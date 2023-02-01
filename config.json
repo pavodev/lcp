@@ -1,0 +1,29 @@
+{
+    "open_subtitles_en": {
+        "word_count": 3106297488,
+        "partitions": {
+            "token_0": 3106297488,
+            "token_1": 1553189928,
+            "token_2": 776561393,
+            "token_3": 388234153,
+            "token_4": 194134858,
+            "token_5": 97083132,
+            "token_6": 48563419,
+            "token_7": 24243833,
+            "token_8": 12138261,
+            "token_rest": 12148511
+        }
+    },
+    "tangram": {
+        "word_count": 89395,
+        "partitions": {
+            "token": 5879,
+            "token ": 10879,
+            "token  ": 15879,
+            "token   ": 20879,
+            "token    ": 35879,
+            "token     ": 70879,
+            "token      ": 135879
+        }
+    }
+}

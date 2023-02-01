@@ -1,0 +1,15 @@
+pyjwt==2.4.0
+aiohttp==3.8.1
+aiohttp-cors==0.7.0
+python-dotenv==0.20.0
+# aiohttp speedups only
+Brotli==1.0.9
+aiodns==3.0.0
+cchardet==2.1.7
+pycares==4.2.1
+# asyncio speedup
+uvloop==0.16.0
+aioredis==2.0.1
+redis==4.3.4
+asyncpg==0.26.0
+rq==1.11.0
