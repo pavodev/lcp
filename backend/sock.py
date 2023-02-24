@@ -1,6 +1,59 @@
 import json
 
 import aiohttp
+import async_timeout
+import asyncio
+
+from .query import query
+
+
+async def send_finished_query_to_websockets(channel, app):
+    """
+    If redis publishes a message, it gets picked up here and broadcast to the
+    correct websockets...
+    """
+    while True:
+        try:
+            async with async_timeout.timeout(1):
+                message = await channel.get_message(ignore_subscribe_messages=True)
+                if message is None:
+                    continue
+                payload = json.loads(message["data"])
+                if "_is_config" in payload:
+                    print(f"Config loaded: {len(payload['config'])} corpora")
+                    app["config"] = payload["config"]
+                    continue
+                user = payload.get("user")
+                room = payload.get("room")
+                status = payload.get("status", "unknown")
+                job = payload.get("job")
+                current_batch = payload["current_batch"]
+                if status == "partial":
+                    payload["config"] = app["config"]
+                    await query(None, payload, app)
+                    # return  # return will prevent partial results from going back to frontend
+                to_send = payload
+                n_users = len(app["websockets"].get(room, set()))
+                if status == "finished" or status == "partial":
+                    to_send = {
+                        "result": payload["result"],
+                        "job": job,
+                        "action": "query_result",
+                        "user": user,
+                        "room": room,
+                        "n_users": n_users,
+                        "original_query": payload["original_query"],
+                        "status": status,
+                        "done_batches": payload["done_batches"],
+                        "current_batch": payload["current_batch"],
+                        "all_batches": payload["all_batches"],
+                    }
+                await send_json_to_user_socket(
+                    app["websockets"], room, to_send, skip=None, just=None
+                )
+                await asyncio.sleep(0.1)
+        except asyncio.TimeoutError:
+            pass
 
 
 async def send_json_to_user_socket(sockets, session_id, msg, skip=None, just=None):
