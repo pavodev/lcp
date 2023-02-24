@@ -1,4 +1,5 @@
 import json
+import os
 
 from rq.job import Job
 from rq import get_current_job
@@ -72,6 +73,7 @@ def _publish_failure(job, connection, typ, value, traceback, *args, **kwargs):
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
+    print("FAILURE", job, traceback)
     jso = {
         "status": "failed",
         "kind": str(typ),
@@ -106,7 +108,7 @@ async def _do_query(query=None, **kwargs):
                 result = await cur.fetchone()
                 result = result[0]
             else:
-                result = await cur.fetchmany(25)
+                result = await cur.fetchall()
             return result
 
 
@@ -166,7 +168,8 @@ class QueryService:
             on_failure=_publish_failure,
             kwargs=kwargs,
         )
-        return self.app[queue].enqueue(_do_query, **opts)
+        timeout = int(os.getenv("QUERY_TIMEOUT"))
+        return self.app[queue].enqueue(_do_query, job_timeout=timeout, **opts)
 
     def get_config(self, queue="query", **kwargs):
         opts = {

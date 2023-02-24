@@ -28,6 +28,9 @@ async def send_finished_query_to_websockets(channel, app):
                 status = payload.get("status", "unknown")
                 job = payload.get("job")
                 current_batch = payload["current_batch"]
+                print(
+                    f"Query iteration: {len(payload['result'])}/{payload['needed']} results, {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches"
+                )
                 if status == "partial":
                     payload["config"] = app["config"]
                     await query(None, payload, app)

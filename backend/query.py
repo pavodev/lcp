@@ -33,6 +33,9 @@ def _decide_batch(corpora, done_batches, batches, n_results_so_far, needed_resul
             size,
         ] in done_batches:
             continue
+        # should we do this? next-smallest for no matches yet?
+        if not n_results_so_far:
+            return (corpus, name, size)
         expected = size * proportion_that_matches
         if n_results_so_far + expected >= needed_results:
             return (corpus, name, size)
@@ -43,14 +46,22 @@ def _decide_batch(corpora, done_batches, batches, n_results_so_far, needed_resul
     )
 
 
-def _get_query_batches(corpora, config):
+def _get_query_batches(corpora, config, languages):
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
     """
     out = []
+    all_languages = ["en", "de", "fr", "ca"]
     for corpus in corpora:
         batches = config[corpus]["_batches"]
         for name, size in batches.items():
+            stripped = name.rstrip("0123456789")
+            if stripped.endswith("rest"):
+                stripped = stripped[:-4]
+            if not stripped.endswith(
+                tuple([f"_{l}" for l in languages])
+            ) and stripped.endswith(tuple([f"_{l}" for l in all_languages])):
+                continue
             out.append((corpus, name, size))
     return sorted(out, key=lambda x: x[-1])
 
@@ -69,6 +80,7 @@ async def query(request, manual=None, app=None):
     if manual is not None:
         user = manual.get("user")
         room = manual.get("room")
+        languages = set(manual.get("languages"))
         done_batches = manual["done_batches"]
         needed_results = manual.get("needed")
         corpora_to_use = manual["corpora"]
@@ -87,10 +99,11 @@ async def query(request, manual=None, app=None):
         query = request_data["query"]
         room = request_data.get("room")
         user = request_data.get("user")
+        languages = set(request_data.get("languages", ["en"]))
         needed_results = request_data.get("needed", 100)
         existing_results = []
         n_results_so_far = 0
-        all_batches = _get_query_batches(corpora_to_use, config)
+        all_batches = _get_query_batches(corpora_to_use, config, languages)
 
     sql_query = query
     word_count = _get_word_count(corpora_to_use, config)
@@ -131,6 +144,7 @@ async def query(request, manual=None, app=None):
         corpora=corpora_to_use,
         existing_results=existing_results,
         word_count=word_count,
+        languages=list(languages),
     )
     job = qs.submit(kwargs=query_kwargs)
     jobs = {"status": "started", "job": job.id}
