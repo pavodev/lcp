@@ -72,8 +72,8 @@ export default {
             "name": "t2",
             "layer": "token",
             "filter": {
-                "attribute": "upos",
-                "value": "NOUN",
+                "attribute": "lemma",
+                "value": "friend",
                 "op": "="
             }
         }
@@ -100,7 +100,7 @@ export default {
     }]
 }`,
       userId: null,
-      corpora: 'tangram',
+      corpora: 'open_subtitles_en1',
       WSData: '',
     }
   },
