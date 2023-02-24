@@ -22,7 +22,11 @@ import asyncpg
 
 from backend.check_file_permissions import check_file_permissions
 from backend.video import video
-from backend.sock import sock, send_json_to_user_socket
+from backend.sock import (
+    sock,
+    send_json_to_user_socket,
+    send_finished_query_to_websockets,
+)
 from backend.lama_user_data import lama_user_data
 from backend.query import query
 from backend.document import document
@@ -47,51 +51,6 @@ REDIS_PORT = int(RPORT.strip())
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
-async def _send_finished_query_to_websockets(channel, app):
-    """
-    If redis publishes a message, it gets picked up here and broadcast to the
-    correct websockets...
-    """
-    while True:
-        try:
-            async with async_timeout.timeout(1):
-                message = await channel.get_message(ignore_subscribe_messages=True)
-                if message is None:
-                    continue
-                payload = json.loads(message["data"])
-                user = payload.get("user")
-                room = payload.get("room")
-                status = payload.get("status", "unknown")
-                job = payload.get("job")
-                current_partition = payload["current_partition"]
-                if status == "partial":
-                    payload["config"] = app["config"]
-                    await query(None, payload, app)
-                    # return  # return will prevent partial results from going back to frontend
-                to_send = payload
-                n_users = len(app["websockets"].get(room, set()))
-                if status == "finished" or status == "partial":
-                    to_send = {
-                        "result": payload["result"],
-                        "job": job,
-                        "action": "query_result",
-                        "user": user,
-                        "room": room,
-                        "n_users": n_users,
-                        "original_query": payload["original_query"],
-                        "status": status,
-                        "done_partitions": payload["done_partitions"],
-                        "current_partition": payload["current_partition"],
-                        "all_partitions": payload["all_partitions"],
-                    }
-                await send_json_to_user_socket(
-                    app["websockets"], room, to_send, skip=None, just=None
-                )
-                await asyncio.sleep(0.1)
-        except asyncio.TimeoutError:
-            pass
-
-
 async def _listen_to_redis_for_queries(app):
     """
     Using our async redis connection instance, listen for events coming from redis
@@ -100,7 +59,7 @@ async def _listen_to_redis_for_queries(app):
     pubsub = app["aredis"].pubsub()
     async with pubsub as p:
         await p.subscribe(PUBSUB_CHANNEL)
-        await _send_finished_query_to_websockets(p, app)
+        await send_finished_query_to_websockets(p, app)
         await p.unsubscribe(PUBSUB_CHANNEL)
 
 
@@ -143,10 +102,6 @@ async def create_app():
 
     app["websockets"] = defaultdict(set)
 
-    with open("config.json", "r") as fo:
-        config = json.load(fo)
-        app["config"] = config
-
     tunnel = SSHTunnelForwarder(
         os.getenv("SSH_HOST"),
         ssh_username=os.getenv("SSH_USER"),
@@ -157,6 +112,7 @@ async def create_app():
     tunnel.start()
 
     resource = cors.add(app.router.add_resource("/corpora"))
+    cors.add(resource.add_route("GET", corpora))
     cors.add(resource.add_route("POST", corpora))
 
     resource = cors.add(app.router.add_resource("/query"))
@@ -187,6 +143,7 @@ async def create_app():
     app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT)
     app["query"] = Queue(connection=app["redis"])
     app["query_service"] = QueryService(app)
+    app["query_service"].get_config()
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
