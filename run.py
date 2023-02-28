@@ -8,7 +8,6 @@ import async_timeout
 import aiohttp_cors
 import asyncio
 from dotenv import load_dotenv
-import psycopg
 from redis import Redis
 
 # import redis.asyncio as redis
