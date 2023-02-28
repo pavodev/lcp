@@ -7,7 +7,6 @@ from rq.job import Job
 
 from redis import Redis
 
-import psycopg2
 from sshtunnel import SSHTunnelForwarder
 import asyncpg
 from psycopg_pool import AsyncConnectionPool

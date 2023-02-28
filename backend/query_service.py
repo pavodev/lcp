@@ -27,7 +27,9 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     """
     Job callback, publishes a redis message containing the results
     """
+
     results_so_far = job.kwargs.get("existing_results", [])
+    total_found = len(results_so_far) + len(result)
     total_requested = job.kwargs["total_results_requested"]
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
@@ -55,7 +57,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([s for c, n, s in done_batches])
-        proportion_that_matches = len(results_so_far) / total_words_processed_so_far
+        proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
     jso = {
