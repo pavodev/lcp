@@ -29,7 +29,8 @@ async def send_finished_query_to_websockets(channel, app):
                 job = payload.get("job")
                 current_batch = payload["current_batch"]
                 print(
-                    f"Query iteration: {len(payload['result'])}/{payload['needed']} results, {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches"
+                    f"Query iteration: {len(payload['result'])}/{payload['total_results_requested']} results\n"
+                    + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches"
                 )
                 if status == "partial":
                     payload["config"] = app["config"]
@@ -37,7 +38,9 @@ async def send_finished_query_to_websockets(channel, app):
                     # return  # return will prevent partial results from going back to frontend
                 to_send = payload
                 n_users = len(app["websockets"].get(room, set()))
-                if status == "finished" or status == "partial":
+                if status in {"finished", "satisfied", "partial"}:
+                    done = len(payload["done_batches"])
+                    total = len(payload["all_batches"])
                     to_send = {
                         "result": payload["result"],
                         "job": job,
@@ -45,11 +48,16 @@ async def send_finished_query_to_websockets(channel, app):
                         "user": user,
                         "room": room,
                         "n_users": n_users,
-                        "original_query": payload["original_query"],
+                        # "original_query": payload["original_query"],
                         "status": status,
-                        "done_batches": payload["done_batches"],
-                        "current_batch": payload["current_batch"],
-                        "all_batches": payload["all_batches"],
+                        # "done_batches": payload["done_batches"],
+                        # "current_batch": payload["current_batch"],
+                        # "all_batches": payload["all_batches"],
+                        "percentage_done": payload["percentage_done"],
+                        "total_results_requested": payload["total_results_requested"],
+                        "hit_limit": payload["hit_limit"],
+                        "projected_results": payload["projected_results"],
+                        "batches_done": f"{done}/{total}",
                     }
                 await send_json_to_user_socket(
                     app["websockets"], room, to_send, skip=None, just=None

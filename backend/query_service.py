@@ -15,11 +15,11 @@ def _get_status(results_so_far, **kwargs):
     """
     Is a query finished, or do we need to do another iteration?
     """
-    needed = kwargs.get("needed", 50)
-    if len(results_so_far) >= needed:
-        return "finished"
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
+    requested = kwargs["total_results_requested"]
+    if len(results_so_far) >= requested:
+        return "satisfied"
     return "partial"
 
 
@@ -28,23 +28,21 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     Job callback, publishes a redis message containing the results
     """
     results_so_far = job.kwargs.get("existing_results", [])
-    needed = job.kwargs.get("needed", 50)
+    total_requested = job.kwargs["total_results_requested"]
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
 
-    # try:
-    #    for res in result:
-    #        sent = res[2]["sentence"]
-    #        sent = " ".join(s[1] for s in sent)
-    #        results_so_far.append((sent, *res))
-    #        if len(results_so_far) >= needed:
-    #            break
-    # except:
-    #    pass
+    limited = len(result) >= job.kwargs["needed"]
 
     for res in result:
-        results_so_far.append(res)
-        if len(results_so_far) >= needed:
+        # fix: move sent_id to own column
+        fixed = []
+        sent_id = res[0][0]
+        tok_ids = res[0][1:]
+        fixed = ((sent_id,), tuple(tok_ids), res[1])
+        # end fix
+        results_so_far.append(fixed)
+        if len(results_so_far) >= total_requested:
             break
 
     just_finished = job.kwargs["current_batch"]
@@ -53,16 +51,20 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     status = _get_status(results_so_far, **job.kwargs)
     if status == "finished":
         projected_results = len(results_so_far)
-    elif status == "partial":
+        perc = 100.0
+    elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([s for c, n, s in done_batches])
         proportion_that_matches = len(results_so_far) / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
+        perc = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
     jso = {
         "result": results_so_far,
         "status": status,
         "job": job.id,
         "projected_results": projected_results,
+        "percentage_done": round(perc, 3),
+        "hit_limit": False if not limited else job.kwargs["needed"],
         **kwargs,
         **job.kwargs,
     }
@@ -177,7 +179,8 @@ class QueryService:
             "config": True,
             "on_success": _make_config,
         }
-        return self.app[queue].enqueue(_do_query, **opts)
+        timeout = int(os.getenv("QUERY_TIMEOUT"))
+        return self.app[queue].enqueue(_do_query, job_timeout=1000, **opts)
 
     def cancel(self, job_id):
         job = Job.fetch(job_id, connection=self.app["redis"])

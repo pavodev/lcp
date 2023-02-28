@@ -21,6 +21,14 @@
               <label for="exampleInputEmail1" class="form-label">User</label>
               <input type="text" class="form-control" v-model="userId" disabled>
             </div>
+            <div class="mb-3">
+              <label for="exampleInputEmail1" class="form-label">Number of results</label>
+              <input type="number" class="form-control" v-model="nResults">
+            </div>
+            <div class="mb-3">
+              <label for="exampleInputEmail1" class="form-label">Languages (split by comma)</label>
+              <input type="text" class="form-control" v-model="languages">
+            </div>
             <button type="button" @click="submit" class="btn btn-primary">Submit</button>
           </form>
         </div>
@@ -102,6 +110,9 @@ export default {
       userId: null,
       corpora: 'open_subtitles_en1',
       WSData: '',
+      nResults: 10000,
+      pageSize: 20,
+      languages: 'en'
     }
   },
   mounted() {
@@ -114,7 +125,7 @@ export default {
     this.$socket.sendObj({
       'room': this.roomId,
       'action': 'left',
-      'user': this.userId
+      'user': this.userId,
     })
   },
   watch: {
@@ -144,15 +155,23 @@ export default {
       }
     },
     onSocketMessage(event) {
-      // this.WSData = JSON.parse(event.data)
-      this.WSData = event.data
+      // this.WSData = event.data
+      // the below is just temporary code
+      let data = JSON.parse(event.data)
+      data['n_results'] = data['result'].length
+      data['first_result'] = data['result'][0]
+      delete data['result']
+      this.WSData = JSON.stringify(data, null, 1)
     },
     submit() {
       let data = {
-        corpora: this.corpora.split(","),
+        corpora: this.corpora.split(','),
         query: this.query,
         user: this.userId,
-        room: this.roomId
+        room: this.roomId,
+        page_size: this.pageSize,
+        languages: this.languages.split(','),
+        total_results_requested: this.nResults
       }
       useCorpusStore().fetchQuery(data)
     }

@@ -18,7 +18,7 @@ def _get_batches(config):
                     name = str(i)
                 batchname = details["relation"].replace("<part>", name)
                 total_size = counts[details["relation"].replace("<part>", "0")]
-                size = size / 2
+                size = size / 2 if name != "rest" else size
                 batches[batchname] = int(size)
     else:
         n_batches = mapping["batches"]
@@ -29,7 +29,7 @@ def _get_batches(config):
             else:
                 name = str(i)
             batchname = mapping["relation"].replace("<part>", name)
-            size = size / 2
+            size = size / 2 if name != "rest" else size
             batches[batchname] = int(size)
     return batches
 
