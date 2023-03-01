@@ -2,7 +2,9 @@
 
 > uplord monorepository
 
-First get this lib
+First, install Python 3.11 (though anything from 3.8 onward should work).
+
+Then, install the following dependencies:
 
 ```bash
 git clone https://gitlab.uzh.ch/LiRI/projects/abstract-query

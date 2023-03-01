@@ -17,7 +17,6 @@ def _get_batches(config):
                 else:
                     name = str(i)
                 batchname = details["relation"].replace("<part>", name)
-                total_size = counts[details["relation"].replace("<part>", "0")]
                 size = size / 2 if name != "rest" else size
                 batches[batchname] = int(size)
     else:
@@ -32,30 +31,3 @@ def _get_batches(config):
             size = size / 2 if name != "rest" else size
             batches[batchname] = int(size)
     return batches
-
-    # old code
-    for corpus in corpora:
-        if "batch" in config[corpus]:
-            for part, size in config[corpus]["batch"].items():
-                batch.append(corpus, part, size)
-            continue
-        total_words = config[corpus].get("word_count", 1000000)
-        done_words = total_words
-        num_batch = config[corpus].get("n_batch", 1)
-        batch.append((corpus, "token_0", total_words))
-        if num_batch <= 1:
-            continue
-        batch.pop()  # we don't need _0 if there are real batch
-        for p in range(1, num_batch + 1):
-            is_rest = p == num_batch
-            suffix = "rest" if is_rest else str(p)
-            size = int(done_words / 2)
-            done_words = size
-            if is_rest:
-                so_far = sum([i[-1] for i in batch if i[0] == corpus])
-                size = total_words - so_far
-            name = f"token_{suffix}"
-            batch.append((corpus, name, size))
-            if is_rest:
-                break
-    return sorted(batch, key=lambda x: x[-1])

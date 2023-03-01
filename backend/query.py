@@ -31,6 +31,12 @@ def _decide_batch(
         return batches[0]
     if hit_limit:
         return done_batches[-1]
+    if needed_to_go in {0, -1, False, None}:
+        return next(
+            p
+            for p in batches
+            if tuple(p) not in done_batches and list(p) not in done_batches
+        )
     total_words_processed_so_far = sum([s for c, n, s in done_batches])
     proportion_that_matches = n_results_so_far / total_words_processed_so_far
     for corpus, name, size in batches:
@@ -44,7 +50,7 @@ def _decide_batch(
         if not n_results_so_far or n_results_so_far < page_size:
             return (corpus, name, size)
         expected = size * proportion_that_matches
-        if n_results_so_far + expected >= (needed_to_go + needed_to_go * buffer):
+        if n_results_so_far + expected >= (needed_to_go + (needed_to_go * buffer)):
             return (corpus, name, size)
     return next(
         p
@@ -107,7 +113,12 @@ async def query(request, manual=None, app=None):
         query = job.kwargs["original_query"]
         n_results_so_far = len(existing_results)
         total_results_requested = manual["total_results_requested"]
-        needed_to_go = total_results_requested - n_results_so_far
+        unlimited = {0, -1, False, None}
+        needed_to_go = (
+            total_results_requested - n_results_so_far
+            if total_results_requested not in unlimited
+            else -1
+        )
         config = manual["config"]
         hit_limit = manual.get("hit_limit")
     else:
@@ -159,8 +170,8 @@ async def query(request, manual=None, app=None):
 
     if manual is None:
         print(f"QUERY:\n\n\n{sql_query}\n\n\n")
-    else:
-        print(f"Now querying: {current_batch[0]}.{current_batch[1]}...")
+
+    print(f"\nNow querying: {current_batch[0]}.{current_batch[1]}...")
 
     qs = app["query_service"]
     query_kwargs = dict(

@@ -18,6 +18,8 @@ def _get_status(results_so_far, **kwargs):
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
     requested = kwargs["total_results_requested"]
+    if requested in {0, -1, False, None}:
+        return "partial"
     if len(results_so_far) >= requested:
         return "satisfied"
     return "partial"
@@ -34,7 +36,9 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
 
-    limited = len(result) >= job.kwargs["needed"]
+    unlimited = job.kwargs["needed"] in {0, -1, False, None}
+
+    limited = not unlimited and len(result) >= job.kwargs["needed"]
 
     for res in result:
         # fix: move sent_id to own column
@@ -44,7 +48,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
         fixed = ((sent_id,), tuple(tok_ids), res[1])
         # end fix
         results_so_far.append(fixed)
-        if len(results_so_far) >= total_requested:
+        if not unlimited and len(results_so_far) >= total_requested:
             break
 
     just_finished = job.kwargs["current_batch"]
@@ -67,6 +71,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
         "projected_results": projected_results,
         "percentage_done": round(perc, 3),
         "hit_limit": False if not limited else job.kwargs["needed"],
+        "batch_matches": len(result),
         **kwargs,
         **job.kwargs,
     }
