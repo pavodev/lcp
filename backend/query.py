@@ -105,7 +105,7 @@ async def query(request, manual=None, app=None):
         done_batches.append(previous_batch)
         all_batches = job.kwargs["all_batches"]
 
-        corpora_to_use = manual["corpora"]
+        corpora_to_use = [int(i) for i in manual["corpora"]]
         existing_results = manual["result"]
         # todo: user may have changed page size ... try get it from ws message first?
         page_size = job.kwargs.get("page_size", 20)
@@ -128,7 +128,7 @@ async def query(request, manual=None, app=None):
         app = request.app
         config = request.app["config"]
         request_data = await request.json()
-        corpora_to_use = request_data["corpora"]
+        corpora_to_use = [int(i) for i in request_data["corpora"]]
         query = request_data["query"]
         room = request_data.get("room")
         page_size = request_data.get("page_size", 10)

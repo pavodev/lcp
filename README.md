@@ -10,11 +10,6 @@ Then, install the following dependencies:
 git clone https://gitlab.uzh.ch/LiRI/projects/abstract-query
 cd abstract-query
 python setup.py develop
-
-# same for cquery
-git clone https://gitlab.uzh.ch/LiRI/projects/cquery
-cd cquery
-python setup.py develop
 ```
 
 Then clone this repo and do `pip install -r requirements.txt`

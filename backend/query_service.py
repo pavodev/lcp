@@ -29,7 +29,6 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     """
     Job callback, publishes a redis message containing the results
     """
-
     results_so_far = job.kwargs.get("existing_results", [])
     total_found = len(results_so_far) + len(result)
     total_requested = job.kwargs["total_results_requested"]
@@ -136,7 +135,8 @@ def _make_config(job, connection, result, *args, **kwargs):
             mapping,
         ) = tup
         rest = {
-            "corpus_id": corpus_id,
+            "shortname": name,
+            "corpus_id": int(corpus_id),
             "current_version": current_version,
             "version_history": version_history,
             "description": description,
@@ -146,14 +146,14 @@ def _make_config(job, connection, result, *args, **kwargs):
         }
         corpus_template.update(rest)
 
-        fixed[name] = corpus_template
+        fixed[int(corpus_id)] = corpus_template
 
     for name, conf in fixed.items():
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 
-    fixed["open_subtitles_en1"] = fixed["open_subtitles_en"]
-    fixed["sparcling1"] = fixed["sparcling"]
+    # fixed["open_subtitles_en1"] = fixed["open_subtitles_en"]
+    # fixed["sparcling1"] = fixed["sparcling"]
 
     jso = {"config": fixed, "_is_config": True}
 
