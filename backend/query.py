@@ -15,12 +15,12 @@ def _get_word_count(corpora, config):
     """
     total = 0
     for corpus in corpora:
-        total += sum(config[corpus]["token_counts"].values())
+        total += sum(config[str(corpus)]["token_counts"].values())
     return total
 
 
 def _decide_batch(
-    corpora, done_batches, batches, n_results_so_far, needed_to_go, hit_limit, page_size
+    done_batches, batches, n_results_so_far, needed_to_go, hit_limit, page_size
 ):
     """
     Find the best next batch to query
@@ -37,10 +37,11 @@ def _decide_batch(
             for p in batches
             if tuple(p) not in done_batches and list(p) not in done_batches
         )
-    total_words_processed_so_far = sum([s for c, n, s in done_batches])
+    total_words_processed_so_far = sum([x[-1] for x in done_batches])
     proportion_that_matches = n_results_so_far / total_words_processed_so_far
-    for corpus, name, size in batches:
-        if (corpus, name, size) in done_batches or [
+    for schema, corpus, name, size in batches:
+        if (schema, corpus, name, size) in done_batches or [
+            schema,
             corpus,
             name,
             size,
@@ -51,7 +52,7 @@ def _decide_batch(
             return (corpus, name, size)
         expected = size * proportion_that_matches
         if n_results_so_far + expected >= (needed_to_go + (needed_to_go * buffer)):
-            return (corpus, name, size)
+            return (schema, corpus, name, size)
     return next(
         p
         for p in reversed(batches)
@@ -66,7 +67,7 @@ def _get_query_batches(corpora, config, languages):
     out = []
     all_languages = ["en", "de", "fr", "ca"]
     for corpus in corpora:
-        batches = config[corpus]["_batches"]
+        batches = config[str(corpus)]["_batches"]
         # config[corpus]['layer']['Token@en'] -- use this to determine languages?
         for name, size in batches.items():
             stripped = name.rstrip("0123456789")
@@ -76,7 +77,8 @@ def _get_query_batches(corpora, config, languages):
                 tuple([f"_{l}" for l in languages])
             ) and stripped.endswith(tuple([f"_{l}" for l in all_languages])):
                 continue
-            out.append((corpus, name, size))
+            schema = config[str(corpus)]["schema_path"]
+            out.append((corpus, schema, name, size))
     return sorted(out, key=lambda x: x[-1])
 
 
@@ -144,23 +146,18 @@ async def query(request, manual=None, app=None):
     word_count = _get_word_count(corpora_to_use, config)
 
     current_batch = _decide_batch(
-        corpora_to_use,
-        done_batches,
-        all_batches,
-        n_results_so_far,
-        needed_to_go,
-        hit_limit,
-        page_size,
+        done_batches, all_batches, n_results_so_far, needed_to_go, hit_limit, page_size
     )
+
     offset = None if not hit_limit else hit_limit
 
     if "SELECT" not in query.upper():
         try:
             kwa = dict(
-                corpus=current_batch[0],
-                batch=current_batch[1],
+                corpus=current_batch[1],
+                batch=current_batch[2],
                 # limit=needed_to_go,
-                config=app["config"][current_batch[0]],
+                config=app["config"][str(current_batch[0])],
                 # offset=offset,
             )
             sql_query = LCPQuery(query, **kwa).sql
@@ -171,7 +168,7 @@ async def query(request, manual=None, app=None):
     if manual is None:
         print(f"QUERY:\n\n\n{sql_query}\n\n\n")
 
-    print(f"\nNow querying: {current_batch[0]}.{current_batch[1]}...")
+    print(f"\nNow querying: {current_batch[1]}.{current_batch[2]}...")
 
     qs = app["query_service"]
     query_kwargs = dict(

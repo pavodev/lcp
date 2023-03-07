@@ -59,7 +59,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
         perc = 100.0
     elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
-        total_words_processed_so_far = sum([s for c, n, s in done_batches])
+        total_words_processed_so_far = sum([x[-1] for x in done_batches])
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
@@ -140,7 +140,9 @@ def _make_config(job, connection, result, *args, **kwargs):
             "current_version": current_version,
             "version_history": version_history,
             "description": description,
-            "schema_path": schema_path,
+            "schema_path": schema_path
+            if schema_path.endswith("1")
+            else f"{schema_path}1",
             "token_counts": token_counts,
             "mapping": mapping,
         }
