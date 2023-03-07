@@ -49,7 +49,7 @@ def _decide_batch(
             continue
         # should we do this? next-smallest for low number of matches?
         if not n_results_so_far or n_results_so_far < page_size:
-            return (corpus, name, size)
+            return (schema, corpus, name, size)
         expected = size * proportion_that_matches
         if n_results_so_far + expected >= (needed_to_go + (needed_to_go * buffer)):
             return (schema, corpus, name, size)
@@ -161,9 +161,9 @@ async def query(request, manual=None, app=None):
                 # offset=offset,
             )
             sql_query = LCPQuery(query, **kwa).sql
-        except:
-            print("SQL GENERATION FAILED! for dev, assuming script passed")
-            raise
+        except Exception as err:
+            print("SQL GENERATION FAILED! for dev, assuming script passed", err)
+            raise err
 
     if manual is None:
         print(f"QUERY:\n\n\n{sql_query}\n\n\n")
