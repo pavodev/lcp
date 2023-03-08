@@ -108,7 +108,7 @@ export default {
     }]
 }`,
       userId: null,
-      corpora: 'open_subtitles_en1',
+      corpora: '2',
       WSData: '',
       nResults: 10000,
       pageSize: 20,
