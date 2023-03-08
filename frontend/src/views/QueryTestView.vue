@@ -15,7 +15,7 @@
             </div>
             <div class="mb-3">
               <label for="exampleInputEmail1" class="form-label">Room</label>
-              <input type="text" class="form-control" v-model="roomId" disabled>
+              <input type="text" class="form-control" disabled>
             </div>
             <div class="mb-3">
               <label for="exampleInputEmail1" class="form-label">User</label>
@@ -29,6 +29,12 @@
               <label for="exampleInputEmail1" class="form-label">Languages (split by comma)</label>
               <input type="text" class="form-control" v-model="languages">
             </div>
+            <div class="mb-3">
+              <label for="exampleInputEmail1" class="form-label">Save name</label>
+              <input type="text" class="form-control" v-model="queryName">
+            </div>
+            <button type="button" @click="save" v-if="queryName" class="btn btn-primary">Save</button>
+            <button type="button" @click="fetch" class="btn btn-primary">Fetch</button>
             <button type="button" @click="submit" class="btn btn-primary">Submit</button>
           </form>
         </div>
@@ -112,7 +118,8 @@ export default {
       WSData: '',
       nResults: 10000,
       pageSize: 20,
-      languages: 'en'
+      languages: 'en',
+      queryName: '',
     }
   },
   mounted() {
@@ -123,7 +130,8 @@ export default {
   },
   unmounted() {
     this.$socket.sendObj({
-      'room': this.roomId,
+      //'room': this.roomId,
+      'room': null,
       'action': 'left',
       'user': this.userId,
     })
@@ -138,7 +146,8 @@ export default {
     connectToRoom(){
       this.waitForConnection(() => {
         this.$socket.sendObj({
-          'room': this.roomId,
+          //'room': this.roomId,
+          'room': null,
           'action': 'joined',
           'user': this.userId
         })
@@ -158,6 +167,15 @@ export default {
       // this.WSData = event.data
       // the below is just temporary code
       let data = JSON.parse(event.data)
+      if (Object.prototype.hasOwnProperty.call(data, 'action')) {
+        if (data['action'] === 'fetch_queries') {
+          console.log('do something here with the fetched queries?', data)
+          return
+        } else if (data['action'] === 'store_query') {
+          console.log('query stored', data)
+          return
+        }
+      }
       data['n_results'] = data['result'].length
       data['first_result'] = data['result'][0]
       delete data['result']
@@ -168,12 +186,35 @@ export default {
         corpora: this.corpora.split(','),
         query: this.query,
         user: this.userId,
-        room: this.roomId,
+        // room: this.roomId,
+        room: null,
         page_size: this.pageSize,
         languages: this.languages.split(','),
         total_results_requested: this.nResults
       }
       useCorpusStore().fetchQuery(data)
+    },
+    save() {
+      let data = {
+        corpora: this.corpora.split(','),
+        query: this.query,
+        user: this.userId,
+        // room: this.roomId,
+        room: null,
+        page_size: this.pageSize,
+        languages: this.languages.split(','),
+        total_results_requested: this.nResults,
+        query_name: this.queryName
+      }
+      useCorpusStore().saveQuery(data)
+    },
+    fetch() {
+      let data = {
+        user: this.userId,
+        // room: this.roomId
+        room: null
+      }
+      useCorpusStore().fetchQueries(data)
     }
   },
   computed: {

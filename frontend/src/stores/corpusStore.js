@@ -13,5 +13,16 @@ export const useCorpusStore = defineStore("corpusData", {
         return r.data;
       });
     },
+    saveQuery(data) {
+      httpApi.post(`/store`, data).then((r) => {
+        return r.data;
+      });
+    },
+    fetchQueries(data) {
+      httpApi.post(`/fetch`, data).then((r) => {
+        this.fetchedQueries = r.data;
+        return r.data;
+      });
+    },
   },
 });

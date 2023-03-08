@@ -19,52 +19,89 @@ async def send_finished_query_to_websockets(channel, app):
                 if message is None:
                     continue
                 payload = json.loads(message["data"])
+                user = payload.get("user")
+                room = payload.get("room")
+                if payload.get("status") == "failed":
+                    await send_json_to_user_socket(
+                        app["websockets"], room, payload, just=(room, user)
+                    )
+                    continue
+                # handle configuration message
                 if "_is_config" in payload:
                     print(f"Config loaded: {len(payload['config'])} corpora")
                     app["config"] = payload["config"]
                     continue
-                user = payload.get("user")
-                room = payload.get("room")
-                status = payload.get("status", "unknown")
-                job = payload.get("job")
-                current_batch = payload["current_batch"]
-                print(
-                    f"Query iteration: {payload['batch_matches']} results found -- {len(payload['result'])}/{payload['total_results_requested']} total\n"
-                    + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
-                )
-                if status == "partial":
-                    payload["config"] = app["config"]
-                    await query(None, payload, app)
-                    # return  # return will prevent partial results from going back to frontend
-                to_send = payload
-                n_users = len(app["websockets"].get(room, set()))
-                if status in {"finished", "satisfied", "partial"}:
-                    done = len(payload["done_batches"])
-                    total = len(payload["all_batches"])
-                    to_send = {
-                        "result": payload["result"],
-                        "job": job,
-                        "action": "query_result",
-                        "user": user,
-                        "room": room,
-                        "n_users": n_users,
-                        # "original_query": payload["original_query"],
-                        "status": status,
-                        # "done_batches": payload["done_batches"],
-                        # "current_batch": payload["current_batch"],
-                        # "all_batches": payload["all_batches"],
-                        "percentage_done": payload["percentage_done"],
-                        "total_results_requested": payload["total_results_requested"],
-                        "hit_limit": payload["hit_limit"],
-                        "projected_results": payload["projected_results"],
-                        "batches_done": f"{done}/{total}",
-                    }
-                await send_json_to_user_socket(
-                    app["websockets"], room, to_send, skip=None, just=None
-                )
+
+                # handle fetch/store queries message
+                elif payload.get("action") in ("fetch_queries", "store_query"):
+                    await send_json_to_user_socket(
+                        app["websockets"],
+                        room,
+                        payload,
+                        skip=None,
+                        just=(room, user),
+                    )
+                    continue
+                else:
+                    await _handle_query(app, payload, user, room)
+
                 await asyncio.sleep(0.1)
         except asyncio.TimeoutError:
             pass
+
+
+async def _kill_ongoing(request, user, room):
+    """
+    todo
+    """
+    qs = request.app["query_service"]
+    qs.cancel_running_jobs(user, room)
+
+
+async def _handle_query(app, payload, user, room):
+    """
+    Handle iteration of a query
+    """
+    status = payload.get("status", "unknown")
+    job = payload.get("job")
+    current_batch = payload["current_batch"]
+    total = payload.get("total_results_requested")
+    if not total or total == -1:
+        total = "all"
+    print(
+        f"Query iteration: {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
+        + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
+    )
+    if status == "partial":
+        payload["config"] = app["config"]
+        await query(None, payload, app)
+        # return  # return will prevent partial results from going back to frontend
+    to_send = payload
+    n_users = len(app["websockets"].get(room, set()))
+    if status in {"finished", "satisfied", "partial"}:
+        done = len(payload["done_batches"])
+        total_batches = len(payload["all_batches"])
+        to_send = {
+            "result": payload["result"],
+            "job": job,
+            "action": "query_result",
+            "user": user,
+            "room": room,
+            "n_users": n_users,
+            # "original_query": payload["original_query"],
+            "status": status,
+            # "done_batches": payload["done_batches"],
+            # "current_batch": payload["current_batch"],
+            # "all_batches": payload["all_batches"],
+            "percentage_done": payload["percentage_done"],
+            "total_results_requested": payload["total_results_requested"],
+            "hit_limit": payload["hit_limit"],
+            "projected_results": payload["projected_results"],
+            "batches_done": f"{done}/{total_batches}",
+        }
+    await send_json_to_user_socket(
+        app["websockets"], room, to_send, skip=None, just=(room, user)
+    )
 
 
 async def send_json_to_user_socket(sockets, session_id, msg, skip=None, just=None):
@@ -75,6 +112,8 @@ async def send_json_to_user_socket(sockets, session_id, msg, skip=None, just=Non
     for room, users in sockets.items():
         if session_id and room != session_id:
             continue
+        if not session_id and room:
+            continue
         for conn, user_id in users:
             if (room, conn, user_id) in sent_to:
                 continue
@@ -84,8 +123,9 @@ async def send_json_to_user_socket(sockets, session_id, msg, skip=None, just=Non
                 continue
             await conn.send_json(msg)
             sent_to.add((room, conn, user_id))
-            if session_id is None:
-                return
+            # todo: can we add back this tiny optimisation?
+            # if session_id is None:
+            #     return
 
 
 async def sock(request):
@@ -123,12 +163,22 @@ async def sock(request):
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
                 continue
+            request.app["qs"]._kill_ongoing(user_id, session_id)
             currently = len(sockets[session_id])
             if session_id and currently:
                 response = {"left": user_id, "room": session_id, "n_users": currently}
                 await send_json_to_user_socket(
                     sockets, session_id, response, skip=(session_id, user_id)
                 )
+
+        elif action == "store_history":
+            await send_json_to_user_socket(
+                sockets, session_id, response, skip=(session_id, user_id)
+            )
+        elif action == "fetch_history":
+            await send_json_to_user_socket(
+                sockets, session_id, response, skip=(session_id, user_id)
+            )
 
         elif action == "populate":
             sockets[session_id].add((ws, user_id))

@@ -29,6 +29,7 @@ from backend.sock import (
 from backend.lama_user_data import lama_user_data
 from backend.query import query
 from backend.document import document
+from backend.store import fetch_queries, store_query
 from backend.validate import validate
 from backend.corpora import corpora
 from backend.query_service import QueryService
@@ -128,6 +129,12 @@ async def create_app():
 
     resource = cors.add(app.router.add_resource("/document/{doc_id}"))
     cors.add(resource.add_route("POST", document))
+
+    resource = cors.add(app.router.add_resource("/fetch"))
+    cors.add(resource.add_route("POST", fetch_queries))
+
+    resource = cors.add(app.router.add_resource("/store"))
+    cors.add(resource.add_route("POST", store_query))
 
     resource = cors.add(app.router.add_resource("/settings"))
     cors.add(resource.add_route("GET", lama_user_data))

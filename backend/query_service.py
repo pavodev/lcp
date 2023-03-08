@@ -6,6 +6,7 @@ from rq import get_current_job
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 
 from .configure import _get_batches
+from .utils import CustomEncoder
 
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
@@ -74,7 +75,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
         **kwargs,
         **job.kwargs,
     }
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _publish_failure(job, connection, typ, value, traceback, *args, **kwargs):
@@ -91,16 +92,17 @@ def _publish_failure(job, connection, typ, value, traceback, *args, **kwargs):
         **kwargs,
         **job.kwargs,
     }
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-async def _do_query(query=None, **kwargs):
+async def _db_query(query=None, **kwargs):
     """
     The function queued by RQ, which executes our DB query
     """
     single_result = kwargs.get("single", False)
     params = kwargs.get("params", tuple())
     is_config = kwargs.get("config", False)
+    is_store = kwargs.get("store", False)
 
     # this open call should be made before any other db calls in the app just in case
     await get_current_job()._pool.open()
@@ -109,6 +111,8 @@ async def _do_query(query=None, **kwargs):
         # await conn.set_autocommit(True)
         async with conn.cursor() as cur:
             result = await cur.execute(query, params)
+            if is_store:
+                return
             if is_config:
                 result = await cur.fetchall()
                 return result
@@ -118,6 +122,24 @@ async def _do_query(query=None, **kwargs):
             else:
                 result = await cur.fetchall()
             return result
+
+
+def _prev_queries_success(job, connection, result, *args, **kwargs):
+    is_store = job.kwargs.get("store")
+    action = "store_query" if is_store else "fetch_queries"
+    room = str(job.kwargs["room"]) if job.kwargs["room"] else None
+    jso = {
+        "user": str(job.kwargs["user"]),
+        "room": room,
+        "status": "success",
+        "action": action,
+    }
+    if is_store:
+        jso["query_id"] = str(job.kwargs["query_id"])
+    else:
+        cols = ["idx", "query", "username", "room", "created_at"]
+        jso["queries"] = [dict(zip(cols, x)) for x in result]
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _make_config(job, connection, result, *args, **kwargs):
@@ -159,7 +181,7 @@ def _make_config(job, connection, result, *args, **kwargs):
 
     jso = {"config": fixed, "_is_config": True}
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 class QueryService:
@@ -169,6 +191,7 @@ class QueryService:
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
+        self.timeout = int(os.getenv("QUERY_TIMEOUT"))
 
     def submit(self, queue="query", kwargs=None):
         """
@@ -179,8 +202,7 @@ class QueryService:
             on_failure=_publish_failure,
             kwargs=kwargs,
         )
-        timeout = int(os.getenv("QUERY_TIMEOUT"))
-        return self.app[queue].enqueue(_do_query, job_timeout=timeout, **opts)
+        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def get_config(self, queue="query", **kwargs):
         opts = {
@@ -188,8 +210,39 @@ class QueryService:
             "config": True,
             "on_success": _make_config,
         }
-        timeout = int(os.getenv("QUERY_TIMEOUT"))
-        return self.app[queue].enqueue(_do_query, job_timeout=1000, **opts)
+        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+
+    def fetch_queries(self, user, room=None, queue="query"):
+        if room:
+            room_info = " AND room = %s"
+            params = (user, room)
+        else:
+            room_info = ""
+            params = (user,)
+        query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC;"
+        opts = {
+            "user": user,
+            "room": room,
+            "query": query,
+            "config": True,
+            "params": params,
+            "on_success": _prev_queries_success,
+        }
+        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+
+    def store_query(self, query_data, idx, user, room=None, queue="query"):
+        db_query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
+        opts = {
+            "user": user,
+            "room": room,
+            "query": db_query,
+            "store": True,
+            "config": True,
+            "query_id": idx,
+            "params": (idx, json.dumps(query_data), user, room),
+            "on_success": _prev_queries_success,
+        }
+        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def cancel(self, job_id):
         job = Job.fetch(job_id, connection=self.app["redis"])
@@ -205,3 +258,6 @@ class QueryService:
     def get(self, job_id):
         job = Job.fetch(job_id, connection=self.app["redis"])
         return job
+
+    def cancel_running_jobs(self, user, room):
+        pass
