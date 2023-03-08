@@ -163,7 +163,7 @@ async def sock(request):
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
                 continue
-            request.app["query_service"]._kill_ongoing(user_id, session_id)
+            await _kill_ongoing(request, user_id, session_id)
             currently = len(sockets[session_id])
             if session_id and currently:
                 response = {"left": user_id, "room": session_id, "n_users": currently}
