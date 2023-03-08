@@ -1,5 +1,6 @@
 import json
 
+
 from aiohttp import web
 from rq.job import Job
 
@@ -9,13 +10,23 @@ from abstract_query.lcp_query import LCPQuery
 from . import utils
 
 
-def _get_word_count(corpora, config):
+def _get_word_count(corpora, config, languages):
     """
     Sum the word counts for corpora being searched
     """
     total = 0
     for corpus in corpora:
-        total += sum(config[str(corpus)]["token_counts"].values())
+        conf = config[str(corpus)]
+        has_partitions = "partitions" in conf["mapping"]["layer"]["Token"]
+        if not has_partitions or not languages:
+            total += sum(conf["token_counts"].values())
+        else:
+            counts = conf["token_counts"]
+            for name, num in counts.items():
+                for lang in languages:
+                    if name.rstrip("0").endswith(lang):
+                        total += num
+                        break
     return total
 
 
@@ -143,7 +154,7 @@ async def query(request, manual=None, app=None):
         needed_to_go = total_results_requested
 
     sql_query = query
-    word_count = _get_word_count(corpora_to_use, config)
+    word_count = _get_word_count(corpora_to_use, config, languages)
 
     current_batch = _decide_batch(
         done_batches, all_batches, n_results_so_far, needed_to_go, hit_limit, page_size
