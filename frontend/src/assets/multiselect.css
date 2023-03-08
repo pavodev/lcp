@@ -1,0 +1,42 @@
+.multiselect__tag {
+  background-color: #1e9989 !important;
+  padding-right: 22px;
+  margin-right: 4px;
+}
+.multiselect__option--highlight {
+  background-color: #1e9989 !important;
+}
+.multiselect__clear:before {
+  transform: rotate(45deg);
+}
+.multiselect__clear:after {
+  transform: rotate(-45deg);
+}
+.multiselect__clear:after,
+.multiselect__clear:before {
+  content: '';
+  display: block;
+  position: absolute;
+  width: 3px;
+  height: 16px;
+  background: #aaa;
+  top: 12px;
+  right: 4px;
+}
+.multiselect__clear:hover {
+  opacity: 0.6;
+}
+.multiselect__clear {
+  transition: 0.2s all;
+  position: absolute;
+  right: 41px;
+  height: 40px;
+  width: 10px;
+  display: block;
+  cursor: pointer;
+  z-index: 2;
+}
+.btn-no-outline:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}

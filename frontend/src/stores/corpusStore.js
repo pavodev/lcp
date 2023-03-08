@@ -24,5 +24,15 @@ export const useCorpusStore = defineStore("corpusData", {
         return r.data;
       });
     },
+    fetchCorpora(data) {
+      httpApi.post(`/corpora`, data).then((r) => {
+        this.corporaJson = r.data;
+        this.corpora = Object.keys(this.corporaJson.config).map(corpusId => {
+          let corpus = this.corporaJson.config[corpusId]
+          corpus.meta['id'] = corpusId
+          return corpus
+        })
+      });
+    }
   },
 });

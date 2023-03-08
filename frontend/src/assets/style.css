@@ -1,0 +1,66 @@
+body {
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-align: center;
+  color: #2c3e50;
+}
+
+
+.btn-primary {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: #1e9989;
+  --bs-btn-border-color: #1e9989;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #178375;
+  --bs-btn-hover-border-color: #178375;
+  --bs-btn-focus-shadow-rgb: 49,132,253;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #178375;
+  --bs-btn-active-border-color: #178375;
+  --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: #1e9989;
+  --bs-btn-disabled-border-color: #1e9989;
+}
+
+.progress {
+  --bs-progress-bar-bg: #1e9989;
+}
+
+.navbar {
+  box-shadow: 0 2px 12px 0 rgb(0 0 0 / 16%);
+}
+
+nav.bg-liri {
+  background-color: #1e9989;
+}
+
+.nav-link {
+  cursor: pointer;
+  font-size: 0.875rem;
+}
+
+.navbar-brand {
+  font-weight: bold;
+}
+
+.navbar .nav-link,
+.navbar .navbar-brand {
+  color: #fff;
+  font-size: 0.875rem;
+}
+
+.navbar a:hover,
+.navbar .navbar-brand:hover {
+  color: rgba(255, 255, 255, 0.60);
+  font-size: 0.875rem;
+}
+
+nav a.router-link-exact-active {
+  color: #42b983;
+}
+
+.text-bold {
+  font-weight: bold;
+}

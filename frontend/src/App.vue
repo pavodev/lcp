@@ -1,68 +1,78 @@
 <template>
-  <div class="container">
-    <header
-      class="d-flex flex-wrap justify-content-center py-3 mb-4 border-bottom"
-    >
-      <a
-        href="/"
-        class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-dark text-decoration-none"
-      >
-        <svg class="bi me-2" width="40" height="32">
-          <use xlink:href="#bootstrap"></use>
-        </svg>
-        <span class="fs-4">uplord</span>
-      </a>
-
-      <ul class="nav nav-pills">
-        <li class="nav-item" @click="addActionClass">
-          <router-link class="nav-link" to="/">Home</router-link>
-        </li>
-        <li class="nav-item" @click="addActionClass">
-          <router-link class="nav-link" to="/query">Query</router-link>
-        </li>
-        <li class="nav-item" @click="addActionClass">
-          <router-link class="nav-link" to="/player">Player</router-link>
-        </li>
-        <li class="nav-item">
-          <router-link class="nav-link" to="/Shibboleth.sso/Logout" v-if="userData && userData.user && userData.user.id"
-            >Logout ({{ userData.user.displayName }})</router-link
-          >
-          <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else
-            >Login</router-link
-          >
-        </li>
-      </ul>
-    </header>
+  <div id="app-content">
+    <nav class="navbar navbar-expand-lg bg-liri mb-3">
+      <div class="container">
+        <a class="navbar-brand" href="#">UpLORD</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+          <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav">
+            <li class="nav-item">
+              <router-link class="nav-link" to="/">
+                <FontAwesomeIcon :icon="['fas', 'house']" class="me-1" />
+                Home
+              </router-link>
+            </li>
+            <li class="nav-item">
+              <router-link class="nav-link" to="/query">
+                <FontAwesomeIcon :icon="['fas', 'magnifying-glass']" class="me-1" />
+                Query
+              </router-link>
+            </li>
+            <li class="nav-item">
+              <router-link class="nav-link" to="/query-test">
+                <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
+                Query Test
+              </router-link>
+            </li>
+            <!-- <li class="nav-item">
+              <router-link class="nav-link" to="/player">Player</router-link>
+            </li> -->
+          </ul>
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <router-link
+                class="nav-link"
+                to="/Shibboleth.sso/Logout"
+                v-if="userData && userData.user && userData.user.id"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
+                  Logout <small>({{ userData.user.displayName }})</small>
+                </router-link
+              >
+              <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else
+                >
+                  <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
+                  Login
+                </router-link
+              >
+            </li>
+          </ul>
+        </div>
+      </div>
+    </nav>
+    <router-view />
   </div>
-  <router-view />
 </template>
-
-<style>
-#app {
-  font-family: Avenir, Helvetica, Arial, sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  text-align: center;
-  color: #2c3e50;
-}
-</style>
 
 <script>
 import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
+import { useCorpusStore } from "@/stores/corpusStore";
 
 export default {
   mounted() {
-    useUserStore().fetchUserData()
-    // useUserStore().fetchCorpuses()
+    useUserStore().fetchUserData();
+    useCorpusStore().fetchCorpora()
   },
   methods: {
-    addActionClass(e){
-      e.currentTarget.querySelector('.nav-link').classList.add("active")
-    }
+    addActionClass(e) {
+      e.currentTarget.querySelector(".nav-link").classList.add("active");
+    },
   },
   computed: {
-    ...mapState(useUserStore, ['userData'])
-  }
+    ...mapState(useUserStore, ["userData"]),
+  },
 };
 </script>
