@@ -21,11 +21,8 @@ import asyncpg
 
 from backend.check_file_permissions import check_file_permissions
 from backend.video import video
-from backend.sock import (
-    sock,
-    send_json_to_user_socket,
-    send_finished_query_to_websockets,
-)
+from backend.sock import sock, handle_redis_response
+
 from backend.lama_user_data import lama_user_data
 from backend.query import query
 from backend.document import document
@@ -59,7 +56,7 @@ async def _listen_to_redis_for_queries(app):
     pubsub = app["aredis"].pubsub()
     async with pubsub as p:
         await p.subscribe(PUBSUB_CHANNEL)
-        await send_finished_query_to_websockets(p, app)
+        await handle_redis_response(p, app)
         await p.unsubscribe(PUBSUB_CHANNEL)
 
 

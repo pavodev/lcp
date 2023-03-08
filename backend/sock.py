@@ -7,7 +7,7 @@ import asyncio
 from .query import query
 
 
-async def send_finished_query_to_websockets(channel, app):
+async def handle_redis_response(channel, app):
     """
     If redis publishes a message, it gets picked up here and broadcast to the
     correct websockets...
@@ -22,9 +22,7 @@ async def send_finished_query_to_websockets(channel, app):
                 user = payload.get("user")
                 room = payload.get("room")
                 if payload.get("status") == "failed":
-                    await send_json_to_user_socket(
-                        app["websockets"], room, payload, just=(room, user)
-                    )
+                    await push_msg(app["websockets"], room, payload, just=(room, user))
                     continue
                 # handle configuration message
                 if "_is_config" in payload:
@@ -34,7 +32,7 @@ async def send_finished_query_to_websockets(channel, app):
 
                 # handle fetch/store queries message
                 elif payload.get("action") in ("fetch_queries", "store_query"):
-                    await send_json_to_user_socket(
+                    await push_msg(
                         app["websockets"],
                         room,
                         payload,
@@ -50,17 +48,10 @@ async def send_finished_query_to_websockets(channel, app):
             pass
 
 
-async def _kill_ongoing(request, user, room):
-    """
-    todo
-    """
-    qs = request.app["query_service"]
-    qs.cancel_running_jobs(user, room)
-
-
 async def _handle_query(app, payload, user, room):
     """
-    Handle iteration of a query
+    Our subscribe listener has picked up a message, and it's about
+    a query iteration. Create a websocket message to send to correct frontends
     """
     status = payload.get("status", "unknown")
     job = payload.get("job")
@@ -88,23 +79,17 @@ async def _handle_query(app, payload, user, room):
             "user": user,
             "room": room,
             "n_users": n_users,
-            # "original_query": payload["original_query"],
             "status": status,
-            # "done_batches": payload["done_batches"],
-            # "current_batch": payload["current_batch"],
-            # "all_batches": payload["all_batches"],
             "percentage_done": payload["percentage_done"],
             "total_results_requested": payload["total_results_requested"],
             "hit_limit": payload["hit_limit"],
             "projected_results": payload["projected_results"],
             "batches_done": f"{done}/{total_batches}",
         }
-    await send_json_to_user_socket(
-        app["websockets"], room, to_send, skip=None, just=(room, user)
-    )
+    await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
 
 
-async def send_json_to_user_socket(sockets, session_id, msg, skip=None, just=None):
+async def push_msg(sockets, session_id, msg, skip=None, just=None):
     """
     Send JSON websocket message
     """
@@ -147,6 +132,7 @@ async def sock(request):
         action = payload["action"]
         session_id = payload.get("room")
         user_id = payload["user"]
+        ident = (session_id, user_id)
 
         if action == "joined":
             originally = len(sockets[session_id])
@@ -154,51 +140,40 @@ async def sock(request):
             currently = len(sockets[session_id])
             if session_id and originally != currently:
                 response = {"joined": user_id, "room": session_id, "n_users": currently}
-                await send_json_to_user_socket(
-                    sockets, session_id, response, skip=(session_id, user_id)
-                )
+                await push_msg(sockets, session_id, response, skip=ident)
 
         elif action == "left":
             try:
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
                 continue
-            await _kill_ongoing(request, user_id, session_id)
+            jobs = payload.get("jobs", [])
             currently = len(sockets[session_id])
-            if session_id and currently:
+            if not currently:
+                qs = request.app["query_service"]
+                qs.cancel_running_jobs(jobs)
+                if session_id:
+                    sockets.pop(session_id)
+            elif session_id:
                 response = {"left": user_id, "room": session_id, "n_users": currently}
-                await send_json_to_user_socket(
-                    sockets, session_id, response, skip=(session_id, user_id)
-                )
-
-        elif action == "store_history":
-            await send_json_to_user_socket(
-                sockets, session_id, response, skip=(session_id, user_id)
-            )
-        elif action == "fetch_history":
-            await send_json_to_user_socket(
-                sockets, session_id, response, skip=(session_id, user_id)
-            )
+                await push_msg(sockets, session_id, response, skip=ident)
 
         elif action == "populate":
             sockets[session_id].add((ws, user_id))
             response = {}
-            await send_json_to_user_socket(
-                sockets, session_id, response, skip=(session_id, user_id)
-            )
+            await push_msg(sockets, session_id, response, skip=ident)
 
-        # query actions
         elif action == "delete_query":
             query_id = payload["query_id"]
             query_service.delete(query_id)
             response = {"id": query_id, "status": "deleted"}
-            await send_json_to_user_socket(sockets, session_id, response)
+            await push_msg(sockets, session_id, response)
 
         elif action == "cancel_query":
             query_id = payload["query_id"]
             query_service.cancel(query_id)
             response = {"id": query_id, "status": "cancelled"}
-            await send_json_to_user_socket(sockets, session_id, response)
+            await push_msg(sockets, session_id, response)
 
         elif action == "query_result":
             response = {
@@ -206,7 +181,7 @@ async def sock(request):
                 "user": user_id,
                 "room": session_id,
             }
-            await send_json_to_user_socket(sockets, session_id, response)
+            await push_msg(sockets, session_id, response)
 
     # connection closed
     # await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message='Server shutdown')

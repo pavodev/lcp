@@ -259,5 +259,6 @@ class QueryService:
         job = Job.fetch(job_id, connection=self.app["redis"])
         return job
 
-    def cancel_running_jobs(self, user, room):
-        pass
+    def cancel_running_jobs(self, jobs):
+        for idx in set(jobs):
+            self.delete(idx)
