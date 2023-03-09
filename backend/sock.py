@@ -76,6 +76,12 @@ async def _handle_query(app, payload, user, room):
     """
     status = payload.get("status", "unknown")
     job = payload.get("job")
+
+    the_job = Job.fetch(job, connection=app["redis"])
+    job_status = the_job.get_status(refresh=True)
+    if job_status in ("stopped", "canceled"):
+        print(f"Query was stopped: {job} -- preventing update")
+        return
     current_batch = payload["current_batch"]
     total = payload.get("total_results_requested")
     if not total or total == -1:
@@ -177,6 +183,12 @@ async def sock(request):
             elif session_id:
                 response = {"left": user_id, "room": session_id, "n_users": currently}
                 await push_msg(sockets, session_id, response, skip=ident)
+
+        elif action == "stop":
+            qs = request.app["query_service"]
+            n = qs.cancel_running_jobs(user_id, session_id)
+            response = {"status": "stopped", "n": n, "action": "stopped"}
+            await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "populate":
             sockets[session_id].add((ws, user_id))

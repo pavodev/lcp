@@ -76,6 +76,9 @@
           <button type="button" @click="submit" class="btn btn-primary" :disabled="selectedCorpora.length == 0">
             Submit
           </button>
+          <button type="button" @click="stop" class="btn btn-primary">
+            Stop
+          </button>
           <button type="button" @click="save" :disabled="!queryName" class="btn btn-primary">Save</button>
           <button type="button" @click="fetch" class="btn btn-primary">Fetch</button>
 
@@ -290,6 +293,11 @@ export default {
         } else if (data['action'] === 'store_query') {
           console.log('query stored', data)
           return
+        } else if (data['action'] === 'stopped') {
+          if (data['n']) {
+            console.log('queries stopped', data)
+          }
+          return
         }
       }
       data["n_results"] = data["result"].length;
@@ -298,6 +306,7 @@ export default {
       this.WSData = data;
     },
     submit() {
+      this.stop();
       let data = {
         corpora: this.selectedCorpora.map(corpus => corpus.value),
         query: this.query,
@@ -309,6 +318,14 @@ export default {
         total_results_requested: this.nResults,
       };
       useCorpusStore().fetchQuery(data);
+    },
+    stop() {
+      this.$socket.sendObj({
+        // room: this.roomId,
+        room: null,
+        action: "stop",
+        user: this.userId,
+      });
     },
     save() {
       let data = {

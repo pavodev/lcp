@@ -72,8 +72,9 @@ async def upload(request):
     qs = request.app["query_service"]
     job = qs.upload(path, username, corpus_id, room=room, config=config, gui=gui_mode)
     short_url = str(url).split("?", 1)[0]
+    whole_url = f"{short_url}?job={job.id}"
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
-        {short_url}?job={job.id}    
+        {whole_url}    
     """
     ret = {
         "status": "started",
@@ -81,6 +82,7 @@ async def upload(request):
         "size": size,
         "corpus_id": str(corpus_id),
         "info": info,
+        "target": whole_url,
     }
 
     return web.json_response(ret)

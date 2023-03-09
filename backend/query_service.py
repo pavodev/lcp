@@ -30,6 +30,9 @@ class QueryService:
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def get_config(self, queue="query", **kwargs):
+        """
+        Get initial app configuration JSON
+        """
         opts = {
             "query": "SELECT * FROM main.corpus;",
             "config": True,
@@ -38,6 +41,9 @@ class QueryService:
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def fetch_queries(self, user, room=None, queue="query"):
+        """
+        Get previous saved queries for this user/room
+        """
         if room:
             room_info = " AND room = %s"
             params = (user, room)
@@ -57,6 +63,9 @@ class QueryService:
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def store_query(self, query_data, idx, user, room=None, queue="query"):
+        """
+        Add a saved query to the db
+        """
         db_query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
         opts = {
             "user": user,
@@ -74,6 +83,9 @@ class QueryService:
     def upload(
         self, data, user, corpus_id, room=None, config=None, queue="query", gui=False
     ):
+        """
+        Upload a new corpus to the system
+        """
 
         if config is not None:
             with open(config, "r") as fo:
@@ -106,11 +118,15 @@ class QueryService:
         jobs = self.app["started_registry"].get_job_ids()
         jobs += self.app["scheduled_registry"].get_job_ids()
         jobs = set(jobs)
+        stopped = 0
         for job in jobs:
             maybe = Job.fetch(job, connection=self.app["redis"])
             if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
+                print(f"Killing job: {job}")
                 maybe.cancel()
-                maybe.delete()
+                # maybe.delete()
+                stopped += 1
+        return stopped
 
     def get(self, job_id):
         try:
