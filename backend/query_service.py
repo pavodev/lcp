@@ -2,6 +2,7 @@ import json
 import os
 
 from rq.job import Job
+from rq.exceptions import NoSuchJobError
 from rq import get_current_job
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 
@@ -26,7 +27,7 @@ def _get_status(results_so_far, **kwargs):
     return "partial"
 
 
-def _publish_success_to_redis(job, connection, result, *args, **kwargs):
+def _query_success(job, connection, result, *args, **kwargs):
     """
     Job callback, publishes a redis message containing the results
     """
@@ -78,7 +79,7 @@ def _publish_success_to_redis(job, connection, result, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _publish_failure(job, connection, typ, value, traceback, *args, **kwargs):
+def _general_failure(job, connection, typ, value, traceback, *args, **kwargs):
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
@@ -93,6 +94,27 @@ def _publish_failure(job, connection, typ, value, traceback, *args, **kwargs):
         **job.kwargs,
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+
+async def _upload_data(**kwargs):
+    """
+    Script to be run by rq worker, convert data and upload to postgres
+    """
+    from corpert import Corpert
+    from .pg_upload import pg_upload
+
+    corpus_data = Corpert(kwargs["path"]).run()
+
+    await get_current_job()._pool.open()
+
+    async with get_current_job()._pool.connection() as conn:
+        # await conn.set_autocommit(True)
+        async with conn.cursor() as cur:
+            await pg_upload(
+                conn, cur, corpus_data, kwargs["corpus_id"], kwargs["config"]
+            )
+
+    return True
 
 
 async def _db_query(query=None, **kwargs):
@@ -124,6 +146,23 @@ async def _db_query(query=None, **kwargs):
             return result
 
 
+def _upload_success(job, connection, result, *args, **kwargs):
+    """
+    Success callback when user has uploaded a dataset
+    """
+
+    jso = {
+        "user": job.kwargs["user"],
+        "status": "success" if result else "unknown",
+        "corpus_id": job.kwargs["corpus_id"],
+        "action": "uploaded",
+        "gui": job.kwargs["gui"],
+        "config": job.kwargs["config"],
+        "room": job.kwargs["room"],
+    }
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+
 def _prev_queries_success(job, connection, result, *args, **kwargs):
     is_store = job.kwargs.get("store")
     action = "store_query" if is_store else "fetch_queries"
@@ -143,6 +182,9 @@ def _prev_queries_success(job, connection, result, *args, **kwargs):
 
 
 def _make_config(job, connection, result, *args, **kwargs):
+    """
+    Run by worker: make config data
+    """
     fixed = {}
     for tup in result:
         (
@@ -176,10 +218,12 @@ def _make_config(job, connection, result, *args, **kwargs):
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 
+    fixed["_uploads"] = {}
+
     # fixed["open_subtitles_en1"] = fixed["open_subtitles_en"]
     # fixed["sparcling1"] = fixed["sparcling"]
 
-    jso = {"config": fixed, "_is_config": True}
+    jso = {"config": fixed, "_is_config": True, "action": "set_config"}
 
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
@@ -197,11 +241,11 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        opts = dict(
-            on_success=_publish_success_to_redis,
-            on_failure=_publish_failure,
-            kwargs=kwargs,
-        )
+        opts = {
+            "on_success": _query_success,
+            "on_failure": _general_failure,
+            "kwargs": kwargs,
+        }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def get_config(self, queue="query", **kwargs):
@@ -227,6 +271,7 @@ class QueryService:
             "config": True,
             "params": params,
             "on_success": _prev_queries_success,
+            "on_failure": _general_failure,
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
@@ -241,8 +286,29 @@ class QueryService:
             "query_id": idx,
             "params": (idx, json.dumps(query_data), user, room),
             "on_success": _prev_queries_success,
+            "on_failure": _general_failure,
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+
+    def upload(
+        self, data, user, corpus_id, room=None, config=None, queue="query", gui=False
+    ):
+
+        if config is not None:
+            with open(config, "r") as fo:
+                config = json.load(fo)
+
+        opts = {
+            "on_success": _upload_success,
+            "on_failure": _general_failure,
+            "path": data,
+            "user": user,
+            "corpus_id": str(corpus_id),
+            "config": config,
+            "gui": gui,
+            "room": room,
+        }
+        return self.app[queue].enqueue(_upload_data, job_timeout=self.timeout, **opts)
 
     def cancel(self, job_id):
         job = Job.fetch(job_id, connection=self.app["redis"])
@@ -255,10 +321,13 @@ class QueryService:
         job.delete()
         return "DELETED"
 
-    def get(self, job_id):
-        job = Job.fetch(job_id, connection=self.app["redis"])
-        return job
-
     def cancel_running_jobs(self, jobs):
         for idx in set(jobs):
             self.delete(idx)
+
+    def get(self, job_id):
+        try:
+            job = Job.fetch(job_id, connection=self.app["redis"])
+            return job
+        except NoSuchJobError:
+            return

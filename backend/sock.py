@@ -21,12 +21,15 @@ async def handle_redis_response(channel, app):
                 payload = json.loads(message["data"])
                 user = payload.get("user")
                 room = payload.get("room")
+
+                # error handling
                 if payload.get("status") == "failed":
                     await push_msg(app["websockets"], room, payload, just=(room, user))
                     continue
+
                 # handle configuration message
-                if "_is_config" in payload:
-                    print(f"Config loaded: {len(payload['config'])} corpora")
+                if payload.get("action") == "set_config":
+                    print(f"Config loaded: {len(payload['config'])-1} corpora")
                     app["config"] = payload["config"]
                     continue
 
@@ -40,6 +43,24 @@ async def handle_redis_response(channel, app):
                         just=(room, user),
                     )
                     continue
+
+                # handle uploaded data (add to config, ws message if gui mode)
+                elif payload.get("action") == "uploaded":
+                    conf = payload["config"]
+                    corpus_id = payload["corpus_id"]
+                    # todo: better structure for this i guess?
+                    app["config"]["_uploads"][corpus_id] = conf
+                    if payload.get("gui"):
+                        await push_msg(
+                            app["websockets"],
+                            room,
+                            payload,
+                            skip=None,
+                            just=(room, user),
+                        )
+                        continue
+
+                # handle query progress
                 else:
                     await _handle_query(app, payload, user, room)
 

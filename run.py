@@ -27,6 +27,7 @@ from backend.lama_user_data import lama_user_data
 from backend.query import query
 from backend.document import document
 from backend.store import fetch_queries, store_query
+from backend.upload import upload
 from backend.validate import validate
 from backend.corpora import corpora
 from backend.query_service import QueryService
@@ -117,6 +118,9 @@ async def create_app():
 
     resource = cors.add(app.router.add_resource("/validate"))
     cors.add(resource.add_route("POST", validate))
+
+    resource = cors.add(app.router.add_resource("/upload"))
+    cors.add(resource.add_route("POST", upload))
 
     resource = cors.add(app.router.add_resource("/video"))
     cors.add(resource.add_route("GET", video))
