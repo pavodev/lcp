@@ -151,6 +151,7 @@ async def create_app():
     timeout = int(os.getenv("QUERY_TIMEOUT"))
     app["query"] = Queue(connection=app["redis"], job_timeout=timeout)
     app["export"] = Queue(connection=app["redis"], job_timeout=3000)
+    app["alt"] = Queue(connection=app["redis"], job_timeout=3000)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
 

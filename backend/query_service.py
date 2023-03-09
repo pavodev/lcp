@@ -29,7 +29,7 @@ class QueryService:
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
-    def get_config(self, queue="query", **kwargs):
+    def get_config(self, queue="alt", **kwargs):
         """
         Get initial app configuration JSON
         """
@@ -40,7 +40,7 @@ class QueryService:
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
-    def fetch_queries(self, user, room=None, queue="query"):
+    def fetch_queries(self, user, room=None, queue="alt"):
         """
         Get previous saved queries for this user/room
         """
@@ -62,7 +62,7 @@ class QueryService:
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
-    def store_query(self, query_data, idx, user, room=None, queue="query"):
+    def store_query(self, query_data, idx, user, room=None, queue="alt"):
         """
         Add a saved query to the db
         """
@@ -81,7 +81,7 @@ class QueryService:
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
     def upload(
-        self, data, user, corpus_id, room=None, config=None, queue="query", gui=False
+        self, data, user, corpus_id, room=None, config=None, queue="alt", gui=False
     ):
         """
         Upload a new corpus to the system
