@@ -27,6 +27,7 @@ export const useCorpusStore = defineStore("corpusData", {
     fetchCorpora(data) {
       httpApi.post(`/corpora`, data).then((r) => {
         this.corporaJson = r.data;
+        delete this.corporaJson.config["_uploads"]
         this.corpora = Object.keys(this.corporaJson.config).map(corpusId => {
           let corpus = this.corporaJson.config[corpusId]
           corpus.meta['id'] = corpusId

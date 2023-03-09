@@ -230,13 +230,11 @@ export default {
       this.connectToRoom();
     }
   },
+  beforeMount() {
+    window.addEventListener("beforeunload", this.sendLeft)
+  },
   unmounted() {
-    this.$socket.sendObj({
-      // room: this.roomId,
-      room: null,
-      action: "left",
-      user: this.userId,
-    });
+    this.sendLeft()
   },
   watch: {
     userData() {
@@ -253,6 +251,14 @@ export default {
     },
   },
   methods: {
+    sendLeft() {
+      this.$socket.sendObj({
+        // room: this.roomId,
+        room: null,
+        action: "left",
+        user: this.userId,
+      });
+    },
     connectToRoom() {
       this.waitForConnection(() => {
         this.$socket.sendObj({

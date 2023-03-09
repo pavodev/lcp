@@ -81,7 +81,7 @@ async def _handle_query(app, payload, user, room):
     if not total or total == -1:
         total = "all"
     print(
-        f"Query iteration: {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
+        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
         + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
     )
     if status == "partial":
@@ -168,11 +168,10 @@ async def sock(request):
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
                 continue
-            jobs = payload.get("jobs", [])
             currently = len(sockets[session_id])
             if not currently:
                 qs = request.app["query_service"]
-                qs.cancel_running_jobs(jobs)
+                qs.cancel_running_jobs(user_id, session_id)
                 if session_id:
                     sockets.pop(session_id)
             elif session_id:

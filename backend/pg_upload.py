@@ -1,5 +1,7 @@
 async def pg_upload(conn, cur, corpus_data, corpus_id, config_data):
 
+    return True
+
     schema_name = "u" + str(corpus_id).replace("-", "_")
     script = f"CREATE SCHEMA %s;"
     params = (schema_name,)
