@@ -1,7 +1,6 @@
 import re
 
 from aiohttp import web
-from cquery import validate as validator
 
 from . import utils
 
@@ -27,6 +26,8 @@ async def validate(request):
     * code shows the bad part of the code and contains a caret on a lower line
     * post gives suggestions for alternatives
     """
+    from cquery import validate as validator
+
     data = await request.json()
     query = data["query"]
     simple = data.get("simple", False)

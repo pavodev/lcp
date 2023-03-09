@@ -81,7 +81,6 @@ def _upload(job, connection, result, *args, **kwargs):
     """
     Success callback when user has uploaded a dataset
     """
-
     jso = {
         "user": job.kwargs["user"],
         "status": "success" if result else "unknown",
