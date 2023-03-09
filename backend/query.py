@@ -179,8 +179,6 @@ async def query(request, manual=None, app=None):
     if manual is None:
         print(f"QUERY:\n\n\n{sql_query}\n\n\n")
 
-    print(f"\nNow querying: {current_batch[1]}.{current_batch[2]}...")
-
     qs = app["query_service"]
     query_kwargs = dict(
         query=sql_query,
@@ -199,5 +197,8 @@ async def query(request, manual=None, app=None):
         languages=list(languages),
     )
     job = qs.submit(kwargs=query_kwargs)
+
+    print(f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}")
+
     jobs = {"status": "started", "job": job.id}
     return web.json_response(jobs)
