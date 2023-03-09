@@ -115,18 +115,20 @@ class QueryService:
         return "DELETED"
 
     def cancel_running_jobs(self, user, room):
-        jobs = self.app["started_registry"].get_job_ids()
-        jobs += self.app["scheduled_registry"].get_job_ids()
+        jobs = self.app["query"].started_job_registry.get_job_ids()
+        jobs += self.app["query"].scheduled_job_registry.get_job_ids()
         jobs = set(jobs)
         stopped = 0
+        ids = []
         for job in jobs:
             maybe = Job.fetch(job, connection=self.app["redis"])
             if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
                 print(f"Killing job: {job}")
                 maybe.cancel()
+                ids.append(job)
                 # maybe.delete()
                 stopped += 1
-        return stopped
+        return ids
 
     def get(self, job_id):
         try:

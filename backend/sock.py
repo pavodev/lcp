@@ -3,6 +3,7 @@ import json
 import aiohttp
 import async_timeout
 import asyncio
+from rq.job import Job
 
 from .query import query
 
@@ -65,8 +66,18 @@ async def handle_redis_response(channel, app):
                     await _handle_query(app, payload, user, room)
 
                 await asyncio.sleep(0.1)
-        except asyncio.TimeoutError:
-            pass
+        except asyncio.TimeoutError as err:
+            print(f"Timeout: {err}")
+        except Exception as err:
+            to_send = {"error": str(err), "status": "failed"}
+            print("Error", err)
+            await push_msg(
+                app["websockets"],
+                room,
+                to_send,
+                skip=None,
+                just=(room, user),
+            )
 
 
 async def _handle_query(app, payload, user, room):
@@ -76,9 +87,8 @@ async def _handle_query(app, payload, user, room):
     """
     status = payload.get("status", "unknown")
     job = payload.get("job")
-
     the_job = Job.fetch(job, connection=app["redis"])
-    job_status = the_job.get_status(refresh=True)
+    job_status = the_job.get_status(refresh=False)
     if job_status in ("stopped", "canceled"):
         print(f"Query was stopped: {job} -- preventing update")
         return
@@ -90,7 +100,7 @@ async def _handle_query(app, payload, user, room):
         f"Query iteration: {job} -- {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
         + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
     )
-    if status == "partial":
+    if status == "partial" and not job_status in ("stopped", "canceled"):
         payload["config"] = app["config"]
         await query(None, payload, app)
         # return  # return will prevent partial results from going back to frontend
@@ -147,7 +157,7 @@ async def sock(request):
     """
     ws = aiohttp.web.WebSocketResponse()
     await ws.prepare(request)
-    query_service = request.app["query_service"]
+    qs = request.app["query_service"]
     sockets = request.app["websockets"]
 
     async for msg in ws:
@@ -176,7 +186,6 @@ async def sock(request):
                 continue
             currently = len(sockets[session_id])
             if not currently:
-                qs = request.app["query_service"]
                 qs.cancel_running_jobs(user_id, session_id)
                 if session_id:
                     sockets.pop(session_id)
@@ -185,9 +194,13 @@ async def sock(request):
                 await push_msg(sockets, session_id, response, skip=ident)
 
         elif action == "stop":
-            qs = request.app["query_service"]
-            n = qs.cancel_running_jobs(user_id, session_id)
-            response = {"status": "stopped", "n": n, "action": "stopped"}
+            jobs = qs.cancel_running_jobs(user_id, session_id)
+            response = {
+                "status": "stopped",
+                "n": len(jobs),
+                "action": "stopped",
+                "jobs": jobs,
+            }
             await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "populate":
@@ -197,13 +210,13 @@ async def sock(request):
 
         elif action == "delete_query":
             query_id = payload["query_id"]
-            query_service.delete(query_id)
+            qs.delete(query_id)
             response = {"id": query_id, "status": "deleted"}
             await push_msg(sockets, session_id, response)
 
         elif action == "cancel_query":
             query_id = payload["query_id"]
-            query_service.cancel(query_id)
+            qs.cancel(query_id)
             response = {"id": query_id, "status": "cancelled"}
             await push_msg(sockets, session_id, response)
 
@@ -216,9 +229,6 @@ async def sock(request):
             await push_msg(sockets, session_id, response)
 
     # connection closed
-    # await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message='Server shutdown')
-
-    # if user_id is not None:
-    #    request.app['websockets'].remove((ws, user_id))
+    await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message="Server shutdown")
 
     return ws

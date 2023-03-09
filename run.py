@@ -15,7 +15,6 @@ from redis import Redis as redis
 from redis import asyncio as aioredis
 from rq import Queue
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
-from rq.registry import StartedJobRegistry, ScheduledJobRegistry
 from sshtunnel import SSHTunnelForwarder
 import uvloop
 import asyncpg
@@ -154,8 +153,6 @@ async def create_app():
     app["export"] = Queue(connection=app["redis"], job_timeout=3000)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
-    app["started_registry"] = StartedJobRegistry("default", connection=app["redis"])
-    app["scheduled_registry"] = ScheduledJobRegistry("default", connection=app["redis"])
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
