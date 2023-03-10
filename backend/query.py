@@ -10,8 +10,19 @@ from abstract_query.lcp_query import LCPQuery
 from . import utils
 
 
-def _make_stats_query(query):
-    return "SELECT xpos FROM {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[]);"
+def _make_stats_query(query, schema, config):
+    """
+    todo: this is just temp code until we know what stats query really does
+    """
+    attrs = config["layer"]["Token"]["attributes"]
+    attrs = reversed(sorted(attrs.items()))
+    best = next((k for k, v in attrs if v.get("type") == "categorical"), "xpos")
+    start = f"SELECT {best}"
+    return (
+        "SELECT "
+        + best
+        + " FROM {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[]);"
+    )
 
 
 def _get_word_count(corpora, config, languages):
@@ -203,13 +214,15 @@ async def query(request, manual=None, app=None):
         existing_results=existing_results,
         word_count=word_count,
         stats=stats,
+        offset=offset,
         page_size=page_size,
         languages=list(languages),
     )
     job = qs.query(kwargs=query_kwargs)
 
     if stats:
-        stats_query = _make_stats_query(query)
+        sect = config[str(current_batch[0])]
+        stats_query = _make_stats_query(query, current_batch[1], sect)
         stats_kwargs = dict(
             user=user,
             room=room,

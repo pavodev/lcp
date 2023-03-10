@@ -17,12 +17,15 @@ def _query(job, connection, result, *args, **kwargs):
     total_requested = job.kwargs["total_results_requested"]
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
+    offset = job.kwargs.get("offset", False)
 
     unlimited = job.kwargs["needed"] in {0, -1, False, None}
 
     limited = not unlimited and len(result) >= job.kwargs["needed"]
 
-    for res in result:
+    for n, res in enumerate(result):
+        if offset and n < offset:
+            continue
         # fix: move sent_id to own column
         fixed = []
         sent_id = res[0][0]
@@ -37,7 +40,9 @@ def _query(job, connection, result, *args, **kwargs):
     job.kwargs["done_batches"].append(just_finished)
 
     status = _get_status(results_so_far, **job.kwargs)
+    hit_limit = False if not limited else job.kwargs["needed"]
     job.meta["_status"] = status
+    job.meta["hit_limit"] = hit_limit
     job.save_meta()
     if status == "finished":
         projected_results = len(results_so_far)
@@ -54,7 +59,7 @@ def _query(job, connection, result, *args, **kwargs):
         "job": job.id,
         "projected_results": projected_results,
         "percentage_done": round(perc, 3),
-        "hit_limit": False if not limited else job.kwargs["needed"],
+        "hit_limit": hit_limit,
         "batch_matches": len(result),
         "stats": job.kwargs["stats"],
         **kwargs,
@@ -162,15 +167,17 @@ def _config(job, connection, result, *args, **kwargs):
             token_counts,
             mapping,
         ) = tup
+        ver = str(current_version)
+        schema_path = schema_path.replace("<version>", ver)
+        if not schema_path.endswith(ver):
+            schema_path = f"{schema_path}{ver}"
         rest = {
             "shortname": name,
             "corpus_id": int(corpus_id),
-            "current_version": current_version,
+            "current_version": int(ver) if ver.isnumeric() else ver,
             "version_history": version_history,
             "description": description,
-            "schema_path": schema_path
-            if schema_path.endswith("1")
-            else f"{schema_path}1",
+            "schema_path": schema_path,
             "token_counts": token_counts,
             "mapping": mapping,
         }

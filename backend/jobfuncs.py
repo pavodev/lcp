@@ -27,9 +27,11 @@ async def _upload_data(**kwargs):
     return True
 
 
-async def _as_dict(result):
+async def _as_dict(result, hit_limit):
     out = Counter()
-    for r in result:
+    for i, r in enumerate(result):
+        if hit_limit and i == hit_limit:
+            break
         r = r[0] if isinstance(r, tuple) and len(r) == 1 else r
         out[r] += 1
     return dict(out)
@@ -50,6 +52,7 @@ async def _db_query(query=None, **kwargs):
         associated_query = kwargs["depends_on"]
         conn = get_current_connection()
         associated_query = Job.fetch(associated_query, connection=conn)
+        hit_limit = associated_query.meta.get("hit_limit")
         if associated_query.get_status(refresh=True) in ("stopped", "canceled"):
             raise Interrupted()
         if associated_query.result is None:
@@ -83,7 +86,7 @@ async def _db_query(query=None, **kwargs):
             if is_config or is_stats:
                 result = await cur.fetchall()
                 if is_stats:
-                    result = await _as_dict(result)
+                    result = await _as_dict(result, hit_limit)
                 return result
             if single_result:
                 result = await cur.fetchone()
