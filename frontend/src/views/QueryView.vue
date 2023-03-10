@@ -76,6 +76,9 @@
           <button type="button" @click="submit" class="btn btn-primary" :disabled="selectedCorpora.length == 0">
             Submit
           </button>
+          <button type="button" @click="resume" class="btn btn-primary" :disabled="selectedCorpora.length == 0">
+            Resume
+          </button>
           <button type="button" @click="stop" class="btn btn-primary">
             Stop
           </button>
@@ -321,14 +324,16 @@ export default {
           return
         }
       }
-      console.log('needs result??', data)
       data["n_results"] = data["result"].length;
       data["first_result"] = data["result"][0];
       delete data["result"];
       this.WSData = data;
     },
-    submit() {
-      this.stop();
+    submit(event, resumeQuery = false) {
+      if (!resumeQuery) {
+        this.stop();
+        this.WSData = {}
+      }
       let data = {
         corpora: this.selectedCorpora.map(corpus => corpus.value),
         query: this.query,
@@ -338,9 +343,16 @@ export default {
         page_size: this.pageSize,
         languages: this.languages.split(","),
         total_results_requested: this.nResults,
-        stats: true
+        stats: true,
+        resume: resumeQuery
       };
+      if (resumeQuery) {
+        data['previous'] = this.WSData.job
+      }
       useCorpusStore().fetchQuery(data);
+    },
+    resume() {
+      this.submit(null, true)
     },
     stop() {
       this.$socket.sendObj({

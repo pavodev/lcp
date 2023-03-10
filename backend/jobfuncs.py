@@ -27,13 +27,11 @@ async def _upload_data(**kwargs):
     return True
 
 
-async def _as_dict(result, hit_limit):
+async def _as_dict(result):
     out = Counter()
-    for i, r in enumerate(result):
-        if hit_limit and i == hit_limit:
-            break
+    for i, (r, freq) in enumerate(result):
         r = r[0] if isinstance(r, tuple) and len(r) == 1 else r
-        out[r] += 1
+        out[r] += freq
     return dict(out)
 
 
@@ -59,7 +57,11 @@ async def _db_query(query=None, **kwargs):
             raise Interrupted()
         if not associated_query.result:
             return {}
-        values = [(i[0][1], i[0][-1]) for i in associated_query.result]
+        prev_results = associated_query.result
+        # so we don't double count on resuming
+        if hit_limit:
+            prev_results = prev_results[hit_limit:]
+        values = [(i[0][1], i[0][-1]) for i in prev_results]
         together = set()
         for start, end in values:
             at = int(start)
@@ -86,7 +88,7 @@ async def _db_query(query=None, **kwargs):
             if is_config or is_stats:
                 result = await cur.fetchall()
                 if is_stats:
-                    result = await _as_dict(result, hit_limit)
+                    result = await _as_dict(result)
                 return result
             if single_result:
                 result = await cur.fetchone()

@@ -24,7 +24,7 @@ def _query(job, connection, result, *args, **kwargs):
     limited = not unlimited and len(result) >= job.kwargs["needed"]
 
     for n, res in enumerate(result):
-        if offset and n < offset:
+        if not unlimited and offset and n < offset:
             continue
         # fix: move sent_id to own column
         fixed = []
@@ -43,6 +43,7 @@ def _query(job, connection, result, *args, **kwargs):
     hit_limit = False if not limited else job.kwargs["needed"]
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
+    job.meta["all_results"] = results_so_far
     job.save_meta()
     if status == "finished":
         projected_results = len(results_so_far)

@@ -17,12 +17,10 @@ def _make_stats_query(query, schema, config):
     attrs = config["layer"]["Token"]["attributes"]
     attrs = reversed(sorted(attrs.items()))
     best = next((k for k, v in attrs if v.get("type") == "categorical"), "xpos")
-    start = f"SELECT {best}"
-    return (
-        "SELECT "
-        + best
-        + " FROM {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[]);"
-    )
+    start = f"SELECT {best}, COUNT({best}) FROM "
+    middle = " {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[])"
+    end = f" GROUP BY {best};"
+    return start + middle + end
 
 
 def _get_word_count(corpora, config, languages):
@@ -119,6 +117,7 @@ async def query(request, manual=None, app=None):
     that happpens, manual is a dict with the needed data and the app is passed in as a kwarg.
     """
     # manual means the request doesn't come from the frontend, but from the run.py file...
+    unlimited = {0, -1, False, None}
     if manual is not None:
         job = Job.fetch(manual["job"], connection=app["redis"])
         user = manual.get("user")
@@ -134,6 +133,8 @@ async def query(request, manual=None, app=None):
         done_batches.append(previous_batch)
         all_batches = job.kwargs["all_batches"]
         base = manual["base"]
+        previous = False
+        resuming = False
 
         corpora_to_use = [int(i) for i in manual["corpora"]]
         existing_results = manual["result"]
@@ -143,17 +144,17 @@ async def query(request, manual=None, app=None):
         query = job.kwargs["original_query"]
         n_results_so_far = len(existing_results)
         total_results_requested = manual["total_results_requested"]
-        unlimited = {0, -1, False, None}
+
         needed_to_go = (
             total_results_requested - n_results_so_far
             if total_results_requested not in unlimited
             else -1
         )
         config = manual["config"]
-        hit_limit = manual.get("hit_limit")
+        hit_limit = manual.get("hit_limit", False)
     else:
         # request is from the frontend, most likely a new query
-        hit_limit = False
+        # hit_limit = False
         done_batches = []
         app = request.app
         config = request.app["config"]
@@ -162,6 +163,8 @@ async def query(request, manual=None, app=None):
         query = request_data["query"]
         base = None
         room = request_data.get("room")
+        previous = request_data.get("previous", False)
+        resuming = request_data.get("resume", False)
         stats = request_data.get("stats", False)
         page_size = request_data.get("page_size", 10)
         user = request_data.get("user")
@@ -171,15 +174,40 @@ async def query(request, manual=None, app=None):
         n_results_so_far = 0
         all_batches = _get_query_batches(corpora_to_use, config, languages)
         needed_to_go = total_results_requested
+        hit_limit = False
+
+    current_batch = None
+
+    if resuming:
+        prev_job = Job.fetch(previous, connection=app["redis"])
+        hit_limit = prev_job.meta.get("hit_limit", 0)
+        all_batches = prev_job.kwargs["all_batches"]
+        done_batches = prev_job.kwargs["done_batches"]
+        existing_results = prev_job.meta["all_results"]
+        n_results_so_far = len(existing_results)
+        needed_to_go = (
+            total_results_requested - n_results_so_far
+            if total_results_requested not in unlimited
+            else -1
+        )
+        if not hit_limit:
+            previous_batch = prev_job.kwargs["current_batch"]
+            done_batches.append(previous_batch)
+        else:
+            current_batch = prev_job.kwargs["current_batch"]
 
     sql_query = query
     word_count = _get_word_count(corpora_to_use, config, languages)
 
-    current_batch = _decide_batch(
-        done_batches, all_batches, n_results_so_far, needed_to_go, hit_limit, page_size
-    )
-
-    offset = None if not hit_limit else hit_limit
+    if current_batch is None:
+        current_batch = _decide_batch(
+            done_batches,
+            all_batches,
+            n_results_so_far,
+            needed_to_go,
+            hit_limit,
+            page_size,
+        )
 
     if "SELECT" not in query.upper():
         try:
@@ -188,14 +216,14 @@ async def query(request, manual=None, app=None):
                 batch=current_batch[2],
                 # limit=needed_to_go,
                 config=app["config"][str(current_batch[0])],
-                # offset=offset,
+                # offset=hit_limit,
             )
             sql_query = LCPQuery(query, **kwa).sql
         except Exception as err:
             print("SQL GENERATION FAILED! for dev, assuming script passed", err)
             raise err
 
-    if manual is None:
+    if manual is None and not resuming:
         print(f"QUERY:\n\n\n{sql_query}\n\n\n")
 
     qs = app["query_service"]
@@ -214,7 +242,7 @@ async def query(request, manual=None, app=None):
         existing_results=existing_results,
         word_count=word_count,
         stats=stats,
-        offset=offset,
+        offset=hit_limit,
         page_size=page_size,
         languages=list(languages),
     )
