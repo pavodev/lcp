@@ -10,6 +10,10 @@ from abstract_query.lcp_query import LCPQuery
 from . import utils
 
 
+def _make_stats_query(query):
+    return "SELECT xpos FROM {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[]);"
+
+
 def _get_word_count(corpora, config, languages):
     """
     Sum the word counts for corpora being searched
@@ -108,6 +112,7 @@ async def query(request, manual=None, app=None):
         job = Job.fetch(manual["job"], connection=app["redis"])
         user = manual.get("user")
         room = manual.get("room")
+        stats = manual.get("stats")
         languages = set([i.strip() for i in manual.get("languages")])
 
         # done_batches = manual["done_batches"]
@@ -117,6 +122,7 @@ async def query(request, manual=None, app=None):
         done_batches = job.kwargs["done_batches"]
         done_batches.append(previous_batch)
         all_batches = job.kwargs["all_batches"]
+        base = manual["base"]
 
         corpora_to_use = [int(i) for i in manual["corpora"]]
         existing_results = manual["result"]
@@ -143,7 +149,9 @@ async def query(request, manual=None, app=None):
         request_data = await request.json()
         corpora_to_use = [int(i) for i in request_data["corpora"]]
         query = request_data["query"]
+        base = None
         room = request_data.get("room")
+        stats = request_data.get("stats", False)
         page_size = request_data.get("page_size", 10)
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
@@ -191,14 +199,29 @@ async def query(request, manual=None, app=None):
         current_batch=current_batch,
         all_batches=all_batches,
         corpora=corpora_to_use,
+        base=base,
         existing_results=existing_results,
         word_count=word_count,
+        stats=stats,
         page_size=page_size,
         languages=list(languages),
     )
-    job = qs.submit(kwargs=query_kwargs)
+    job = qs.query(kwargs=query_kwargs)
+
+    if stats:
+        stats_query = _make_stats_query(query)
+        stats_kwargs = dict(
+            user=user,
+            room=room,
+            current_batch=current_batch,
+            query=stats_query,
+            base=job.id if base is None else base,
+        )
+        stats_job = qs.statistics(depends_on=job.id, kwargs=stats_kwargs)
 
     print(f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}")
 
     jobs = {"status": "started", "job": job.id}
+    if stats:
+        jobs.update({"stats": True, "stats_job": stats_job.id})
     return web.json_response(jobs)

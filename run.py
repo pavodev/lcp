@@ -28,7 +28,8 @@ from backend.query import query
 from backend.document import document
 from backend.store import fetch_queries, store_query
 from backend.upload import upload
-from backend.validate import validate
+
+# from backend.validate import validate
 from backend.corpora import corpora
 from backend.query_service import QueryService
 
@@ -116,8 +117,8 @@ async def create_app():
     resource = cors.add(app.router.add_resource("/query"))
     cors.add(resource.add_route("POST", query))
 
-    resource = cors.add(app.router.add_resource("/validate"))
-    cors.add(resource.add_route("POST", validate))
+    # resource = cors.add(app.router.add_resource("/validate"))
+    # cors.add(resource.add_route("POST", validate))
 
     resource = cors.add(app.router.add_resource("/upload"))
     cors.add(resource.add_route("POST", upload))
@@ -150,10 +151,12 @@ async def create_app():
     app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT)
     timeout = int(os.getenv("QUERY_TIMEOUT"))
     app["query"] = Queue(connection=app["redis"], job_timeout=timeout)
+    # app["stats"] = Queue(connection=app["redis"], job_timeout=timeout)
     app["export"] = Queue(connection=app["redis"], job_timeout=3000)
     app["alt"] = Queue(connection=app["redis"], job_timeout=3000)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
+    app["canceled"] = set()
 
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)

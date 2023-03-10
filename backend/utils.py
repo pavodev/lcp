@@ -12,6 +12,10 @@ import json
 from uuid import UUID
 
 
+class Interrupted(Exception):
+    pass
+
+
 class CustomEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, UUID):

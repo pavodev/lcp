@@ -6,6 +6,7 @@ import asyncio
 from rq.job import Job
 
 from .query import query
+from .validate import validate
 
 
 async def handle_redis_response(channel, app):
@@ -25,6 +26,12 @@ async def handle_redis_response(channel, app):
 
                 # error handling
                 if payload.get("status") == "failed":
+                    await push_msg(app["websockets"], room, payload, just=(room, user))
+                    continue
+
+                # interrupt was sent? -- currently not used
+                if payload.get("status") == "interrupted":
+                    payload["action"] = "interrupted"
                     await push_msg(app["websockets"], room, payload, just=(room, user))
                     continue
 
@@ -61,6 +68,17 @@ async def handle_redis_response(channel, app):
                         )
                         continue
 
+                elif payload.get("action") == "stats":
+
+                    await push_msg(
+                        app["websockets"],
+                        room,
+                        payload,
+                        skip=None,
+                        just=(room, user),
+                    )
+                    continue
+
                 # handle query progress
                 else:
                     await _handle_query(app, payload, user, room)
@@ -88,8 +106,8 @@ async def _handle_query(app, payload, user, room):
     status = payload.get("status", "unknown")
     job = payload.get("job")
     the_job = Job.fetch(job, connection=app["redis"])
-    job_status = the_job.get_status(refresh=False)
-    if job_status in ("stopped", "canceled"):
+    job_status = the_job.get_status(refresh=True)
+    if job_status in ("stopped", "canceled") or job in app["canceled"]:
         print(f"Query was stopped: {job} -- preventing update")
         return
     current_batch = payload["current_batch"]
@@ -100,8 +118,14 @@ async def _handle_query(app, payload, user, room):
         f"Query iteration: {job} -- {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
         + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
     )
-    if status == "partial" and not job_status in ("stopped", "canceled"):
+    if (
+        status == "partial"
+        and not job_status in ("stopped", "canceled")
+        and job not in app["canceled"]
+    ):
         payload["config"] = app["config"]
+        if payload["base"] is None:
+            payload["base"] = job
         await query(None, payload, app)
         # return  # return will prevent partial results from going back to frontend
     to_send = payload
@@ -117,6 +141,8 @@ async def _handle_query(app, payload, user, room):
             "room": room,
             "n_users": n_users,
             "status": status,
+            "base": payload["base"],
+            # "job_status": job_status,
             "percentage_done": payload["percentage_done"],
             "total_results_requested": payload["total_results_requested"],
             "hit_limit": payload["hit_limit"],
@@ -201,6 +227,10 @@ async def sock(request):
                 "action": "stopped",
                 "jobs": jobs,
             }
+            await push_msg(sockets, session_id, response, just=ident)
+
+        elif action == "validate":
+            response = await validate(**payload)
             await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "populate":

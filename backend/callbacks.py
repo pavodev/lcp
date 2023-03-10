@@ -1,9 +1,9 @@
 import json
 
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
-
+from rq.job import Job
 from .configure import _get_batches
-from .utils import CustomEncoder
+from .utils import CustomEncoder, Interrupted
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
@@ -37,6 +37,8 @@ def _query(job, connection, result, *args, **kwargs):
     job.kwargs["done_batches"].append(just_finished)
 
     status = _get_status(results_so_far, **job.kwargs)
+    job.meta["_status"] = status
+    job.save_meta()
     if status == "finished":
         projected_results = len(results_so_far)
         perc = 100.0
@@ -54,8 +56,36 @@ def _query(job, connection, result, *args, **kwargs):
         "percentage_done": round(perc, 3),
         "hit_limit": False if not limited else job.kwargs["needed"],
         "batch_matches": len(result),
+        "stats": job.kwargs["stats"],
         **kwargs,
         **job.kwargs,
+    }
+
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+
+def _stats(job, connection, result, *args, **kwargs):
+
+    base = Job.fetch(job.kwargs["base"], connection=connection)
+    if "_stats" not in base.meta:
+        base.meta["_stats"] = {}
+    for r, v in result.items():
+        if r in base.meta["_stats"]:
+            base.meta["_stats"][r] += v
+        else:
+            base.meta["_stats"][r] = v
+
+    base.save_meta()
+
+    depended = Job.fetch(job.kwargs["depends_on"], connection=connection)
+
+    jso = {
+        "result": base.meta["_stats"],
+        "status": depended.meta["_status"],
+        "action": "stats",
+        "user": job.kwargs["user"],
+        "room": job.kwargs["room"],
+        # "current_batch": list(job.kwargs["current_batch"]),
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
@@ -64,16 +94,20 @@ def _general_failure(job, connection, typ, value, traceback, *args, **kwargs):
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
-    print("FAILURE", job, traceback)
-    jso = {
-        "status": "failed",
-        "kind": str(typ),
-        "value": str(value),
-        "traceback": str(traceback),
-        "job": job.id,
-        **kwargs,
-        **job.kwargs,
-    }
+    print("FAILURE", job, traceback, typ, value)
+    if isinstance(typ, Interrupted) or typ == Interrupted:
+        # jso = {"status": "interrupted", "job": job.id, **kwargs, **job.kwargs}
+        return  # do we need to send this?
+    else:
+        jso = {
+            "status": "failed",
+            "kind": str(typ),
+            "value": str(value),
+            "traceback": str(traceback),
+            "job": job.id,
+            **kwargs,
+            **job.kwargs,
+        }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 

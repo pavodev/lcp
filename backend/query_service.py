@@ -3,8 +3,9 @@ import os
 
 from rq.job import Job
 from rq.exceptions import NoSuchJobError
+from rq.command import send_stop_job_command
 
-from .callbacks import _query, _queries, _upload, _config, _general_failure
+from .callbacks import _query, _queries, _upload, _config, _general_failure, _stats
 
 from .jobfuncs import _db_query, _upload_data
 
@@ -18,7 +19,7 @@ class QueryService:
         self.app = app
         self.timeout = int(os.getenv("QUERY_TIMEOUT"))
 
-    def submit(self, queue="query", kwargs=None):
+    def query(self, queue="query", kwargs=None):
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -26,6 +27,20 @@ class QueryService:
             "on_success": _query,
             "on_failure": _general_failure,
             "kwargs": kwargs,
+        }
+        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+
+    def statistics(self, queue="query", depends_on=None, kwargs=None):
+        kwargs["is_stats"] = True
+        kwargs["depends_on"] = depends_on
+        opts = {
+            "is_stats": True,
+            "on_success": _stats,
+            "on_failure": _general_failure,
+            "kwargs": kwargs,
+            "depends_on": depends_on,
+            "current_batch": kwargs["current_batch"],
+            "base": kwargs["base"],
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
@@ -40,7 +55,7 @@ class QueryService:
         }
         return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
 
-    def fetch_queries(self, user, room=None, queue="alt"):
+    def fetch_queries(self, user, room=None, queue="alt", limit=10):
         """
         Get previous saved queries for this user/room
         """
@@ -50,7 +65,7 @@ class QueryService:
         else:
             room_info = ""
             params = (user,)
-        query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC;"
+        query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC LIMIT {limit};"
         opts = {
             "user": user,
             "room": room,
@@ -117,17 +132,24 @@ class QueryService:
     def cancel_running_jobs(self, user, room):
         jobs = self.app["query"].started_job_registry.get_job_ids()
         jobs += self.app["query"].scheduled_job_registry.get_job_ids()
+        # the two lines below are probably overkill...
+        finished = self.app["query"].finished_job_registry.get_job_ids()
+        jobs += finished
         jobs = set(jobs)
-        stopped = 0
         ids = []
+        set_fin = set(finished)
         for job in jobs:
             maybe = Job.fetch(job, connection=self.app["redis"])
             if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
-                print(f"Killing job: {job}")
+
                 maybe.cancel()
-                ids.append(job)
-                # maybe.delete()
-                stopped += 1
+                send_stop_job_command(self.app["redis"], job)
+                if job not in set_fin:
+                    self.app["canceled"].add(job)
+                    print(f"Killing job: {job}")
+                    ids.append(job)
+                else:
+                    print(f"Stopped finished job anyway: {job}")
         return ids
 
     def get(self, job_id):

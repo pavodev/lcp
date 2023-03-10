@@ -81,6 +81,7 @@
           </button>
           <button type="button" @click="save" :disabled="!queryName" class="btn btn-primary">Save</button>
           <button type="button" @click="fetch" class="btn btn-primary">Fetch</button>
+          <button type="button" @click="validate" :disabled="!query.trim()" class="btn btn-primary">Validate</button>
 
         </div>
         <div class="col">
@@ -154,6 +155,13 @@
 }
 .query-field {
   height: 328px;
+}
+.btn-primary {
+  margin-left: 2px;
+  margin-right: 2px;
+}
+textarea {
+  font-family:Consolas,Monaco,Lucida Console,Liberation Mono,DejaVu Sans Mono,Bitstream Vera Sans Mono,Courier New, monospace;
 }
 </style>
 
@@ -231,6 +239,7 @@ export default {
     if (this.userData) {
       this.userId = this.userData.user.id;
       this.connectToRoom();
+      this.stop();
     }
   },
   beforeMount() {
@@ -287,6 +296,18 @@ export default {
       // the below is just temporary code
       let data = JSON.parse(event.data);
       if (Object.prototype.hasOwnProperty.call(data, 'action')) {
+        if (data['action'] === 'interrupted') {
+          console.log('Query interrupted', data)
+          return
+        }
+        if (data['action'] === 'validate') {
+          console.log('Query validation', data)
+          return
+        }
+        if (data['action'] === 'stats') {
+          console.log('stats', data)
+          return
+        }
         if (data['action'] === 'fetch_queries') {
           console.log('do something here with the fetched queries?', data)
           return
@@ -300,6 +321,7 @@ export default {
           return
         }
       }
+      console.log('needs result??', data)
       data["n_results"] = data["result"].length;
       data["first_result"] = data["result"][0];
       delete data["result"];
@@ -316,6 +338,7 @@ export default {
         page_size: this.pageSize,
         languages: this.languages.split(","),
         total_results_requested: this.nResults,
+        stats: true
       };
       useCorpusStore().fetchQuery(data);
     },
@@ -325,6 +348,16 @@ export default {
         room: null,
         action: "stop",
         user: this.userId,
+      });
+    },
+    validate() {
+      this.$socket.sendObj({
+        // room: this.roomId,
+        room: null,
+        action: "validate",
+        user: this.userId,
+        query: this.query,
+        query_name: this.queryName
       });
     },
     save() {
