@@ -1,4 +1,5 @@
 import json
+from time import sleep
 
 import aiohttp
 import async_timeout
@@ -221,6 +222,9 @@ async def sock(request):
 
         elif action == "stop":
             jobs = qs.cancel_running_jobs(user_id, session_id)
+            sleep(2)
+            jobs += qs.cancel_running_jobs(user_id, session_id)
+            jobs = list(set(jobs))
             response = {
                 "status": "stopped",
                 "n": len(jobs),
