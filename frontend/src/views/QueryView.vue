@@ -134,7 +134,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in WSData.first_result[2]" :key="index">
+              <tr v-for="(item, index) in WSData.first_result[3]" :key="index">
                 <th scope="row">{{ item[0] }}</th>
                 <td>{{ item[1] }}</td>
                 <td>{{ item[2] }}</td>
