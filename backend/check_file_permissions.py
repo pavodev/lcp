@@ -17,12 +17,12 @@ async def check_file_permissions(request: web.Request) -> web.Response:
     # uri = "/video/3d4560a1-aaa9-4eae-bcf1-ac224989c7e3/video1.mp4"
 
     user_details_lama = await utils._lama_user_details(request.headers)
-    for subscription in user_details_lama.get("subscription").get("subscriptions"):
+    for subscription in user_details_lama.get("subscription", {}).get("subscriptions"):
         profiles_id.extend(
             [profile.get("id") for profile in subscription.get("profiles")]
         )
 
-    for public_profile in user_details_lama.get("publicProfiles"):
+    for public_profile in user_details_lama.get("publicProfiles", []):
         profiles_id.append(public_profile.get("id"))
 
     if uri:

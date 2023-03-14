@@ -1,12 +1,12 @@
 import json
 
-from typing import Optional
+from typing import Optional, Union
 
 
 async def validate(
     user: Optional[str] = None,
     room: Optional[str] = None,
-    query: Optional[str] = None,
+    query: Union[str, bytes, bytearray] = "",
     query_name: Optional[str] = None,
     **kwargs
 ):

@@ -1,24 +1,32 @@
 import aiohttp
+import json
 import jwt
 import os
 import re
 
 from aiohttp import web
+from datetime import date, datetime
 from functools import wraps
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import Connection
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
-from typing import Any, Dict, List, Optional, Tuple, Union
-
-from datetime import date, datetime
-
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    List,
+    Optional,
+    Reversible,
+    Tuple,
+    Union,
+    Sequence,
+    Mapping,
+    Sized,
+)
+from uuid import UUID
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
-
-import json
-
-from uuid import UUID
 
 
 class Interrupted(Exception):
@@ -34,7 +42,7 @@ class CustomEncoder(json.JSONEncoder):
     UUID and time to string
     """
 
-    def default(self, obj):
+    def default(self, obj: Any):
         if isinstance(obj, UUID):
             return obj.hex
         elif isinstance(obj, (datetime, date)):
@@ -42,7 +50,7 @@ class CustomEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def ensure_authorised(func):
+def ensure_authorised(func: Callable):
     """
     auth decorator, still wip
     """
@@ -76,21 +84,24 @@ def ensure_authorised(func):
     return deco
 
 
-def _extract_lama_headers(headers: Dict[str, Any]) -> Dict[str, Optional[str]]:
+def _extract_lama_headers(headers: Mapping) -> Dict[str, str]:
+    """
+    Create needed headers from existing headers
+    """
     retval = {
-        "X-API-Key": os.getenv("LAMA_API_KEY"),
+        "X-API-Key": os.environ["LAMA_API_KEY"],
         "X-Remote-User": headers.get("X-Remote-User"),
-        "X-Display-Name": headers.get("X-Display-Name").encode("cp1252").decode("utf8")
+        "X-Display-Name": headers["X-Display-Name"].encode("cp1252").decode("utf8")
         if headers.get("X-Display-Name")
         else "",
         "X-Edu-Person-Unique-Id": headers.get("X-Edu-Person-Unique-Id"),
         "X-Home-Organization": headers.get("X-Home-Organization"),
         "X-Schac-Home-Organization": headers.get("X-Schac-Home-Organization"),
         "X-Persistent-Id": headers.get("X-Persistent-Id"),
-        "X-Given-Name": headers.get("X-Given-Name").encode("cp1252").decode("utf8")
+        "X-Given-Name": headers["X-Given-Name"].encode("cp1252").decode("utf8")
         if headers.get("X-Given-Name")
         else "",
-        "X-Surname": headers.get("X-Surname").encode("cp1252").decode("utf8")
+        "X-Surname": headers["X-Surname"].encode("cp1252").decode("utf8")
         if headers.get("X-Surname")
         else "",
         "X-Principal-Name": headers.get("X-Principal-Name"),
@@ -101,11 +112,17 @@ def _extract_lama_headers(headers: Dict[str, Any]) -> Dict[str, Optional[str]]:
 
 
 def _check_email(email: str) -> bool:
+    """
+    Is an email address valid?
+    """
     regex = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
     return bool(re.fullmatch(regex, email))
 
 
 def get_user_identifier(headers: Dict[str, Any]) -> Optional[str]:
+    """
+    Get best possible identifier
+    """
     persistent_id = headers.get("X-Persistent-Id")
     persistent_name = headers.get("X-Principal-Name")
     edu_person_unique_id = headers.get("X-Edu-Person-Unique-Id")
@@ -123,7 +140,7 @@ def get_user_identifier(headers: Dict[str, Any]) -> Optional[str]:
     return retval
 
 
-async def _lama_user_details(headers: Dict[str, Any]) -> Dict:
+async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -133,21 +150,24 @@ async def _lama_user_details(headers: Dict[str, Any]) -> Dict:
             return await resp.json()
 
 
-def _get_all_results(job: Union[Job, str], connection: Connection) -> List[List[Tuple]]:
+def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
-    out = []
+    out: List[Tuple] = []
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
     while True:
         batch = _add_results(job.result, 0, True, False, False, 0)
-        out += list(reversed(batch))
+        batch.reverse()
+        for bit in batch:
+            out.append(bit)
         parent = job.kwargs.get("parent", None)
         if not parent:
             break
         job = Job.fetch(parent, connection=connection)
-    return list(reversed(out))
+    out.reverse()
+    return out
 
 
 def _add_results(
@@ -161,14 +181,13 @@ def _add_results(
     """
     Helper function, run inside callback
     """
-    out = []
+    out: List = []
     for n, res in enumerate(result):
         if not unlimited and offset and n < offset:
             continue
         if restart is not False and n + 1 < restart:
             continue
         # fix: move sent_id to own column
-        fixed = []
         sent_id = res[0][0]
         tok_ids = res[0][1:]
         fixed = ((sent_id,), tuple(tok_ids), res[1], res[2])

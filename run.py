@@ -48,7 +48,7 @@ HOST = os.getenv("SQL_HOST")
 DBNAME = os.getenv("SQL_DATABASE")
 PORT = int(os.getenv("SQL_PORT", 5432))
 VERBOSE = True if os.getenv("VERBOSE", "").lower() == "true" else False
-RHOST, RPORT = os.getenv("REDIS_URL").rsplit(":", 1)
+RHOST, RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
 REDIS_HOST = RHOST.split("/")[-1].strip()
 REDIS_PORT = int(RPORT.strip())
 
@@ -72,8 +72,12 @@ async def on_shutdown(app: web.Application) -> None:
     """
     Close websocket connections on app shutdown
     """
-    for (ws, uid) in set(app["websockets"].values()):
-        await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message="Server shutdown")
+    msg = "Server shutdown"
+    for (ws, uid) in app["websockets"].values():
+        try:
+            await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message=msg)
+        except Exception as err:
+            print(f"Issue closing websocket for {uid}: {err}")
 
 
 async def start_background_tasks(app: web.Application) -> None:
@@ -91,7 +95,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["redis_listener"]
 
 
-async def create_app() -> None:
+async def create_app(*args, **kwargs) -> None:
 
     catcher = Catcher()
 
@@ -180,6 +184,7 @@ async def create_app() -> None:
     # wait forever
     await asyncio.Event().wait()
     # return app
+    return None
 
 
 if __name__ == "__main__":

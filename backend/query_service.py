@@ -1,7 +1,7 @@
 import json
 import os
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
@@ -25,8 +25,8 @@ class QueryService:
     def query(
         self,
         queue: str = "query",
-        depends_on: Optional[str] = None,
-        kwargs: Dict[Any, Any] = None,
+        depends_on=None,
+        kwargs: Dict = None,
     ) -> Job:
         """
         Here we send the query to RQ and therefore to redis
@@ -35,7 +35,6 @@ class QueryService:
             "on_success": _query,
             "on_failure": _general_failure,
             "kwargs": kwargs,
-            "job_id": kwargs.get("id"),
         }
         if depends_on:
             opts["depends_on"] = depends_on
@@ -47,7 +46,7 @@ class QueryService:
         self,
         queue: str = "query",
         depends_on: Optional[str] = None,
-        kwargs: Dict[Any, Any] = None,
+        kwargs: Dict[str, Any] = {},
     ) -> Job:
         kwargs["is_stats"] = True
         kwargs["depends_on"] = depends_on
@@ -89,14 +88,14 @@ class QueryService:
             params = (user, room)
         else:
             room_info = ""
-            params = (user,)
+            params2 = (user,)
         query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC LIMIT {limit};"
         opts = {
             "user": user,
             "room": room,
             "query": query,
             "config": True,
-            "params": params,
+            "params": params if room else params2,
             "on_success": _queries,
             "on_failure": _general_failure,
         }
@@ -182,16 +181,17 @@ class QueryService:
         base: Optional[str] = None,
     ) -> List[str]:
         if specific_job:
-            jobs = {str(specific_job)}
+            rel_jobs = [str(specific_job)]
             finished = []
         else:
-            jobs = self.app["query"].started_job_registry.get_job_ids()
-            jobs += self.app["query"].scheduled_job_registry.get_job_ids()
+            rel_jobs = self.app["query"].started_job_registry.get_job_ids()
+            rel_jobs += self.app["query"].scheduled_job_registry.get_job_ids()
             # the two lines below are probably overkill...
             finished = self.app["query"].finished_job_registry.get_job_ids()
-            jobs += finished
+            rel_jobs += finished
             set_fin = set(finished)
-            jobs = set(jobs)
+
+        jobs = set(rel_jobs)
 
         ids = []
 
@@ -224,4 +224,4 @@ class QueryService:
             job = Job.fetch(job_id, connection=self.app["redis"])
             return job
         except NoSuchJobError:
-            return
+            return None

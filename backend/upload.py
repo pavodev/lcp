@@ -5,17 +5,18 @@ from aiohttp import web
 
 from io import BytesIO
 
+from typing import Any, Dict, Union
 from uuid import uuid4
 
 
-async def _status_check(request: web.Request, job: str) -> web.Response:
+async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
     What to do when user check status on an upload job
     """
     qs = request.app["query_service"]
-    job = qs.get(job)
+    job = qs.get(job_id)
     if not job:
-        ret = {"job": job, "status": "failed", "error": "Job not found."}
+        ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
     status = job.get_status(refresh=True)
     msg = """Please wait: corpus processing in progress..."""
@@ -56,7 +57,7 @@ async def upload(request: web.Request) -> web.Response:
     #     return web.json_response({"status": "failure", "error": "file exists"})
     has_file = False
     async for bit in data:
-        if bit.name == "file":
+        if bit.name == "file" and isinstance(bit.filename, str):
             ext = os.path.splitext(bit.filename)[-1]
             filename = str(corpus_id) + ext
             path = os.path.join("uploads", username, filename)
@@ -78,9 +79,10 @@ async def upload(request: web.Request) -> web.Response:
                         break
                     f.write(chunk)
 
+    ret: Dict[str, Any] = {}
     if not has_file:
         msg = "No file sent?"
-        ret = {"status": "failed", "info": msg}
+        ret.update({"status": "failed", "info": msg})
         return web.json_response(ret)
 
     qs = request.app["query_service"]
@@ -91,13 +93,15 @@ async def upload(request: web.Request) -> web.Response:
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
         {whole_url}    
     """
-    ret = {
-        "status": "started",
-        "job": job.id,
-        "size": size,
-        "corpus_id": str(corpus_id),
-        "info": info,
-        "target": whole_url,
-    }
+    ret.update(
+        {
+            "status": "started",
+            "job": job.id,
+            "size": size,
+            "corpus_id": str(corpus_id),
+            "info": info,
+            "target": whole_url,
+        }
+    )
 
     return web.json_response(ret)

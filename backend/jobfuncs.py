@@ -1,7 +1,7 @@
 from collections import Counter
 from rq import get_current_connection, get_current_job
 from rq.job import Job
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Mapping, Optional, Tuple, Union
 
 from .utils import Interrupted
 
@@ -27,17 +27,16 @@ async def _upload_data(**kwargs):
     return True
 
 
-async def _as_dict(result: Dict[Union[Tuple, str], int]) -> Dict:
-    out = Counter()
+async def _as_dict(result: List[Tuple[Union[Tuple[str], str], int]]) -> Dict:
+    out: Counter = Counter()
     for i, (r, freq) in enumerate(result):
-        r = r[0] if isinstance(r, tuple) and len(r) == 1 else r
+        if isinstance(r, tuple) and len(r) == 1:
+            r = r[0]
         out[r] += freq
     return dict(out)
 
 
-async def _db_query(
-    query: Optional[str] = None, **kwargs
-) -> Optional[Union[Dict, List]]:
+async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
     """
     The function queued by RQ, which executes our DB query
     """
@@ -49,7 +48,7 @@ async def _db_query(
     current_batch = kwargs.get("current_batch")
     resuming = kwargs.get("resuming", False)
 
-    if is_stats:
+    if is_stats and current_batch:
         associated_query = kwargs["depends_on"]
         conn = get_current_connection()
         if isinstance(associated_query, list):
@@ -93,7 +92,7 @@ async def _db_query(
         async with conn.cursor() as cur:
             result = await cur.execute(query, params)
             if is_store:
-                return
+                return None
             if is_config or is_stats:
                 result = await cur.fetchall()
                 if is_stats:

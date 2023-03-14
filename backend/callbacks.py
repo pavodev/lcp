@@ -2,6 +2,7 @@ import json
 
 from .configure import _get_batches
 from .utils import CustomEncoder, Interrupted, _add_results
+from datetime import datetime
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import Connection
 from rq.job import Job
@@ -174,32 +175,39 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
 def _queries(
     job: Job,
     connection: Connection,
-    result: Optional[List[Dict[str, Any]]],
+    result: Optional[List[Tuple[str, Dict, str, Optional[str], datetime]]],
     *args,
     **kwargs,
 ) -> None:
     is_store = job.kwargs.get("store")
     action = "store_query" if is_store else "fetch_queries"
     room = str(job.kwargs["room"]) if job.kwargs["room"] else None
-    jso = {
+    jso: Dict[str, Any] = {
         "user": str(job.kwargs["user"]),
         "room": room,
         "status": "success",
         "action": action,
+        "queries": [],
     }
     if is_store:
         jso["query_id"] = str(job.kwargs["query_id"])
-    else:
+        jso.pop("queries")
+    elif result:
         cols = ["idx", "query", "username", "room", "created_at"]
-        jso["queries"] = [dict(zip(cols, x)) for x in result]
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+        queries: List[Dict[str, Any]] = []
+        for x in result:
+            dct: Dict[str, Any] = dict(zip(cols, x))
+            queries.append(dct)
+        jso["queries"] = queries
+    made = json.dumps(jso, cls=CustomEncoder)
+    job._redis.publish(PUBSUB_CHANNEL, made)
 
 
 def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     """
     Run by worker: make config data
     """
-    fixed = {}
+    fixed: Dict[int, Dict] = {-1: {}}
     for tup in result:
         (
             corpus_id,
@@ -230,11 +238,14 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
 
         fixed[int(corpus_id)] = corpus_template
 
+    print("FIXED", fixed)
+
     for name, conf in fixed.items():
+        if name == -1:
+            continue
+        print("GETTING", name)
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
-
-    fixed["_uploads"] = {}
 
     # fixed["open_subtitles_en1"] = fixed["open_subtitles_en"]
     # fixed["sparcling1"] = fixed["sparcling"]

@@ -1,7 +1,7 @@
 import json
 import os
 
-from typing import Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 from aiohttp import web
 from rq.job import Job
@@ -28,7 +28,7 @@ def _make_stats_query(query: str, schema: str, config: Dict) -> str:
 
 
 def _get_word_count(
-    corpora: List[str], config: Dict[str, Dict], languages: Set[str]
+    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
 ) -> int:
     """
     Sum the word counts for corpora being searched
@@ -50,13 +50,13 @@ def _get_word_count(
 
 
 def _decide_batch(
-    done_batches: List[Union[Tuple, List]],
-    batches: List[Union[Tuple, List]],
+    done_batches: List[Union[Tuple[int, str, str, int], List[Any]]],
+    batches: List[Union[Tuple[int, str, str, int], List[Any]]],
     so_far: int,
     needed: int,
     hit_limit: Union[bool, int],
     page_size: int,
-):
+) -> Union[Tuple[int, str, str, int], List[Any]]:
     """
     Find the best next batch to query
     """
@@ -96,7 +96,7 @@ def _decide_batch(
 
 
 def _get_query_batches(
-    corpora: List[str], config: Dict[str, Dict], languages: Set[str]
+    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
 ) -> List[Tuple]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -122,9 +122,9 @@ def _get_query_batches(
 async def _do_resume(
     request_data: Dict,
     app: web.Application,
-    previous: str,
+    previous: Optional[str],
     total_results_requested: Optional[int],
-) -> Tuple:
+) -> Tuple[bool, Tuple[Any, Any, Any, Any]]:
     """
     Resume a query!
     """
@@ -140,7 +140,7 @@ async def _do_resume(
             total_results_requested=request_data["total_results_requested"],
         )
         current_batch = prev_job.kwargs["current_batch"]
-        return True, (current_batch, prev_job)
+        return True, (current_batch, prev_job, None, None)
     else:
         all_batches = prev_job.kwargs["all_batches"]
         done_batches = prev_job.kwargs["done_batches"]
@@ -177,10 +177,10 @@ async def query(
     # request doesn't come from frontend, but from the run.py file            #
     ###########################################################################
     unlimited = {-1, False, None}
-    if manual is not None:
-        previous = False
+    simultaneous: Optional[str] = None
+    previous: Optional[str] = None
+    if manual is not None and isinstance(app, web.Application):
         resuming = False
-        simultaneous = False
         job = Job.fetch(manual["job"], connection=app["redis"])
         base = manual["base"]
         existing_results = manual["result"]
@@ -191,7 +191,7 @@ async def query(
         room = manual.get("room")
         stats = manual.get("stats", False)
         hit_limit = manual.get("hit_limit", False)
-        languages = set([i.strip() for i in manual.get("languages")])
+        languages = set([i.strip() for i in manual.get("languages", [])])
         query = job.kwargs["original_query"]
         page_size = job.kwargs.get("page_size", 20)  # todo: user may change
         previous_batch = job.kwargs["current_batch"]
@@ -219,16 +219,15 @@ async def query(
         corpora_to_use = [int(i) for i in request_data["corpora"]]
         query = request_data["query"]
         room = request_data.get("room")
-        previous = request_data.get("previous", False)
+        previous = request_data.get("previous")
         resuming = request_data.get("resume", False)
         stats = request_data.get("stats", False)
         page_size = request_data.get("page_size", 10)
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
         total_results_requested = request_data.get("total_results_requested", 10000)
-        simultaneous = request_data.get("simultaneous", False)
-        if simultaneous:
-            simultaneous = str(uuid4())
+        is_simultaneous = request_data.get("simultaneous", False)
+        simultaneous = str(uuid4()) if is_simultaneous else None
         base = None if not resuming else previous
         all_batches = _get_query_batches(corpora_to_use, config, languages)
         needed = total_results_requested
@@ -243,7 +242,7 @@ async def query(
     first_job = None
     depends_on_chain = []
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
-    query_depends = []
+    query_depends: List[str] = []
     qs = app["query_service"]
 
     for i in range(iterations):
@@ -255,16 +254,16 @@ async def query(
         ########################################################################
 
         if resuming:
-            args = (request_data, app, previous, total_results_requested)
-            done, r = await _do_resume(*args)
+            rargs = (request_data, app, previous, total_results_requested)
+            done, r = await _do_resume(*rargs)
 
-            if not done:
+            if not done and len(r) == 4:
                 all_batches, done_batches, so_far, needed = r
                 existing_results = utils._get_all_results(
                     previous, connection=app["redis"]
                 )
             else:
-                current_batch, prev_job = r
+                current_batch, prev_job, _, _ = r
 
         #######################################################################
         # build new query sql (not needed if resuming a queried batch)        #
@@ -285,7 +284,7 @@ async def query(
                     page_size,
                 )
 
-            if "SELECT" not in query.upper():
+            if "SELECT" not in query.upper() and current_batch:
                 try:
                     kwa = dict(
                         corpus=current_batch[1],
@@ -344,7 +343,10 @@ async def query(
             if simultaneous and i and max_jobs and max_jobs != -1 and not divv:
                 query_depends.append(job.id)
 
-            print(f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}")
+            if current_batch is not None:
+                print(
+                    f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}"
+                )
 
             if simultaneous and not i:
                 first_job = job
@@ -353,10 +355,10 @@ async def query(
         # prepare and submit statistics query                                 #
         #######################################################################
 
-        if stats:
+        if stats and current_batch:
             sect = config[str(current_batch[0])]
             stats_query = _make_stats_query(query, current_batch[1], sect)
-            if simultaneous:
+            if simultaneous and first_job:
                 the_base = first_job.id
             elif resuming and done:
                 the_base = prev_job.kwargs.get("base", prev_job.id)
@@ -393,8 +395,10 @@ async def query(
         if simultaneous:
             done_batches.append(current_batch)
             current_batch = None
-            http_response.append(jobs)
-        else:
-            http_response = jobs
 
-    return web.json_response(http_response)
+        http_response.append(jobs)
+
+    if simultaneous:
+        return web.json_response(http_response)
+    else:
+        return web.json_response(http_response[0])

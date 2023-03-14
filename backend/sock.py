@@ -68,7 +68,7 @@ async def handle_redis_response(
                     conf = payload["config"]
                     corpus_id = payload["corpus_id"]
                     # todo: better structure for this i guess?
-                    app["config"]["_uploads"][corpus_id] = conf
+                    app["config"][-1][corpus_id] = conf
                     if payload.get("gui"):
                         await push_msg(
                             app["websockets"],
@@ -301,6 +301,6 @@ async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
             await push_msg(sockets, session_id, response)
 
     # connection closed
-    await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message="Server shutdown")
+    await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message=b"Server shutdown")
 
     return ws
