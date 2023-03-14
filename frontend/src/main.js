@@ -5,6 +5,7 @@ import router from "./router";
 import FontAwesomeIcon from '@/fontawesome';
 import VueNativeSock from 'vue-native-websocket-vue3'
 import Multiselect from 'vue-multiselect';
+import config from "@/config";
 
 import "vue-multiselect/dist/vue-multiselect.css";
 import "bootstrap/dist/css/bootstrap.min.css";
@@ -15,7 +16,7 @@ import "@/assets/multiselect.css";
 const pinia = createPinia();
 
 createApp(App).use(
-  VueNativeSock, 'ws://localhost:9090/ws', {
+  VueNativeSock, config.wsUrl, {
     reconnection: true,
     reconnectionAttempts: 5,
     format: 'json',

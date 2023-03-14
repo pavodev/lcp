@@ -27,6 +27,7 @@ if (process.env.NODE_ENV === "production") {
   // development
   config = {
     apiUrl: "http://localhost:9090",
+    wsUrl: "ws://localhost:9090/ws",
     appDomain: "localhost",
     environment: "development",
     apiHeaders: {

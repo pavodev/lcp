@@ -40,3 +40,6 @@
   outline: none !important;
   box-shadow: none !important;
 }
+.multiselect__tag-icon::after {
+  color: #95c0ad;
+}
