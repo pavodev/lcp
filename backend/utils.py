@@ -1,9 +1,11 @@
 from functools import wraps
 import os
 import re
-
+from typing import Dict, Any, Union, List, Tuple, Optional
 import aiohttp
+from aiohttp import web
 from rq.job import Job
+from rq.connections import Connection
 from rq.exceptions import NoSuchJobError
 import jwt
 
@@ -45,7 +47,7 @@ def ensure_authorised(func):
     return func
 
     @wraps(func)
-    async def deco(request, *args, **kwargs):
+    async def deco(request: web.Request, *args, **kwargs):
         headers = await _lama_user_details(getattr(request, "headers", request))
 
         if "X-Access-Token" in headers:
@@ -72,7 +74,7 @@ def ensure_authorised(func):
     return deco
 
 
-def _extract_lama_headers(headers):
+def _extract_lama_headers(headers: Dict[str, Any]) -> Dict[str, Optional[str]]:
     retval = {
         "X-API-Key": os.getenv("LAMA_API_KEY"),
         "X-Remote-User": headers.get("X-Remote-User"),
@@ -101,7 +103,7 @@ def _check_email(email: str) -> bool:
     return bool(re.fullmatch(regex, email))
 
 
-def get_user_identifier(headers):
+def get_user_identifier(headers: Dict[str, Any]) -> Optional[str]:
     persistent_id = headers.get("X-Persistent-Id")
     persistent_name = headers.get("X-Principal-Name")
     edu_person_unique_id = headers.get("X-Edu-Person-Unique-Id")
@@ -119,7 +121,7 @@ def get_user_identifier(headers):
     return retval
 
 
-async def _lama_user_details(headers: dict) -> dict:
+async def _lama_user_details(headers: Dict[str, Any]) -> Dict:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -129,7 +131,7 @@ async def _lama_user_details(headers: dict) -> dict:
             return await resp.json()
 
 
-def _get_all_results(job, connection):
+def _get_all_results(job: Union[Job, str], connection: Connection) -> List[List[Tuple]]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
@@ -146,7 +148,14 @@ def _get_all_results(job, connection):
     return list(reversed(out))
 
 
-def _add_results(result, so_far, unlimited, offset, restart, total_requested):
+def _add_results(
+    result: List[List],
+    so_far: int,
+    unlimited: bool,
+    offset: Optional[int],
+    restart: Union[bool, int],
+    total_requested: int,
+) -> List[Tuple]:
     """
     Helper function, run inside callback
     """
@@ -168,7 +177,7 @@ def _add_results(result, so_far, unlimited, offset, restart, total_requested):
     return out
 
 
-def _push_stats(previous, connection):
+def _push_stats(previous: str, connection: Connection) -> Dict[str, Any]:
     """
     Send statistics to the websocket
     """
@@ -192,7 +201,7 @@ def _push_stats(previous, connection):
     }
 
 
-async def handle_timeout(exc: Exception, request):
+async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
     """

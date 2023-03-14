@@ -4,7 +4,7 @@ from aiohttp import web
 from . import utils
 
 
-async def check_file_permissions(request):
+async def check_file_permissions(request: web.Request) -> web.Response:
     """
     Returns if user has access to file
     """

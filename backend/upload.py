@@ -7,7 +7,7 @@ from io import BytesIO
 from uuid import uuid4
 
 
-async def _status_check(request, job):
+async def _status_check(request: web.Request, job: str) -> web.Response:
     """
     What to do when user check status on an upload job
     """
@@ -29,7 +29,7 @@ async def _status_check(request, job):
     return web.json_response(ret)
 
 
-async def upload(request):
+async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
     """

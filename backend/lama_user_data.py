@@ -3,7 +3,7 @@ from aiohttp import web
 from . import utils
 
 
-async def lama_user_data(request):
+async def lama_user_data(request: web.Request) -> web.Response:
     """
     Returns user data and app settings
     """

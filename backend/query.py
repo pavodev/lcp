@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional, Dict, Set, List, Union, Tuple
 
 from aiohttp import web
 from rq.job import Job
@@ -12,7 +13,7 @@ from .callbacks import _query
 from uuid import uuid4
 
 
-def _make_stats_query(query, schema, config):
+def _make_stats_query(query: str, schema: str, config: Dict) -> str:
     """
     todo: this is just temp code until we know what stats query really does
     """
@@ -25,7 +26,9 @@ def _make_stats_query(query, schema, config):
     return start + middle + end
 
 
-def _get_word_count(corpora, config, languages):
+def _get_word_count(
+    corpora: List[str], config: Dict[str, Dict], languages: Set[str]
+) -> int:
     """
     Sum the word counts for corpora being searched
     """
@@ -45,7 +48,14 @@ def _get_word_count(corpora, config, languages):
     return total
 
 
-def _decide_batch(done_batches, batches, so_far, needed, hit_limit, page_size):
+def _decide_batch(
+    done_batches: List[Union[Tuple, List]],
+    batches: List[Union[Tuple, List]],
+    so_far: int,
+    needed: int,
+    hit_limit: Union[bool, int],
+    page_size: int,
+):
     """
     Find the best next batch to query
     """
@@ -84,7 +94,9 @@ def _decide_batch(done_batches, batches, so_far, needed, hit_limit, page_size):
     )
 
 
-def _get_query_batches(corpora, config, languages):
+def _get_query_batches(
+    corpora: List[str], config: Dict[str, Dict], languages: Set[str]
+) -> List[Tuple]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
     """
@@ -106,7 +118,12 @@ def _get_query_batches(corpora, config, languages):
     return sorted(out, key=lambda x: x[-1])
 
 
-async def _do_resume(request_data, app, previous, total_results_requested):
+async def _do_resume(
+    request_data: Dict,
+    app: web.Application,
+    previous: str,
+    total_results_requested: Optional[int],
+) -> Tuple:
     """
     Resume a query!
     """
@@ -143,7 +160,11 @@ async def _do_resume(request_data, app, previous, total_results_requested):
 
 
 @utils.ensure_authorised
-async def query(request, manual=None, app=None):
+async def query(
+    request: web.Request,
+    manual: Optional[dict] = None,
+    app: Optional[web.Application] = None,
+) -> web.Response:
     """
     Generate and queue up queries
 

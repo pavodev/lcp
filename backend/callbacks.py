@@ -1,14 +1,18 @@
 import json
-
+from typing import List, Dict, Union, Tuple, Type, Optional, Any
+from types import TracebackType
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.job import Job
+from rq.connections import Connection
 from .configure import _get_batches
 from .utils import CustomEncoder, Interrupted, _add_results
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
-def _query(job, connection, result, *args, **kwargs):
+def _query(
+    job: Job, connection: Connection, result: List[List], *args, **kwargs
+) -> None:
     """
     Job callback, publishes a redis message containing the results
     """
@@ -78,7 +82,13 @@ def _query(job, connection, result, *args, **kwargs):
     redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _stats(job, connection, result, *args, **kwargs):
+def _stats(
+    job: Job,
+    connection: Connection,
+    result: Dict[Union[str, Tuple[str]], int],
+    *args,
+    **kwargs,
+) -> None:
 
     base = Job.fetch(job.kwargs["base"], connection=connection)
     if "_stats" not in base.meta:
@@ -111,7 +121,15 @@ def _stats(job, connection, result, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _general_failure(job, connection, typ, value, traceback, *args, **kwargs):
+def _general_failure(
+    job: Job,
+    connection: Connection,
+    typ: Type,
+    value: str,
+    traceback: TracebackType,
+    *args,
+    **kwargs,
+) -> None:
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
@@ -136,7 +154,7 @@ def _general_failure(job, connection, typ, value, traceback, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _upload(job, connection, result, *args, **kwargs):
+def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     """
     Success callback when user has uploaded a dataset
     """
@@ -152,7 +170,13 @@ def _upload(job, connection, result, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _queries(job, connection, result, *args, **kwargs):
+def _queries(
+    job: Job,
+    connection: Connection,
+    result: Optional[List[Dict[str, Any]]],
+    *args,
+    **kwargs,
+) -> None:
     is_store = job.kwargs.get("store")
     action = "store_query" if is_store else "fetch_queries"
     room = str(job.kwargs["room"]) if job.kwargs["room"] else None
@@ -170,7 +194,7 @@ def _queries(job, connection, result, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _config(job, connection, result, *args, **kwargs):
+def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     """
     Run by worker: make config data
     """
@@ -219,7 +243,7 @@ def _config(job, connection, result, *args, **kwargs):
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _get_status(results_so_far, **kwargs):
+def _get_status(results_so_far: List[List], **kwargs) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """

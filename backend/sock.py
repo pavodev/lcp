@@ -1,7 +1,9 @@
 import json
 from time import sleep
 
+from typing import Dict, Union, Tuple, Optional, List, Any
 import aiohttp
+import aioredis
 import async_timeout
 import asyncio
 from rq.job import Job
@@ -10,7 +12,9 @@ from .query import query
 from .validate import validate
 
 
-async def handle_redis_response(channel, app):
+async def handle_redis_response(
+    channel: aioredis.client.PubSub, app: aiohttp.web.Application
+) -> None:
     """
     If redis publishes a message, it gets picked up here and broadcast to the
     correct websockets...
@@ -103,7 +107,12 @@ async def handle_redis_response(channel, app):
             )
 
 
-async def _handle_query(app, payload, user, room):
+async def _handle_query(
+    app: aiohttp.web.Application,
+    payload: Dict[str, Any],
+    user: str,
+    room: Optional[str],
+) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
     a query iteration. Create a websocket message to send to correct frontends
@@ -159,7 +168,13 @@ async def _handle_query(app, payload, user, room):
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
 
 
-async def push_msg(sockets, session_id, msg, skip=None, just=None):
+async def push_msg(
+    sockets: Dict[Optional[str], Tuple[Any, str]],
+    session_id: Optional[str],
+    msg: Union[Dict, List],
+    skip: Optional[Tuple[Optional[str], str]] = None,
+    just: Optional[Tuple[Optional[str], str]] = None,
+) -> None:
     """
     Send JSON websocket message
     """
@@ -187,7 +202,7 @@ async def push_msg(sockets, session_id, msg, skip=None, just=None):
             #     return
 
 
-async def sock(request):
+async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
     """
     Socket has to handle incoming messages, but also send a message when
     queries have finished processing

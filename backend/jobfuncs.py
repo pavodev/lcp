@@ -1,6 +1,6 @@
 from rq import get_current_job, get_current_connection
 from rq.job import Job
-
+from typing import Optional, Dict, Union, Tuple, List
 from collections import Counter
 
 from .utils import Interrupted
@@ -27,7 +27,7 @@ async def _upload_data(**kwargs):
     return True
 
 
-async def _as_dict(result):
+async def _as_dict(result: Dict[Union[Tuple, str], int]) -> Dict:
     out = Counter()
     for i, (r, freq) in enumerate(result):
         r = r[0] if isinstance(r, tuple) and len(r) == 1 else r
@@ -35,7 +35,9 @@ async def _as_dict(result):
     return dict(out)
 
 
-async def _db_query(query=None, **kwargs):
+async def _db_query(
+    query: Optional[str] = None, **kwargs
+) -> Optional[Union[Dict, List]]:
     """
     The function queued by RQ, which executes our DB query
     """

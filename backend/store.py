@@ -7,7 +7,7 @@ from . import utils
 
 
 @utils.ensure_authorised
-async def fetch_queries(request):
+async def fetch_queries(request: web.Request) -> web.Response:
     """
     User wants to retrieve their stored queries from the DB
     """
@@ -21,7 +21,7 @@ async def fetch_queries(request):
 
 
 @utils.ensure_authorised
-async def store_query(request):
+async def store_query(request: web.Request) -> web.Response:
     """
     User wants to store one or more queries in the DB
     """

@@ -11,7 +11,7 @@ def _has_access(user, corpus):
 
 
 @utils.ensure_authorised
-async def corpora(request):
+async def corpora(request: web.Request) -> web.Response:
     """
     Return config to frontend
     """

@@ -4,7 +4,7 @@ from . import utils
 
 
 @utils.ensure_authorised
-async def document(request):
+async def document(request: web.Request) -> web.Response:
     """
     Return a corpus document via the doc_export functionality
     """

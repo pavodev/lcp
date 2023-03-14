@@ -1,5 +1,6 @@
 import json
 import os
+from typing import Optional, Dict, Any, List
 
 from rq.job import Job
 from rq.exceptions import NoSuchJobError, InvalidJobOperation
@@ -20,7 +21,12 @@ class QueryService:
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 180))
         self.query_ttl = int(os.getenv("QUERY_TTL", 500))
 
-    def query(self, queue="query", depends_on=None, kwargs=None):
+    def query(
+        self,
+        queue: str = "query",
+        depends_on: Optional[str] = None,
+        kwargs: Dict[Any, Any] = None,
+    ) -> Job:
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -36,7 +42,12 @@ class QueryService:
             _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def statistics(self, queue="query", depends_on=None, kwargs=None):
+    def statistics(
+        self,
+        queue: str = "query",
+        depends_on: Optional[str] = None,
+        kwargs: Dict[Any, Any] = None,
+    ) -> Job:
         kwargs["is_stats"] = True
         kwargs["depends_on"] = depends_on
         opts = {
@@ -53,7 +64,7 @@ class QueryService:
             _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def get_config(self, queue="alt", **kwargs):
+    def get_config(self, queue: str = "alt", **kwargs) -> Job:
         """
         Get initial app configuration JSON
         """
@@ -66,7 +77,9 @@ class QueryService:
             _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def fetch_queries(self, user, room=None, queue="alt", limit=10):
+    def fetch_queries(
+        self, user: str, room: Optional[str] = None, queue: str = "alt", limit: int = 10
+    ) -> Job:
         """
         Get previous saved queries for this user/room
         """
@@ -90,7 +103,14 @@ class QueryService:
             _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def store_query(self, query_data, idx, user, room=None, queue="alt"):
+    def store_query(
+        self,
+        query_data: Dict,
+        idx: int,
+        user: str,
+        room: Optional[str] = None,
+        queue: str = "alt",
+    ) -> Job:
         """
         Add a saved query to the db
         """
@@ -111,8 +131,15 @@ class QueryService:
         )
 
     def upload(
-        self, data, user, corpus_id, room=None, config=None, queue="alt", gui=False
-    ):
+        self,
+        data,
+        user: str,
+        corpus_id: str,
+        room=None,
+        config=None,
+        queue: str = "alt",
+        gui=False,
+    ) -> Job:
         """
         Upload a new corpus to the system
         """
@@ -135,18 +162,24 @@ class QueryService:
             _upload_data, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def cancel(self, job_id):
+    def cancel(self, job_id: str) -> str:
         job = Job.fetch(job_id, connection=self.app["redis"])
         job.cancel()
         return job.get_status()
 
-    def delete(self, job_id):
+    def delete(self, job_id: str) -> str:
         job = Job.fetch(job_id, connection=self.app["redis"])
         job.cancel()
         job.delete()
         return "DELETED"
 
-    def cancel_running_jobs(self, user, room, specific_job=None, base=None):
+    def cancel_running_jobs(
+        self,
+        user: str,
+        room: Optional[str],
+        specific_job: Optional[str] = None,
+        base: Optional[str] = None,
+    ) -> List[str]:
         if specific_job:
             jobs = {str(specific_job)}
             finished = []
@@ -185,7 +218,7 @@ class QueryService:
                     print(f"Stopped finished job anyway: {job}")
         return ids
 
-    def get(self, job_id):
+    def get(self, job_id: str) -> Optional[Job]:
         try:
             job = Job.fetch(job_id, connection=self.app["redis"])
             return job

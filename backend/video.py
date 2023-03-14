@@ -6,7 +6,7 @@ from . import utils
 
 
 @utils.ensure_authorised
-async def video(request):
+async def video(request: web.Request) -> web.Response:
     corpora = [i.strip() for i in request.rel_url.query["corpora"].split(",")]
     out = {}
     for corpus in corpora:

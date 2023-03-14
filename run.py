@@ -53,7 +53,7 @@ REDIS_PORT = int(RPORT.strip())
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
-async def _listen_to_redis_for_queries(app):
+async def _listen_to_redis_for_queries(app: web.Application) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender
@@ -65,7 +65,7 @@ async def _listen_to_redis_for_queries(app):
         await p.unsubscribe(PUBSUB_CHANNEL)
 
 
-async def on_shutdown(app):
+async def on_shutdown(app: web.Application) -> None:
     """
     Close websocket connections on app shutdown
     """
@@ -73,14 +73,14 @@ async def on_shutdown(app):
         await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message="Server shutdown")
 
 
-async def start_background_tasks(app):
+async def start_background_tasks(app: web.Application) -> None:
     """
     Start the thread that listens to redis pubsub
     """
     app["redis_listener"] = asyncio.create_task(_listen_to_redis_for_queries(app))
 
 
-async def cleanup_background_tasks(app):
+async def cleanup_background_tasks(app: web.Application) -> None:
     """
     Stop the redis listener
     """
@@ -88,7 +88,7 @@ async def cleanup_background_tasks(app):
     await app["redis_listener"]
 
 
-async def create_app():
+async def create_app() -> None:
 
     catcher = Catcher()
 

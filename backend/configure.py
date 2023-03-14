@@ -1,4 +1,7 @@
-def _get_batches(config):
+from typing import Dict, Any
+
+
+def _get_batches(config: Dict[str, Any]) -> Dict[str, int]:
     """
     Get a dict of batch_name: size for a given corpus
     """

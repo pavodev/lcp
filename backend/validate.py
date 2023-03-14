@@ -1,7 +1,14 @@
 import json
+from typing import Optional
 
 
-async def validate(user=None, room=None, query=None, query_name=None, **kwargs):
+async def validate(
+    user: Optional[str] = None,
+    room: Optional[str] = None,
+    query: Optional[str] = None,
+    query_name: Optional[str] = None,
+    **kwargs
+):
     """
     Validate user query: still mostly todo
     """
