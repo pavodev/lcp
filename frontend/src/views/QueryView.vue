@@ -333,7 +333,7 @@ export default {
       }
       // we might need this block for stats related stuff later, don't worry about it much right now
       if (this.simultaneousMode) {
-        theseResults = this.allResults.concat(data['result'])
+        this.allResults = this.allResults.concat(data['result'])
         if (this.allResults.length >= data['total_results_requested']) {
           this.allResults = this.allResults.slice(0, data['total_results_requested'])
           this.enough(data['simultaneous']);
