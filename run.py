@@ -187,7 +187,7 @@ async def create_app(*args, **kwargs) -> None:
     return None
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" or __name__ == "run":
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     app = asyncio.run(create_app())

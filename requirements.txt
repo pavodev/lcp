@@ -18,3 +18,4 @@ aioredis==2.0.1
 redis==4.3.4
 asyncpg==0.27.0
 rq==1.13.0
+types-redis==4.5.1.5

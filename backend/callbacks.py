@@ -238,12 +238,9 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
 
         fixed[int(corpus_id)] = corpus_template
 
-    print("FIXED", fixed)
-
     for name, conf in fixed.items():
         if name == -1:
             continue
-        print("GETTING", name)
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 

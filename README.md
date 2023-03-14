@@ -59,3 +59,28 @@ yarn serve
 ```
 
 The defaults in `.env` should work for Postgres and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
+
+### mypy
+
+Check app for type problems:
+
+```bash
+# pip install mypy
+mypy run.py
+mypy worker.py
+```
+
+Build C extension:
+
+
+```bash
+mypyc run.py
+```
+
+Run:
+
+```bash
+python -c "import run"
+```
+
+Still working on compiling `worker.py`...
