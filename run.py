@@ -1,40 +1,43 @@
-from collections import defaultdict
-import os
 import json
+import os
+
+from collections import defaultdict
 
 import aiohttp
-from aiohttp import web, WSCloseCode
-import async_timeout
 import aiohttp_cors
+import async_timeout
 import asyncio
+
+from aiohttp import WSCloseCode, web
 from dotenv import load_dotenv
 from redis import Redis
 
 # import redis.asyncio as redis
+import asyncpg
+import uvloop
+
 from redis import Redis as redis
 from redis import asyncio as aioredis
 from rq import Queue
-from rq.exceptions import NoSuchJobError
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.exceptions import NoSuchJobError
 from sshtunnel import SSHTunnelForwarder
-import uvloop
-import asyncpg
 
 from backend.check_file_permissions import check_file_permissions
+from backend.sock import handle_redis_response, sock
 from backend.video import video
-from backend.sock import sock, handle_redis_response
 
+from aiohttp_catcher import Catcher, catch
+from backend.document import document
 from backend.lama_user_data import lama_user_data
 from backend.query import query
-from backend.document import document
 from backend.store import fetch_queries, store_query
 from backend.upload import upload
-from aiohttp_catcher import catch, Catcher
 
 # from backend.validate import validate
+from backend import utils
 from backend.corpora import corpora
 from backend.query_service import QueryService
-from backend import utils
 
 
 load_dotenv(override=True)
