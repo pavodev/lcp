@@ -1,12 +1,13 @@
 import json
 import os
-from typing import Optional, Dict, Any, List
 
-from rq.job import Job
-from rq.exceptions import NoSuchJobError, InvalidJobOperation
+from typing import Any, Dict, List, Optional
+
 from rq.command import send_stop_job_command
+from rq.exceptions import InvalidJobOperation, NoSuchJobError
+from rq.job import Job
 
-from .callbacks import _query, _queries, _upload, _config, _general_failure, _stats
+from .callbacks import _config, _general_failure, _queries, _query, _stats, _upload
 
 from .jobfuncs import _db_query, _upload_data
 

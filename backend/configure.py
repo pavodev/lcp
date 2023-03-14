@@ -1,4 +1,4 @@
-from typing import Dict, Any
+from typing import Any, Dict
 
 
 def _get_batches(config: Dict[str, Any]) -> Dict[str, int]:

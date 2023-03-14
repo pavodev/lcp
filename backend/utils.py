@@ -1,13 +1,14 @@
-from functools import wraps
+import aiohttp
+import jwt
 import os
 import re
-from typing import Dict, Any, Union, List, Tuple, Optional
-import aiohttp
+
 from aiohttp import web
-from rq.job import Job
+from functools import wraps
 from rq.connections import Connection
 from rq.exceptions import NoSuchJobError
-import jwt
+from rq.job import Job
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from datetime import date, datetime
 
@@ -16,6 +17,7 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 import json
+
 from uuid import UUID
 
 

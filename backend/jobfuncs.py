@@ -1,7 +1,7 @@
-from rq import get_current_job, get_current_connection
-from rq.job import Job
-from typing import Optional, Dict, Union, Tuple, List
 from collections import Counter
+from rq import get_current_connection, get_current_job
+from rq.job import Job
+from typing import Dict, List, Optional, Tuple, Union
 
 from .utils import Interrupted
 

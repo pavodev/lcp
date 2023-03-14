@@ -1,6 +1,7 @@
 import json
 import os
-from typing import Optional, Dict, Set, List, Union, Tuple
+
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 from aiohttp import web
 from rq.job import Job

@@ -1,12 +1,14 @@
 import json
+
 from time import sleep
 
-from typing import Dict, Union, Tuple, Optional, List, Any
 import aiohttp
 import aioredis
 import async_timeout
 import asyncio
+
 from rq.job import Job
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .query import query
 from .validate import validate

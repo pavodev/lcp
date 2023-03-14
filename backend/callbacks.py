@@ -1,11 +1,12 @@
 import json
-from typing import List, Dict, Union, Tuple, Type, Optional, Any
-from types import TracebackType
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
-from rq.job import Job
-from rq.connections import Connection
+
 from .configure import _get_batches
 from .utils import CustomEncoder, Interrupted, _add_results
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.connections import Connection
+from rq.job import Job
+from types import TracebackType
+from typing import Any, Dict, List, Optional, Tuple, Type, Union
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
