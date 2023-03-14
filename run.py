@@ -14,6 +14,7 @@ from redis import Redis
 from redis import Redis as redis
 from redis import asyncio as aioredis
 from rq import Queue
+from rq.exceptions import NoSuchJobError
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from sshtunnel import SSHTunnelForwarder
 import uvloop
@@ -28,10 +29,12 @@ from backend.query import query
 from backend.document import document
 from backend.store import fetch_queries, store_query
 from backend.upload import upload
+from aiohttp_catcher import catch, Catcher
 
 # from backend.validate import validate
 from backend.corpora import corpora
 from backend.query_service import QueryService
+from backend import utils
 
 
 load_dotenv(override=True)
@@ -87,7 +90,13 @@ async def cleanup_background_tasks(app):
 
 async def create_app():
 
-    app = web.Application()
+    catcher = Catcher()
+
+    await catcher.add_scenario(
+        catch(NoSuchJobError).with_status_code(200).and_call(utils.handle_timeout)
+    )
+
+    app = web.Application(middlewares=[catcher.middleware])
     cors = aiohttp_cors.setup(
         app,
         defaults={
@@ -149,11 +158,10 @@ async def create_app():
     # we keep two redis connections, for reasons
     app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT)
     app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT)
-    timeout = int(os.getenv("QUERY_TIMEOUT"))
-    app["query"] = Queue(connection=app["redis"], job_timeout=timeout)
-    # app["stats"] = Queue(connection=app["redis"], job_timeout=timeout)
-    app["export"] = Queue(connection=app["redis"], job_timeout=3000)
-    app["alt"] = Queue(connection=app["redis"], job_timeout=3000)
+    app["query"] = Queue(connection=app["redis"])
+    # app["stats"] = Queue(connection=app["redis"])
+    app["export"] = Queue(connection=app["redis"], job_timeout=-1)
+    app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
     app["canceled"] = set()

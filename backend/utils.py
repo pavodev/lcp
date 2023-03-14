@@ -3,20 +3,33 @@ import os
 import re
 
 import aiohttp
+from rq.job import Job
+from rq.exceptions import NoSuchJobError
 import jwt
 
 from datetime import date, datetime
 
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+
+PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 import json
 from uuid import UUID
 
 
 class Interrupted(Exception):
+    """
+    Used when a user interrupts a query from frontend
+    """
+
     pass
 
 
 class CustomEncoder(json.JSONEncoder):
+    """
+    UUID and time to string
+    """
+
     def default(self, obj):
         if isinstance(obj, UUID):
             return obj.hex
@@ -85,7 +98,7 @@ def _extract_lama_headers(headers):
 
 def _check_email(email: str) -> bool:
     regex = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-    return True if (re.fullmatch(regex, email)) else False
+    return bool(re.fullmatch(regex, email))
 
 
 def get_user_identifier(headers):
@@ -114,3 +127,86 @@ async def _lama_user_details(headers: dict) -> dict:
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
             return await resp.json()
+
+
+def _get_all_results(job, connection):
+    """
+    Get results from all parents -- reconstruct results from just latest batch
+    """
+    out = []
+    if isinstance(job, str):
+        job = Job.fetch(job, connection=connection)
+    while True:
+        batch = _add_results(job.result, 0, True, False, False, 0)
+        out += list(reversed(batch))
+        parent = job.kwargs.get("parent", None)
+        if not parent:
+            break
+        job = Job.fetch(parent, connection=connection)
+    return list(reversed(out))
+
+
+def _add_results(result, so_far, unlimited, offset, restart, total_requested):
+    """
+    Helper function, run inside callback
+    """
+    out = []
+    for n, res in enumerate(result):
+        if not unlimited and offset and n < offset:
+            continue
+        if restart is not False and n + 1 < restart:
+            continue
+        # fix: move sent_id to own column
+        fixed = []
+        sent_id = res[0][0]
+        tok_ids = res[0][1:]
+        fixed = ((sent_id,), tuple(tok_ids), res[1], res[2])
+        # end fix
+        out.append(fixed)
+        if not unlimited and so_far + len(out) >= total_requested:
+            break
+    return out
+
+
+def _push_stats(previous, connection):
+    """
+    Send statistics to the websocket
+    """
+    depended = Job.fetch(previous, connection=connection)
+    base = depended.kwargs.get("base")
+    basejob = Job.fetch(base, connection=connection) if base else depended
+
+    jso = {
+        "result": basejob.meta["_stats"],
+        "status": depended.meta["_status"],
+        "action": "stats",
+        "user": basejob.kwargs["user"],
+        "room": basejob.kwargs["room"],
+    }
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return {
+        "stats": True,
+        "stats_job": basejob.meta.get("latest_stats", None),
+        "status": "faked",
+        "job": previous,
+    }
+
+
+async def handle_timeout(exc: Exception, request):
+    """
+    If a job dies due to TTL, we send this...
+    """
+    request_data = await request.json()
+    user = request_data["user"]
+    room = request_data["room"]
+    job = str(exc).split("rq:job:")[-1]
+    jso = {
+        "user": user,
+        "room": room,
+        "error": str(exc),
+        "status": "timeout",
+        "job": job,
+        "action": "timeout",
+    }
+    connection = request.app["redis"]
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

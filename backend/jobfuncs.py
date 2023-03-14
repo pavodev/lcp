@@ -45,10 +45,13 @@ async def _db_query(query=None, **kwargs):
     is_store = kwargs.get("store", False)
     is_stats = kwargs.get("is_stats", False)
     current_batch = kwargs.get("current_batch")
+    resuming = kwargs.get("resuming", False)
 
     if is_stats:
         associated_query = kwargs["depends_on"]
         conn = get_current_connection()
+        if isinstance(associated_query, list):
+            associated_query = associated_query[-1]
         associated_query = Job.fetch(associated_query, connection=conn)
         hit_limit = associated_query.meta.get("hit_limit")
         if associated_query.get_status(refresh=True) in ("stopped", "canceled"):
@@ -59,8 +62,12 @@ async def _db_query(query=None, **kwargs):
             return {}
         prev_results = associated_query.result
         # so we don't double count on resuming
+        if resuming:
+            start_at = associated_query.meta.get("start_at", 0)
+            prev_results = prev_results[start_at:]
         if hit_limit:
-            prev_results = prev_results[hit_limit:]
+            prev_results = prev_results[:hit_limit]
+
         values = [(i[0][1], i[0][-1]) for i in prev_results]
         together = set()
         for start, end in values:

@@ -25,6 +25,10 @@ async def handle_redis_response(channel, app):
                 user = payload.get("user")
                 room = payload.get("room")
 
+                if payload.get("status") == "timeout":
+                    await push_msg(app["websockets"], room, payload, just=(room, user))
+                    continue
+
                 # error handling
                 if payload.get("status") == "failed":
                     await push_msg(app["websockets"], room, payload, just=(room, user))
@@ -127,7 +131,8 @@ async def _handle_query(app, payload, user, room):
         payload["config"] = app["config"]
         if payload["base"] is None:
             payload["base"] = job
-        await query(None, payload, app)
+        if not payload.get("simultaneous"):
+            await query(None, manual=payload, app=app)
         # return  # return will prevent partial results from going back to frontend
     to_send = payload
     n_users = len(app["websockets"].get(room, set()))
@@ -149,6 +154,7 @@ async def _handle_query(app, payload, user, room):
             "hit_limit": payload["hit_limit"],
             "projected_results": payload["projected_results"],
             "batches_done": f"{done}/{total_batches}",
+            "simultaneous": payload.get("simultaneous", False),
         }
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
 
@@ -170,7 +176,11 @@ async def push_msg(sockets, session_id, msg, skip=None, just=None):
                 continue
             if just and (room, user_id) != just:
                 continue
-            await conn.send_json(msg)
+            try:
+                await conn.send_json(msg)
+            except ConnectionResetError:
+                print(f"Connection reset: {room}/{user_id}")
+                pass
             sent_to.add((room, conn, user_id))
             # todo: can we add back this tiny optimisation?
             # if session_id is None:
@@ -235,6 +245,17 @@ async def sock(request):
 
         elif action == "validate":
             response = await validate(**payload)
+            await push_msg(sockets, session_id, response, just=ident)
+
+        elif action == "enough_results":
+            job = payload["job"]
+            jobs = qs.cancel_running_jobs(user_id, session_id, base=job)
+            response = {
+                "status": "stopped",
+                "n": len(jobs),
+                "action": "stopped",
+                "jobs": jobs,
+            }
             await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "populate":

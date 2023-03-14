@@ -3,7 +3,7 @@ import json
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.job import Job
 from .configure import _get_batches
-from .utils import CustomEncoder, Interrupted
+from .utils import CustomEncoder, Interrupted, _add_results
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
@@ -12,38 +12,42 @@ def _query(job, connection, result, *args, **kwargs):
     """
     Job callback, publishes a redis message containing the results
     """
+    restart = kwargs.get("hit_limit", False)
     results_so_far = job.kwargs.get("existing_results", [])
     total_found = len(results_so_far) + len(result)
-    total_requested = job.kwargs["total_results_requested"]
+    total_requested = (
+        job.kwargs["total_results_requested"]
+        if restart is False
+        else kwargs["total_results_requested"]
+    )
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
-    offset = job.kwargs.get("offset", False)
+    offset = job.kwargs.get("offset", False) if restart is False else False
 
-    unlimited = job.kwargs["needed"] in {0, -1, False, None}
+    if restart is False:
+        needed = job.kwargs["needed"]
+    else:
+        needed = total_requested - len(results_so_far)
 
-    limited = not unlimited and len(result) >= job.kwargs["needed"]
+    unlimited = needed in {-1, False, None} or job.kwargs.get("simultaneous", False)
 
-    for n, res in enumerate(result):
-        if not unlimited and offset and n < offset:
-            continue
-        # fix: move sent_id to own column
-        fixed = []
-        sent_id = res[0][0]
-        tok_ids = res[0][1:]
-        fixed = ((sent_id,), tuple(tok_ids), res[1], res[2])
-        # end fix
-        results_so_far.append(fixed)
-        if not unlimited and len(results_so_far) >= total_requested:
-            break
+    limited = not unlimited and len(result) > job.kwargs["needed"]
+
+    args = (result, len(results_so_far), unlimited, offset, restart, total_requested)
+    results_so_far += _add_results(*args)
+    # add everything: _add_results(result, 0, True, False, False, 0)
 
     just_finished = job.kwargs["current_batch"]
     job.kwargs["done_batches"].append(just_finished)
 
     status = _get_status(results_so_far, **job.kwargs)
-    hit_limit = False if not limited else job.kwargs["needed"]
+    hit_limit = False if not limited else needed
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
-    job.meta["all_results"] = results_so_far
+    job.meta["total_results"] = len(results_so_far)
+    # the +1 could be wrong, maybe hit_limit should be -1?
+    job.meta["start_at"] = 0 if restart is False else restart
+    # job.meta["all_results"] = results_so_far
     job.save_meta()
     if status == "finished":
         projected_results = len(results_so_far)
@@ -54,20 +58,24 @@ def _query(job, connection, result, *args, **kwargs):
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
-    jso = {
-        "result": results_so_far,
-        "status": status,
-        "job": job.id,
-        "projected_results": projected_results,
-        "percentage_done": round(perc, 3),
-        "hit_limit": hit_limit,
-        "batch_matches": len(result),
-        "stats": job.kwargs["stats"],
-        **kwargs,
-        **job.kwargs,
-    }
+    jso = dict(**job.kwargs)
+    jso.update(
+        {
+            "result": results_so_far,
+            "status": status,
+            "job": job.id,
+            "projected_results": projected_results,
+            "percentage_done": round(perc, 3),
+            "hit_limit": hit_limit,
+            "batch_matches": len(result),
+            "stats": job.kwargs["stats"],
+            "total_results_requested": total_requested,
+        }
+    )
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    redis = job._redis if restart is False else connection
+
+    redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _stats(job, connection, result, *args, **kwargs):
@@ -75,15 +83,22 @@ def _stats(job, connection, result, *args, **kwargs):
     base = Job.fetch(job.kwargs["base"], connection=connection)
     if "_stats" not in base.meta:
         base.meta["_stats"] = {}
+
     for r, v in result.items():
         if r in base.meta["_stats"]:
             base.meta["_stats"][r] += v
         else:
             base.meta["_stats"][r] = v
 
+    base.meta["latest_stats"] = job.id
+
     base.save_meta()
 
-    depended = Job.fetch(job.kwargs["depends_on"], connection=connection)
+    depends_on = job.kwargs["depends_on"]
+    if isinstance(depends_on, list):
+        depends_on = depends_on[-1]
+
+    depended = Job.fetch(depends_on, connection=connection)
 
     jso = {
         "result": base.meta["_stats"],
@@ -114,6 +129,10 @@ def _general_failure(job, connection, typ, value, traceback, *args, **kwargs):
             **kwargs,
             **job.kwargs,
         }
+    # this is just for consistency with the other timeout messages
+    if "No such job" in jso["value"]:
+        jso["status"] = "timeout"
+        jso["action"] = "timeout"
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -207,7 +226,7 @@ def _get_status(results_so_far, **kwargs):
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
     requested = kwargs["total_results_requested"]
-    if requested in {0, -1, False, None}:
+    if requested in {-1, False, None}:
         return "partial"
     if len(results_so_far) >= requested:
         return "satisfied"

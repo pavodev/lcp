@@ -9,25 +9,27 @@ def _get_batches(config):
     mapping = config["mapping"]["layer"]["Token"]
     if "partitions" in mapping:
         for lang, details in mapping["partitions"].items():
-            size = counts[details["relation"].replace("<part>", "0")]
+            named = details["relation"].replace("<batch>", "0")
+            size = counts[named]
             n_batches = details["batches"]
             for i in range(1, n_batches):
                 if i + 1 == n_batches:
                     name = "rest"
                 else:
                     name = str(i)
-                batchname = details["relation"].replace("<part>", name)
+                batch = details["relation"].replace("<batch>", name)
                 size = size / 2 if name != "rest" else size
-                batches[batchname] = int(size)
+                batches[batch] = int(size)
     else:
         n_batches = mapping["batches"]
-        size = counts[mapping["relation"].replace("<part>", "0")]
+        name = mapping["relation"].replace("<batch>", "0")
+        size = counts[name]
         for i in range(1, n_batches):
             if i + 1 == n_batches:
                 name = "rest"
             else:
                 name = str(i)
-            batchname = mapping["relation"].replace("<part>", name)
+            batch = mapping["relation"].replace("<batch>", name)
             size = size / 2 if name != "rest" else size
-            batches[batchname] = int(size)
+            batches[batch] = int(size)
     return batches

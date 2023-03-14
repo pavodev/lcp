@@ -2,7 +2,7 @@ import json
 import os
 
 from rq.job import Job
-from rq.exceptions import NoSuchJobError
+from rq.exceptions import NoSuchJobError, InvalidJobOperation
 from rq.command import send_stop_job_command
 
 from .callbacks import _query, _queries, _upload, _config, _general_failure, _stats
@@ -17,9 +17,10 @@ class QueryService:
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
-        self.timeout = int(os.getenv("QUERY_TIMEOUT"))
+        self.timeout = int(os.getenv("QUERY_TIMEOUT", 180))
+        self.query_ttl = int(os.getenv("QUERY_TTL", 500))
 
-    def query(self, queue="query", kwargs=None):
+    def query(self, queue="query", depends_on=None, kwargs=None):
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -27,8 +28,13 @@ class QueryService:
             "on_success": _query,
             "on_failure": _general_failure,
             "kwargs": kwargs,
+            "job_id": kwargs.get("id"),
         }
-        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+        if depends_on:
+            opts["depends_on"] = depends_on
+        return self.app[queue].enqueue(
+            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def statistics(self, queue="query", depends_on=None, kwargs=None):
         kwargs["is_stats"] = True
@@ -41,8 +47,11 @@ class QueryService:
             "depends_on": depends_on,
             "current_batch": kwargs["current_batch"],
             "base": kwargs["base"],
+            "resuming": kwargs["resuming"],
         }
-        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+        return self.app[queue].enqueue(
+            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def get_config(self, queue="alt", **kwargs):
         """
@@ -53,7 +62,9 @@ class QueryService:
             "config": True,
             "on_success": _config,
         }
-        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+        return self.app[queue].enqueue(
+            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def fetch_queries(self, user, room=None, queue="alt", limit=10):
         """
@@ -75,7 +86,9 @@ class QueryService:
             "on_success": _queries,
             "on_failure": _general_failure,
         }
-        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+        return self.app[queue].enqueue(
+            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def store_query(self, query_data, idx, user, room=None, queue="alt"):
         """
@@ -93,7 +106,9 @@ class QueryService:
             "on_success": _queries,
             "on_failure": _general_failure,
         }
-        return self.app[queue].enqueue(_db_query, job_timeout=self.timeout, **opts)
+        return self.app[queue].enqueue(
+            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def upload(
         self, data, user, corpus_id, room=None, config=None, queue="alt", gui=False
@@ -116,7 +131,9 @@ class QueryService:
             "gui": gui,
             "room": room,
         }
-        return self.app[queue].enqueue(_upload_data, job_timeout=self.timeout, **opts)
+        return self.app[queue].enqueue(
+            _upload_data, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def cancel(self, job_id):
         job = Job.fetch(job_id, connection=self.app["redis"])
@@ -129,21 +146,37 @@ class QueryService:
         job.delete()
         return "DELETED"
 
-    def cancel_running_jobs(self, user, room):
-        jobs = self.app["query"].started_job_registry.get_job_ids()
-        jobs += self.app["query"].scheduled_job_registry.get_job_ids()
-        # the two lines below are probably overkill...
-        finished = self.app["query"].finished_job_registry.get_job_ids()
-        jobs += finished
-        jobs = set(jobs)
+    def cancel_running_jobs(self, user, room, specific_job=None, base=None):
+        if specific_job:
+            jobs = {str(specific_job)}
+            finished = []
+        else:
+            jobs = self.app["query"].started_job_registry.get_job_ids()
+            jobs += self.app["query"].scheduled_job_registry.get_job_ids()
+            # the two lines below are probably overkill...
+            finished = self.app["query"].finished_job_registry.get_job_ids()
+            jobs += finished
+            set_fin = set(finished)
+            jobs = set(jobs)
+
         ids = []
-        set_fin = set(finished)
+
         for job in jobs:
             maybe = Job.fetch(job, connection=self.app["redis"])
+            if base and maybe.kwargs.get("simultaneous") != base:
+                continue
+            if base and maybe.kwargs.get("is_stats"):
+                continue
             if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
-
-                maybe.cancel()
-                send_stop_job_command(self.app["redis"], job)
+                try:
+                    maybe.cancel()
+                    send_stop_job_command(self.app["redis"], job)
+                except InvalidJobOperation:
+                    print(f"Already canceled: {job}")
+                    continue
+                except Exception as err:
+                    print("Unknown error, please debug", err, job)
+                    continue
                 if job not in set_fin:
                     self.app["canceled"].add(job)
                     print(f"Killing job: {job}")

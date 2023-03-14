@@ -232,7 +232,10 @@ export default {
       nResults: 1000,
       pageSize: 20,
       languages: "en",
-      queryName: ""
+      queryName: "",
+      simultaneousMode: false,
+      currentResults: [],
+      percentageDone: 0
     };
   },
   components: {
@@ -303,6 +306,10 @@ export default {
           console.log('Query interrupted', data)
           return
         }
+        if (data['action'] === 'timeout') {
+          console.log('Query job expired', data)
+          return
+        }
         if (data['action'] === 'validate') {
           console.log('Query validation', data)
           return
@@ -324,10 +331,25 @@ export default {
           return
         }
       }
-      data["n_results"] = data["result"].length;
-      data["first_result"] = data["result"][0];
-      delete data["result"];
-      this.WSData = data;
+      // we might need this block for stats related stuff later, don't worry about it much right now
+      if (this.simultaneousMode) {
+        theseResults = this.allResults.concat(data['result'])
+        if (this.allResults.length >= data['total_results_requested']) {
+          this.allResults = this.allResults.slice(0, data['total_results_requested'])
+          this.enough(data['simultaneous']);
+          data['status'] = 'satisfied';
+        }
+        data["first_result"] = this.allResults[0];
+        data["n_results"] = this.allResults.length;
+        delete data["result"];
+        data["percentage_done"] += this.percentageDone;
+        this.WSData = data;
+      } else {
+        data["n_results"] = data["result"].length;
+        data["first_result"] = data["result"][0];
+        delete data["result"];
+        this.WSData = data;
+      }
     },
     submit(event, resumeQuery = false) {
       if (!resumeQuery) {
@@ -344,7 +366,8 @@ export default {
         languages: this.languages.split(","),
         total_results_requested: this.nResults,
         stats: true,
-        resume: resumeQuery
+        resume: resumeQuery,
+        simultaneous: this.simultaneousMode
       };
       if (resumeQuery) {
         data['previous'] = this.WSData.job
@@ -355,11 +378,22 @@ export default {
       this.submit(null, true)
     },
     stop() {
+      this.currentResults = [];
+      this.percentageDone = 0
       this.$socket.sendObj({
         // room: this.roomId,
         room: null,
         action: "stop",
         user: this.userId,
+      });
+    },
+    enough(job) {
+      this.$socket.sendObj({
+        // room: this.roomId,
+        room: null,
+        action: "enough_results",
+        user: this.userId,
+        job: job
       });
     },
     validate() {

@@ -1,5 +1,5 @@
 import json
-
+import os
 
 from aiohttp import web
 from rq.job import Job
@@ -8,6 +8,8 @@ from abstract_query.abstract_query import Query
 from abstract_query.lcp_query import LCPQuery
 
 from . import utils
+from .callbacks import _query
+from uuid import uuid4
 
 
 def _make_stats_query(query, schema, config):
@@ -43,9 +45,7 @@ def _get_word_count(corpora, config, languages):
     return total
 
 
-def _decide_batch(
-    done_batches, batches, n_results_so_far, needed_to_go, hit_limit, page_size
-):
+def _decide_batch(done_batches, batches, so_far, needed, hit_limit, page_size):
     """
     Find the best next batch to query
     """
@@ -55,14 +55,14 @@ def _decide_batch(
         return batches[0]
     if hit_limit:
         return done_batches[-1]
-    if needed_to_go in {0, -1, False, None}:
+    if needed in {-1, False, None}:
         return next(
             p
             for p in batches
             if tuple(p) not in done_batches and list(p) not in done_batches
         )
     total_words_processed_so_far = sum([x[-1] for x in done_batches])
-    proportion_that_matches = n_results_so_far / total_words_processed_so_far
+    proportion_that_matches = so_far / total_words_processed_so_far
     for schema, corpus, name, size in batches:
         if (schema, corpus, name, size) in done_batches or [
             schema,
@@ -72,10 +72,10 @@ def _decide_batch(
         ] in done_batches:
             continue
         # should we do this? next-smallest for low number of matches?
-        if not n_results_so_far or n_results_so_far < page_size:
+        if not so_far or so_far < page_size:
             return (schema, corpus, name, size)
         expected = size * proportion_that_matches
-        if n_results_so_far + expected >= (needed_to_go + (needed_to_go * buffer)):
+        if so_far + expected >= (needed + (needed * buffer)):
             return (schema, corpus, name, size)
     return next(
         p
@@ -106,62 +106,96 @@ def _get_query_batches(corpora, config, languages):
     return sorted(out, key=lambda x: x[-1])
 
 
+async def _do_resume(request_data, app, previous, total_results_requested):
+    """
+    Resume a query!
+    """
+    prev_job = Job.fetch(previous, connection=app["redis"])
+    hit_limit = prev_job.meta.get("hit_limit", 0)
+    if hit_limit:
+        base = prev_job.kwargs.get("base", prev_job.id)
+        _query(
+            prev_job,
+            app["redis"],
+            prev_job.result,
+            hit_limit=hit_limit,
+            total_results_requested=request_data["total_results_requested"],
+        )
+        current_batch = prev_job.kwargs["current_batch"]
+        return True, (current_batch, prev_job)
+    else:
+        all_batches = prev_job.kwargs["all_batches"]
+        done_batches = prev_job.kwargs["done_batches"]
+        so_far = prev_job.meta["total_results"]
+        needed = (
+            total_results_requested - so_far
+            if total_results_requested not in {-1, False, None}
+            else -1
+        )
+        previous_batch = prev_job.kwargs["current_batch"]
+        done_batches.append(previous_batch)
+        return False, (
+            all_batches,
+            done_batches,
+            so_far,
+            needed,
+        )
+
+
 @utils.ensure_authorised
 async def query(request, manual=None, app=None):
     """
-    Here we get the corpora and the search criteria, generate a JSON query, which gets submitted to query service
-
-    POST data should contain `corpora` and `query`, room and user_id also allowed
+    Generate and queue up queries
 
     This endpoint can be manually triggered for queries over multiple batches. When
-    that happpens, manual is a dict with the needed data and the app is passed in as a kwarg.
+    that happpens, manual is a dict with the needed data and the app is passed in
+    as a kwarg.
     """
-    # manual means the request doesn't come from the frontend, but from the run.py file...
-    unlimited = {0, -1, False, None}
+    ###########################################################################
+    # request doesn't come from frontend, but from the run.py file            #
+    ###########################################################################
+    unlimited = {-1, False, None}
     if manual is not None:
-        job = Job.fetch(manual["job"], connection=app["redis"])
-        user = manual.get("user")
-        room = manual.get("room")
-        stats = manual.get("stats")
-        languages = set([i.strip() for i in manual.get("languages")])
-
-        # done_batches = manual["done_batches"]
-        # all_batches = manual["all_batches"]
-
-        previous_batch = job.kwargs["current_batch"]
-        done_batches = job.kwargs["done_batches"]
-        done_batches.append(previous_batch)
-        all_batches = job.kwargs["all_batches"]
-        base = manual["base"]
         previous = False
         resuming = False
-
-        corpora_to_use = [int(i) for i in manual["corpora"]]
+        simultaneous = False
+        job = Job.fetch(manual["job"], connection=app["redis"])
+        base = manual["base"]
         existing_results = manual["result"]
-        # todo: user may have changed page size ... try get it from ws message first?
-        page_size = job.kwargs.get("page_size", 20)
-
-        query = job.kwargs["original_query"]
-        n_results_so_far = len(existing_results)
+        config = manual["config"]
         total_results_requested = manual["total_results_requested"]
-
-        needed_to_go = (
-            total_results_requested - n_results_so_far
+        user = manual["user"]
+        corpora_to_use = [int(i) for i in manual["corpora"]]
+        room = manual.get("room")
+        stats = manual.get("stats", False)
+        hit_limit = manual.get("hit_limit", False)
+        languages = set([i.strip() for i in manual.get("languages")])
+        query = job.kwargs["original_query"]
+        page_size = job.kwargs.get("page_size", 20)  # todo: user may change
+        previous_batch = job.kwargs["current_batch"]
+        done_batches = job.kwargs["done_batches"]
+        all_batches = job.kwargs["all_batches"]
+        done_batches.append(previous_batch)
+        so_far = len(existing_results)
+        needed = (
+            total_results_requested - so_far
             if total_results_requested not in unlimited
             else -1
         )
-        config = manual["config"]
-        hit_limit = manual.get("hit_limit", False)
     else:
-        # request is from the frontend, most likely a new query
-        # hit_limit = False
+        #######################################################################
+        # request is from the frontend, most likely a new query...            #
+        #######################################################################
         done_batches = []
+        existing_results = []
+        hit_limit = False
+        job = False
+        so_far = 0
         app = request.app
         config = request.app["config"]
         request_data = await request.json()
         corpora_to_use = [int(i) for i in request_data["corpora"]]
         query = request_data["query"]
-        base = None
         room = request_data.get("room")
         previous = request_data.get("previous", False)
         resuming = request_data.get("resume", False)
@@ -170,99 +204,175 @@ async def query(request, manual=None, app=None):
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
         total_results_requested = request_data.get("total_results_requested", 10000)
-        existing_results = []
-        n_results_so_far = 0
+        simultaneous = request_data.get("simultaneous", False)
+        if simultaneous:
+            simultaneous = str(uuid4())
+        base = None if not resuming else previous
         all_batches = _get_query_batches(corpora_to_use, config, languages)
-        needed_to_go = total_results_requested
-        hit_limit = False
+        needed = total_results_requested
 
+    ############################################################################
+    # prepare for query iterations (just one if not simultaneous mode)         #
+    ############################################################################
+
+    iterations = len(all_batches) if simultaneous else 1
+    http_response = []
     current_batch = None
-
-    if resuming:
-        prev_job = Job.fetch(previous, connection=app["redis"])
-        hit_limit = prev_job.meta.get("hit_limit", 0)
-        all_batches = prev_job.kwargs["all_batches"]
-        done_batches = prev_job.kwargs["done_batches"]
-        existing_results = prev_job.meta["all_results"]
-        n_results_so_far = len(existing_results)
-        needed_to_go = (
-            total_results_requested - n_results_so_far
-            if total_results_requested not in unlimited
-            else -1
-        )
-        if not hit_limit:
-            previous_batch = prev_job.kwargs["current_batch"]
-            done_batches.append(previous_batch)
-        else:
-            current_batch = prev_job.kwargs["current_batch"]
-
-    sql_query = query
-    word_count = _get_word_count(corpora_to_use, config, languages)
-
-    if current_batch is None:
-        current_batch = _decide_batch(
-            done_batches,
-            all_batches,
-            n_results_so_far,
-            needed_to_go,
-            hit_limit,
-            page_size,
-        )
-
-    if "SELECT" not in query.upper():
-        try:
-            kwa = dict(
-                corpus=current_batch[1],
-                batch=current_batch[2],
-                # limit=needed_to_go,
-                config=app["config"][str(current_batch[0])],
-                # offset=hit_limit,
-            )
-            sql_query = LCPQuery(query, **kwa).sql
-        except Exception as err:
-            print("SQL GENERATION FAILED! for dev, assuming script passed", err)
-            raise err
-
-    if manual is None and not resuming:
-        print(f"QUERY:\n\n\n{sql_query}\n\n\n")
-
+    first_job = None
+    depends_on_chain = []
+    max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
+    query_depends = []
     qs = app["query_service"]
-    query_kwargs = dict(
-        query=sql_query,
-        user=user,
-        original_query=query,
-        room=room,
-        needed=needed_to_go,
-        total_results_requested=total_results_requested,
-        done_batches=done_batches,
-        current_batch=current_batch,
-        all_batches=all_batches,
-        corpora=corpora_to_use,
-        base=base,
-        existing_results=existing_results,
-        word_count=word_count,
-        stats=stats,
-        offset=hit_limit,
-        page_size=page_size,
-        languages=list(languages),
-    )
-    job = qs.query(kwargs=query_kwargs)
 
-    if stats:
-        sect = config[str(current_batch[0])]
-        stats_query = _make_stats_query(query, current_batch[1], sect)
-        stats_kwargs = dict(
-            user=user,
-            room=room,
-            current_batch=current_batch,
-            query=stats_query,
-            base=job.id if base is None else base,
-        )
-        stats_job = qs.statistics(depends_on=job.id, kwargs=stats_kwargs)
+    for i in range(iterations):
 
-    print(f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}")
+        done = False
 
-    jobs = {"status": "started", "job": job.id}
-    if stats:
-        jobs.update({"stats": True, "stats_job": stats_job.id})
-    return web.json_response(jobs)
+        ########################################################################
+        # handle resumed queries                                               #
+        ########################################################################
+
+        if resuming:
+            args = (request_data, app, previous, total_results_requested)
+            done, r = await _do_resume(*args)
+
+            if not done:
+                all_batches, done_batches, so_far, needed = r
+                existing_results = utils._get_all_results(
+                    previous, connection=app["redis"]
+                )
+            else:
+                current_batch, prev_job = r
+
+        #######################################################################
+        # build new query sql (not needed if resuming a queried batch)        #
+        #######################################################################
+
+        if not done:
+
+            sql_query = query
+            word_count = _get_word_count(corpora_to_use, config, languages)
+
+            if current_batch is None:
+                current_batch = _decide_batch(
+                    done_batches,
+                    all_batches,
+                    so_far,
+                    needed,
+                    hit_limit,
+                    page_size,
+                )
+
+            if "SELECT" not in query.upper():
+                try:
+                    kwa = dict(
+                        corpus=current_batch[1],
+                        batch=current_batch[2],
+                        config=app["config"][str(current_batch[0])],
+                    )
+                    sql_query = LCPQuery(query, **kwa).sql
+                except Exception as err:
+                    print("SQL GENERATION FAILED! for dev, assuming script passed", err)
+                    raise err
+
+            ###################################################################
+            # organise and submit query to rq via query service               #
+            ###################################################################
+
+            if manual is None and not resuming and not i:
+                print(f"QUERY:\n\n\n{sql_query}\n\n\n")
+
+            if manual is not None:
+                parent = job.id
+            elif resuming:
+                parent = previous
+            else:
+                parent = None
+
+            query_kwargs = dict(
+                query=sql_query,
+                user=user,
+                original_query=query,
+                room=room,
+                needed=needed,
+                total_results_requested=total_results_requested,
+                done_batches=done_batches,
+                current_batch=current_batch,
+                all_batches=all_batches,
+                corpora=corpora_to_use,
+                base=base,
+                existing_results=existing_results,
+                word_count=word_count,
+                stats=stats,
+                offset=hit_limit,
+                page_size=page_size,
+                languages=list(languages),
+                parent=parent,
+                simultaneous=simultaneous,
+            )
+
+            job = qs.query(depends_on=query_depends, kwargs=query_kwargs)
+
+            ###################################################################
+            # simultaneous query setup for next iteration                     #
+            ###################################################################
+
+            # still figuring this out a little bit
+            divv = (i + 1) % max_jobs if max_jobs else -1
+            if simultaneous and i and max_jobs and max_jobs != -1 and not divv:
+                query_depends.append(job.id)
+
+            print(f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}")
+
+            if simultaneous and not i:
+                first_job = job
+
+        #######################################################################
+        # prepare and submit statistics query                                 #
+        #######################################################################
+
+        if stats:
+            sect = config[str(current_batch[0])]
+            stats_query = _make_stats_query(query, current_batch[1], sect)
+            if simultaneous:
+                the_base = first_job.id
+            elif resuming and done:
+                the_base = prev_job.kwargs.get("base", prev_job.id)
+            else:
+                the_base = job.id if base is None else base
+            stats_kwargs = dict(
+                user=user,
+                room=room,
+                current_batch=current_batch,
+                query=stats_query,
+                base=the_base,
+                resuming=done,
+                simultaneous=simultaneous,
+            )
+            depends_on = job.id if not done else previous
+            if simultaneous:
+                depends_on_chain.append(depends_on)
+                to_use = depends_on_chain
+            else:
+                to_use = depends_on
+            stats_job = qs.statistics(depends_on=to_use, kwargs=stats_kwargs)
+            # if simultaneous:
+            #    depends_on_chain.append(stats_job.id)
+
+        #######################################################################
+        # prepare for next iteration if need be, and return http response     #
+        #######################################################################
+
+        jobs = {"status": "started", "job": job.id if job else previous}
+
+        if stats:
+            jobs.update({"stats": True, "stats_job": stats_job.id})
+
+        if simultaneous:
+            done_batches.append(current_batch)
+            current_batch = None
+            http_response.append(jobs)
+        else:
+            http_response = jobs
+
+    return web.json_response(http_response)
