@@ -30,7 +30,7 @@ def _query(job, connection, result, *args, **kwargs):
         fixed = []
         sent_id = res[0][0]
         tok_ids = res[0][1:]
-        fixed = ((sent_id,), tuple(tok_ids), res[1])
+        fixed = ((sent_id,), tuple(tok_ids), res[1], res[2])
         # end fix
         results_so_far.append(fixed)
         if not unlimited and len(results_so_far) >= total_requested:
