@@ -153,7 +153,7 @@ export default {
         let range = [row[1][0] - startIndex, row[1][1] - startIndex];
         let tokens = row[3];
         return [
-          tokens.filter((_, index) => index < range[0]),
+          tokens.filter((_, index) => index < range[0]).reverse(),
           tokens.filter((_, index) => index >= range[0] && index <= range[1]),
           // .map((token) => `<span class="show-data" data-id="${token[0]}">${token[1]}</span>`)
           // .join(" "),
