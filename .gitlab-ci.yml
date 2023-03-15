@@ -8,8 +8,8 @@
 # https://hub.docker.com/r/library/python/tags/
 image: python:3.9-slim
 
-#services:
-#  - redis:latest
+services:
+  - redis:latest
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -35,7 +35,7 @@ test:
   script:
     - apt-get update -y
     - apt-get install git -y
-    - apt-get -y install systemctl
+    # - apt-get -y install systemctl
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
     - pwd
@@ -44,7 +44,8 @@ test:
     - cd abstract-query && python setup.py develop && cd ..
     - pip install -r requirements.txt
     - pip install coverage
-    - apt-get install redis -y
-    - redis-cli -h localhost ping
+    # - apt-get install redis -y
+    - apt-get install redis-server
+    - redis-cli -h redis ping
     - coverage run -m unittest
     - coverage report
