@@ -31,6 +31,7 @@ before_script:
 
 test:
   script:
+    - apt-get install git
     - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/".insteadOf https://gitlab.com/
     - pip install git+https://gitlab.uzh.ch/LiRI/projects/abstract-query
     - pip install -r requirements.txt
