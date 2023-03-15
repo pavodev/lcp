@@ -35,6 +35,8 @@ test:
   script:
     - apt-get update -y
     - apt-get install git -y
+    - apt-get install build-essential -y
+    - git submodule update --init
     # - apt-get -y install systemctl
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
