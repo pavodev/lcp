@@ -15,7 +15,7 @@ from .validate import validate
 
 
 async def handle_redis_response(
-    channel: aioredis.client.PubSub, app: aiohttp.web.Application
+    channel: aioredis.client.PubSub, app: aiohttp.web.Application, test: bool = False
 ) -> None:
     """
     If redis publishes a message, it gets picked up here and broadcast to the
@@ -50,6 +50,8 @@ async def handle_redis_response(
                 if payload.get("action") == "set_config":
                     print(f"Config loaded: {len(payload['config'])-1} corpora")
                     app["config"] = payload["config"]
+                    if test:
+                        return
                     continue
 
                 # handle fetch/store queries message

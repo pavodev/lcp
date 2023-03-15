@@ -12,6 +12,7 @@ from aiohttp import WSCloseCode, web
 from dotenv import load_dotenv
 from redis import Redis
 
+
 # import redis.asyncio as redis
 import asyncpg
 import uvloop
@@ -23,21 +24,22 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.exceptions import NoSuchJobError
 from sshtunnel import SSHTunnelForwarder
 
-from backend.check_file_permissions import check_file_permissions
-from backend.sock import handle_redis_response, sock
-from backend.video import video
 
-from aiohttp_catcher import Catcher, catch
+from backend.check_file_permissions import check_file_permissions
 from backend.document import document
 from backend.lama_user_data import lama_user_data
 from backend.query import query
+from backend.sock import handle_redis_response, sock
 from backend.store import fetch_queries, store_query
 from backend.upload import upload
+from backend.video import video
 
 # from backend.validate import validate
 from backend import utils
 from backend.corpora import corpora
 from backend.query_service import QueryService
+
+from aiohttp_catcher import Catcher, catch
 
 
 load_dotenv(override=True)
@@ -96,6 +98,8 @@ async def cleanup_background_tasks(app: web.Application) -> None:
 
 
 async def create_app(*args, **kwargs) -> None:
+
+    test = kwargs.get("test")
 
     catcher = Catcher()
 
@@ -173,6 +177,9 @@ async def create_app(*args, **kwargs) -> None:
     app["query_service"].get_config()
     app["canceled"] = set()
 
+    if test:
+        return app
+
     app.on_startup.append(start_background_tasks)
     app.on_cleanup.append(cleanup_background_tasks)
     app.on_shutdown.append(on_shutdown)
@@ -187,7 +194,7 @@ async def create_app(*args, **kwargs) -> None:
     return None
 
 
-if __name__ == "__main__" or __name__ == "run":
+if __name__ == "__main__" or (__name__ == "run" and not "_TEST" in os.environ):
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     app = asyncio.run(create_app())
