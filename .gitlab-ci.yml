@@ -33,7 +33,7 @@ test:
     - apt-get update -y
     - apt-get install git -y
     - apt-get -y install systemctl
-    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
+    # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
     - cd abstract-query && python setup.py develop && cd ..
     - pip install -r requirements.txt
