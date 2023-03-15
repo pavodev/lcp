@@ -120,6 +120,14 @@ async def create_app(*args, **kwargs) -> None:
     )
 
     app["websockets"] = defaultdict(set)
+    print(
+        "SSH SETTINGS",
+        os.getenv("SSH_HOST"),
+        HOST,
+        PORT,
+        os.getenv("SSH_USER"),
+        os.getenv("SSH_PKEY"),
+    )
 
     tunnel = SSHTunnelForwarder(
         os.getenv("SSH_HOST"),
