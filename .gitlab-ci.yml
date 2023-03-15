@@ -33,8 +33,7 @@ test:
   script:
     - apt-get update -y
     - apt-get install git -y
-    - git config --global url."https://gitlab+deploy-token-136:cyqhD_bUz7MgCeZ83taZ@gitlab.uzh.ch/LiRI/projects/abstract-query/".insteadOf "git@gitlab.uzh.ch/LiRI/projects/abstract-query:"
-    - git submodule sync && git submodule update --init
+    - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
     - cd abstract-query && python setup.py develop && cd ..
     - pip install -r requirements.txt
