@@ -45,6 +45,6 @@ test:
     - pip install -r requirements.txt
     - pip install coverage
     - apt-get install redis -y
-    - redis-cli -u redis://redis:6379 ping
+    - redis-cli -h localhost ping
     - coverage run -m unittest
     - coverage report
