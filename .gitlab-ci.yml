@@ -35,7 +35,9 @@ test:
     - apt-get -y install systemctl
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
-    - cd abstract-query && python setup.py develop && cd ..
+    - python abstract-query/setup.py develop
+    - pwd
+    - ls -al
     - pip install -r requirements.txt
     - pip install coverage
     - apt-get install redis -y
