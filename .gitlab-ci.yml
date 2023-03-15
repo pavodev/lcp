@@ -42,6 +42,6 @@ test:
     - pip install -r requirements.txt
     - pip install coverage
     - apt-get install redis -y
-    - systemctl start redis
+    - redis-cli ping
     - coverage run -m unittest
     - coverage report
