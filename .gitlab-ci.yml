@@ -31,12 +31,12 @@ before_script:
 
 test:
   script:
+    - apt-get update -y
     - apt-get install git
     - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/".insteadOf https://gitlab.com/
     - pip install git+https://gitlab.uzh.ch/LiRI/projects/abstract-query
     - pip install -r requirements.txt
     - pip install coverage
-    - apt-get update -y
     - apt-get install redis
     - systemctl start redis.service
     - coverage run -m unittest
