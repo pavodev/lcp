@@ -30,10 +30,10 @@ before_script:
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
-  - apt-get update -y
-  - apt-get install git -y
-  - git submodule sync --recursive
-  - git submodule update --init --recursive --remote
+  #- apt-get update -y
+  #- apt-get install git -y
+  #- git submodule sync --recursive
+  #- git submodule update --init --recursive --remote
 
 test:
   script:
