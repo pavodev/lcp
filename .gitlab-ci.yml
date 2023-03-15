@@ -42,10 +42,11 @@ test:
     - ls -al
     - ls -al abstract-query
     - cd abstract-query && python setup.py develop && cd ..
+    - sleep 3
     - pip install -r requirements.txt
     - pip install coverage
     # - apt-get install redis -y
-    - apt-get install redis-server
+    - apt-get install redis-server -y
     - redis-cli -h redis ping
     - coverage run -m unittest
     - coverage report
