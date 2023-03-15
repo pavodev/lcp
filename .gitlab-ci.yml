@@ -12,7 +12,7 @@ image: python:3.9-slim
 # only cache local items.
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
-
+  GIT_SUBMODULE_STRATEGY: recursive
 # Pip's cache doesn't store the python packages
 # https://pip.pypa.io/en/stable/reference/pip_install/#caching
 #
@@ -33,8 +33,7 @@ test:
   script:
     - apt-get update -y
     - apt-get install git -y
-    - git config --global url."https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.com/".insteadOf https://gitlab.com/
-    - pip install git+https://gitlab.uzh.ch/LiRI/projects/abstract-query
+    - cd abstract-query && python setup.py develop && cd ..
     - pip install -r requirements.txt
     - pip install coverage
     - apt-get install redis -y

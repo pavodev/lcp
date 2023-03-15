@@ -1,0 +1,4 @@
+[submodule "abstract-query"]
+	path = abstract-query
+	url = https://gitlab.uzh.ch/LiRI/projects/abstract-query
+
