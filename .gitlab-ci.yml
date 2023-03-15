@@ -44,9 +44,13 @@ test:
     - cd abstract-query && python setup.py develop && cd ..
     - sleep 3
     - pip install -r requirements.txt
-    - pip install coverage
+    - pip install coverage mypy
     # - apt-get install redis -y
     - apt-get install redis-server -y
     - redis-cli -h redis ping
+    - mkdir uplord
+    - mypy run.py
+    - mypy worker.py
+    - mypyc run.py
     - coverage run -m unittest
     - coverage report
