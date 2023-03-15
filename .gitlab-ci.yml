@@ -8,6 +8,9 @@
 # https://hub.docker.com/r/library/python/tags/
 image: python:3.9-slim
 
+#services:
+#  - redis:latest
+
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
 variables:
@@ -42,6 +45,6 @@ test:
     - pip install -r requirements.txt
     - pip install coverage
     - apt-get install redis -y
-    - redis-cli ping
+    - redis-cli -h redis ping
     - coverage run -m unittest
     - coverage report
