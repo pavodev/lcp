@@ -41,8 +41,8 @@ test:
     - pwd
     - ls -al
     - ls -al abstract-query
+    - sleep 5
     - cd abstract-query && python setup.py develop && cd ..
-    - sleep 3
     - pip install -r requirements.txt
     - pip install coverage mypy
     # - apt-get install redis -y
