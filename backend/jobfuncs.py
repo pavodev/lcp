@@ -1,6 +1,6 @@
 from collections import Counter
-from rq import get_current_connection, get_current_job
-from rq.job import Job
+from rq.connections import get_current_connection
+from rq.job import Job, get_current_job
 from typing import Dict, List, Mapping, Optional, Tuple, Union
 
 from .utils import Interrupted

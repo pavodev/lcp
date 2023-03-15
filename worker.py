@@ -3,8 +3,9 @@
 import os
 import sys
 
-from rq import Connection, Worker
+from rq.connections import Connection
 from rq.job import Job
+from rq.worker import Worker
 
 from redis import Redis
 

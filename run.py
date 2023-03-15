@@ -11,6 +11,7 @@ import asyncio
 from aiohttp import WSCloseCode, web
 from dotenv import load_dotenv
 from redis import Redis
+from typing import Optional
 
 
 # import redis.asyncio as redis
@@ -19,9 +20,9 @@ import uvloop
 
 from redis import Redis as redis
 from redis import asyncio as aioredis
-from rq import Queue
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.exceptions import NoSuchJobError
+from rq.queue import Queue
 from sshtunnel import SSHTunnelForwarder
 
 
@@ -97,7 +98,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["redis_listener"]
 
 
-async def create_app(*args, **kwargs) -> None:
+async def create_app(*args, **kwargs) -> Optional[web.Application]:
 
     test = kwargs.get("test")
 
