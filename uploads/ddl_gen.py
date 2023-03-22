@@ -2,6 +2,8 @@ import argparse
 import math
 import json
 
+from collections import OrderedDict
+
 
 class Globs:
     layers = {}
@@ -187,36 +189,57 @@ class Type(DDL):
              + self.end
 
 
+class CTProcessor:
+    def __init__(self, corpus_template):
+        self.corpus_temp = corpus_template
+        self.layers      = self._order_ct_layers(corpus_template["layer"])
+
+    @staticmethod
+    def _order_ct_layers(layers):
+        # check if all layers referred to do exist
+        referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
+        exists   = set(layers.keys())
+
+        if not exists > referred:
+            not_ex     = referred - exists
+            str_not_ex = ", ".join(sorted(["'" + elem + "'" for elem in not_ex]))
+
+            raise Exception(f"The following referred layers do not exist: {str_not_ex}")
+
+        ordered = OrderedDict()
+        to_append = []
+
+        for k, v in layers.items():
+            if not v.get("contains"):
+                ordered[k] = v
+            else:
+                to_append.append((k, v))
+
+        while len(to_append):
+            for k, v in to_append:
+                if v["contains"] in ordered:
+                    ordered[k] = v
+                    to_append.pop(to_append.index((k, v)))
+                else:
+                    continue
+
+        return ordered
+
+    def _process_unitspan(self, entity):
+        pass
+
+    def _process_relation(self, entity):
+        pass
+
+    def process_layers(self):
+        pass
+
+
+
+
 # def parse_CT(template):
 #     for layer, defs in sorted(template["layer"].items(), key=lambda x: x :
 #         table_name = layer.lower()
-
-
-def order_ct_layers(layers):
-    ordered = []
-
-    # check if all layers referred to do exist
-    referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
-    exist    = set(layers.keys())
-    if not exist > referred:
-        not_ex = referred - exist
-        str_not_ex = ", ".join(sorted(["'" + elem + "'" for elem in not_ex]))
-
-        raise Exception(f"The following referred layers do not exist: {str_not_ex}")
-
-    simple_ord = sorted(layers.items(), key=lambda x: x[1].get("contains", ""))
-    while len(simple_ord):
-        for k, v in simple_ord:
-            if not (conts := v.get("contains", None)):
-                ordered.append((k, v))
-                simple_ord.pop(simple_ord.index((k, v)))
-            elif conts in [elem[0] for elem in ordered]:
-                ordered.append((k, v))
-                simple_ord.pop(simple_ord.index((k, v)))
-            else:
-                continue
-
-    return ordered
 
 
 def process_layer(layer_name, params, globs):
@@ -227,33 +250,40 @@ def process_layer(layer_name, params, globs):
 
     cols.append(Column(table_name + "_id", "int", primary_key=True))
 
-    for attr, vals in params.get("attributes", {}).items():
-        if (type := vals.get("type", None)) == "text":
-            norm_col = attr + "_id"
-            norm_table = Table(
-                            attr, [
-                                Column(norm_col, "int", primary_key=True),
-                                Column(attr, "text", unique=True)
-                         ])
+    if (layer_type := params.get("layerType")) in ["unit", "span"]:
+        for attr, vals in params.get("attributes", {}).items():
+            nullable = res if (res := vals.get("nullable")) else False
+            if (type := vals.get("type")) == "text":
+                norm_col = attr + "_id"
+                norm_table = Table(attr, [Column(norm_col, "int", primary_key=True),
+                                          Column(attr, "text", unique=True)])
 
-            cols.append(Column(norm_col, "int", foreign_key={"table": attr, "column": norm_col}))
+                cols.append(Column(norm_col, "int", foreign_key={"table": attr, "column": norm_col}, nullable=nullable))
+                tables.append(norm_table)
 
-            tables.append(norm_table)
-        elif type == "categorical":
-            enum_type = Type(attr, vals["values"])
-            types.append(enum_type)
-            cols.append(Column(attr, attr))
-        elif not type and attr == "meta":
-            cols.append(Column(attr, "jsonb",))
-        else:
-            raise Exception(f"unknown type for attribute: '{attr}'")
+            elif type == "categorical":
+                enum_type = Type(attr, vals["values"])
+                types.append(enum_type)
+                cols.append(Column(attr, attr, nullable=nullable))
 
-    anchs = [k for k, v in params.get("anchoring", {}).items() if v]
-    if params.get("layerType", None) == "span" and (child := params.get("contains", None)):
-        anchs += globs.layers[child]["anchoring"]
-    table = Table(table_name, cols, anchorings=anchs)
-    globs.layers[layer_name] = {}
-    globs.layers[layer_name]["anchoring"] = anchs
+            elif not type and attr == "meta":
+                cols.append(Column(attr, "jsonb", nullable=nullable))
+
+            elif vals.get("is_global"):
+                cols.append(Column(attr, f"main.{attr}", nullable=nullable))
+            else:
+                raise Exception(f"unknown type for attribute: '{attr}'")
+
+        anchs = [k for k, v in params.get("anchoring", {}).items() if v]
+        if params.get("layerType") == "span" and (child := params.get("contains")):
+            anchs += globs.layers[child]["anchoring"]
+        table = Table(table_name, cols, anchorings=anchs)
+        globs.layers[layer_name] = {}
+        globs.layers[layer_name]["anchoring"] = anchs
+    elif layer_type == "relation":
+        pass
+    else:
+        raise Exception(f"Unknown layer type '{layer_type}' for layer '{layer_name}'.")
 
     tables.append(table)
 
@@ -276,10 +306,16 @@ def main():
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
-    layers = order_ct_layers(corpus_temp["layer"])
+    processor = CTProcessor(corpus_temp)
 
-    for layer, props in layers:
-        process_layer(layer, props, Globs)
+    import ipdb; ipdb.set_trace()
+
+    # layers = order_ct_layers(corpus_temp["layer"])
+
+    # for layer, props in layers:
+    #     process_layer(layer, props, Globs)
+
+    processor.process_layers()
 
 
     print("\n\n".join([x.create_DDL() for x in Globs.types]))
