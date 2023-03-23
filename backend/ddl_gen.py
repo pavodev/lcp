@@ -1,12 +1,16 @@
 import argparse
 import math
 import json
+import re
 
 from collections import OrderedDict
+from textwrap    import dedent
+
 
 
 class Globs:
     layers = {}
+    schema = []
     tables = []
     types  = []
 
@@ -30,7 +34,13 @@ class DDL:
     """
     base DDL class for DB entities
     """
-    create_scm = "BEGIN;\n\nDROP SCHEMA IF EXISTS {} CASCADE;\nCREATE SCHEMA {};\nSET search_path TO {}\n\n;"
+    create_scm = lambda x: dedent(f"""
+        BEGIN;
+
+        DROP SCHEMA IF EXISTS {x} CASCADE;
+        CREATE SCHEMA {x};
+        SET search_path TO {x};""")
+
     t          = "\t"
     nl         = "\n\t"
     end        = "\n);"
@@ -190,9 +200,10 @@ class Type(DDL):
 
 
 class CTProcessor:
-    def __init__(self, corpus_template):
+    def __init__(self, corpus_template, globals):
         self.corpus_temp = corpus_template
         self.layers      = self._order_ct_layers(corpus_template["layer"])
+        self.globals     = globals
 
     @staticmethod
     def _order_ct_layers(layers):
@@ -226,13 +237,75 @@ class CTProcessor:
         return ordered
 
     def _process_unitspan(self, entity):
-        pass
+        l_name, l_params = list(entity.items())[0]
+        tables, types    = [], []
+
+        table_name = l_name.lower()
+        table_cols = []
+
+        table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
+
+        for attr, vals in l_params.get("attributes", {}).items():
+            nullable = res if (res := vals.get("nullable")) else False
+
+            if (type := vals.get("type")) == "text":
+                norm_col = f"{attr}_id"
+                norm_table = Table(attr, [Column(norm_col, "int",  primary_key=True),
+                                          Column(attr,     "text", unique=True)])
+
+                table_cols.append(Column(norm_col,
+                                   "int",
+                                   foreign_key={"table": attr, "column": norm_col},
+                                   nullable=nullable))
+
+                tables.append(norm_table)
+
+            elif type == "categorical":
+                enum_type = Type(attr, vals["values"])
+                types.append(enum_type)
+                table_cols.append(Column(attr, attr, nullable=nullable))
+
+            elif vals.get("is_global"):
+                table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
+
+            elif not type and attr == "meta":
+                table_cols.append(Column(attr, "jsonb", nullable=nullable))
+
+            else:
+                raise Exception(f"unknown type for attribute: '{attr}'")
+
+        anchs = [k for k, v in l_params.get("anchoring", {}).items() if v]
+        if l_params.get("layerType") == "span" and (child := l_params.get("contains")):
+            anchs += self.globals.layers[child]["anchoring"]
+
+        table = Table(table_name.lower(), table_cols, anchorings=anchs)
+        tables.append(table)
+
+        self.globals.layers[l_name] = {}
+        self.globals.layers[l_name]["anchoring"] = anchs
+
+        self.globals.tables += tables
+        self.globals.types  += types
 
     def _process_relation(self, entity):
         pass
 
     def process_layers(self):
-        pass
+        for layer, params in self.layers.items():
+            if (layer_type := params.get("layerType")) in ["unit", "span"]:
+                self._process_unitspan({layer: params})
+            elif layer_type == "relation":
+                self._process_relation({layer: params})
+            else:
+                raise Exception(f"unknown layer type '{layer_type}' for layer '{layer}'.")
+
+    def process_schema(self):
+        corpus_name = re.sub("\W", "_", self.corpus_temp["meta"]["name"].lower())
+        corpus_version = str(int(self.corpus_temp["meta"]["version"]))
+        schema_name = corpus_name + corpus_version
+
+        self.globals.schema.append(DDL.create_scm(schema_name))
+
 
 
 
@@ -242,60 +315,60 @@ class CTProcessor:
 #         table_name = layer.lower()
 
 
-def process_layer(layer_name, params, globs):
-    tables, types = [], []
+# def process_layer(layer_name, params, globs):
+#     tables, types = [], []
 
-    table_name = layer_name.lower()
-    cols = []
+#     table_name = layer_name.lower()
+#     cols = []
 
-    cols.append(Column(table_name + "_id", "int", primary_key=True))
+#     cols.append(Column(table_name + "_id", "int", primary_key=True))
 
-    if (layer_type := params.get("layerType")) in ["unit", "span"]:
-        for attr, vals in params.get("attributes", {}).items():
-            nullable = res if (res := vals.get("nullable")) else False
-            if (type := vals.get("type")) == "text":
-                norm_col = attr + "_id"
-                norm_table = Table(attr, [Column(norm_col, "int", primary_key=True),
-                                          Column(attr, "text", unique=True)])
+#     if (layer_type := params.get("layerType")) in ["unit", "span"]:
+#         for attr, vals in params.get("attributes", {}).items():
+#             nullable = res if (res := vals.get("nullable")) else False
+#             if (type := vals.get("type")) == "text":
+#                 norm_col = attr + "_id"
+#                 norm_table = Table(attr, [Column(norm_col, "int", primary_key=True),
+#                                           Column(attr, "text", unique=True)])
 
-                cols.append(Column(norm_col, "int", foreign_key={"table": attr, "column": norm_col}, nullable=nullable))
-                tables.append(norm_table)
+#                 cols.append(Column(norm_col, "int", foreign_key={"table": attr, "column": norm_col}, nullable=nullable))
+#                 tables.append(norm_table)
 
-            elif type == "categorical":
-                enum_type = Type(attr, vals["values"])
-                types.append(enum_type)
-                cols.append(Column(attr, attr, nullable=nullable))
+#             elif type == "categorical":
+#                 enum_type = Type(attr, vals["values"])
+#                 types.append(enum_type)
+#                 cols.append(Column(attr, attr, nullable=nullable))
 
-            elif not type and attr == "meta":
-                cols.append(Column(attr, "jsonb", nullable=nullable))
+#             elif not type and attr == "meta":
+#                 cols.append(Column(attr, "jsonb", nullable=nullable))
 
-            elif vals.get("is_global"):
-                cols.append(Column(attr, f"main.{attr}", nullable=nullable))
-            else:
-                raise Exception(f"unknown type for attribute: '{attr}'")
+#             elif vals.get("is_global"):
+#                 cols.append(Column(attr, f"main.{attr}", nullable=nullable))
+#             else:
+#                 raise Exception(f"unknown type for attribute: '{attr}'")
 
-        anchs = [k for k, v in params.get("anchoring", {}).items() if v]
-        if params.get("layerType") == "span" and (child := params.get("contains")):
-            anchs += globs.layers[child]["anchoring"]
-        table = Table(table_name, cols, anchorings=anchs)
-        globs.layers[layer_name] = {}
-        globs.layers[layer_name]["anchoring"] = anchs
-    elif layer_type == "relation":
-        pass
-    else:
-        raise Exception(f"Unknown layer type '{layer_type}' for layer '{layer_name}'.")
+#         anchs = [k for k, v in params.get("anchoring", {}).items() if v]
+#         if params.get("layerType") == "span" and (child := params.get("contains")):
+#             anchs += globs.layers[child]["anchoring"]
+#         table = Table(table_name, cols, anchorings=anchs)
+#         globs.layers[layer_name] = {}
+#         globs.layers[layer_name]["anchoring"] = anchs
+#     elif layer_type == "relation":
+#         pass
+#     else:
+#         raise Exception(f"Unknown layer type '{layer_type}' for layer '{layer_name}'.")
 
-    tables.append(table)
+#     tables.append(table)
 
-    globs.tables += tables
-    globs.types  += types
+#     globs.tables += tables
+#     globs.types  += types
 
 
 def main():
     parser = argparse.ArgumentParser(description="Generate Postgres DDL from CT.")
     parser.add_argument("ct_file", type=str, # nargs="+",
                         help="the corpus template file (json)")
-    parser.add_argument("-t", "--tabwidth", type=int, default=4,
+    parser.add_argument("-t", "--tabwidth", type=int, default=8,
                         help="size of tabulator")
 
     args = parser.parse_args()
@@ -306,18 +379,16 @@ def main():
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
-    processor = CTProcessor(corpus_temp)
+    processor = CTProcessor(corpus_temp, Globs)
 
-    import ipdb; ipdb.set_trace()
 
-    # layers = order_ct_layers(corpus_temp["layer"])
-
-    # for layer, props in layers:
-    #     process_layer(layer, props, Globs)
-
+    processor.process_schema()
     processor.process_layers()
 
+    # import ipdb; ipdb.set_trace()
 
+    print("\n\n".join([x for x in Globs.schema]))
+    print()
     print("\n\n".join([x.create_DDL() for x in Globs.types]))
     print()
     print("\n\n".join([x.create_tbl() for x in Globs.tables]))
