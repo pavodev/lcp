@@ -1,0 +1,3 @@
+[submodule "abstract-query"]
+  path = abstract-query
+  url = ../abstract-query.git

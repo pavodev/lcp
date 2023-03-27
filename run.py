@@ -121,14 +121,6 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     )
 
     app["websockets"] = defaultdict(set)
-    print(
-        "SSH SETTINGS",
-        os.getenv("SSH_HOST"),
-        HOST,
-        PORT,
-        os.getenv("SSH_USER"),
-        os.getenv("SSH_PKEY"),
-    )
 
     tunnel = SSHTunnelForwarder(
         os.getenv("SSH_HOST"),
@@ -204,6 +196,7 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
 
 
 if __name__ == "__main__" or (__name__ == "run" and not "_TEST" in os.environ):
+    # we do not want to run this code when unit testing, but we do want to allow mypy
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     app = asyncio.run(create_app())
