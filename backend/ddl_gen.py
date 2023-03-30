@@ -122,7 +122,7 @@ class Column(DDL):
             if k == "primary_key" and v:
                 ret.append(self._pk_constr.format(self.name))
             elif k == "foreign_key" and v:
-                assert type(v) == dict
+                assert isinstance(v, dict)
                 ret.append(self._fk_constr.format(self.name, v["table"], v["column"]))
             elif k == "unique" and v:
                 ret.append(self._uniq_constr.format(self.name))
@@ -187,6 +187,91 @@ class Table(DDL):
              + self.create_idxs()
 
 
+
+
+class PartitionedTable(Table):
+    max_id = 0xffffffffffffffffffffffffffffffff
+
+    @staticmethod
+    def half_hex(num):
+        if isinstance(num, str):
+            num = int(num, 16)
+        res = hex(int(num/2))
+
+        return res
+
+    @staticmethod
+    def hex2uuid(num):
+        if isinstance(num, int):
+            num = hex(num)
+        form = re.match('(.{8})(.{4})(.{4})(.{4})(.{12})', num.replace("0x", "").rjust(32, "0"))
+
+        return f"{form[1]}-{form[2]}-{form[3]}-{form[4]}-{form[5]}"
+
+    def __init__(self, name, cols, anchorings=None, column_part="segment_id", num_part=10):
+        super(PartitionedTable, self).__init__(name, cols, anchorings)
+        self.num_partitions = num_part + 1    # rest is same size as smallest partition
+        self.col_partitions = column_part
+        self.header_txt     = f"CREATE TABLE {self.name}0 ("
+
+    def _create_maintbl(self):
+        return self.header_txt \
+             + self.inlined([self.fmt(col.ret_tabulate(self._max_ident), quote=False) for col in self.cols]) \
+             + f"\n) PARTITION BY RANGE ({self.col_partitions});"
+
+    def _create_subtbls(self):
+        tbls = []
+        cur_max = self.max_id
+
+        for i in range(1, self.num_partitions):
+            tbl_n   = f"{self.name}{i} PARTITION OF {self.name}0"
+            cur_min = self.half_hex(cur_max)
+
+            max = self.hex2uuid(cur_max)
+            min = self.hex2uuid(cur_min)
+
+            defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
+            tbls.append(tbl_n + defn)
+
+            cur_max = cur_min
+
+        max = self.hex2uuid(cur_min)
+        min = self.hex2uuid(0)
+
+        tbl_n   = f"{self.name}rest PARTITION OF {self.name}0"
+        defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
+        tbls.append(tbl_n + defn)
+
+        return tbls
+
+    def create_constrs(self):
+        ret = []
+
+        for col in self.cols:
+            pks = [self.col_partitions]
+            if col.constrs.get("primary_key"):
+                pks.append(col.name)
+                col.constrs.pop("primary_key")
+
+        pks = sorted(pks, key=lambda x: x != self.col_partitions)
+        ret.append(f"ALTER TABLE {self.name} ADD PRIMARY KEY ({', '.join(pks)});")
+
+        ret += [f"ALTER TABLE {self.name} " + constr for col in self.cols if (constr := col.ret_constrs())]
+
+        return "\n".join(ret)
+
+
+    def create_tbl(self):
+        main_t = [self._create_maintbl()]
+        sub_ts = self._create_subtbls()
+
+        return "\n\n".join(main_t + sub_ts)
+
+
+
+
+
+
 class Type(DDL):
     def __init__(self, name, values):
         self.name       = name.strip()
@@ -218,10 +303,12 @@ class CTProcessor:
             raise Exception(f"The following referred layers do not exist: {str_not_ex}")
 
         ordered = OrderedDict()
-        to_append = []
+        to_append, last_append = [], []
 
         for k, v in layers.items():
-            if not v.get("contains"):
+            if v.get("layerType") == "relation":
+                last_append.append((k, v))
+            elif not v.get("contains"):
                 ordered[k] = v
             else:
                 to_append.append((k, v))
@@ -233,6 +320,9 @@ class CTProcessor:
                     to_append.pop(to_append.index((k, v)))
                 else:
                     continue
+
+        for k, v in last_append:
+            ordered[k] = v
 
         return ordered
 
@@ -278,7 +368,13 @@ class CTProcessor:
         if l_params.get("layerType") == "span" and (child := l_params.get("contains")):
             anchs += self.globals.layers[child]["anchoring"]
 
-        table = Table(table_name.lower(), table_cols, anchorings=anchs)
+        if l_name == "Token":
+            part_col = Column("segment_id", "uuid", foreign_key={"table": "segment", "column": "segment_id"})
+            table_cols.append(part_col)
+            table = PartitionedTable(table_name, table_cols, anchorings=anchs, column_part="segment_id")
+        else:
+            table = Table(table_name, table_cols, anchorings=anchs)
+
         tables.append(table)
 
         self.globals.layers[l_name] = {}
@@ -288,7 +384,14 @@ class CTProcessor:
         self.globals.types  += types
 
     def _process_relation(self, entity):
-        pass
+        l_name, l_params = list(entity.items())[0]
+        table_name = l_name.lower()
+
+        source_col = self._get_relation_col(l_params.get("source"))
+        target_col = self._get_relation_col(l_params.get("target"))
+
+    def _get_relation_col(self, rel_structure):
+        table_name = rel_structure.get("name")
 
     def process_layers(self):
         for layer, params in self.layers.items():
