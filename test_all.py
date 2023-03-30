@@ -7,12 +7,13 @@ from aiohttp import web
 from aiohttp.test_utils import AioHTTPTestCase
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 
+# this env var must be set before we import anything from .run
+os.environ["_TEST"] = "true"
+
 from run import create_app, handle_redis_response, on_shutdown
 
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
-
-os.environ["_TEST"] = "true"
 
 
 class MyAppTestCase(AioHTTPTestCase):
