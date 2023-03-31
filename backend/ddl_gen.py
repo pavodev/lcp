@@ -224,7 +224,7 @@ class PartitionedTable(Table):
         cur_max = self.max_id
 
         for i in range(1, self.num_partitions):
-            tbl_n   = f"{self.name}{i} PARTITION OF {self.name}0"
+            tbl_n   = f"CREATE TABLE {self.name}{i} PARTITION OF {self.name}0"
             cur_min = self.half_hex(cur_max)
 
             max = self.hex2uuid(cur_max)
@@ -408,63 +408,6 @@ class CTProcessor:
         schema_name = corpus_name + corpus_version
 
         self.globals.schema.append(DDL.create_scm(schema_name))
-
-
-
-
-
-# def parse_CT(template):
-#     for layer, defs in sorted(template["layer"].items(), key=lambda x: x :
-#         table_name = layer.lower()
-
-
-# def process_layer(layer_name, params, globs):
-#     tables, types = [], []
-
-#     table_name = layer_name.lower()
-#     cols = []
-
-#     cols.append(Column(table_name + "_id", "int", primary_key=True))
-
-#     if (layer_type := params.get("layerType")) in ["unit", "span"]:
-#         for attr, vals in params.get("attributes", {}).items():
-#             nullable = res if (res := vals.get("nullable")) else False
-#             if (type := vals.get("type")) == "text":
-#                 norm_col = attr + "_id"
-#                 norm_table = Table(attr, [Column(norm_col, "int", primary_key=True),
-#                                           Column(attr, "text", unique=True)])
-
-#                 cols.append(Column(norm_col, "int", foreign_key={"table": attr, "column": norm_col}, nullable=nullable))
-#                 tables.append(norm_table)
-
-#             elif type == "categorical":
-#                 enum_type = Type(attr, vals["values"])
-#                 types.append(enum_type)
-#                 cols.append(Column(attr, attr, nullable=nullable))
-
-#             elif not type and attr == "meta":
-#                 cols.append(Column(attr, "jsonb", nullable=nullable))
-
-#             elif vals.get("is_global"):
-#                 cols.append(Column(attr, f"main.{attr}", nullable=nullable))
-#             else:
-#                 raise Exception(f"unknown type for attribute: '{attr}'")
-
-#         anchs = [k for k, v in params.get("anchoring", {}).items() if v]
-#         if params.get("layerType") == "span" and (child := params.get("contains")):
-#             anchs += globs.layers[child]["anchoring"]
-#         table = Table(table_name, cols, anchorings=anchs)
-#         globs.layers[layer_name] = {}
-#         globs.layers[layer_name]["anchoring"] = anchs
-#     elif layer_type == "relation":
-#         pass
-#     else:
-#         raise Exception(f"Unknown layer type '{layer_type}' for layer '{layer_name}'.")
-
-#     tables.append(table)
-
-#     globs.tables += tables
-#     globs.types  += types
 
 
 def main():
