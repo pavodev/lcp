@@ -9,6 +9,7 @@ from textwrap    import dedent
 
 
 class Globs:
+    base_map = {}
     layers = {}
     schema = []
     tables = []
@@ -210,9 +211,11 @@ class PartitionedTable(Table):
 
     def __init__(self, name, cols, anchorings=None, column_part="segment_id", num_part=10):
         super(PartitionedTable, self).__init__(name, cols, anchorings)
+        self.base_name      = self.name
+        self.name           = f"{self.base_name}0"
         self.num_partitions = num_part + 1    # rest is same size as smallest partition
         self.col_partitions = column_part
-        self.header_txt     = f"CREATE TABLE {self.name}0 ("
+        self.header_txt     = f"CREATE TABLE {self.name} ("
 
     def _create_maintbl(self):
         return self.header_txt \
@@ -224,7 +227,7 @@ class PartitionedTable(Table):
         cur_max = self.max_id
 
         for i in range(1, self.num_partitions):
-            tbl_n   = f"CREATE TABLE {self.name}{i} PARTITION OF {self.name}0"
+            tbl_n   = f"CREATE TABLE {self.base_name}{i} PARTITION OF {self.name}"
             cur_min = self.half_hex(cur_max)
 
             max = self.hex2uuid(cur_max)
@@ -238,7 +241,7 @@ class PartitionedTable(Table):
         max = self.hex2uuid(cur_min)
         min = self.hex2uuid(0)
 
-        tbl_n   = f"{self.name}rest PARTITION OF {self.name}0"
+        tbl_n   = f"{self.base_name}rest PARTITION OF {self.name}"
         defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
         tbls.append(tbl_n + defn)
 
@@ -247,8 +250,8 @@ class PartitionedTable(Table):
     def create_constrs(self):
         ret = []
 
+        pks = []
         for col in self.cols:
-            pks = [self.col_partitions]
             if col.constrs.get("primary_key"):
                 pks.append(col.name)
                 col.constrs.pop("primary_key")
@@ -326,16 +329,9 @@ class CTProcessor:
 
         return ordered
 
-    def _process_unitspan(self, entity):
-        l_name, l_params = list(entity.items())[0]
-        tables, types    = [], []
-
-        table_name = l_name.lower()
-        table_cols = []
-
-        table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
-
-        for attr, vals in l_params.get("attributes", {}).items():
+    @staticmethod
+    def _process_attributes(attr_structure, tables, table_cols, types):
+        for attr, vals in attr_structure:
             nullable = res if (res := vals.get("nullable")) else False
 
             if (type := vals.get("type")) == "text":
@@ -343,7 +339,8 @@ class CTProcessor:
                 norm_table = Table(attr, [Column(norm_col, "int",  primary_key=True),
                                           Column(attr,     "text", unique=True)])
 
-                table_cols.append(Column(norm_col,
+                table_cols.append(Column(
+                                   norm_col,
                                    "int",
                                    foreign_key={"table": attr, "column": norm_col},
                                    nullable=nullable))
@@ -364,14 +361,40 @@ class CTProcessor:
             else:
                 raise Exception(f"unknown type for attribute: '{attr}'")
 
+        return tables, table_cols
+
+    def _process_unitspan(self, entity):
+        l_name, l_params = list(entity.items())[0]
+        tables, types    = [], []
+
+        table_name = l_name.lower()
+        table_cols = []
+
+        table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
+
+        tables, table_cols = self._process_attributes(
+                                 l_params.get("attributes", {}).items(),
+                                 tables,
+                                 table_cols,
+                                 types
+                             )
+
         anchs = [k for k, v in l_params.get("anchoring", {}).items() if v]
         if l_params.get("layerType") == "span" and (child := l_params.get("contains")):
             anchs += self.globals.layers[child]["anchoring"]
 
-        if l_name == "Token":
-            part_col = Column("segment_id", "uuid", foreign_key={"table": "segment", "column": "segment_id"})
+        if l_name == Globs.base_map["token"]:
+            part_ent     = Globs.base_map["segment"].lower()
+            part_ent_col = f"{part_ent}_id"
+
+            part_col = Column(
+                           part_ent_col,
+                           "uuid",
+                           primary_key=True,
+                           foreign_key={"table": part_ent, "column": part_ent_col}
+                       )
             table_cols.append(part_col)
-            table = PartitionedTable(table_name, table_cols, anchorings=anchs, column_part="segment_id")
+            table = PartitionedTable(table_name, table_cols, anchorings=anchs, column_part=part_ent_col)
         else:
             table = Table(table_name, table_cols, anchorings=anchs)
 
@@ -379,6 +402,7 @@ class CTProcessor:
 
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["anchoring"] = anchs
+        self.globals.layers[l_name]["table_name"] = table.name
 
         self.globals.tables += tables
         self.globals.types  += types
@@ -386,12 +410,39 @@ class CTProcessor:
     def _process_relation(self, entity):
         l_name, l_params = list(entity.items())[0]
         table_name = l_name.lower()
+        tables, table_cols, types = [], [], []
 
         source_col = self._get_relation_col(l_params.get("source"))
         target_col = self._get_relation_col(l_params.get("target"))
+        table_cols.append(source_col)
+        table_cols.append(target_col)
+
+        tables, table_cols = self._process_attributes(
+                                 l_params.get("attributes", {}).items(),
+                                 tables,
+                                 table_cols,
+                                 types
+                             )
+
+        table = Table(table_name, table_cols)
+
+        tables.append(table)
+
+        self.globals.layers[l_name] = {}
+        self.globals.layers[l_name]["table_name"] = table.name
+
+        self.globals.tables += tables
+        self.globals.types  += types
 
     def _get_relation_col(self, rel_structure):
-        table_name = rel_structure.get("name")
+        name       = rel_structure.get("name")
+        table_name = self.globals.layers[rel_structure.get("entity")]["table_name"]
+        table      = [x for x in self.globals.tables if x.name == table_name][0]
+        fk_col     = f"{rel_structure.get('entity').lower()}_id"
+        type       = [x for x in table.cols if x.name == fk_col][0].type
+        nullable   = rel_structure.get("nullable")
+
+        return Column(name, type, nullable=nullable)
 
     def process_layers(self):
         for layer, params in self.layers.items():
@@ -425,6 +476,8 @@ def main():
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
+    Globs.base_map = corpus_temp["firstClass"]
+
     processor = CTProcessor(corpus_temp, Globs)
 
 
@@ -435,13 +488,13 @@ def main():
 
     print("\n\n".join([x for x in Globs.schema]))
     print()
-    print("\n\n".join([x.create_DDL() for x in Globs.types]))
+    print("\n\n".join([x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)]))
     print()
-    print("\n\n".join([x.create_tbl() for x in Globs.tables]))
+    print("\n\n".join([x.create_tbl() for x in sorted(Globs.tables, key=lambda x: x.name)]))
     print()
-    print("\n\n".join([x.create_idxs() for x in Globs.tables]))
+    print("\n\n".join([x.create_idxs() for x in sorted(Globs.tables, key=lambda x: x.name)]))
     print()
-    print("\n\n".join([x.create_constrs() for x in Globs.tables]))
+    print("\n\n".join([x.create_constrs() for x in sorted(Globs.tables, key=lambda x: x.name)]))
 
 
 
