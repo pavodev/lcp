@@ -20,3 +20,4 @@ asyncpg==0.27.0
 rq==1.13.0
 types-redis==4.5.1.5
 sshtunnel==0.4.0
+lark==1.1.2

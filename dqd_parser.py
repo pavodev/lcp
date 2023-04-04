@@ -20,7 +20,7 @@ dqd_grammar = r"""
                     | "dep" operator string                                             -> dep
                     | "label" operator string                                           -> label
     document_props  : "year" operator year                                              -> year
-    repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/
+    repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/                                         -> loop
 
     year            : /[0-9]{1,4}/ _NL
     string          : NAME _NL
