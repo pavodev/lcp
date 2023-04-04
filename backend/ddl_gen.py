@@ -364,13 +364,16 @@ class CTProcessor:
         return tables, table_cols
 
     def _process_unitspan(self, entity):
-        l_name, l_params = list(entity.items())[0]
-        tables, types    = [], []
+        l_name, l_params          = list(entity.items())[0]
+        tables, table_cols, types = [], [], []
 
         table_name = l_name.lower()
-        table_cols = []
 
-        table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
+        # create primary key column (if table that will be used to partition -> UUID)
+        if l_name == Globs.base_map["segment"]:
+            table_cols.append(Column(f"{table_name}_id", "uuid", primary_key=True))
+        else:
+            table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
 
         tables, table_cols = self._process_attributes(
                                  l_params.get("attributes", {}).items(),
@@ -412,8 +415,8 @@ class CTProcessor:
         table_name = l_name.lower()
         tables, table_cols, types = [], [], []
 
-        source_col = self._get_relation_col(l_params.get("source"))
-        target_col = self._get_relation_col(l_params.get("target"))
+        source_col = self._get_relation_col(l_params["source"])
+        target_col = self._get_relation_col(l_params["target"])
         table_cols.append(source_col)
         table_cols.append(target_col)
 
