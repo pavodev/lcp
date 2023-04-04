@@ -4,6 +4,7 @@ import httpApi from "@/httpApi";
 export const useCorpusStore = defineStore("corpusData", {
   state: () => ({
     queryData: null,
+    corpora: [],
   }),
   getters: {},
   actions: {

@@ -43,26 +43,33 @@
             ></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
-            <p class="title mb-0">{{ corpusModal.meta.name }}</p>
-            <p class="author mb-0" v-if="corpusModal.meta.author">by {{ corpusModal.meta.author }}</p>
-            <p class="description mt-3">{{ corpusModal.meta.corpusDescription }}</p>
-            <p class="word-count mb-0">Word count: <b>{{ calculateSum(Object.values(corpusModal.token_counts)).toLocaleString('de-DE') }}</b></p>
-            <p class="word-count mb-0">Version: {{ corpusModal.meta.version }}</p>
-            <p class="word-count mb-0">Description: {{ corpusModal.description }}</p>
-            <span v-if="corpusModal.partitions">
-              <p class="word-count" v-if="corpusModal.partitions">Partitions: {{ corpusModal.partitions.values.join(", ") }}</p>
-              <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
-                <p class="text-bold">{{ partition.toUpperCase() }}</p>
-                <p class="word-count">
-                  Segments:
-                  {{ corpusModal.mapping.layer.Segment.partitions[partition].prepared.columnHeaders.join(", ") }}
-                </p>
-                <!-- <p class="word-count">
-                  Segments:
-                  {{ corpusModal.mapping.layer.Segment.partitions[partition].prepared.columnHeaders.join(", ") }}
-                </p> -->
+            <div class="row">
+              <div class="col-6">
+                <p class="title mb-0">{{ corpusModal.meta.name }}</p>
+                <p class="author mb-0" v-if="corpusModal.meta.author">by {{ corpusModal.meta.author }}</p>
+                <p class="description mt-3">{{ corpusModal.meta.corpusDescription }}</p>
+                <p class="word-count mb-0">Word count: <b>{{ calculateSum(Object.values(corpusModal.token_counts)).toLocaleString('de-DE') }}</b></p>
+                <p class="word-count mb-0">Version: {{ corpusModal.meta.version }}</p>
+                <p class="word-count mb-0">Description: {{ corpusModal.description }}</p>
+                <span v-if="corpusModal.partitions">
+                  <p class="word-count" v-if="corpusModal.partitions">Partitions: {{ corpusModal.partitions.values.join(", ") }}</p>
+                  <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
+                    <p class="text-bold">{{ partition.toUpperCase() }}</p>
+                    <p class="word-count">
+                      Segments:
+                      {{ corpusModal.mapping.layer.Segment.partitions[partition].prepared.columnHeaders.join(", ") }}
+                    </p>
+                    <!-- <p class="word-count">
+                      Segments:
+                      {{ corpusModal.mapping.layer.Segment.partitions[partition].prepared.columnHeaders.join(", ") }}
+                    </p> -->
+                  </div>
+                </span>
               </div>
-            </span>
+              <div class="col-6">
+                Class
+              </div>
+            </div>
           </div>
           <div class="modal-footer">
             <button

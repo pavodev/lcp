@@ -5,7 +5,6 @@ import Utils from '@/utils';
 export const useUserStore = defineStore("userData", {
   state: () => ({
     userData: null,
-    corpora: [],
     roomId: Utils.uuidv4(),
   }),
   getters: {},

@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3">
       <div class="container">
-        <a class="navbar-brand" href="#">UpLORD</a>
+        <a class="navbar-brand" href="#">LCP</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
           <span class="navbar-toggler-icon"></span>
         </button>
@@ -20,12 +20,12 @@
                 Query
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query-test">
                 <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
                 Query Test
               </router-link>
-            </li>
+            </li> -->
             <!-- <li class="nav-item">
               <router-link class="nav-link" to="/player">Player</router-link>
             </li> -->

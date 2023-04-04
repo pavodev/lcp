@@ -1,0 +1,71 @@
+<template>
+  <div id="result-details-view">
+    <nav>
+      <div class="nav nav-tabs" id="nav-tab" role="tablist">
+        <button
+          class="nav-link active"
+          id="nav-dependency-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#nav-dependency"
+          type="button"
+          role="tab"
+          aria-controls="nav-dependency"
+          aria-selected="true"
+        >
+          Dependency Visualizer
+        </button>
+        <button
+          class="nav-link"
+          id="nav-details-tab"
+          data-bs-toggle="tab"
+          data-bs-target="#nav-details"
+          type="button"
+          role="tab"
+          aria-controls="nav-details"
+          aria-selected="false"
+        >
+          Details
+        </button>
+      </div>
+    </nav>
+    <div class="tab-content" id="nav-tabContent">
+      <div
+        class="tab-pane fade show active"
+        id="nav-dependency"
+        role="tabpanel"
+        aria-labelledby="nav-dependency-tab"
+      >
+        <DepRelView :data="data" />
+      </div>
+      <div
+        class="tab-pane fade"
+        id="nav-details"
+        role="tabpanel"
+        aria-labelledby="nav-details-tab"
+      >
+        <DetailsTableView :data="data" :corpora="corpora" />
+      </div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+#nav-dependency,
+#nav-details {
+  overflow: auto;
+}
+</style>
+
+<script>
+import DepRelView from "@/components/DepRelView.vue";
+import DetailsTableView from "@/components/DetailsTableView.vue";
+
+export default {
+  name: "ResultDetailsModalView",
+  props: ["data", "corpora"],
+  components: {
+    DepRelView,
+    DetailsTableView,
+  },
+}
+</script>

@@ -1,10 +1,84 @@
 <template>
   <div class="query">
-    <Title :title="'Query test'" />
+    <Title :title="'Query'" />
     <div class="container mt-4">
       <div class="row">
-        <div class="col-6">
+        <div class="col-7">
           <div class="form-floating mb-3">
+            <nav>
+              <div class="nav nav-tabs" id="nav-tab" role="tablist">
+                <button
+                  class="nav-link active"
+                  id="nav-dqd-tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#nav-dqd"
+                  type="button"
+                  role="tab"
+                  aria-controls="nav-dqd"
+                  aria-selected="true"
+                >
+                  DQD
+                </button>
+                <button
+                  class="nav-link"
+                  id="nav-json-tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#nav-json"
+                  type="button"
+                  role="tab"
+                  aria-controls="nav-json"
+                  aria-selected="false"
+                >
+                  JSON
+                </button>
+              </div>
+            </nav>
+            <div class="tab-content" id="nav-tabContent">
+              <div
+                class="tab-pane fade show active"
+                id="nav-dqd"
+                role="tabpanel"
+                aria-labelledby="nav-results-tab"
+              >
+                <EditorView
+                  :query="queryDQD"
+                  :corpora="selectedCorpora"
+                  @update="updateQueryDQD"
+                />
+                <p
+                  class="error-text text-danger mt-3"
+                  v-if="isQueryValidData && isQueryValidData.valid != true"
+                >
+                  {{ isQueryValidData.error }}
+                </p>
+              </div>
+              <div
+                class="tab-pane fade"
+                id="nav-json"
+                role="tabpanel"
+                aria-labelledby="nav-stats-tab"
+              >
+                <textarea
+                  class="form-control query-field"
+                  placeholder="Query (e.g. test.*)"
+                  :class="
+                    isQueryValidData == null || isQueryValidData.valid == true
+                      ? 'ok'
+                      : 'error'
+                  "
+                  v-model="query"
+                ></textarea>
+                <!-- <label for="floatingTextarea">Query</label> -->
+                <p
+                  class="error-text text-danger"
+                  v-if="isQueryValidData && isQueryValidData.valid != true"
+                >
+                  {{ isQueryValidData.error }}
+                </p>
+              </div>
+            </div>
+          </div>
+          <!-- <div class="form-floating mb-3">
             <textarea
               class="form-control query-field"
               placeholder="Query (e.g. test.*)"
@@ -22,14 +96,14 @@
             >
               {{ isQueryValidData.error }}
             </p>
-          </div>
+          </div> -->
         </div>
-        <div class="col-6">
+        <div class="col-5">
           <div class="mb-3">
             <label for="exampleInputEmail1" class="form-label">Corpora</label>
             <multiselect
               v-model="selectedCorpora"
-              :options="corporaOptions()"
+              :options="corporaOptions"
               :multiple="false"
               label="name"
               track-by="value"
@@ -70,7 +144,7 @@
             <div class="col-6">
               <div class="mb-3">
                 <label for="exampleInputEmail1" class="form-label"
-                  >Languages (split by comma)</label
+                  >Languages</label
                 >
                 <multiselect
                   v-model="languages"
@@ -97,7 +171,12 @@
             >
               Resume
             </button>
-            <button type="button" @click="stop" :disabled="loading == false" class="btn btn-primary">
+            <button
+              type="button"
+              @click="stop"
+              :disabled="loading == false"
+              class="btn btn-primary"
+            >
               Stop
             </button>
             <button
@@ -112,6 +191,10 @@
               Fetch
             </button>
             <!-- <button type="button" @click="validate" :disabled="!query.trim()" class="btn btn-primary">Validate</button> -->
+          </div>
+          <div class="lds-ripple" v-if="loading">
+            <div></div>
+            <div></div>
           </div>
         </div>
         <!-- <div class="col-12">
@@ -153,10 +236,10 @@
               aria-valuemin="0"
               aria-valuemax="100"
             >
-              {{ percentageDone }}
+              {{ percentageDone }}%
             </div>
           </div>
-          <div class="row">
+          <div class="row mb-4">
             <div class="col">
               <p class="mb-1">
                 Number of results:
@@ -184,8 +267,81 @@
               </p>
             </div>
           </div>
-          <h6 class="mt-4 mb-3">Results:</h6>
-          <KWICTable :data="WSData.result" v-if="WSData && WSData.result" />
+        </div>
+      </div>
+    </div>
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-12">
+          <nav>
+            <div class="nav nav-tabs" id="nav-tab" role="tablist">
+              <button
+                class="nav-link active"
+                id="nav-results-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#nav-results"
+                type="button"
+                role="tab"
+                aria-controls="nav-results"
+                aria-selected="true"
+              >
+                Results
+              </button>
+              <button
+                class="nav-link"
+                id="nav-stats-tab"
+                data-bs-toggle="tab"
+                data-bs-target="#nav-stats"
+                type="button"
+                role="tab"
+                aria-controls="nav-stats"
+                aria-selected="false"
+              >
+                Statistics
+              </button>
+            </div>
+          </nav>
+          <div class="tab-content" id="nav-tabContent">
+            <div
+              class="tab-pane fade show active"
+              id="nav-results"
+              role="tabpanel"
+              aria-labelledby="nav-results-tab"
+            >
+              <ResultsTableView
+                :data="WSData.result"
+                v-if="WSData && WSData.result"
+                :corpora="selectedCorpora"
+                @updatePage="updatePage"
+                :resultsPerPage="resultsPerPage"
+                :loading="loading"
+              />
+            </div>
+            <div
+              class="tab-pane fade"
+              id="nav-stats"
+              role="tabpanel"
+              aria-labelledby="nav-stats-tab"
+            >
+              <table v-if="stats" class="table">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Count</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(statsKey, index) in Object.keys(stats.result)"
+                    :key="index"
+                  >
+                    <td>{{ statsKey }}</td>
+                    <td>{{ stats.result[statsKey] }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -210,10 +366,13 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label for="queryName" class="form-label"
-              >Query name</label
-            >
-            <input type="text" class="form-control" id="queryName" v-model="queryName" />
+            <label for="queryName" class="form-label">Query name</label>
+            <input
+              type="text"
+              class="form-control"
+              id="queryName"
+              v-model="queryName"
+            />
           </div>
           <div class="modal-footer">
             <button
@@ -223,7 +382,14 @@
             >
               Close
             </button>
-            <button type="button" :disabled="!queryName" @click="saveQuery" class="btn btn-primary">Save query</button>
+            <button
+              type="button"
+              :disabled="!queryName"
+              @click="saveQuery"
+              class="btn btn-primary"
+            >
+              Save query
+            </button>
           </div>
         </div>
       </div>
@@ -237,6 +403,9 @@
 }
 .pre {
   font-family: "Courier New", Courier, monospace;
+}
+.query {
+  margin-bottom: 100px;
 }
 .query-field {
   height: 328px;
@@ -266,14 +435,17 @@ import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useUserStore } from "@/stores/userStore";
 import Title from "@/components/TitleComponent.vue";
-import KWICTable from "@/components/KWICTableView.vue";
+import ResultsTableView from "@/components/ResultsTableView.vue";
+// import KWICTable from "@/components/KWICTableView.vue";
+// import DetailsTableView from "@/components/DetailsTableView.vue";
+
+import EditorView from "@/components/EditorView.vue";
 
 export default {
   name: "QueryTestView",
   data() {
     return {
-      query: `
-{
+      query: `{
     "comment": "An NP with an unlimited number of adjectives (at least one)",
     "nodes": [{
             "name": "t1",
@@ -315,6 +487,10 @@ export default {
         }
     }]
 }`,
+      queryDQD: `Segment s1
+
+Token@s1 t1
+    form = cat`,
       userId: null,
       selectedCorpora: this.corpora
         ? this.corpora
@@ -329,19 +505,26 @@ export default {
         : [],
       isQueryValidData: null,
       WSData: "",
-      nResults: 1000,
-      pageSize: 20,
+      nResults: 15,
+      pageSize: 15,
       languages: ["en"],
       queryName: "",
       simultaneousMode: false,
       currentResults: [],
       percentageDone: 0,
       loading: false,
+      stats: null,
+      queryTest: "const noop = () => {}",
+      resultsPerPage: 5,
+      // nResults: 50,
     };
   },
   components: {
     Title,
-    KWICTable,
+    ResultsTableView,
+    // KWICTable,
+    // DetailsTableView,
+    EditorView,
   },
   mounted() {
     if (this.userData) {
@@ -377,15 +560,12 @@ export default {
     },
     WSData() {
       this.percentageDone = this.WSData.percentage_done;
-      if (["finished", "satisfied"].includes(this.WSData.status)){
+      if (["finished", "satisfied"].includes(this.WSData.status)) {
         this.percentageDone = 100;
       }
       if (this.percentageDone >= 100) {
         this.loading = false;
       }
-    },
-    selectedCorpora() {
-      console.log("EE", this.corpora);
     },
     query() {
       // console.log("Check is valid")
@@ -393,6 +573,20 @@ export default {
     },
   },
   methods: {
+    updatePage(currentPage) {
+      let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
+      console.log("Page updated 1", currentPage, this.nResults, newNResults);
+      if (newNResults > this.nResults) {
+        this.nResults = newNResults;
+        this.submit(null, true);
+        console.log("Submit", newNResults);
+      }
+      console.log("Page updated 2", currentPage, this.nResults, newNResults);
+    },
+    updateQueryDQD(queryDQD) {
+      this.queryDQD = queryDQD;
+      this.validate();
+    },
     sendLeft() {
       this.$socket.sendObj({
         // room: this.roomId,
@@ -430,17 +624,18 @@ export default {
           console.log("Query interrupted", data);
           return;
         }
-        if (data['action'] === 'timeout') {
-          console.log('Query job expired', data)
-          return
+        if (data["action"] === "timeout") {
+          console.log("Query job expired", data);
+          return;
         }
-        if (data['action'] === 'validate') {
+        if (data["action"] === "validate") {
           // console.log('Query validation', data)
           this.isQueryValidData = data;
-          return
+          return;
         }
         if (data["action"] === "stats") {
-          console.log("stats", data);
+          // console.log("stats", data);
+          this.stats = data;
           return;
         }
         if (data["action"] === "fetch_queries") {
@@ -458,11 +653,14 @@ export default {
       }
       // we might need this block for stats related stuff later, don't worry about it much right now
       if (this.simultaneousMode) {
-        this.allResults = this.allResults.concat(data['result'])
-        if (this.allResults.length >= data['total_results_requested']) {
-          this.allResults = this.allResults.slice(0, data['total_results_requested'])
-          this.enough(data['simultaneous']);
-          data['status'] = 'satisfied';
+        this.allResults = this.allResults.concat(data["result"]);
+        if (this.allResults.length >= data["total_results_requested"]) {
+          this.allResults = this.allResults.slice(
+            0,
+            data["total_results_requested"]
+          );
+          this.enough(data["simultaneous"]);
+          data["status"] = "satisfied";
         }
         data["first_result"] = this.allResults[0];
         data["n_results"] = this.allResults.length;
@@ -488,12 +686,13 @@ export default {
         user: this.userId,
         // room: this.roomId,
         room: null,
-        page_size: this.pageSize,
+        // page_size: this.pageSize,
+        page_size: this.nResults,
         languages: this.languages,
         total_results_requested: this.nResults,
         stats: true,
         resume: resumeQuery,
-        simultaneous: this.simultaneousMode
+        simultaneous: this.simultaneousMode,
       };
       if (resumeQuery) {
         data["previous"] = this.WSData.job;
@@ -507,7 +706,7 @@ export default {
     },
     stop() {
       this.currentResults = [];
-      this.percentageDone = 0
+      this.percentageDone = 0;
       this.$socket.sendObj({
         // room: this.roomId,
         room: null,
@@ -525,7 +724,7 @@ export default {
         room: null,
         action: "enough_results",
         user: this.userId,
-        job: job
+        job: job,
       });
     },
     validate() {
@@ -561,35 +760,42 @@ export default {
       };
       useCorpusStore().fetchQueries(data);
     },
+  },
+  computed: {
+    ...mapState(useCorpusStore, ["queryData", "corpora"]),
+    ...mapState(useUserStore, ["userData", "roomId"]),
+    availableLanguages() {
+      let retval = [];
+      if (this.selectedCorpora) {
+        if (
+          this.corpora.filter(
+            (corpus) => corpus.meta.id == this.selectedCorpora.value
+          ).length
+        ) {
+          retval = Object.keys(
+            this.corpora.filter(
+              (corpus) => corpus.meta.id == this.selectedCorpora.value
+            )[0].layer
+          )
+            .filter((key) => key.startsWith("Token@"))
+            .map((key) => key.replace(/Token@/, ""));
+          if (retval.length == 0) {
+            retval = ["en"];
+          }
+        }
+      }
+      return retval;
+    },
     corporaOptions() {
       return this.corpora
         ? this.corpora.map((corpus) => {
             return {
               name: corpus.meta.name,
               value: corpus.meta.id,
+              corpus: corpus,
             };
           })
         : [];
-    },
-  },
-  computed: {
-    ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["userData", "roomId"]),
-    availableLanguages() {
-      let retval = []
-      if (this.selectedCorpora) {
-        if (this.corpora.filter(corpus => corpus.meta.id == this.selectedCorpora.value).length) {
-          retval = Object.keys(this.corpora.filter(
-            corpus => corpus.meta.id == this.selectedCorpora.value
-          )[0].layer).filter(
-            key => key.startsWith("Token@")
-          ).map(key => key.replace(/Token@/, ''))
-          if (retval.length == 0) {
-            retval = ["en"]
-          }
-        }
-      }
-      return retval
     },
   },
 };
