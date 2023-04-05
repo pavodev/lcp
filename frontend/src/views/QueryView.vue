@@ -626,6 +626,7 @@ Token@s1 t1
         }
         if (data["action"] === "timeout") {
           console.log("Query job expired", data);
+          this.submit(null, false);
           return;
         }
         if (data["action"] === "validate") {

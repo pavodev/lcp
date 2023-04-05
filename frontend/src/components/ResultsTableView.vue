@@ -20,6 +20,7 @@
               class="token"
               v-for="(token, index) in item[0]"
               :key="`lt-${index}`"
+              :class="bgCheck(resultIndex, index, item[3], 1)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -31,6 +32,8 @@
               class="token"
               v-for="(token, index) in item[1]"
               :key="`lt-${index}`"
+              :data-id="item[3]"
+              :class="bgCheck(resultIndex, index, item[3], 2)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -42,6 +45,7 @@
               class="token"
               v-for="(token, index) in item[2]"
               :key="`lt-${index}`"
+              :class="bgCheck(resultIndex, index, item[3], 3)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -192,6 +196,9 @@
   color: #fff;
   cursor: pointer;
 }
+.highlight {
+  background-color: #1e999967;
+}
 </style>
 
 <script>
@@ -228,12 +235,35 @@ export default {
       this.currentIndex = null;
     },
     showModal(index) {
-      this.modalIndex = index;
+      this.modalIndex = index + ((this.currentPage - 1)*this.resultsPerPage);
       this.modalVisible = true;
     },
     updatePage(currentPage) {
       this.currentPage = currentPage;
       this.$emit("updatePage", this.currentPage);
+    },
+    bgCheck (resultIndex, tokenIndex, range, type) {
+      let classes = []
+      resultIndex = resultIndex + ((this.currentPage - 1)*this.resultsPerPage)
+      if (this.currentIndex == resultIndex) {
+        let headIndex = this.columnHeaders.indexOf("head");
+        let currentTokenHeadId = this.currentToken[headIndex];
+        let startId = this.data[this.currentIndex][2];
+        let tokenId
+        if (type == 1) {
+          tokenId = range[0] - tokenIndex + startId - 1
+        }
+        else if (type == 2) {
+          tokenId = range[0] + tokenIndex + startId
+        }
+        else if (type == 3) {
+          tokenId = range[1] + tokenIndex + startId + 1
+        }
+        if (tokenId == currentTokenHeadId) {
+          classes.push("highlight")
+        }
+      }
+      return classes
     },
   },
   computed: {
@@ -258,7 +288,7 @@ export default {
           let end = start + this.resultsPerPage;
           return rowIndex >= start && rowIndex < end;
         })
-        .map((row, rowIndex) => {
+        .map(row => {
           let startIndex = row[2];
           let range = [row[1][0] - startIndex, row[1][1] - startIndex];
           let tokens = row[3];
@@ -266,7 +296,7 @@ export default {
             tokens.filter((_, index) => index < range[0]).reverse(),
             tokens.filter((_, index) => index >= range[0] && index <= range[1]),
             tokens.filter((_, index) => index > range[1]),
-            rowIndex,
+            range,
           ];
         });
     },
