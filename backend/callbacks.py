@@ -60,7 +60,8 @@ def _query(
     job.save_meta()
     if status == "finished":
         projected_results = len(results_so_far)
-        perc = 100.0
+        perc_words = 100.0
+        perc_matches = 100.0
     elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
