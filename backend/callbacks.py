@@ -28,7 +28,9 @@ def _query(
     )
     current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
-    offset = job.kwargs.get("offset", False) if restart is False else False
+    # this seemed to be wrong:
+    # offset = job.kwargs.get("offset", False) if restart is False else False
+    offset = restart if restart is not False else False
 
     if restart is False:
         needed = job.kwargs["needed"]
@@ -40,6 +42,7 @@ def _query(
     limited = not unlimited and len(result) > job.kwargs["needed"]
 
     args = (result, len(results_so_far), unlimited, offset, restart, total_requested)
+
     results_so_far += _add_results(*args)
     # add everything: _add_results(result, 0, True, False, False, 0)
 
@@ -63,7 +66,8 @@ def _query(
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
-        perc = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
+        perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
+        perc_matches = total_found * 100.0 / total_requested
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -71,7 +75,8 @@ def _query(
             "status": status,
             "job": job.id,
             "projected_results": projected_results,
-            "percentage_done": round(perc, 3),
+            "percentage_done": round(perc_matches, 3),
+            "percentage_words_done": round(perc_words, 3),
             "hit_limit": hit_limit,
             "batch_matches": len(result),
             "stats": job.kwargs["stats"],

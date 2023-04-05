@@ -6,7 +6,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from aiohttp import web
 from rq.job import Job
 
-from abstract_query.abstract_query import Query
 from abstract_query.lcp_query import LCPQuery
 
 from . import utils
@@ -96,7 +95,7 @@ def _decide_batch(
 
 
 def _get_query_batches(
-    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
+    corpora: List[int], config: Dict[str, Dict], languages: Set[str] = None
 ) -> List[Tuple]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -163,7 +162,7 @@ async def _do_resume(
 @utils.ensure_authorised
 async def query(
     request: web.Request,
-    manual: Optional[dict] = None,
+    manual: Optional[Dict] = None,
     app: Optional[web.Application] = None,
 ) -> web.Response:
     """
