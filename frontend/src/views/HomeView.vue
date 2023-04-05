@@ -14,10 +14,19 @@
         >
           <div class="corpus-block">
             <p class="title mb-0">{{ corpus.meta.name }}</p>
-            <p class="author mb-0" v-if="corpus.meta.author">by {{ corpus.meta.author }}</p>
+            <p class="author mb-0" v-if="corpus.meta.author">
+              by {{ corpus.meta.author }}
+            </p>
             <p class="description mt-3">{{ corpus.meta.corpusDescription }}</p>
-            <p class="word-count mb-0">Word count: <b>{{ nFormatter(calculateSum(Object.values(corpus.token_counts))) }}</b></p>
-            <p class="word-count">Version: <b>{{ corpus.meta.version }}</b></p>
+            <p class="word-count mb-0">
+              Word count:
+              <b>{{
+                nFormatter(calculateSum(Object.values(corpus.token_counts)))
+              }}</b>
+            </p>
+            <p class="word-count">
+              Version: <b>{{ corpus.meta.version }}</b>
+            </p>
           </div>
         </div>
       </div>
@@ -30,11 +39,14 @@
       tabindex="-1"
       aria-labelledby="corpusDetailsModalLabel"
       aria-hidden="true"
+      ref="vuemodal"
     >
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="corpusDetailsModalLabel">Corpus details</h5>
+            <h5 class="modal-title" id="corpusDetailsModalLabel">
+              Corpus details
+            </h5>
             <button
               type="button"
               class="btn-close"
@@ -44,20 +56,45 @@
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
             <div class="row">
-              <div class="col-6">
+              <div class="col-5">
                 <p class="title mb-0">{{ corpusModal.meta.name }}</p>
-                <p class="author mb-0" v-if="corpusModal.meta.author">by {{ corpusModal.meta.author }}</p>
-                <p class="description mt-3">{{ corpusModal.meta.corpusDescription }}</p>
-                <p class="word-count mb-0">Word count: <b>{{ calculateSum(Object.values(corpusModal.token_counts)).toLocaleString('de-DE') }}</b></p>
-                <p class="word-count mb-0">Version: {{ corpusModal.meta.version }}</p>
-                <p class="word-count mb-0">Description: {{ corpusModal.description }}</p>
+                <p class="author mb-0" v-if="corpusModal.meta.author">
+                  by {{ corpusModal.meta.author }}
+                </p>
+                <p class="description mt-3">
+                  {{ corpusModal.meta.corpusDescription }}
+                </p>
+                <p class="word-count mb-0">
+                  Word count:
+                  <b>{{
+                    calculateSum(
+                      Object.values(corpusModal.token_counts)
+                    ).toLocaleString("de-DE")
+                  }}</b>
+                </p>
+                <p class="word-count mb-0">
+                  Version: {{ corpusModal.meta.version }}
+                </p>
+                <p class="word-count mb-0">
+                  Description: {{ corpusModal.description }}
+                </p>
                 <span v-if="corpusModal.partitions">
-                  <p class="word-count" v-if="corpusModal.partitions">Partitions: {{ corpusModal.partitions.values.join(", ") }}</p>
-                  <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
+                  <p class="word-count" v-if="corpusModal.partitions">
+                    Partitions: {{ corpusModal.partitions.values.join(", ") }}
+                  </p>
+                  <div
+                    class=""
+                    v-for="partition in corpusModal.partitions.values"
+                    :key="partition"
+                  >
                     <p class="text-bold">{{ partition.toUpperCase() }}</p>
                     <p class="word-count">
                       Segments:
-                      {{ corpusModal.mapping.layer.Segment.partitions[partition].prepared.columnHeaders.join(", ") }}
+                      {{
+                        corpusModal.mapping.layer.Segment.partitions[
+                          partition
+                        ].prepared.columnHeaders.join(", ")
+                      }}
                     </p>
                     <!-- <p class="word-count">
                       Segments:
@@ -66,8 +103,14 @@
                   </div>
                 </span>
               </div>
-              <div class="col-6">
-                Class
+              <div class="col-7">
+                <vue3-mermaid
+                  v-if="showGraph"
+                  :nodes="graphData"
+                  type="graph TD"
+                  :config="config"
+                  :key="graphIndex"
+                ></vue3-mermaid>
               </div>
             </div>
           </div>
@@ -97,7 +140,12 @@ export default {
   data() {
     return {
       corpusModal: null,
-    }
+      graphIndex: 0,
+      showGraph: false,
+      config: {
+        theme: "neutral",
+      },
+    };
   },
   components: {
     Title,
@@ -115,6 +163,55 @@ export default {
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
+    graphData() {
+      let corpus = this.corpusModal;
+      let data = [
+        {
+          id: "1",
+          text: corpus.meta.name.replace(/\(/gi, "") .replace(/\)/gi, ""),
+          next: Object.keys(corpus.layer).map((layer) => `l-${layer.toLowerCase().replace(/@/gi, "")}`),
+        },
+      ];
+      Object.keys(corpus.layer).forEach((layer, index) => {
+        let next = [];
+        if ("attributes" in corpus.layer[layer]) {
+          Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
+            let attributeId = `a-${index}-${attribute.toLowerCase()}`;
+            data.push({
+              id: attributeId,
+              text: attribute.replace(/@/gi, ""),
+              edgeType: "circle",
+            });
+            next.push(attributeId);
+          });
+        }
+        if ("meta" in corpus.layer[layer]) {
+          Object.keys(corpus.layer[layer].meta).forEach((meta) => {
+            let metaId = `a-${index}-${meta.toLowerCase()}`;
+            data.push({
+              id: metaId,
+              text: meta.replace(/@/gi, ""),
+              edgeType: "circle",
+            });
+            next.push(metaId);
+          });
+        }
+        data.push({
+          id: `l-${layer.toLowerCase().replace(/@/gi, "")}`,
+          text: layer.replace(/@/gi, ""),
+          next: next,
+        });
+      });
+      return data;
+    },
+  },
+  mounted() {
+    this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
+      this.showGraph = true
+    });
+    this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
+      this.showGraph = false
+    });
   },
 };
 </script>
