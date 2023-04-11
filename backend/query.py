@@ -95,7 +95,7 @@ def _decide_batch(
 
 
 def _get_query_batches(
-    corpora: List[int], config: Dict[str, Dict], languages: Set[str] = None
+    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
 ) -> List[Tuple]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
