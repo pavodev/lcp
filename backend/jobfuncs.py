@@ -3,7 +3,7 @@ from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
 from typing import Dict, List, Mapping, Optional, Tuple, Union
 
-from .utils import Interrupted
+from .utils import Interrupted, _get_kwics
 
 
 async def _upload_data(**kwargs):
@@ -71,10 +71,7 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
         seg_ids = set()
 
         result_sets = associated_query.meta["result_sets"]
-        itt = result_sets.get("result_sets", result_sets)
-        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
-        kwics = set(kwics)
-
+        kwics = _get_kwics(result_sets)
         counts = defaultdict(int)
 
         for res in prev_results:

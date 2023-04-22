@@ -132,8 +132,9 @@ async def _handle_query(
     total = payload.get("total_results_requested")
     if not total or total == -1:
         total = "all"
+    so_far = payload.get("total_results_so_far", -1)
     print(
-        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {len(payload['result'])}/{total} total\n"
+        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total\n"
         + f"Status: {status} -- done {len(payload['done_batches'])}/{len(payload['all_batches'])} batches ({payload['percentage_done']}% done)"
     )
     if (
@@ -161,6 +162,8 @@ async def _handle_query(
             "n_users": n_users,
             "status": status,
             "base": payload["base"],
+            "batch_matches": payload["batch_matches"],
+            "total_results_so_far": payload["total_results_so_far"],
             # "job_status": job_status,
             "percentage_done": payload["percentage_done"],
             "percentage_words_done": payload["percentage_words_done"],

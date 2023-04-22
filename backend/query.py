@@ -195,6 +195,7 @@ async def query(
         existing_results = manual["result"]
         config = manual["config"]
         total_results_requested = manual["total_results_requested"]
+        total_results_so_far = manual["total_results_so_far"]
         user = manual["user"]
         corpora_to_use = [int(i) for i in manual["corpora"]]
         room = manual.get("room")
@@ -207,9 +208,8 @@ async def query(
         done_batches = job.kwargs["done_batches"]
         all_batches = job.kwargs["all_batches"]
         done_batches.append(previous_batch)
-        so_far = len(existing_results)
         needed = (
-            total_results_requested - so_far
+            total_results_requested - total_results_so_far
             if total_results_requested not in unlimited
             else -1
         )
@@ -221,7 +221,7 @@ async def query(
         existing_results = {}
         hit_limit = False
         job = False
-        so_far = 0
+        total_results_so_far = 0
         app = request.app
         config = request.app["config"]
         request_data = await request.json()
@@ -267,7 +267,7 @@ async def query(
             done, r = await _do_resume(*rargs)
 
             if not done and len(r) == 4:
-                all_batches, done_batches, so_far, needed = r
+                all_batches, done_batches, total_results_so_far, needed = r
                 existing_results = utils._get_all_results(
                     previous, connection=app["redis"]
                 )
@@ -287,7 +287,7 @@ async def query(
                 current_batch = _decide_batch(
                     done_batches,
                     all_batches,
-                    so_far,
+                    total_results_so_far,
                     needed,
                     hit_limit,
                     page_size,
@@ -333,6 +333,7 @@ async def query(
                 done_batches=done_batches,
                 current_batch=current_batch,
                 all_batches=all_batches,
+                total_results_so_far=total_results_so_far,
                 corpora=corpora_to_use,
                 base=base,
                 existing_results=existing_results,

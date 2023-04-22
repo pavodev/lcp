@@ -3,7 +3,7 @@ import json
 from collections import defaultdict
 
 from .configure import _get_batches
-from .utils import CustomEncoder, Interrupted, _add_results, _union_results
+from .utils import CustomEncoder, Interrupted, _add_results, _get_kwics, _union_results
 from datetime import datetime
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import Connection
@@ -21,10 +21,12 @@ def _query(
     Job callback, publishes a redis message containing the results
     """
     restart = kwargs.get("hit_limit", False)
+    total_before_now = job.kwargs.get("total_results_so_far")
     results_so_far = job.kwargs.get("existing_results", {})
-    total_found = len(results_so_far.get(1, [])) + len(
-        [i for i in result if int(i[0]) == 1]
-    )
+    # lines_sent_to_fe = set()
+    results_so_far = {int(k): v for k, v in results_so_far.items()}
+    results_this_batch = len([i for i in result if int(i[0]) == 1])
+    total_found = total_before_now + results_this_batch
     total_requested = (
         job.kwargs["total_results_requested"]
         if restart is False
@@ -39,15 +41,15 @@ def _query(
     if restart is False:
         needed = job.kwargs["needed"]
     else:
-        needed = total_requested - len(results_so_far[1])
+        needed = total_requested - total_before_now
 
     unlimited = needed in {-1, False, None} or job.kwargs.get("simultaneous", False)
 
-    limited = not unlimited and len(result) > job.kwargs["needed"]
+    limited = not unlimited and total_found > job.kwargs["needed"]
 
     args = (
         result,
-        len(results_so_far.get(1, [])),
+        total_before_now,
         unlimited,
         offset,
         restart,
@@ -56,35 +58,48 @@ def _query(
 
     new_res, n_results = _add_results(*args, kwic=False)
     results_so_far = _union_results(results_so_far, new_res)
+
+    # kwics = _get_kwics(results_so_far[0])
+    # for k in kwics:
+    #    for line in results_so_far.get(k, []):
+    #        ids = [i for i in line if isinstance(i, (str, int))]
+    #        ids = sorted(ids)
+    #        lines_sent_to_fe.add(tuple(ids))
     # add everything: _add_results(result, 0, True, False, False, 0)
 
     just_finished = job.kwargs["current_batch"]
     job.kwargs["done_batches"].append(just_finished)
 
-    status = _get_status(n_results, **job.kwargs)
+    status = _get_status(total_found, **job.kwargs)
     hit_limit = False if not limited else needed
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
-    job.meta["total_results"] = len(results_so_far.get(1, []))
+    job.meta["total_results_so_far"] = total_found
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
     job.meta["_args"] = args[1:]
     job.meta["result_sets"] = results_so_far[0]
+    # job.meta["lines_sent_to_fe"] = lines_sent_to_fe
     # job.meta["all_results"] = results_so_far
-    job.save_meta()
+
     if status == "finished":
-        projected_results = len(results_so_far.get(1, []))
+        projected_results = total_found
         perc_words = 100.0
         perc_matches = 100.0
+        job.meta["percentage_done"] = 100.0
     elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
-        if total_requested < total_found:
-            total_found = total_requested
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
         perc_matches = total_found * 100.0 / total_requested
+        job.meta["percentage_done"] = round(perc_matches, 3)
+        # todo: can remove this for more accuracy if need be
+        if total_requested < total_found:
+            total_found = total_requested
+
+    job.save_meta()
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -95,7 +110,8 @@ def _query(
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "hit_limit": hit_limit,
-            "batch_matches": len(result),
+            "total_results_so_far": total_found,
+            "batch_matches": n_results,
             "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,
         }
@@ -123,27 +139,24 @@ def _sentences(
         depends_on = depends_on[-1]
 
     depended = Job.fetch(depends_on, connection=connection)
-
     args = depended.meta["_args"]
-    rs = depended.meta["result_sets"]
-
-    new_res, _ = _add_results(
-        depended.result, *args, kwic=True, sents=result, result_sets=rs
-    )
-    # results_so_far = _union_results(results_so_far, new_res)
+    new_res, _ = _add_results(depended.result, *args, kwic=True, sents=result)
+    results_so_far = _union_results(base.meta["_sentences"], new_res)
 
     base.meta["latest_sentences"] = job.id
+    base.meta["_sentences"] = results_so_far
 
     base.save_meta()
 
     jso = {
-        "result": new_res,
+        "result": results_so_far,
         "status": depended.meta["_status"],
         "action": "sentences",
         "user": job.kwargs["user"],
         "room": job.kwargs["room"],
         "query": depended.id,
-        "base": base.id
+        "base": base.id,
+        "percentage_done": depended.meta["percentage_done"]
         # "current_batch": list(job.kwargs["current_batch"]),
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

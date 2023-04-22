@@ -19,6 +19,7 @@ from typing import (
     Sequence,
     Mapping,
     Sized,
+    Set,
 )
 from uuid import UUID
 
@@ -203,12 +204,32 @@ def _old_add_results(
 
 
 def _make_kwic_line(original, sents):
+    """
+    Helper to make a kwic line from kwic result and sent data
+    """
     out = []
     for sent in sents:
         sent = [str(sent[0])] + list(sent[1:])
         if str(sent[0]) == str(original[0]):
-            return [original[0]] + list(sent) + original[1:]
+            return list(sent) + original[1:]
     raise ValueError("matching sent not found", original)
+
+
+def _get_kwics(result):
+    """
+    Helper to get set of kwic ids
+    """
+    if isinstance(result, dict):
+        itt = result.get("result_sets", result)
+        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
+        return set(kwics)
+    for line in result:
+        if not int(line[0]):
+            res = line[1]["result_sets"]
+            enum = enumerate(res, start=1)
+            kwics = [i for i, r in enum if r.get("type") == "plain"]
+            return set(kwics)
+    return set()
 
 
 def _add_results(
@@ -220,28 +241,15 @@ def _add_results(
     total_requested: int,
     kwic: bool = False,
     sents: Optional[List[List]] = None,
-    result_sets: Optional[Dict] = None,
 ) -> Tuple[Dict[int, List], int]:
     """
     todo: respect limits here?
     """
     bundle = {}
-    count = 0
-    kwics = set()
     counts = defaultdict(int)
-    if not result_sets:
-        for line in result:
-            if not int(line[0]):
-                res = line[1]["result_sets"]
-                kwics = [
-                    i for i, r in enumerate(res, start=1) if r.get("type") == "plain"
-                ]
-                kwics = set(kwics)
-                break
-    else:
-        itt = result_sets.get("result_sets", result_sets)
-        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
-        kwics = set(kwics)
+    rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
+    res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
+    kwics = set(res_objs)
 
     for line in result:
         key = int(line[0])
@@ -249,49 +257,41 @@ def _add_results(
         if not key:
             assert isinstance(rest, dict)
             bundle[key] = rest
-        else:
-            if not kwic and key in kwics:
-                counts[key] += 1
-                continue
-            if key in kwics and kwic:
-                counts[key] += 1
-                if not unlimited and offset and count < offset:
-                    continue
-                if restart is not False and counts.get(key, 0) < restart:
-                    continue
-                if (
-                    not unlimited
-                    and so_far + len(bundle.get(key, [])) >= total_requested
-                ):
-                    continue
+            continue
 
-                rest = _make_kwic_line(rest, sents)
+        if key not in bundle:
+            bundle[key] = []
 
-                if key not in bundle:
-                    bundle[key] = [rest]
-                else:
-                    bundle[key].append(rest)
-            elif key in kwics and not kwic:
-                continue
-            elif key not in kwics and kwic:
-                continue
-            elif key not in kwics and not kwic:
-                if key not in bundle:
-                    bundle[key] = [rest]
-                else:
-                    bundle[key].append(rest)
+        counts[key] += 1
 
-    n_results = None
+        if key in kwics and not kwic:
+            continue
+        elif key not in kwics and kwic:
+            continue
+        elif key not in kwics and not kwic:
+            if key not in bundle:
+                bundle[key] = [rest]
+            else:
+                bundle[key].append(rest)
+            continue
+
+        # doing kwics and this is a kwic line
+        if not unlimited and offset and counts[key] < offset:
+            continue
+        if restart is not False and counts[key] < restart:
+            continue
+        if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
+            continue
+        rest = _make_kwic_line(rest, sents)
+        bundle[key].append(rest)
+
     for k in kwics:
         if k not in bundle:
             continue
         if len(bundle[k]) > total_requested:
             bundle[k] = bundle[k][:total_requested]
-            n_results = total_requested
-    if n_results is None:
-        n_results = counts[list(kwics)[0]]
 
-    return bundle, n_results
+    return bundle, counts[list(kwics)[0]]
 
 
 def _union_results(so_far: Dict[int, List], incoming: Dict[int, List]) -> [int, List]:
