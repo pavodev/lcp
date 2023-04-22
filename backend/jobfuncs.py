@@ -27,15 +27,6 @@ async def _upload_data(**kwargs):
     return True
 
 
-async def _as_dict(result: List[Tuple[Union[Tuple[str], str], int]]) -> Dict:
-    out: Counter = Counter()
-    for i, (r, freq) in enumerate(result):
-        if isinstance(r, tuple) and len(r) == 1:
-            r = r[0]
-        out[r] += freq
-    return dict(out)
-
-
 async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
     """
     The function queued by RQ, which executes our DB query

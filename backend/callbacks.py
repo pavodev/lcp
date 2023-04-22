@@ -282,9 +282,6 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 
-    # fixed["open_subtitles_en1"] = fixed["open_subtitles_en"]
-    # fixed["sparcling1"] = fixed["sparcling"]
-
     jso = {"config": fixed, "_is_config": True, "action": "set_config"}
 
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

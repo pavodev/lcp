@@ -10,12 +10,16 @@ from abstract_query.create import json_to_sql
 
 from . import utils
 from .callbacks import _query
+from .utils import _determine_language
 from uuid import uuid4
 
 
 def _make_sents_query(
     query: str, schema: str, config: Dict, lang: Optional[str]
 ) -> str:
+    """
+    Build a query to fetch sentences (uuids to be filled in later)
+    """
     underlang = f"_{lang}" if lang else ""
     seg_name = f"prepared_segment{underlang}"
     script = f"SELECT segment_id, off_set, content FROM {schema}.{seg_name} "
@@ -281,10 +285,7 @@ async def query(
                 )
 
             try:
-                lang = None
-                for lan in ["de", "en", "fr"]:
-                    if f"_{lan}" in current_batch[2]:
-                        lang = lan
+                lang = _determine_language(current_batch[2])
                 kwa = dict(
                     schema=current_batch[1],
                     batch=current_batch[2],
@@ -353,15 +354,12 @@ async def query(
                 first_job = job
 
         #######################################################################
-        # prepare and submit statistics query                                 #
+        # prepare and submit sentences query                                  #
         #######################################################################
 
         if sentences and current_batch:
             sect = config[str(current_batch[0])]
-            lang = None
-            for lan in ["de", "en", "fr"]:
-                if f"_{lan}" in current_batch[2]:
-                    lang = lan
+            lang = _determine_language(current_batch[2])
             sents_query = _make_sents_query(query, current_batch[1], sect, lang)
             if simultaneous and first_job:
                 the_base = first_job.id

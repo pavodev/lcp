@@ -177,12 +177,16 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple
 def _make_kwic_line(original, sents):
     """
     Helper to make a kwic line from kwic result and sent data
+
+    format: ["segment-id", offset, sent_obj, [tokid1, tokid2...]]
     """
     out = []
     for sent in sents:
         sent = [str(sent[0])] + list(sent[1:])
         if str(sent[0]) == str(original[0]):
-            return list(sent) + original[1:]
+            together = list(sent)
+            together.append(original[1:])
+            return together
     raise ValueError("matching sent not found", original)
 
 
@@ -214,7 +218,7 @@ def _add_results(
     sents: Optional[List[List]] = None,
 ) -> Tuple[Dict[int, List], int]:
     """
-    todo: respect limits here?
+    todo: check limits here?
     """
     bundle = {}
     counts = defaultdict(int)
@@ -285,30 +289,6 @@ def _union_results(so_far: Dict[int, List], incoming: Dict[int, List]) -> [int, 
     return so_far
 
 
-def _push_stats(previous: str, connection: Connection) -> Dict[str, Any]:
-    """
-    Send statistics to the websocket
-    """
-    depended = Job.fetch(previous, connection=connection)
-    base = depended.kwargs.get("base")
-    basejob = Job.fetch(base, connection=connection) if base else depended
-
-    jso = {
-        "result": basejob.meta["_stats"],
-        "status": depended.meta["_status"],
-        "action": "stats",
-        "user": basejob.kwargs["user"],
-        "room": basejob.kwargs["room"],
-    }
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return {
-        "stats": True,
-        "sentences_job": basejob.meta.get("latest_sentences", None),
-        "status": "faked",
-        "job": previous,
-    }
-
-
 async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
@@ -327,3 +307,15 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     }
     connection = request.app["redis"]
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+
+def _determine_language(batch: str) -> Optional[str]:
+    """
+    Helper to find language from batch
+    """
+    batch = batch.rstrip("0123456789")
+    if batch.endswith("rest"):
+        batch = batch[:-4]
+    for lan in ["de", "en", "fr"]:
+        if batch.endswith(f"_{lan}"):
+            return lan

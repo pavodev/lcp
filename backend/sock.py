@@ -164,7 +164,6 @@ async def _handle_query(
             "base": payload["base"],
             "batch_matches": payload["batch_matches"],
             "total_results_so_far": payload["total_results_so_far"],
-            # "job_status": job_status,
             "percentage_done": payload["percentage_done"],
             "percentage_words_done": payload["percentage_words_done"],
             "total_results_requested": payload["total_results_requested"],
