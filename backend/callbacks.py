@@ -54,20 +54,22 @@ def _query(
         total_requested,
     )
 
-    new_res = _add_results(*args)
+    new_res, n_results = _add_results(*args, kwic=False)
     results_so_far = _union_results(results_so_far, new_res)
     # add everything: _add_results(result, 0, True, False, False, 0)
 
     just_finished = job.kwargs["current_batch"]
     job.kwargs["done_batches"].append(just_finished)
 
-    status = _get_status(results_so_far, **job.kwargs)
+    status = _get_status(n_results, **job.kwargs)
     hit_limit = False if not limited else needed
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
     job.meta["total_results"] = len(results_so_far.get(1, []))
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
+    job.meta["_args"] = args[1:]
+    job.meta["result_sets"] = results_so_far[0]
     # job.meta["all_results"] = results_so_far
     job.save_meta()
     if status == "finished":
@@ -94,7 +96,7 @@ def _query(
             "percentage_words_done": round(perc_words, 3),
             "hit_limit": hit_limit,
             "batch_matches": len(result),
-            "stats": job.kwargs["stats"],
+            "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,
         }
     )
@@ -104,7 +106,7 @@ def _query(
     redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _stats(
+def _sentences(
     job: Job,
     connection: Connection,
     result: Dict[Union[str, Tuple[str]], int],
@@ -113,18 +115,8 @@ def _stats(
 ) -> None:
 
     base = Job.fetch(job.kwargs["base"], connection=connection)
-    if "_stats" not in base.meta:
-        base.meta["_stats"] = {}
-
-    for r, v in result.items():
-        if r in base.meta["_stats"]:
-            base.meta["_stats"][r] += v
-        else:
-            base.meta["_stats"][r] = v
-
-    base.meta["latest_stats"] = job.id
-
-    base.save_meta()
+    if "_sentences" not in base.meta:
+        base.meta["_sentences"] = {}
 
     depends_on = job.kwargs["depends_on"]
     if isinstance(depends_on, list):
@@ -132,12 +124,26 @@ def _stats(
 
     depended = Job.fetch(depends_on, connection=connection)
 
+    args = depended.meta["_args"]
+    rs = depended.meta["result_sets"]
+
+    new_res, _ = _add_results(
+        depended.result, *args, kwic=True, sents=result, result_sets=rs
+    )
+    # results_so_far = _union_results(results_so_far, new_res)
+
+    base.meta["latest_sentences"] = job.id
+
+    base.save_meta()
+
     jso = {
-        "result": base.meta["_stats"],
+        "result": new_res,
         "status": depended.meta["_status"],
-        "action": "stats",
+        "action": "sentences",
         "user": job.kwargs["user"],
         "room": job.kwargs["room"],
+        "query": depended.id,
+        "base": base.id
         # "current_batch": list(job.kwargs["current_batch"]),
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
@@ -272,7 +278,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _get_status(results_so_far: List[List], **kwargs) -> str:
+def _get_status(n_results: int, **kwargs) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """
@@ -281,6 +287,6 @@ def _get_status(results_so_far: List[List], **kwargs) -> str:
     requested = kwargs["total_results_requested"]
     if requested in {-1, False, None}:
         return "partial"
-    if len(results_so_far.get(1, [])) >= requested:
+    if n_results >= requested:
         return "satisfied"
     return "partial"

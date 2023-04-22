@@ -1,4 +1,4 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
 from typing import Dict, List, Mapping, Optional, Tuple, Union
@@ -44,11 +44,13 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
     params = kwargs.get("params", tuple())
     is_config = kwargs.get("config", False)
     is_store = kwargs.get("store", False)
-    is_stats = kwargs.get("is_stats", False)
+    is_sentences = kwargs.get("is_sentences", False)
     current_batch = kwargs.get("current_batch")
     resuming = kwargs.get("resuming", False)
+    start_at = 0
+    hit_limit = False
 
-    if is_stats and current_batch:
+    if is_sentences and current_batch:
         associated_query = kwargs["depends_on"]
         conn = get_current_connection()
         if isinstance(associated_query, list):
@@ -65,21 +67,29 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
         # so we don't double count on resuming
         if resuming:
             start_at = associated_query.meta.get("start_at", 0)
-            prev_results = prev_results[start_at:]
-        if hit_limit:
-            prev_results = prev_results[:hit_limit]
 
-        values = [(i[0][1], i[0][-1]) for i in prev_results]
-        together = set()
-        for start, end in values:
-            at = int(start)
-            if at == int(end):
-                together.add(at)
-                continue
-            while at <= int(end):
-                together.add(at)
-                at += 1
-        form = ", ".join([str(x) for x in sorted(together)])
+        seg_ids = set()
+
+        result_sets = associated_query.meta["result_sets"]
+        itt = result_sets.get("result_sets", result_sets)
+        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
+        kwics = set(kwics)
+
+        counts = defaultdict(int)
+
+        for res in prev_results:
+            key = int(res[0])
+            rest = res[1]
+            if key in kwics:
+                counts[key] += 1
+                if start_at and counts[key] < start_at:
+                    continue
+                elif hit_limit is not False and counts[key] > hit_limit:
+                    continue
+                seg_ids.add(str(rest[0]))
+
+        form = ", ".join(sorted(seg_ids))
+
         query = query.format(
             schema=current_batch[1], table=current_batch[2], allowed=form
         )
@@ -93,10 +103,8 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
             result = await cur.execute(query, params)
             if is_store:
                 return None
-            if is_config or is_stats:
+            if is_config or is_sentences:
                 result = await cur.fetchall()
-                if is_stats:
-                    result = await _as_dict(result)
                 return result
             if single_result:
                 result = await cur.fetchone()

@@ -81,7 +81,7 @@ async def handle_redis_response(
                         )
                         continue
 
-                elif payload.get("action") == "stats":
+                elif payload.get("action") == "sentences":
 
                     await push_msg(
                         app["websockets"],

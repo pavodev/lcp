@@ -7,7 +7,7 @@ from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
 
-from .callbacks import _config, _general_failure, _queries, _query, _stats, _upload
+from .callbacks import _config, _general_failure, _queries, _query, _sentences, _upload
 
 from .jobfuncs import _db_query, _upload_data
 
@@ -42,17 +42,17 @@ class QueryService:
             _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
-    def statistics(
+    def sentences(
         self,
         queue: str = "query",
         depends_on: Optional[str] = None,
         kwargs: Dict[str, Any] = {},
     ) -> Job:
-        kwargs["is_stats"] = True
+        kwargs["is_sentences"] = True
         kwargs["depends_on"] = depends_on
         opts = {
-            "is_stats": True,
-            "on_success": _stats,
+            "is_sentences": True,
+            "on_success": _sentences,
             "on_failure": _general_failure,
             "kwargs": kwargs,
             "depends_on": depends_on,
@@ -199,7 +199,7 @@ class QueryService:
             maybe = Job.fetch(job, connection=self.app["redis"])
             if base and maybe.kwargs.get("simultaneous") != base:
                 continue
-            if base and maybe.kwargs.get("is_stats"):
+            if base and maybe.kwargs.get("is_sentences"):
                 continue
             if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
                 try:

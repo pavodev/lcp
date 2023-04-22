@@ -13,6 +13,16 @@ from .callbacks import _query
 from uuid import uuid4
 
 
+def _make_sents_query(
+    query: str, schema: str, config: Dict, lang: Optional[str]
+) -> str:
+    underlang = f"_{lang}" if lang else ""
+    seg_name = f"prepared_segment{underlang}"
+    script = f"SELECT segment_id, off_set, content FROM {schema}.{seg_name} "
+    end = "WHERE segment_id = ANY('{{ {allowed} }}');"
+    return script + end
+
+
 def _make_stats_query(query: str, schema: str, config: Dict) -> str:
     """
     todo: this is just temp code until we know what stats query really does
@@ -188,7 +198,7 @@ async def query(
         user = manual["user"]
         corpora_to_use = [int(i) for i in manual["corpora"]]
         room = manual.get("room")
-        stats = manual.get("stats", False)
+        sentences = manual.get("sentences", True)
         hit_limit = manual.get("hit_limit", False)
         languages = set([i.strip() for i in manual.get("languages", [])])
         query = job.kwargs["original_query"]
@@ -220,7 +230,7 @@ async def query(
         room = request_data.get("room")
         previous = request_data.get("previous")
         resuming = request_data.get("resume", False)
-        stats = request_data.get("stats", False)
+        sentences = request_data.get("sentences", True)
         page_size = request_data.get("page_size", 10)
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
@@ -283,22 +293,21 @@ async def query(
                     page_size,
                 )
 
-            if "SELECT" not in query.upper() and current_batch:
-                try:
-                    lang = None
-                    for lan in ["de", "en", "fr"]:
-                        if f"_{lan}" in current_batch[2]:
-                            lang = lan
-                    kwa = dict(
-                        schema=current_batch[1],
-                        batch=current_batch[2],
-                        config=app["config"][str(current_batch[0])],
-                        lang=lang,
-                    )
-                    sql_query = json_to_sql(json.loads(query), **kwa)
-                except Exception as err:
-                    print("SQL GENERATION FAILED! for dev, assuming script passed", err)
-                    raise err
+            try:
+                lang = None
+                for lan in ["de", "en", "fr"]:
+                    if f"_{lan}" in current_batch[2]:
+                        lang = lan
+                kwa = dict(
+                    schema=current_batch[1],
+                    batch=current_batch[2],
+                    config=app["config"][str(current_batch[0])],
+                    lang=lang,
+                )
+                sql_query = json_to_sql(json.loads(query), **kwa)
+            except Exception as err:
+                print("SQL GENERATION FAILED! for dev, assuming script passed", err)
+                raise err
 
             ###################################################################
             # organise and submit query to rq via query service               #
@@ -328,7 +337,7 @@ async def query(
                 base=base,
                 existing_results=existing_results,
                 word_count=word_count,
-                stats=stats,
+                sentences=sentences,
                 offset=hit_limit,
                 page_size=page_size,
                 languages=list(languages),
@@ -359,20 +368,24 @@ async def query(
         # prepare and submit statistics query                                 #
         #######################################################################
 
-        if stats and current_batch and False:
+        if sentences and current_batch:
             sect = config[str(current_batch[0])]
-            stats_query = _make_stats_query(query, current_batch[1], sect)
+            lang = None
+            for lan in ["de", "en", "fr"]:
+                if f"_{lan}" in current_batch[2]:
+                    lang = lan
+            sents_query = _make_sents_query(query, current_batch[1], sect, lang)
             if simultaneous and first_job:
                 the_base = first_job.id
             elif resuming and done:
                 the_base = prev_job.kwargs.get("base", prev_job.id)
             else:
                 the_base = job.id if base is None else base
-            stats_kwargs = dict(
+            sents_kwargs = dict(
                 user=user,
                 room=room,
                 current_batch=current_batch,
-                query=stats_query,
+                query=sents_query,
                 base=the_base,
                 resuming=done,
                 simultaneous=simultaneous,
@@ -383,7 +396,7 @@ async def query(
                 to_use = depends_on_chain
             else:
                 to_use = depends_on
-            stats_job = qs.statistics(depends_on=to_use, kwargs=stats_kwargs)
+            sents_job = qs.sentences(depends_on=to_use, kwargs=sents_kwargs)
             # if simultaneous:
             #    depends_on_chain.append(stats_job.id)
 
@@ -393,8 +406,8 @@ async def query(
 
         jobs = {"status": "started", "job": job.id if job else previous}
 
-        if stats and False:
-            jobs.update({"stats": True, "stats_job": stats_job.id})
+        if sentences:
+            jobs.update({"sentences": True, "sentences_job": sents_job.id})
 
         if simultaneous:
             done_batches.append(current_batch)

@@ -202,6 +202,15 @@ def _old_add_results(
     return out
 
 
+def _make_kwic_line(original, sents):
+    out = []
+    for sent in sents:
+        sent = [str(sent[0])] + list(sent[1:])
+        if str(sent[0]) == str(original[0]):
+            return [original[0]] + list(sent) + original[1:]
+    raise ValueError("matching sent not found", original)
+
+
 def _add_results(
     result: List[List],
     so_far: int,
@@ -209,7 +218,10 @@ def _add_results(
     offset: Optional[int],
     restart: Union[bool, int],
     total_requested: int,
-) -> Dict[int, List]:
+    kwic: bool = False,
+    sents: Optional[List[List]] = None,
+    result_sets: Optional[Dict] = None,
+) -> Tuple[Dict[int, List], int]:
     """
     todo: respect limits here?
     """
@@ -217,12 +229,19 @@ def _add_results(
     count = 0
     kwics = set()
     counts = defaultdict(int)
-    for line in result:
-        if not int(line[0]):
-            res = line[1]["result_sets"]
-            kwics = [i for i, r in enumerate(res, start=1) if r.get("type") == "plain"]
-            kwics = set(kwics)
-            break
+    if not result_sets:
+        for line in result:
+            if not int(line[0]):
+                res = line[1]["result_sets"]
+                kwics = [
+                    i for i, r in enumerate(res, start=1) if r.get("type") == "plain"
+                ]
+                kwics = set(kwics)
+                break
+    else:
+        itt = result_sets.get("result_sets", result_sets)
+        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
+        kwics = set(kwics)
 
     for line in result:
         key = int(line[0])
@@ -231,7 +250,10 @@ def _add_results(
             assert isinstance(rest, dict)
             bundle[key] = rest
         else:
-            if key in kwics:
+            if not kwic and key in kwics:
+                counts[key] += 1
+                continue
+            if key in kwics and kwic:
                 counts[key] += 1
                 if not unlimited and offset and count < offset:
                     continue
@@ -242,15 +264,34 @@ def _add_results(
                     and so_far + len(bundle.get(key, [])) >= total_requested
                 ):
                     continue
-            if key not in bundle:
-                bundle[key] = [rest]
-            else:
-                bundle[key].append(rest)
-    for k in kwics:
-        if len(bundle.get(k, [])) > total_requested:
-            bundle[k] = bundle[k][:total_requested]
 
-    return bundle
+                rest = _make_kwic_line(rest, sents)
+
+                if key not in bundle:
+                    bundle[key] = [rest]
+                else:
+                    bundle[key].append(rest)
+            elif key in kwics and not kwic:
+                continue
+            elif key not in kwics and kwic:
+                continue
+            elif key not in kwics and not kwic:
+                if key not in bundle:
+                    bundle[key] = [rest]
+                else:
+                    bundle[key].append(rest)
+
+    n_results = None
+    for k in kwics:
+        if k not in bundle:
+            continue
+        if len(bundle[k]) > total_requested:
+            bundle[k] = bundle[k][:total_requested]
+            n_results = total_requested
+    if n_results is None:
+        n_results = counts[list(kwics)[0]]
+
+    return bundle, n_results
 
 
 def _union_results(so_far: Dict[int, List], incoming: Dict[int, List]) -> [int, List]:
@@ -288,7 +329,7 @@ def _push_stats(previous: str, connection: Connection) -> Dict[str, Any]:
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return {
         "stats": True,
-        "stats_job": basejob.meta.get("latest_stats", None),
+        "sentences_job": basejob.meta.get("latest_sentences", None),
         "status": "faked",
         "job": previous,
     }
