@@ -4,13 +4,9 @@ import jwt
 import os
 import re
 
-from aiohttp import web
+from collections import defaultdict
 from datetime import date, datetime
 from functools import wraps
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
-from rq.connections import Connection
-from rq.exceptions import NoSuchJobError
-from rq.job import Job
 from typing import (
     Any,
     Callable,
@@ -25,6 +21,13 @@ from typing import (
     Sized,
 )
 from uuid import UUID
+
+from aiohttp import web
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.connections import Connection
+from rq.exceptions import NoSuchJobError
+from rq.job import Job
+
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
@@ -154,7 +157,7 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
-    out = []
+    out: List[Tuple] = []
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
     while True:
@@ -170,7 +173,7 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple
     return out
 
 
-def _add_results(
+def _old_add_results(
     result: List[List],
     so_far: int,
     unlimited: bool,
@@ -180,6 +183,7 @@ def _add_results(
 ) -> List[Tuple]:
     """
     Helper function, run inside callback
+    the args (total_found:18, len(result):9, so_far:9, None, False, 6, 20)
     """
     out: List = []
     for n, res in enumerate(result):
@@ -196,6 +200,74 @@ def _add_results(
         if not unlimited and so_far + len(out) >= total_requested:
             break
     return out
+
+
+def _add_results(
+    result: List[List],
+    so_far: int,
+    unlimited: bool,
+    offset: Optional[int],
+    restart: Union[bool, int],
+    total_requested: int,
+) -> Dict[int, List]:
+    """
+    todo: respect limits here?
+    """
+    bundle = {}
+    count = 0
+    kwics = set()
+    counts = defaultdict(int)
+    for line in result:
+        if not int(line[0]):
+            res = line[1]["result_sets"]
+            kwics = [i for i, r in enumerate(res, start=1) if r.get("type") == "plain"]
+            kwics = set(kwics)
+            break
+
+    for line in result:
+        key = int(line[0])
+        rest = line[1]
+        if not key:
+            assert isinstance(rest, dict)
+            bundle[key] = rest
+        else:
+            if key in kwics:
+                counts[key] += 1
+                if not unlimited and offset and count < offset:
+                    continue
+                if restart is not False and counts.get(key, 0) < restart:
+                    continue
+                if (
+                    not unlimited
+                    and so_far + len(bundle.get(key, [])) >= total_requested
+                ):
+                    continue
+            if key not in bundle:
+                bundle[key] = [rest]
+            else:
+                bundle[key].append(rest)
+    for k in kwics:
+        if len(bundle.get(k, [])) > total_requested:
+            bundle[k] = bundle[k][:total_requested]
+
+    return bundle
+
+
+def _union_results(so_far: Dict[int, List], incoming: Dict[int, List]) -> [int, List]:
+    """
+    Join two results objects
+    """
+    for k, v in incoming.items():
+        if not k:
+            if k in so_far:
+                continue
+            else:
+                so_far[k] = v
+                continue
+        if k not in so_far:
+            so_far[k] = []
+        so_far[k] += v
+    return so_far
 
 
 def _push_stats(previous: str, connection: Connection) -> Dict[str, Any]:

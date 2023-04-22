@@ -1,7 +1,9 @@
 import json
 
+from collections import defaultdict
+
 from .configure import _get_batches
-from .utils import CustomEncoder, Interrupted, _add_results
+from .utils import CustomEncoder, Interrupted, _add_results, _union_results
 from datetime import datetime
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import Connection
@@ -19,8 +21,10 @@ def _query(
     Job callback, publishes a redis message containing the results
     """
     restart = kwargs.get("hit_limit", False)
-    results_so_far = job.kwargs.get("existing_results", [])
-    total_found = len(results_so_far) + len(result)
+    results_so_far = job.kwargs.get("existing_results", {})
+    total_found = len(results_so_far.get(1, [])) + len(
+        [i for i in result if int(i[0]) == 1]
+    )
     total_requested = (
         job.kwargs["total_results_requested"]
         if restart is False
@@ -35,15 +39,23 @@ def _query(
     if restart is False:
         needed = job.kwargs["needed"]
     else:
-        needed = total_requested - len(results_so_far)
+        needed = total_requested - len(results_so_far[1])
 
     unlimited = needed in {-1, False, None} or job.kwargs.get("simultaneous", False)
 
     limited = not unlimited and len(result) > job.kwargs["needed"]
 
-    args = (result, len(results_so_far), unlimited, offset, restart, total_requested)
+    args = (
+        result,
+        len(results_so_far.get(1, [])),
+        unlimited,
+        offset,
+        restart,
+        total_requested,
+    )
 
-    results_so_far += _add_results(*args)
+    new_res = _add_results(*args)
+    results_so_far = _union_results(results_so_far, new_res)
     # add everything: _add_results(result, 0, True, False, False, 0)
 
     just_finished = job.kwargs["current_batch"]
@@ -53,18 +65,20 @@ def _query(
     hit_limit = False if not limited else needed
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
-    job.meta["total_results"] = len(results_so_far)
+    job.meta["total_results"] = len(results_so_far.get(1, []))
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
     # job.meta["all_results"] = results_so_far
     job.save_meta()
     if status == "finished":
-        projected_results = len(results_so_far)
+        projected_results = len(results_so_far.get(1, []))
         perc_words = 100.0
         perc_matches = 100.0
     elif status in {"partial", "satisfied"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
+        if total_requested < total_found:
+            total_found = total_requested
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
@@ -267,6 +281,6 @@ def _get_status(results_so_far: List[List], **kwargs) -> str:
     requested = kwargs["total_results_requested"]
     if requested in {-1, False, None}:
         return "partial"
-    if len(results_so_far) >= requested:
+    if len(results_so_far.get(1, [])) >= requested:
         return "satisfied"
     return "partial"

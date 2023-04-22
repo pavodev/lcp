@@ -208,7 +208,7 @@ async def query(
         # request is from the frontend, most likely a new query...            #
         #######################################################################
         done_batches = []
-        existing_results = []
+        existing_results = {}
         hit_limit = False
         job = False
         so_far = 0
@@ -295,7 +295,7 @@ async def query(
                         config=app["config"][str(current_batch[0])],
                         lang=lang,
                     )
-                    sql_query = json_to_sql(query_json, **kwa)
+                    sql_query = json_to_sql(json.loads(query), **kwa)
                 except Exception as err:
                     print("SQL GENERATION FAILED! for dev, assuming script passed", err)
                     raise err
@@ -359,7 +359,7 @@ async def query(
         # prepare and submit statistics query                                 #
         #######################################################################
 
-        if stats and current_batch:
+        if stats and current_batch and False:
             sect = config[str(current_batch[0])]
             stats_query = _make_stats_query(query, current_batch[1], sect)
             if simultaneous and first_job:
@@ -393,7 +393,7 @@ async def query(
 
         jobs = {"status": "started", "job": job.id if job else previous}
 
-        if stats:
+        if stats and False:
             jobs.update({"stats": True, "stats_job": stats_job.id})
 
         if simultaneous:

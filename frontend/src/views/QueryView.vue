@@ -446,46 +446,214 @@ export default {
   data() {
     return {
       query: `{
-    "comment": "An NP with an unlimited number of adjectives (at least one)",
-    "nodes": [{
-            "name": "t1",
-            "layer": "token",
-            "filter": {
-                "attribute": "upos",
-                "value": "DET",
-                "op": "="
+    "$schema": "cobquec2.json",
+    "query": [
+        {
+            "layer": "Turn",
+            "label": "d",
+            "constraints": {
+                "operator": "AND",
+                "args": [
+                    {
+                        "attributeComparison": "IsPresident = no"
+                    },
+                    {
+                        "attributeComparison": "PoliticalGroup != NI"
+                    }
+                ]
             }
         },
         {
-            "name": "t2",
-            "layer": "token",
-            "filter": {
-                "attribute": "lemma",
-                "value": "friend",
-                "op": "="
+            "layer": "Segment",
+            "partOf": "d",
+            "label": "s"
+        },
+        {
+            "sequence": {
+                "members": [
+                    {
+                        "layer": "Token",
+                        "partOf": "s",
+                        "label": "t1",
+                        "constraints": {
+                            "attributeComparison": "upos = DET"
+                        }
+                    },
+                    {
+                        "layer": "Token",
+                        "partOf": "s",
+                        "label": "t2",
+                        "constraints": {
+                            "attributeComparison": "upos = ADJ"
+                        }
+                    },
+                    {
+                        "layer": "Token",
+                        "partOf": "s",
+                        "label": "t3",
+                        "constraints": {
+                            "operator": "AND",
+                            "args": [
+                                {
+                                    "attributeComparison": "lemma = f.*"
+                                },
+                                {
+                                    "attributeComparison": "lemma.length > 5"
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "set": {
+                "layer": "Token",
+                "partOf": "s",
+                "label": "tdeps",
+                "constraints": {
+                    "layer": "DepRel",
+                    "constraints": {
+                        "operator": "AND",
+                        "args": [
+                            {
+                                "attributeComparison": "head = t3"
+                            },
+                            {
+                                "attributeComparison": "dep = tx"
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        {
+            "layer": "Token",
+            "partOf": "s",
+            "label": "thead",
+            "constraints": {
+                "layer": "DepRel",
+                "constraints": {
+                    "operator": "AND",
+                    "args": [
+                        {
+                            "attributeComparison": "head = thead"
+                        },
+                        {
+                            "attributeComparison": "dep = t3"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "layer": "Token",
+            "label": "thead",
+            "constraints": {
+                "operator": "AND",
+                "args": [
+                    {
+                        "attributeComparison": "upos = VERB"
+                    },
+                    {
+                        "layer": "DepRel",
+                        "constraints": {
+                            "operator": "AND",
+                            "args": [
+                                {
+                                    "attributeComparison": "head = thead"
+                                },
+                                {
+                                    "attributeComparison": "dep = t3"
+                                }
+                            ]
+                        }
+                    }
+                ]
             }
         }
     ],
-    "edges": [{
-        "source": "t1",
-        "target": "t2",
-        "constraint": {
-            "AND": [{
-                    "relation": "distance",
-                    "value": [2, null]
-                },
-                {
-                    "filter": "repeat",
-                    "elements": [{
-                        "attribute": "upos",
-                        "value": "ADJ",
-                        "op": "="
-                    }],
-                    "repetitions": [1, null]
+    "results": [
+        {
+            "plain": {
+                "label": "myKWIC1",
+                "context": "s",
+                "entities": [
+                    "t1",
+                    "t2",
+                    "t3"
+                ]
+            }
+        },
+        {
+            "plain": {
+                "label": "myKWIC2",
+                "context": "s",
+                "entities": [
+                    "t1",
+                    "t2",
+                    "t3"
+                ]
+            }
+        },
+        {
+            "statAnalysis": {
+                "label": "myStat1",
+                "attributes": [
+                    "t1.lemma",
+                    "t2.lemma",
+                    "t3.lemma"
+                ],
+                "functions": [
+                    "frequency"
+                ],
+                "filter": {
+                    "attributeComparison": "frequency > 10"
                 }
-            ]
+            }
+        },
+        {
+            "statAnalysis": {
+                "label": "myStat2",
+                "attributes": [
+                    "t3.lemma",
+                    "d.OriginalLanguage"
+                ],
+                "functions": [
+                    "frequency"
+                ],
+                "filter": {
+                    "attributeComparison": "frequency > 10"
+                }
+            }
+        },
+        {
+            "collAnalysis": {
+                "label": "myColl1",
+                "center": "t3",
+                "window": "-5..+5",
+                "attribute": "lemma"
+            }
+        },
+        {
+            "collAnalysis": {
+                "label": "myColl2",
+                "space": [
+                    "tdeps"
+                ],
+                "attribute": "lemma"
+            }
+        },
+        {
+            "collAnalysis": {
+                "label": "myColl3",
+                "space": [
+                    "thead"
+                ],
+                "attribute": "lemma"
+            }
         }
-    }]
+    ]
 }`,
       queryDQD: `Segment s1
 
