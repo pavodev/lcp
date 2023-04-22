@@ -23,19 +23,6 @@ def _make_sents_query(
     return script + end
 
 
-def _make_stats_query(query: str, schema: str, config: Dict) -> str:
-    """
-    todo: this is just temp code until we know what stats query really does
-    """
-    attrs = config["layer"]["Token"]["attributes"]
-    attrs = reversed(sorted(attrs.items()))
-    best = next((k for k, v in attrs if v.get("type") == "categorical"), "xpos")
-    start = f"SELECT {best}, COUNT({best}) FROM "
-    middle = " {schema}.{table} WHERE token_id = ANY('{{ {allowed} }}'::int[])"
-    end = f" GROUP BY {best};"
-    return start + middle + end
-
-
 def _get_word_count(
     corpora: List[int], config: Dict[str, Dict], languages: Set[str]
 ) -> int:

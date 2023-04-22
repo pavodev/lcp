@@ -156,8 +156,7 @@ def _sentences(
         "room": job.kwargs["room"],
         "query": depended.id,
         "base": base.id,
-        "percentage_done": depended.meta["percentage_done"]
-        # "current_batch": list(job.kwargs["current_batch"]),
+        "percentage_done": depended.meta["percentage_done"],
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
@@ -174,7 +173,7 @@ def _general_failure(
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
-    print("FAILURE", job, traceback, typ, value)
+    print("Failure of some kind:", job, traceback, typ, value)
     if isinstance(typ, Interrupted) or typ == Interrupted:
         # jso = {"status": "interrupted", "job": job.id, **kwargs, **job.kwargs}
         return  # do we need to send this?

@@ -174,35 +174,6 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple
     return out
 
 
-def _old_add_results(
-    result: List[List],
-    so_far: int,
-    unlimited: bool,
-    offset: Optional[int],
-    restart: Union[bool, int],
-    total_requested: int,
-) -> List[Tuple]:
-    """
-    Helper function, run inside callback
-    the args (total_found:18, len(result):9, so_far:9, None, False, 6, 20)
-    """
-    out: List = []
-    for n, res in enumerate(result):
-        if not unlimited and offset and n < offset:
-            continue
-        if restart is not False and n + 1 < restart:
-            continue
-        # fix: move sent_id to own column
-        sent_id = res[0][0]
-        tok_ids = res[0][1:]
-        fixed = ((sent_id,), tuple(tok_ids), res[1], res[2])
-        # end fix
-        out.append(fixed)
-        if not unlimited and so_far + len(out) >= total_requested:
-            break
-    return out
-
-
 def _make_kwic_line(original, sents):
     """
     Helper to make a kwic line from kwic result and sent data
