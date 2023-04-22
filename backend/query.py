@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 from aiohttp import web
 from rq.job import Job
 
-from abstract_query.lcp_query import LCPQuery
+from abstract_query.create import json_to_sql
 
 from . import utils
 from .callbacks import _query
@@ -285,12 +285,17 @@ async def query(
 
             if "SELECT" not in query.upper() and current_batch:
                 try:
+                    lang = None
+                    for lan in ["de", "en", "fr"]:
+                        if f"_{lan}" in current_batch[2]:
+                            lang = lan
                     kwa = dict(
-                        corpus=current_batch[1],
+                        schema=current_batch[1],
                         batch=current_batch[2],
                         config=app["config"][str(current_batch[0])],
+                        lang=lang,
                     )
-                    sql_query = LCPQuery(query, **kwa).sql
+                    sql_query = json_to_sql(query_json, **kwa)
                 except Exception as err:
                     print("SQL GENERATION FAILED! for dev, assuming script passed", err)
                     raise err

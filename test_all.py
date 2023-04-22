@@ -43,3 +43,4 @@ class MyAppTestCase(AioHTTPTestCase):
             conf_data = await resp.json()
             self.assertTrue(str(-1) in conf_data["config"])
             self.assertTrue("meta" in conf_data["config"][str(1)])
+            self.assertTrue("schema_path" in conf_data["config"][str(1)])

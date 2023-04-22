@@ -154,7 +154,7 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
-    out: List[Tuple] = []
+    out = []
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
     while True:
