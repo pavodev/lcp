@@ -260,7 +260,10 @@ def _add_results(
             continue
 
         if key not in bundle:
-            bundle[key] = []
+            if kwic and key in kwics:
+                bundle[key] = []
+            elif not kwic and key not in kwics:
+                bundle[key] = []
 
         counts[key] += 1
 
