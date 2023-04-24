@@ -9,7 +9,7 @@ from rq.worker import Worker
 
 from redis import Redis
 
-import asyncpg
+import psycopg
 
 from dotenv import load_dotenv
 from psycopg_pool import AsyncConnectionPool
@@ -46,7 +46,7 @@ async def go():
     connstr = (
         f"postgresql://{USER}:{PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
     )
-    # conn = psycopg2.connect(connstr)
+    conn = psycopg.AsyncConnection.connect(connstr)
     pool = AsyncConnectionPool(
         connstr, num_workers=8, min_size=8, timeout=60, open=False
     )
@@ -54,7 +54,7 @@ async def go():
     class MyJob(Job):
         def __init__(self, *args, **kwargs):
             super().__init__(*args)
-            # self._db_conn = conn
+            self._db_conn = conn
             self._pool = pool
             self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT)
             self._redis.pubsub()

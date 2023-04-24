@@ -125,7 +125,7 @@ def _query(
 def _sentences(
     job: Job,
     connection: Connection,
-    result: Dict[Union[str, Tuple[str]], int],
+    result: List[Tuple[str, int, List[Any]]],
     *args,
     **kwargs,
 ) -> None:
@@ -142,6 +142,7 @@ def _sentences(
     aargs: Tuple[int, bool, Optional[int], Union[int, bool], int] = depended.meta[
         "_args"
     ]
+
     new_res, _ = _add_results(depended.result, *aargs, kwic=True, sents=result)
     results_so_far = _union_results(base.meta["_sentences"], new_res)
 

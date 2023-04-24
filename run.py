@@ -35,10 +35,10 @@ from backend.store import fetch_queries, store_query
 from backend.upload import make_schema, upload
 from backend.video import video
 
-# from backend.validate import validate
 from backend import utils
 from backend.corpora import corpora
 from backend.query_service import QueryService
+from backend.validate import validate
 
 from aiohttp_catcher import Catcher, catch
 
@@ -138,8 +138,8 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     resource = cors.add(app.router.add_resource("/query"))
     cors.add(resource.add_route("POST", query))
 
-    # resource = cors.add(app.router.add_resource("/validate"))
-    # cors.add(resource.add_route("POST", validate))
+    resource = cors.add(app.router.add_resource("/validate"))
+    cors.add(resource.add_route("POST", validate))
 
     # resource = cors.add(app.router.add_resource("/upload"))
     # cors.add(resource.add_route("POST", upload))

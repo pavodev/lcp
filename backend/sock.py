@@ -266,6 +266,7 @@ async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
             await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "validate":
+            payload["_ws"] = True
             response = await validate(**payload)
             await push_msg(sockets, session_id, response, just=ident)
 

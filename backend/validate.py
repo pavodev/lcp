@@ -2,6 +2,10 @@ import json
 
 from typing import Optional, Union
 
+from aiohttp import web
+
+from .dqd_parser import convert
+
 
 async def validate(
     user: Optional[str] = None,
@@ -11,15 +15,30 @@ async def validate(
     **kwargs
 ):
     """
-    Validate user query: still mostly todo
+    Validate user query?
     """
+    is_websocket = kwargs.get("_ws")
     try:
         json.loads(query)
-        return {"kind": "json", "valid": True, "action": "validate"}
+        result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
     except json.JSONDecodeError as err:
-        return {
-            "kind": "unknown",
-            "valid": None,
-            "action": "validate",
-            "error": str(err),
-        }
+        try:
+            json_query = convert(query)
+            result = {
+                "kind": "dqd",
+                "valid": True,
+                "action": "validate",
+                "json": json_query,
+                "status": 200,
+            }
+        except Exception as err:
+            result = {
+                "kind": "dqd?",
+                "valid": False,
+                "action": "validate",
+                "error": str(err),
+                "status": 400,
+            }
+    if is_websocket:
+        return result
+    return web.json_response(result)

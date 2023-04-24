@@ -196,19 +196,19 @@ def _add_results(
     restart: Union[bool, int],
     total_requested: int,
     kwic: bool = False,
-    sents: Optional[Dict[Union[str, Tuple[str]], int]] = None,
+    sents: Optional[List[Tuple[str, int, List[Any]]]] = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?
     """
-    bundle: Dict[int, Union[List, Dict[Any, Any]]] = {}
+    bundle: Dict[int, Any] = {}
     counts: Dict[int, int] = defaultdict(int)
     rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
 
     if sents:
-        bundle[-1]: Dict[Str, Tuple[int, List[Any]]] = {}
+        bundle[-1] = {}
         for sent in sents:
             bundle[-1][str(sent[0])] = [sent[1], sent[2]]
 
@@ -257,8 +257,9 @@ def _add_results(
 
 
 def _union_results(
-    so_far: Dict[int, List], incoming: Dict[int, List]
-) -> Dict[int, List]:
+    so_far: Dict[int, Any],
+    incoming: Dict[int, Any],
+) -> Dict[int, Any]:
     """
     Join two results objects
     """
