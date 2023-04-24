@@ -154,23 +154,20 @@ async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
             return await resp.json()
 
 
-def _get_all_results(job: Union[Job, str], connection: Connection) -> List[Tuple]:
+def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
-    out: List[Tuple] = []
+    out: Dict[int, Any] = {}
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
     while True:
-        batch = _add_results(job.result, 0, True, False, False, 0)
-        batch.reverse()
-        for bit in batch:
-            out.append(bit)
+        batch, _ = _add_results(job.result, 0, True, False, False, 0)
+        out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:
             break
         job = Job.fetch(parent, connection=connection)
-    out.reverse()
     return out
 
 
@@ -215,13 +212,13 @@ def _add_results(
     restart: Union[bool, int],
     total_requested: int,
     kwic: bool = False,
-    sents: Optional[List[List]] = None,
-) -> Tuple[Dict[int, List], int]:
+    sents: Optional[Dict[Union[str, Tuple[str]], int]] = None,
+) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?
     """
-    bundle = {}
-    counts = defaultdict(int)
+    bundle: Dict[int, List] = {}
+    counts: Dict[int, int] = defaultdict(int)
     rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
@@ -230,7 +227,6 @@ def _add_results(
         key = int(line[0])
         rest = line[1]
         if not key:
-            assert isinstance(rest, dict)
             bundle[key] = rest
             continue
 
@@ -272,7 +268,9 @@ def _add_results(
     return bundle, counts[list(kwics)[0]]
 
 
-def _union_results(so_far: Dict[int, List], incoming: Dict[int, List]) -> [int, List]:
+def _union_results(
+    so_far: Dict[int, List], incoming: Dict[int, List]
+) -> Dict[int, List]:
     """
     Join two results objects
     """
@@ -319,3 +317,4 @@ def _determine_language(batch: str) -> Optional[str]:
     for lan in ["de", "en", "fr"]:
         if batch.endswith(f"_{lan}"):
             return lan
+    return None

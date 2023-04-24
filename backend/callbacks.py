@@ -47,7 +47,7 @@ def _query(
 
     limited = not unlimited and total_found > job.kwargs["needed"]
 
-    args = (
+    aargs = (
         result,
         total_before_now,
         unlimited,
@@ -56,7 +56,7 @@ def _query(
         total_requested,
     )
 
-    new_res, n_results = _add_results(*args, kwic=False)
+    new_res, n_results = _add_results(*aargs, kwic=False)
     results_so_far = _union_results(results_so_far, new_res)
 
     # kwics = _get_kwics(results_so_far[0])
@@ -77,7 +77,7 @@ def _query(
     job.meta["total_results_so_far"] = total_found
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
-    job.meta["_args"] = args[1:]
+    job.meta["_args"] = aargs[1:]
     job.meta["result_sets"] = results_so_far[0]
     # job.meta["lines_sent_to_fe"] = lines_sent_to_fe
     # job.meta["all_results"] = results_so_far
@@ -93,7 +93,7 @@ def _query(
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
         perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
-        perc_matches = total_found * 100.0 / total_requested
+        perc_matches = min(total_found, total_requested) * 100.0 / total_requested
         job.meta["percentage_done"] = round(perc_matches, 3)
         # todo: can remove this for more accuracy if need be
         if total_requested < total_found:
@@ -139,8 +139,10 @@ def _sentences(
         depends_on = depends_on[-1]
 
     depended = Job.fetch(depends_on, connection=connection)
-    args = depended.meta["_args"]
-    new_res, _ = _add_results(depended.result, *args, kwic=True, sents=result)
+    aargs: Tuple[int, bool, Optional[int], Union[int, bool], int] = depended.meta[
+        "_args"
+    ]
+    new_res, _ = _add_results(depended.result, *aargs, kwic=True, sents=result)
     results_so_far = _union_results(base.meta["_sentences"], new_res)
 
     base.meta["latest_sentences"] = job.id

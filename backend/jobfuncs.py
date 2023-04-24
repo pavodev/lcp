@@ -63,7 +63,7 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
 
         result_sets = associated_query.meta["result_sets"]
         kwics = _get_kwics(result_sets)
-        counts = defaultdict(int)
+        counts: Dict[int, int] = defaultdict(int)
 
         for res in prev_results:
             key = int(res[0])
