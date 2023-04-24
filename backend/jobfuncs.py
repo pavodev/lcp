@@ -11,20 +11,21 @@ async def _upload_data(**kwargs):
     Script to be run by rq worker, convert data and upload to postgres
     """
     from corpert import Corpert
-    from .pg_upload import pg_upload
 
     corpus_data = Corpert(kwargs["path"]).run()
 
-    await get_current_job()._pool.open()
-
-    async with get_current_job()._pool.connection() as conn:
-        # await conn.set_autocommit(True)
-        async with conn.cursor() as cur:
-            await pg_upload(
-                conn, cur, corpus_data, kwargs["corpus_id"], kwargs["config"]
-            )
-
+    # todo: here we upload the corpus data to postgres...
     return True
+
+
+async def _create_schema(**kwargs) -> None:
+    """
+    To be run by rq worker, create schema
+    """
+    async with get_current_job()._db_conn.cursor() as acur:
+        await acur.execute(kwargs["create"])
+        await acur.execute(kwargs["constraints"])
+    return None
 
 
 async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:

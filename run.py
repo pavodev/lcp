@@ -32,7 +32,7 @@ from backend.lama_user_data import lama_user_data
 from backend.query import query
 from backend.sock import handle_redis_response, sock
 from backend.store import fetch_queries, store_query
-from backend.upload import upload
+from backend.upload import make_schema, upload
 from backend.video import video
 
 # from backend.validate import validate
@@ -141,8 +141,11 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     # resource = cors.add(app.router.add_resource("/validate"))
     # cors.add(resource.add_route("POST", validate))
 
-    resource = cors.add(app.router.add_resource("/upload"))
-    cors.add(resource.add_route("POST", upload))
+    # resource = cors.add(app.router.add_resource("/upload"))
+    # cors.add(resource.add_route("POST", upload))
+
+    resource = cors.add(app.router.add_resource("/create"))
+    cors.add(resource.add_route("POST", make_schema))
 
     resource = cors.add(app.router.add_resource("/video"))
     cors.add(resource.add_route("GET", video))

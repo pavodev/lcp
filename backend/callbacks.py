@@ -163,6 +163,15 @@ def _sentences(
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
+def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> None:
+    """
+    This callback is executed after successful creation of schema.
+    We might want to notify some WS user?
+    """
+    print(f"Schema created: {job.id}")
+    return
+
+
 def _general_failure(
     job: Job,
     connection: Connection,

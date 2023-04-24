@@ -8,6 +8,8 @@ from io import BytesIO
 from typing import Any, Dict, Union
 from uuid import uuid4
 
+from .pg_upload import pg_create
+
 
 async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
@@ -105,3 +107,23 @@ async def upload(request: web.Request) -> web.Response:
     )
 
     return web.json_response(ret)
+
+
+async def make_schema(request: web.Request) -> web.Response:
+    """
+    What happens when a user goes to /create and POSTS JSON
+    """
+    request_data = await request.json()
+    template = request_data["template"]
+    try:
+        template = json.loads(template)
+    except json.JSONDecodeError as err:
+        msg = str(err)
+        return web.json_response({"status": "failure", "message": msg})
+    except Exception as err:
+        msg = str(err)
+        return web.json_response({"status": "failure", "message": msg})
+
+    create_ddl, constraints_ddl = await pg_create(template)
+    job = request.app["query_service"].create(create_ddl, constraints_ddl)
+    return web.json_response({"status": "started", "job": job.id})

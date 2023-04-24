@@ -7,7 +7,15 @@ from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
 
-from .callbacks import _config, _general_failure, _queries, _query, _sentences, _upload
+from .callbacks import (
+    _config,
+    _general_failure,
+    _queries,
+    _query,
+    _sentences,
+    _upload,
+    _schema,
+)
 
 from .jobfuncs import _db_query, _upload_data
 
@@ -172,6 +180,17 @@ class QueryService:
         job.cancel()
         job.delete()
         return "DELETED"
+
+    def create(self, create: str, constraints: str, queue: str = "alt"):
+        opts = {
+            "on_success": _schema,
+            "on_failure": _general_failure,
+            "create": create,
+            "constraints": constraints,
+        }
+        return self.app[queue].enqueue(
+            _schema, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        )
 
     def cancel_running_jobs(
         self,
