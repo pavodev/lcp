@@ -171,18 +171,6 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, 
     return out
 
 
-def _get_matching_sent(original, sents) -> Tuple[str, Tuple[int, List[List[Any]]]]:
-    """
-    Helper to make a kwic line from kwic result and sent data
-
-    format: ["segment-id", offset, sent_obj, [tokid1, tokid2...]]
-    """
-    for sent in sents:
-        if str(sent[0]) == str(original[0]):
-            return str(sent[0]), [sent[1], sent[2]]
-    raise ValueError("matching sent not found", original)
-
-
 def _get_kwics(result):
     """
     Helper to get set of kwic ids
@@ -219,6 +207,11 @@ def _add_results(
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
 
+    if sents:
+        bundle[-1]: Dict[Str, Tuple[int, List[Any]]] = {}
+        for sent in sents:
+            bundle[-1][str(sent[0])] = [sent[1], sent[2]]
+
     for line in result:
         key = int(line[0])
         rest = line[1]
@@ -252,11 +245,7 @@ def _add_results(
             continue
         if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
             continue
-        sent_id, offsent = _get_matching_sent(rest, sents)
-        if -1 not in bundle:
-            bundle[-1] = {}
-        bundle[-1][sent_id] = list(offsent)
-        bundle[key].append(rest[1:])
+        bundle[key].append(rest)
 
     for k in kwics:
         if k not in bundle:
