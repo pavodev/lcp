@@ -171,19 +171,15 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, 
     return out
 
 
-def _make_kwic_line(original, sents):
+def _get_matching_sent(original, sents) -> Tuple[str, Tuple[int, List[List[Any]]]]:
     """
     Helper to make a kwic line from kwic result and sent data
 
     format: ["segment-id", offset, sent_obj, [tokid1, tokid2...]]
     """
-    out = []
     for sent in sents:
-        sent = [str(sent[0])] + list(sent[1:])
         if str(sent[0]) == str(original[0]):
-            together = list(sent)
-            together.append(original[1:])
-            return together
+            return str(sent[0]), [sent[1], sent[2]]
     raise ValueError("matching sent not found", original)
 
 
@@ -217,7 +213,7 @@ def _add_results(
     """
     todo: check limits here?
     """
-    bundle: Dict[int, List] = {}
+    bundle: Dict[int, Union[List, Dict[Any, Any]]] = {}
     counts: Dict[int, int] = defaultdict(int)
     rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
@@ -256,8 +252,11 @@ def _add_results(
             continue
         if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
             continue
-        rest = _make_kwic_line(rest, sents)
-        bundle[key].append(rest)
+        sent_id, offsent = _get_matching_sent(rest, sents)
+        if -1 not in bundle:
+            bundle[-1] = {}
+        bundle[-1][sent_id] = list(offsent)
+        bundle[key].append(rest[1:])
 
     for k in kwics:
         if k not in bundle:
@@ -281,9 +280,16 @@ def _union_results(
             else:
                 so_far[k] = v
                 continue
-        if k not in so_far:
+        elif k == -1:
+            if k not in so_far:
+                so_far[k] = v
+                continue
+            else:
+                so_far[k].update(v)
+        elif k not in so_far:
             so_far[k] = []
-        so_far[k] += v
+        if isinstance(so_far[k], list):
+            so_far[k] += v
     return so_far
 
 
