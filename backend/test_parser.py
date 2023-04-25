@@ -1,7 +1,8 @@
 import dqd_parser
 import json
 
-dqd_query = """
+
+DQD_QUERY = """
 Turn d
     IsPresident = no
     PoliticalGroup != NI
@@ -85,6 +86,6 @@ myColl3 => collocation
         lemma
 """
 
-dqd_json = dqd_parser.convert(dqd_query)
+dqd_json = dqd_parser.convert(DQD_QUERY)
 # print(json.dumps(dqd_json, indent=2))
 print(json.dumps(dqd_json))

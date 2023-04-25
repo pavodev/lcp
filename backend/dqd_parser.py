@@ -1,5 +1,4 @@
 import lark
-import sys
 
 from lark import Lark
 from lark.indenter import Indenter
@@ -8,7 +7,7 @@ from lark.indenter import Indenter
 dqd_grammar = r"""
     ?start: _NL* [predicate+]
 
-    predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]        -> token
+    predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
                     | "Segment"scope? label? _NL                                        -> segment
                     | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
                     | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
@@ -62,35 +61,6 @@ class TreeIndenter(Indenter):
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
-def tree_to_json(item, write=None):
-    """Writes a Lark tree as a JSON dictionary."""
-    if write is None:
-        write = sys.stdout.write
-    _tree_to_json(item, write, 0)
-
-
-def _tree_to_json(item, write, level):
-    indent = "  " * level
-    level += 1
-    if isinstance(item, lark.Tree):
-        write(f'{indent}{{ "type": "{item.data}", "children": [\n')
-        sep = ""
-        for child in item.children:
-            write(indent)
-            write(sep)
-            _tree_to_json(child, write, level)
-            sep = ",\n"
-        write(f"{indent}] }}\n")
-    elif isinstance(item, lark.Token):
-        # reminder: Lark Tokens are directly strings
-        # token attrs include: line, end_line, column, end_column, pos_in_stream, end_pos
-        write(
-            f'{indent}{{ "type": "{item.type}", "text": "{item}", "line": {item.line}, "col": {item.column} }}\n'
-        )
-    else:
-        assert False, item  # fall-through
-
-
 def merge_constraints(constraints):
     retval = {}
     if len(constraints) == 1 and len(constraints[0].keys()) > 1:
@@ -138,7 +108,7 @@ def to_dict(tree):
             ],
         }
 
-    elif tree.data in ('sequence'):
+    elif tree.data in ("sequence"):
         children = [to_dict(child) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
         members = [child for child in children if child.get("layer") is not None]
@@ -153,18 +123,24 @@ def to_dict(tree):
             }
         }
 
-    elif tree.data in ('set'):
+    elif tree.data in ("set"):
         children = [to_dict(child) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
-        constraints = merge_constraints([child for child in children if child.get("layer") is not None])
+        constraints = merge_constraints(
+            [child for child in children if child.get("layer") is not None]
+        )
         return {
             tree.data: {
-                **({k: v for child in others for k, v in child.items()} if others else {}),
-                **constraints
+                **(
+                    {k: v for child in others for k, v in child.items()}
+                    if others
+                    else {}
+                ),
+                **constraints,
             }
         }
 
-    elif tree.data in ('turn', 'token', 'segment', 'deprel'):
+    elif tree.data in ("turn", "token", "segment", "deprel"):
         children = [to_dict(child) for child in tree.children]
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
