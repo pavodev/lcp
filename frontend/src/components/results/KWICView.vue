@@ -20,7 +20,8 @@
               class="token"
               v-for="(token, index) in item[0]"
               :key="`lt-${index}`"
-              :class="bgCheck(resultIndex, index, item[3], 1)"
+              :data-id="item[3]"
+              :class="bgCheck(resultIndex, index, item[2], 1)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -33,7 +34,7 @@
               v-for="(token, index) in item[1]"
               :key="`lt-${index}`"
               :data-id="item[3]"
-              :class="bgCheck(resultIndex, index, item[3], 2)"
+              :class="bgCheck(resultIndex, index, item[2], 2)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -45,7 +46,7 @@
               class="token"
               v-for="(token, index) in item[2]"
               :key="`lt-${index}`"
-              :class="bgCheck(resultIndex, index, item[3], 3)"
+              :class="bgCheck(resultIndex, index, item[2], 3)"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -79,7 +80,7 @@
       v-if="currentToken"
       :style="{ top: popoverY + 'px', left: popoverX + 'px' }"
     >
-      <table class="table">
+      <table class="table popover-table">
         <thead>
           <tr>
             <th v-for="(item, index) in columnHeaders" :key="`th-${index}`">
@@ -125,8 +126,9 @@
           </div>
           <div class="modal-body text-start">
             <div class="modal-body-content">
-              <ResultDetailsModalView
+              <ResultsDetailsModalView
                 :data="data[modalIndex]"
+                :sentence="sentences[data[modalIndex][0]]"
                 :corpora="corpora"
                 :key="modalIndex"
                 v-if="modalVisible"
@@ -152,6 +154,13 @@
 .header-form {
   text-align: center;
 }
+.popover-table th {
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.popover-table {
+  margin-bottom: 0;
+}
 .header-left {
   text-align: right;
 }
@@ -171,11 +180,12 @@
   max-width: 0;
   width: 40%;
   text-overflow: ellipsis;
+  text-align: left;
 }
 .popover-liri {
   position: fixed;
   background: #cfcfcf;
-  padding: 10px;
+  padding: 2px;
   border: #cbcbcb 1px solid;
   border-radius: 5px;
   z-index: 200;
@@ -202,12 +212,12 @@
 </style>
 
 <script>
-import ResultDetailsModalView from "@/components/ResultDetailsModalView.vue";
+import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
-  name: "ResultsTableView",
-  props: ["data", "corpora", "resultsPerPage", "loading"],
+  name: "ResultsKWICView",
+  props: ["data", "sentences", "attributes", "corpora", "resultsPerPage", "loading"],
   data() {
     return {
       popoverY: 0,
@@ -220,7 +230,7 @@ export default {
     };
   },
   components: {
-    ResultDetailsModalView,
+    ResultsDetailsModalView,
     PaginationComponent,
   },
   methods: {
@@ -248,7 +258,7 @@ export default {
       if (this.currentIndex == resultIndex) {
         let headIndex = this.columnHeaders.indexOf("head");
         let currentTokenHeadId = this.currentToken[headIndex];
-        let startId = this.data[this.currentIndex][2];
+        let startId = this.data[this.currentIndex][1];
         let tokenId
         if (type == 1) {
           tokenId = range[0] - tokenIndex + startId - 1
@@ -274,9 +284,11 @@ export default {
       if (headIndex) {
         let tokenId = this.currentToken[headIndex];
         if (tokenId) {
-          let startId = this.data[this.currentIndex][2];
+          let sentenceId = this.data[this.currentIndex][0];
+          let startId = this.sentences[sentenceId][0];
           let tokenIndexInList = tokenId - startId;
-          token = this.data[this.currentIndex][3][tokenIndexInList][lemmaIndex];
+          // token = this.data[this.currentIndex][2][tokenIndexInList][lemmaIndex];
+          token = this.sentences[sentenceId][1][tokenIndexInList][lemmaIndex];
         }
       }
       return token;
@@ -289,9 +301,11 @@ export default {
           return rowIndex >= start && rowIndex < end;
         })
         .map(row => {
-          let startIndex = row[2];
-          let range = [row[1][0] - startIndex, row[1][1] - startIndex];
-          let tokens = row[3];
+          let sentenceId = row[0]
+          let startIndex = this.sentences[sentenceId][0];
+          let range = [row[1] - startIndex, row.at(-1) - startIndex];
+          // let tokens = row[2];
+          let tokens = this.sentences[sentenceId][1]
           return [
             tokens.filter((_, index) => index < range[0]).reverse(),
             tokens.filter((_, index) => index >= range[0] && index <= range[1]),

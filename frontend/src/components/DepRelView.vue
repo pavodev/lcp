@@ -80,9 +80,10 @@ const browserText = (function () {
 
 export default {
   name: "DepRelView",
-  props: ["data"],
+  props: ["data", "sentence"],
   data(){
-    const { tokens, links } = this.buildGraphData(this.data)
+    console.log("DD", this.data)
+    const { tokens, links } = this.buildGraphData(this.data, this.sentence)
     return {
       tokens: tokens,
       links: links,
@@ -90,8 +91,9 @@ export default {
     }
   },
   methods: {
-    buildGraphData(data) {
-      let startId = this.data[2]
+    buildGraphData(data, sentence) {
+      // let startId = this.data[1]
+      let startId = sentence[0]
       let tokens = []
       let links = []
       let sumX = 0
@@ -99,7 +101,7 @@ export default {
       let linksDict = {}
 
       // Compile tokens and link matrix
-      data[3].forEach((token, index) => {
+      data[2].forEach((token, index) => {
         let textWidth = browserText.getWidth(token[0], 12, "Arial")
         let typeWidth = browserText.getWidth(token[2], 12, "Arial")
         tokens.push({
@@ -195,7 +197,7 @@ export default {
     // },
     calcLine(link) {
       let diff = Math.abs(link.target - link.source)
-      let startId = this.data[2]
+      let startId = this.data[1]
       let sourceIndex = link.source - startId
       let targetIndex = link.target - startId
       let startX = this.tokens[sourceIndex].sumX + this.tokens[sourceIndex].width/2 + sourceIndex*this.tokenSpace
@@ -242,7 +244,7 @@ export default {
       .selectAll("text")
       .data(this.tokens)
       .join("text")
-      .attr("class", d => (d.id >= this.data[1][0] && d.id <= this.data[1][1]) ? "text-bold text-danger" : "")
+      .attr("class", d => (d.id >= this.data[3][0] && d.id <= this.data[3].at(-1)) ? "text-bold text-danger" : "")
       .text(d => d.form)
       .attr("x", (d, index) => (this.tokenSpace * index + d.sumX))
       .attr("y", 10 + maxLevel*15);

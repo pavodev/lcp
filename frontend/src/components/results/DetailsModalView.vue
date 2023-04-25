@@ -35,7 +35,7 @@
         role="tabpanel"
         aria-labelledby="nav-dependency-tab"
       >
-        <DepRelView :data="data" />
+        <DepRelView :data="data" :sentence="sentence" />
       </div>
       <div
         class="tab-pane fade"
@@ -43,7 +43,7 @@
         role="tabpanel"
         aria-labelledby="nav-details-tab"
       >
-        <DetailsTableView :data="data" :corpora="corpora" />
+        <DetailsTableView :data="data" :sentence="sentence" :corpora="corpora" />
       </div>
     </div>
   </div>
@@ -58,11 +58,11 @@
 
 <script>
 import DepRelView from "@/components/DepRelView.vue";
-import DetailsTableView from "@/components/DetailsTableView.vue";
+import DetailsTableView from "@/components/results/DetailsTableView.vue";
 
 export default {
-  name: "ResultDetailsModalView",
-  props: ["data", "corpora"],
+  name: "ResultsDetailsModalView",
+  props: ["data", "sentence", "corpora"],
   components: {
     DepRelView,
     DetailsTableView,
