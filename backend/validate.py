@@ -1,6 +1,6 @@
 import json
 
-from typing import Optional, Union
+from typing import Any, Dict, Optional, Union
 
 from aiohttp import web
 
@@ -12,8 +12,8 @@ async def validate(
     room: Optional[str] = None,
     query: Union[str, bytes, bytearray] = "",
     query_name: Optional[str] = None,
-    **kwargs
-):
+    **kwargs: Dict[str, Any]
+) -> Union[Dict[str, Any], web.Response]:
     """
     Validate user query?
     """

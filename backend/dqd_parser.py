@@ -53,51 +53,52 @@ dqd_grammar = r"""
     _NL: /(\r?\n[\t ]*)+/
 """
 
+
 class TreeIndenter(Indenter):
-    NL_type = '_NL'
+    NL_type = "_NL"
     OPEN_PAREN_types = []
     CLOSE_PAREN_types = []
-    INDENT_type = '_INDENT'
-    DEDENT_type = '_DEDENT'
+    INDENT_type = "_INDENT"
+    DEDENT_type = "_DEDENT"
     tab_len = 8
 
-parser = Lark(dqd_grammar, parser='lalr', postlex=TreeIndenter())
+
+parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
 def tree_to_json(item, write=None):
-    """ Writes a Lark tree as a JSON dictionary. """
-    if write is None: write = sys.stdout.write
+    """Writes a Lark tree as a JSON dictionary."""
+    if write is None:
+        write = sys.stdout.write
     _tree_to_json(item, write, 0)
 
 
 def _tree_to_json(item, write, level):
-    indent = '  ' * level
+    indent = "  " * level
     level += 1
     if isinstance(item, lark.Tree):
         write(f'{indent}{{ "type": "{item.data}", "children": [\n')
-        sep = ''
+        sep = ""
         for child in item.children:
             write(indent)
             write(sep)
             _tree_to_json(child, write, level)
-            sep = ',\n'
-        write(f'{indent}] }}\n')
+            sep = ",\n"
+        write(f"{indent}] }}\n")
     elif isinstance(item, lark.Token):
         # reminder: Lark Tokens are directly strings
         # token attrs include: line, end_line, column, end_column, pos_in_stream, end_pos
-        write(f'{indent}{{ "type": "{item.type}", "text": "{item}", "line": {item.line}, "col": {item.column} }}\n')
+        write(
+            f'{indent}{{ "type": "{item.type}", "text": "{item}", "line": {item.line}, "col": {item.column} }}\n'
+        )
     else:
         assert False, item  # fall-through
 
 
-def mergeConstraints(constraints):
+def merge_constraints(constraints):
     retval = {}
     if len(constraints) == 1 and len(constraints[0].keys()) > 1:
-        retval = {
-            "constraints": {
-                **constraints[0]
-            }
-        }
+        retval = {"constraints": {**constraints[0]}}
     elif len(constraints) == 1:
         retval = constraints[0]
     elif len(constraints) > 1:
@@ -105,24 +106,25 @@ def mergeConstraints(constraints):
             "constraints": {
                 "operator": "AND",
                 "args": [
-                    (constraint.get("constraints") if len(constraint.keys()) == 1 and "constraints" in constraint.keys() else constraint) for constraint in constraints
-                ]
+                    (
+                        constraint.get("constraints")
+                        if len(constraint.keys()) == 1
+                        and "constraints" in constraint.keys()
+                        else constraint
+                    )
+                    for constraint in constraints
+                ],
             }
         }
     return retval
 
 
-def mergeFilter(filters):
+def merge_filter(filters):
     retval = {}
     if len(filters) == 1:
         retval = filters[0]
     elif len(filters) > 1:
-        retval = {
-            "filters": {
-                "operator": "AND",
-                "args": filters
-            }
-        }
+        retval = {"filters": {"operator": "AND", "args": filters}}
     return retval
 
 
@@ -130,49 +132,57 @@ def to_dict(tree):
     if isinstance(tree, lark.lexer.Token):
         return tree.value
 
-    if tree.data == 'start':
+    if tree.data == "start":
         children = [to_dict(child) for child in tree.children]
         return {
             "$schema": "cobquec2.json",
-            "query": [child for child in children if 'results' not in child],
-            "results": [child.get("results") for child in children if 'results' in child]
+            "query": [child for child in children if "results" not in child],
+            "results": [
+                child.get("results") for child in children if "results" in child
+            ],
         }
 
-    elif tree.data in ('sequence', 'set'):
+    elif tree.data in ("sequence", "set"):
         children = [to_dict(child) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
         members = [child for child in children if child.get("layer") is not None]
         return {
             tree.data: {
-                **({k: v for child in others for k, v in child.items()} if others else {}),
-                "members": members
+                **(
+                    {k: v for child in others for k, v in child.items()}
+                    if others
+                    else {}
+                ),
+                "members": members,
             }
         }
 
-    elif tree.data in ('turn', 'token', 'segment', 'deprel'):
+    elif tree.data in ("turn", "token", "segment", "deprel"):
         children = [to_dict(child) for child in tree.children]
-        constraints = mergeConstraints([child for child in children if 'constraints' in child])
-        others = [child for child in children if 'constraints' not in child]
-        layer = "DepRel" if tree.data == "deprel" else f"{tree.data[0].upper()}{tree.data[1:]}"
+        constraints = merge_constraints(
+            [child for child in children if "constraints" in child]
+        )
+        others = [child for child in children if "constraints" not in child]
+        layer = (
+            "DepRel"
+            if tree.data == "deprel"
+            else f"{tree.data[0].upper()}{tree.data[1:]}"
+        )
         return {
             "layer": layer,
             **({k: v for child in others for k, v in child.items()} if others else {}),
             **constraints,
         }
-    elif tree.data == 'property':
+    elif tree.data == "property":
         return {
             "constraints": {
-                "attributeComparison": " ".join([to_dict(child) for child in tree.children])
+                "comparison": " ".join([to_dict(child) for child in tree.children])
             }
         }
-    elif tree.data == 'label':
-        return {
-            "label": str(tree.children[0])
-        }
-    elif tree.data == 'scope':
-        return {
-            "partOf": str(tree.children[0])
-        }
+    elif tree.data == "label":
+        return {"label": str(tree.children[0])}
+    elif tree.data == "scope":
+        return {"partOf": str(tree.children[0])}
     # elif tree.data == 'all':
     #     return {
     #         "all": str(tree.children[0])
@@ -191,79 +201,82 @@ def to_dict(tree):
     #     }
 
     # Results
-    elif tree.data == 'results_plain':
+    elif tree.data == "results_plain":
         children = [to_dict(child) for child in tree.children]
         return {
             "results": {
                 "plain": {
-                    **({k: v for child in children for k, v in child.items()} if children else {}),
+                    **(
+                        {k: v for child in children for k, v in child.items()}
+                        if children
+                        else {}
+                    ),
                 }
             }
         }
 
-    elif tree.data == 'result_plain_context':
-        name = tree.data .split("_")[2]
+    elif tree.data == "result_plain_context":
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: children[0].get("label")
-        }
+        return {name: children[0].get("label")}
 
-    elif tree.data == 'result_plain_entities':
-        name = tree.data .split("_")[2]
+    elif tree.data == "result_plain_entities":
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: [child.get("label") for child in children]
-        }
+        return {name: [child.get("label") for child in children]}
 
-    elif tree.data == 'results_analysis':
+    elif tree.data == "results_analysis":
         children = [to_dict(child) for child in tree.children]
         return {
             "results": {
                 "statAnalysis": {
-                    **({k: v for child in children for k, v in child.items()} if children else {}),
+                    **(
+                        {k: v for child in children for k, v in child.items()}
+                        if children
+                        else {}
+                    ),
                 }
             }
         }
 
-    elif tree.data in ('result_analysis_attributes', 'result_analysis_functions'):
-        name = tree.data .split("_")[2]
+    elif tree.data in ("result_analysis_attributes", "result_analysis_functions"):
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: children
-        }
+        return {name: children}
 
-    elif tree.data in ('result_analysis_filter'):
-        name = tree.data .split("_")[2]
+    elif tree.data in ("result_analysis_filter"):
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: {
-                "attributeComparison": mergeFilter(children)
-            }
-        }
+        return {name: {"comparison": merge_filter(children)}}
 
-    elif tree.data == 'results_collocation':
+    elif tree.data == "results_collocation":
         children = [to_dict(child) for child in tree.children]
         return {
             "results": {
                 "collAnalysis": {
-                    **({k: v for child in children for k, v in child.items()} if children else {}),
+                    **(
+                        {k: v for child in children for k, v in child.items()}
+                        if children
+                        else {}
+                    ),
                 }
             }
         }
 
-    elif tree.data in ('result_coll_center', 'result_coll_window', 'result_coll_attribute', 'result_coll_comment'):
-        name = tree.data .split("_")[2]
+    elif tree.data in (
+        "result_coll_center",
+        "result_coll_window",
+        "result_coll_attribute",
+        "result_coll_comment",
+    ):
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: children[0]
-        }
+        return {name: children[0]}
 
-    elif tree.data in ('result_coll_space'):
-        name = tree.data .split("_")[2]
+    elif tree.data in ("result_coll_space"):
+        name = tree.data.split("_")[2]
         children = [to_dict(child) for child in tree.children]
-        return {
-            name: children
-        }
+        return {name: children}
 
 
 def convert(dqd_query):

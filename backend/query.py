@@ -10,6 +10,7 @@ from abstract_query.create import json_to_sql
 
 from . import utils
 from .callbacks import _query
+from .dqd_parser import convert
 from .utils import _determine_language
 from uuid import uuid4
 
@@ -245,6 +246,8 @@ async def query(
     query_depends: List[str] = []
     qs = app["query_service"]
 
+    print("\n\n\n\nTHE QUERY", query, "\n\n\n")
+
     for i in range(iterations):
 
         done = False
@@ -271,7 +274,6 @@ async def query(
 
         if not done:
 
-            sql_query = query
             word_count = _get_word_count(corpora_to_use, config, languages)
 
             if current_batch is None:
@@ -292,7 +294,16 @@ async def query(
                     config=app["config"][str(current_batch[0])],
                     lang=lang,
                 )
-                sql_query = json_to_sql(json.loads(query), **kwa)
+                query_type = "JSON"
+                # sql_query = json_to_sql(json.loads(query), **kwa)
+
+                try:
+                    json_query = json.loads(query)
+                except json.JSONDecodeError as err:
+                    json_query = convert(query)
+                    query_type = "DQD"
+                print(f"Detected query type: {query_type}")
+                sql_query = json_to_sql(json_query, **kwa)
             except Exception as err:
                 print("SQL GENERATION FAILED! for dev, assuming script passed", err)
                 raise err
