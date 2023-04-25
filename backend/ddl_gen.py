@@ -463,6 +463,23 @@ class CTProcessor:
         self.globals.schema.append(DDL.create_scm(schema_name))
 
 
+def generate_ddl(template):
+    Globs.base_map = corpus_temp["firstClass"]
+
+    processor = CTProcessor(corpus_temp, Globs)
+
+    processor.process_schema()
+    processor.process_layers()
+
+    create_schema = "\n\n".join([x for x in Globs.schema])
+    create_tbls   = "\n\n".join([x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)])
+
+    create_idxs   = "\n\n".join([x.create_idxs() for x in sorted(Globs.tables, key=lambda x: x.name)])
+    create_constr = "\n\n".join([x.create_constrs() for x in sorted(Globs.tables, key=lambda x: x.name)])
+
+    return "\n".join([create_schema, create_tbls]), "\n".join([create_idxs, create_constr])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Generate Postgres DDL from CT.")
     parser.add_argument("ct_file", type=str, # nargs="+",
