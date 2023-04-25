@@ -13,10 +13,6 @@ dqd_grammar = r"""
                     | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
                     | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                     | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
-                    | "repeat" repeat_loop label? _NL [_INDENT predicate+ _DEDENT]      -> repeat
-                    | "intersect" label? _NL [_INDENT (NAME _NL)+ _DEDENT]              -> intersect
-                    | "group" label? _NL [_INDENT (NAME _NL)+ _DEDENT]                  -> group
-                    | "all" label? "(" VARIABLE ")" _NL [_INDENT predicate+ _DEDENT]    -> all
                     | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
                     | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                     | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
@@ -142,7 +138,7 @@ def to_dict(tree):
             ],
         }
 
-    elif tree.data in ("sequence", "set"):
+    elif tree.data in ('sequence'):
         children = [to_dict(child) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
         members = [child for child in children if child.get("layer") is not None]
@@ -157,7 +153,18 @@ def to_dict(tree):
             }
         }
 
-    elif tree.data in ("turn", "token", "segment", "deprel"):
+    elif tree.data in ('set'):
+        children = [to_dict(child) for child in tree.children]
+        others = [child for child in children if child.get("layer") is None]
+        constraints = merge_constraints([child for child in children if child.get("layer") is not None])
+        return {
+            tree.data: {
+                **({k: v for child in others for k, v in child.items()} if others else {}),
+                **constraints
+            }
+        }
+
+    elif tree.data in ('turn', 'token', 'segment', 'deprel'):
         children = [to_dict(child) for child in tree.children]
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
@@ -183,22 +190,6 @@ def to_dict(tree):
         return {"label": str(tree.children[0])}
     elif tree.data == "scope":
         return {"partOf": str(tree.children[0])}
-    # elif tree.data == 'all':
-    #     return {
-    #         "all": str(tree.children[0])
-    #     }
-    # elif tree.data == 'intersect':
-    #     return {
-    #         "intersect": str(tree.children[0])
-    #     }
-    # elif tree.data == 'group':
-    #     return {
-    #         "group": str(tree.children[0])
-    #     }
-    # elif tree.data == 'repeat':
-    #     return {
-    #         "repeat": str(tree.children[0])
-    #     }
 
     # Results
     elif tree.data == "results_plain":

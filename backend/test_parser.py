@@ -1,4 +1,5 @@
 import dqd_parser
+import json
 
 dqd_query = """
 Turn d
@@ -22,8 +23,7 @@ set tdeps
             head = t3
             dep = tx
 
-
-Token thead
+Token@s thead
     upos = VERB
     DepRel
         head = thead
@@ -83,8 +83,8 @@ myColl3 => collocation
         thead
     attribute
         lemma
-
 """
 
 dqd_json = dqd_parser.convert(dqd_query)
-print(dqd_json)
+# print(json.dumps(dqd_json, indent=2))
+print(json.dumps(dqd_json))
