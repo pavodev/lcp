@@ -64,6 +64,7 @@ class DDL:
         "int8range": 8,
         "smallint":  2,
         "text":      4,
+        "uuid":      16,
     }
 
     def create_str(self):
@@ -271,10 +272,6 @@ class PartitionedTable(Table):
         return "\n\n".join(main_t + sub_ts)
 
 
-
-
-
-
 class Type(DDL):
     def __init__(self, name, values):
         self.name       = name.strip()
@@ -334,6 +331,7 @@ class CTProcessor:
         for attr, vals in attr_structure:
             nullable = res if (res := vals.get("nullable")) else False
 
+            # TODO: make this working also for e.g. "isGlobal" & "text"
             if (type := vals.get("type")) == "text":
                 norm_col = f"{attr}_id"
                 norm_table = Table(attr, [Column(norm_col, "int",  primary_key=True),
@@ -348,12 +346,13 @@ class CTProcessor:
                 tables.append(norm_table)
 
             elif type == "categorical":
-                enum_type = Type(attr, vals["values"])
-                types.append(enum_type)
-                table_cols.append(Column(attr, attr, nullable=nullable))
+                if vals.get("isGlobal"):
+                    table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
 
-            elif vals.get("is_global"):
-                table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
+                else:
+                    enum_type = Type(attr, vals["values"])
+                    types.append(enum_type)
+                    table_cols.append(Column(attr, attr, nullable=nullable))
 
             elif not type and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
@@ -462,6 +461,23 @@ class CTProcessor:
         schema_name = corpus_name + corpus_version
 
         self.globals.schema.append(DDL.create_scm(schema_name))
+
+
+def generate_ddl(template):
+    Globs.base_map = corpus_temp["firstClass"]
+
+    processor = CTProcessor(corpus_temp, Globs)
+
+    processor.process_schema()
+    processor.process_layers()
+
+    create_schema = "\n\n".join([x for x in Globs.schema])
+    create_tbls   = "\n\n".join([x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)])
+
+    create_idxs   = "\n\n".join([x.create_idxs() for x in sorted(Globs.tables, key=lambda x: x.name)])
+    create_constr = "\n\n".join([x.create_constrs() for x in sorted(Globs.tables, key=lambda x: x.name)])
+
+    return "\n".join([create_schema, create_tbls]), "\n".join([create_idxs, create_constr])
 
 
 def main():

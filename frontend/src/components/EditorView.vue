@@ -16,10 +16,116 @@
 
 <script>
 import * as monaco from "monaco-editor";
-import monacoDQD from "@/monaco-dqd.js";
+import DQDmonaco from "@/dqd_monaco.js";
+import DQDParser from "@/dqd_parser.js";
 
-monaco.languages.register({ id: "monacoDQD" });
-monaco.languages.setMonarchTokensProvider("monacoDQD", monacoDQD);
+
+function checkCode (content) {
+  let retval = null
+  class TreeIndenter extends DQDParser.Indenter {
+    static get NL_type() {
+      return "_NL";
+    }
+    get NL_type() {
+      return this.constructor.NL_type;
+    }
+    static get OPEN_PAREN_types() {
+      return [];
+    }
+    get OPEN_PAREN_types() {
+      return this.constructor.OPEN_PAREN_types;
+    }
+    static get CLOSE_PAREN_types() {
+      return [];
+    }
+    get CLOSE_PAREN_types() {
+      return this.constructor.CLOSE_PAREN_types;
+    }
+    static get INDENT_type() {
+      return "_INDENT";
+    }
+    get INDENT_type() {
+      return this.constructor.INDENT_type;
+    }
+    static get DEDENT_type() {
+      return "_DEDENT";
+    }
+    get DEDENT_type() {
+      return this.constructor.DEDENT_type;
+    }
+    static get tab_len() {
+      return 8;
+    }
+    get tab_len() {
+      return this.constructor.tab_len;
+    }
+  }
+  let parser = DQDParser.get_parser({
+    parser: "lalr",
+    postlex: new TreeIndenter
+  })
+  try {
+    parser.parser.parse(content)
+  }
+  catch (e) {
+    console.log("ERROR", e.token_history, e.line, e.column)
+    retval = e.token_history
+  }
+  return retval
+}
+
+monaco.editor.onDidCreateModel(function(model) {
+  function validate() {
+    let errorList = checkCode(model.getValue())
+    let markers = []
+
+    if (errorList) {
+      markers = errorList.map(errorLine => {
+        return {
+          severity: monaco.MarkerSeverity.Error,
+          startLineNumber: errorLine.line,
+          startColumn: errorLine.column,
+          endLineNumber: errorLine.end_line,
+          endColumn: errorLine.end_column,
+          message: 'Error message ...'
+        }
+      })
+    }
+
+    // var markers = [{
+    //   severity: monaco.MarkerSeverity.Error,
+    //   startLineNumber: 1,
+    //   startColumn: 2,
+    //   endLineNumber: 1,
+    //   endColumn: 5,
+    //   message: 'hi there'
+    // }];
+
+    // {
+    //   "type": "_NL",
+    //   "start_pos": 23,
+    //   "value": "\n    ",
+    //   "line": 3,
+    //   "column": 12,
+    //   "end_line": 4,
+    //   "end_column": 5,
+    //   "end_pos": 28
+    // }
+
+    // change mySpecialLanguage to whatever your language id is
+    monaco.editor.setModelMarkers(model, 'DQDmonaco', markers);
+  }
+
+  let handle = null;
+  model.onDidChangeContent(() => {
+    // debounce
+    clearTimeout(handle);
+    handle = setTimeout(() => validate(), 500);
+  });
+  validate();
+});
+monaco.languages.register({ id: "DQDmonaco" });
+monaco.languages.setMonarchTokensProvider("DQDmonaco", DQDmonaco);
 
 let editor = null;
 
@@ -40,7 +146,7 @@ export default {
       }
 
       // Register a completion item provider for the new language
-      const { dispose } = monaco.languages.registerCompletionItemProvider("monacoDQD", {
+      const { dispose } = monaco.languages.registerCompletionItemProvider("DQDmonaco", {
         provideCompletionItems: (model, position) => {
           var word = model.getWordUntilPosition(position);
           var range = {
@@ -174,7 +280,7 @@ export default {
   },
   mounted() {
     editor = monaco.editor.create(document.getElementById("editor"), {
-      language: "monacoDQD",
+      language: "DQDmonaco",
       value: this.query,
       minimap: { enabled: false },
     });

@@ -16,6 +16,7 @@
                   role="tab"
                   aria-controls="nav-dqd"
                   aria-selected="true"
+                  @click="currentTab = 'dqd'"
                 >
                   DQD
                 </button>
@@ -28,6 +29,7 @@
                   role="tab"
                   aria-controls="nav-json"
                   aria-selected="false"
+                  @click="currentTab = 'json'"
                 >
                   JSON
                 </button>
@@ -133,12 +135,20 @@
             />
           </div> -->
           <div class="row">
-            <div class="col-6">
+            <div class="col-3">
               <div class="mb-3">
                 <label for="exampleInputEmail1" class="form-label"
-                  >Number of results</label
+                  >Res. per page</label
                 >
-                <input type="number" class="form-control" v-model="nResults" />
+                <input type="number" class="form-control" disabled v-model="resultsPerPage" />
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="mb-3">
+                <label for="exampleInputEmail1" class="form-label"
+                  >No. of results</label
+                >
+                <input type="number" class="form-control" disabled v-model="nResults" />
               </div>
             </div>
             <div class="col-6">
@@ -163,7 +173,7 @@
             >
               Submit
             </button>
-            <button
+            <!-- <button
               type="button"
               @click="resume"
               class="btn btn-primary"
@@ -189,7 +199,7 @@
             </button>
             <button type="button" @click="fetch" class="btn btn-primary">
               Fetch
-            </button>
+            </button> -->
             <!-- <button type="button" @click="validate" :disabled="!query.trim()" class="btn btn-primary">Validate</button> -->
           </div>
           <div class="lds-ripple" v-if="loading">
@@ -225,7 +235,7 @@
             <div
               class="progress-bar"
               :class="
-                percentageDone < 100
+                loading
                   ? 'progress-bar-striped progress-bar-animated'
                   : ''
               "
@@ -243,7 +253,7 @@
             <div class="col">
               <p class="mb-1">
                 Number of results:
-                <span class="text-bold" v-html="WSData.n_results"></span>
+                <span class="text-bold" v-html="WSDataResults.n_results"></span>
               </p>
             </div>
             <div class="col">
@@ -251,19 +261,19 @@
                 Projected results:
                 <span
                   class="text-bold"
-                  v-html="WSData.projected_results"
+                  v-html="WSDataResults.projected_results"
                 ></span>
               </p>
             </div>
             <div class="col">
               <p class="mb-1">
                 Batch done:
-                <span class="text-bold" v-html="WSData.batches_done"></span>
+                <span class="text-bold" v-html="WSDataResults.batches_done"></span>
               </p>
             </div>
             <div class="col">
               <p class="mb-1">
-                Status: <span class="text-bold" v-html="WSData.status"></span>
+                Status: <span class="text-bold" v-html="WSDataResults.status"></span>
               </p>
             </div>
           </div>
@@ -272,22 +282,26 @@
     </div>
     <div class="container-fluid">
       <div class="row">
-        <div class="col-12">
+        <div class="col-12" v-if="WSDataResults && WSDataResults.result">
           <nav>
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
               <button
-                class="nav-link active"
-                id="nav-results-tab"
+                class="nav-link"
+                :class="index == 0 ? 'active': ''"
+                :id="`nav-results-tab-${index}`"
                 data-bs-toggle="tab"
-                data-bs-target="#nav-results"
+                :data-bs-target="`#nav-results-${index}`"
                 type="button"
                 role="tab"
-                aria-controls="nav-results"
+                :aria-controls="`nav-results-${index}`"
                 aria-selected="true"
+                v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+                :key="`result-btn-${index}`"
               >
-                Results
+                {{ resultSet.name }}
+                ({{ WSDataSentences && WSDataSentences.result[index + 1] ? WSDataSentences.result[index + 1].length : 0 }})
               </button>
-              <button
+              <!-- <button
                 class="nav-link"
                 id="nav-stats-tab"
                 data-bs-toggle="tab"
@@ -298,26 +312,43 @@
                 aria-selected="false"
               >
                 Statistics
-              </button>
+              </button> -->
             </div>
           </nav>
           <div class="tab-content" id="nav-tabContent">
             <div
-              class="tab-pane fade show active"
-              id="nav-results"
+              class="tab-pane fade show"
+              :class="index == 0 ? 'active': ''"
+              :id="`nav-results-${index}`"
               role="tabpanel"
-              aria-labelledby="nav-results-tab"
+              :aria-labelledby="`nav-results-${index}-tab`"
+              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+              :key="`result-tab-${index}`"
             >
-              <ResultsTableView
-                :data="WSData.result"
-                v-if="WSData && WSData.result"
+              <ResultsKWICView
+                v-if="resultSet.type == 'plain' && WSDataSentences"
+                :data="WSDataSentences.result[index + 1]"
+                :sentences="WSDataSentences.result[-1]"
+                :attributes="resultSet.attributes"
                 :corpora="selectedCorpora"
                 @updatePage="updatePage"
                 :resultsPerPage="resultsPerPage"
                 :loading="loading"
               />
+              <!-- <ResultsAnalysisView
+                v-else-if="resultSet.type == 'analysis'"
+                v-else-if="resultSet.type == 'collocation'"
+                :data="WSDataResults.result[index + 1]"
+                :attributes="resultSet.attributes"
+              /> -->
+              <ResultsTableView
+                v-else
+                :data="WSDataResults.result[index + 1]"
+                :attributes="resultSet.attributes"
+                :resultsPerPage="resultsPerPage"
+              />
             </div>
-            <div
+            <!-- <div
               class="tab-pane fade"
               id="nav-stats"
               role="tabpanel"
@@ -340,7 +371,7 @@
                   </tr>
                 </tbody>
               </table>
-            </div>
+            </div> -->
           </div>
         </div>
       </div>
@@ -435,7 +466,9 @@ import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useUserStore } from "@/stores/userStore";
 import Title from "@/components/TitleComponent.vue";
-import ResultsTableView from "@/components/ResultsTableView.vue";
+import ResultsTableView from "@/components/results/TableView.vue";
+import ResultsKWICView from "@/components/results/KWICView.vue";
+// import ResultsAnalysisView from "@/components/results/AnalysisView.vue";
 // import KWICTable from "@/components/KWICTableView.vue";
 // import DetailsTableView from "@/components/DetailsTableView.vue";
 
@@ -655,10 +688,96 @@ export default {
         }
     ]
 }`,
-      queryDQD: `Segment s1
+      queryDQD: `Turn d
+    IsPresident = no
+    PoliticalGroup != NI
 
-Token@s1 t1
-    form = cat`,
+Segment@d s
+
+sequence
+    Token@s t1
+        upos = DET
+    Token@s t2
+        upos = ADJ
+    Token@s t3
+        lemma = f.*
+        lemma.length > 5
+
+set tdeps
+    Token@s tx
+        DepRel
+            head = t3
+            dep = tx
+
+Token@s thead
+    DepRel
+        head = thead
+        dep = t3
+
+Token
+    upos = VERB
+    DepRel
+        head = thead
+        dep = t3
+
+
+myKWIC1 => plain
+    context
+        s
+    entities
+        t1
+        t2
+        t3
+
+myKWIC2 => plain
+    context
+        s
+    entities
+        t1
+        t2
+        t3
+
+myStat1 => analysis
+    attributes
+        t1.lemma
+        t2.lemma
+        t3.lemma
+    functions
+        frequency
+    filter
+        frequency > 10
+
+myStat2 => analysis
+    attributes
+        t3.lemma
+        d.OriginalLanguage
+    functions
+        frequency
+    filter
+        frequency > 10
+
+myColl1 => collocation
+    center
+        t3
+    window
+        -5..+5
+    attribute
+        lemma
+
+myColl2 => collocation
+    space
+        tdeps
+    attribute
+        lemma
+    comment
+        PoS collocations of all dependends
+
+myColl3 => collocation
+    space
+        thead
+    attribute
+        lemma
+`,
       userId: null,
       selectedCorpora: this.corpora
         ? this.corpora
@@ -672,11 +791,13 @@ Token@s1 t1
             })
         : [],
       isQueryValidData: null,
-      WSData: "",
-      nResults: 15,
-      pageSize: 15,
+      WSDataResults: "",
+      WSDataSentences: "",
+      nResults: 20,
+      pageSize: 5,
       languages: ["en"],
       queryName: "",
+      currentTab: "dqd",
       simultaneousMode: false,
       currentResults: [],
       percentageDone: 0,
@@ -689,7 +810,9 @@ Token@s1 t1
   },
   components: {
     Title,
+    ResultsKWICView,
     ResultsTableView,
+    // ResultsAnalysisView,
     // KWICTable,
     // DetailsTableView,
     EditorView,
@@ -699,6 +822,7 @@ Token@s1 t1
       this.userId = this.userData.user.id;
       this.connectToRoom();
       this.stop();
+      this.validate();
     }
   },
   beforeMount() {
@@ -726,18 +850,24 @@ Token@s1 t1
               })
           : [];
     },
-    WSData() {
-      this.percentageDone = this.WSData.percentage_done;
-      if (["finished", "satisfied"].includes(this.WSData.status)) {
+    WSDataResults() {
+      // this.percentageDone = this.WSDataResults.projected_results;
+      this.percentageDone = this.WSDataResults.percentage_done;
+      if (["finished"].includes(this.WSDataResults.status)) {
         this.percentageDone = 100;
       }
-      if (this.percentageDone >= 100) {
+      if (["satisfied"].includes(this.WSDataResults.status)) {
+        this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
+      }
+      if (this.WSDataResults.percentage_done >= 100) {
         this.loading = false;
       }
     },
     query() {
       // console.log("Check is valid")
-      this.validate();
+      if (this.currentTab != 'dqd') {
+        this.validate();
+      }
     },
   },
   methods: {
@@ -784,9 +914,9 @@ Token@s1 t1
       }
     },
     onSocketMessage(event) {
-      // this.WSData = event.data
       // the below is just temporary code
       let data = JSON.parse(event.data);
+      // console.log("R", event)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "interrupted") {
           console.log("Query interrupted", data);
@@ -798,7 +928,10 @@ Token@s1 t1
           return;
         }
         if (data["action"] === "validate") {
-          // console.log('Query validation', data)
+          console.log('Query validation', data)
+          if (data.kind == "dqd" && data.valid == true){
+            this.query = JSON.stringify(data.json, null, 2)
+          }
           this.isQueryValidData = data;
           return;
         }
@@ -818,6 +951,15 @@ Token@s1 t1
             console.log("queries stopped", data);
           }
           return;
+        } else if (data["action"] === "query_result") {
+          console.log("query_result", data);
+          data["n_results"] = data["result"].length;
+          this.WSDataResults = data;
+          return;
+        } else if (data["action"] === "sentences") {
+          console.log("sentences", data);
+          this.WSDataSentences = data;
+          return;
         }
       }
       // we might need this block for stats related stuff later, don't worry about it much right now
@@ -835,18 +977,13 @@ Token@s1 t1
         data["n_results"] = this.allResults.length;
         delete data["result"];
         data["percentage_done"] += this.percentageDone;
-        this.WSData = data;
-      } else {
-        data["n_results"] = data["result"].length;
-        // data["first_result"] = data["result"][0];
-        // delete data["result"];
-        this.WSData = data;
+        this.WSDataResults = data;
       }
     },
     submit(event, resumeQuery = false) {
       if (!resumeQuery) {
         this.stop();
-        this.WSData = {};
+        // this.WSDataResults = {};
       }
       let data = {
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
@@ -864,7 +1001,7 @@ Token@s1 t1
         simultaneous: this.simultaneousMode,
       };
       if (resumeQuery) {
-        data["previous"] = this.WSData.job;
+        data["previous"] = this.WSDataResults.job;
       }
       useCorpusStore().fetchQuery(data);
       this.loading = true;
@@ -897,13 +1034,14 @@ Token@s1 t1
       });
     },
     validate() {
+      console.log("RRRR")
       this.$socket.sendObj({
         // room: this.roomId,
         room: null,
         action: "validate",
         user: this.userId,
-        query: this.query,
-        query_name: this.queryName,
+        query: this.currentTab == 'json' ? this.query : this.queryDQD + "\n",
+        // query_name: this.queryName,
       });
     },
     saveQuery() {
