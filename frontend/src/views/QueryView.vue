@@ -465,242 +465,30 @@ textarea {
 import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useUserStore } from "@/stores/userStore";
+
 import Title from "@/components/TitleComponent.vue";
 import ResultsTableView from "@/components/results/TableView.vue";
 import ResultsKWICView from "@/components/results/KWICView.vue";
-// import ResultsAnalysisView from "@/components/results/AnalysisView.vue";
-// import KWICTable from "@/components/KWICTableView.vue";
-// import DetailsTableView from "@/components/DetailsTableView.vue";
-
 import EditorView from "@/components/EditorView.vue";
 
 export default {
   name: "QueryTestView",
   data() {
     return {
-      query: `{
-    "$schema": "cobquec2.json",
-    "query": [
-        {
-            "layer": "Turn",
-            "label": "d",
-            "constraints": {
-                "operator": "AND",
-                "args": [
-                    {
-                        "attributeComparison": "IsPresident = no"
-                    },
-                    {
-                        "attributeComparison": "PoliticalGroup != NI"
-                    }
-                ]
-            }
-        },
-        {
-            "layer": "Segment",
-            "partOf": "d",
-            "label": "s"
-        },
-        {
-            "sequence": {
-                "members": [
-                    {
-                        "layer": "Token",
-                        "partOf": "s",
-                        "label": "t1",
-                        "constraints": {
-                            "attributeComparison": "upos = DET"
-                        }
-                    },
-                    {
-                        "layer": "Token",
-                        "partOf": "s",
-                        "label": "t2",
-                        "constraints": {
-                            "attributeComparison": "upos = ADJ"
-                        }
-                    },
-                    {
-                        "layer": "Token",
-                        "partOf": "s",
-                        "label": "t3",
-                        "constraints": {
-                            "operator": "AND",
-                            "args": [
-                                {
-                                    "attributeComparison": "lemma = f.*"
-                                },
-                                {
-                                    "attributeComparison": "lemma.length > 5"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        },
-        {
-            "set": {
-                "layer": "Token",
-                "partOf": "s",
-                "label": "tdeps",
-                "constraints": {
-                    "layer": "DepRel",
-                    "constraints": {
-                        "operator": "AND",
-                        "args": [
-                            {
-                                "attributeComparison": "head = t3"
-                            },
-                            {
-                                "attributeComparison": "dep = tx"
-                            }
-                        ]
-                    }
-                }
-            }
-        },
-        {
-            "layer": "Token",
-            "partOf": "s",
-            "label": "thead",
-            "constraints": {
-                "layer": "DepRel",
-                "constraints": {
-                    "operator": "AND",
-                    "args": [
-                        {
-                            "attributeComparison": "head = thead"
-                        },
-                        {
-                            "attributeComparison": "dep = t3"
-                        }
-                    ]
-                }
-            }
-        },
-        {
-            "layer": "Token",
-            "label": "thead",
-            "constraints": {
-                "operator": "AND",
-                "args": [
-                    {
-                        "attributeComparison": "upos = VERB"
-                    },
-                    {
-                        "layer": "DepRel",
-                        "constraints": {
-                            "operator": "AND",
-                            "args": [
-                                {
-                                    "attributeComparison": "head = thead"
-                                },
-                                {
-                                    "attributeComparison": "dep = t3"
-                                }
-                            ]
-                        }
-                    }
-                ]
-            }
-        }
-    ],
-    "results": [
-        {
-            "plain": {
-                "label": "myKWIC1",
-                "context": "s",
-                "entities": [
-                    "t1",
-                    "t2",
-                    "t3"
-                ]
-            }
-        },
-        {
-            "plain": {
-                "label": "myKWIC2",
-                "context": "s",
-                "entities": [
-                    "t1",
-                    "t2",
-                    "t3"
-                ]
-            }
-        },
-        {
-            "statAnalysis": {
-                "label": "myStat1",
-                "attributes": [
-                    "t1.lemma",
-                    "t2.lemma",
-                    "t3.lemma"
-                ],
-                "functions": [
-                    "frequency"
-                ],
-                "filter": {
-                    "attributeComparison": "frequency > 10"
-                }
-            }
-        },
-        {
-            "statAnalysis": {
-                "label": "myStat2",
-                "attributes": [
-                    "t3.lemma",
-                    "d.OriginalLanguage"
-                ],
-                "functions": [
-                    "frequency"
-                ],
-                "filter": {
-                    "attributeComparison": "frequency > 10"
-                }
-            }
-        },
-        {
-            "collAnalysis": {
-                "label": "myColl1",
-                "center": "t3",
-                "window": "-5..+5",
-                "attribute": "lemma"
-            }
-        },
-        {
-            "collAnalysis": {
-                "label": "myColl2",
-                "space": [
-                    "tdeps"
-                ],
-                "attribute": "lemma"
-            }
-        },
-        {
-            "collAnalysis": {
-                "label": "myColl3",
-                "space": [
-                    "thead"
-                ],
-                "attribute": "lemma"
-            }
-        }
-    ]
-}`,
+      query: '',
       queryDQD: `Turn d
     IsPresident = no
     PoliticalGroup != NI
 
 Segment@d s
 
-sequence
+sequence seq
     Token@s t1
         upos = DET
     Token@s t2
         upos = ADJ
     Token@s t3
-        lemma = f.*
+        lemma = ^f.*
         lemma.length > 5
 
 set tdeps
@@ -710,11 +498,6 @@ set tdeps
             dep = tx
 
 Token@s thead
-    DepRel
-        head = thead
-        dep = t3
-
-Token
     upos = VERB
     DepRel
         head = thead
@@ -793,8 +576,8 @@ myColl3 => collocation
       isQueryValidData: null,
       WSDataResults: "",
       WSDataSentences: "",
-      nResults: 20,
-      pageSize: 5,
+      nResults: 200,
+      pageSize: 100,
       languages: ["en"],
       queryName: "",
       currentTab: "dqd",
@@ -804,7 +587,7 @@ myColl3 => collocation
       loading: false,
       stats: null,
       queryTest: "const noop = () => {}",
-      resultsPerPage: 5,
+      resultsPerPage: 100,
       // nResults: 50,
     };
   },
@@ -1034,7 +817,7 @@ myColl3 => collocation
       });
     },
     validate() {
-      console.log("RRRR")
+      // console.log("RRRR")
       this.$socket.sendObj({
         // room: this.roomId,
         room: null,

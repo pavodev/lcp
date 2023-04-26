@@ -35,7 +35,7 @@
         role="tabpanel"
         aria-labelledby="nav-dependency-tab"
       >
-        <DepRelView :data="data" :sentence="sentence" />
+        <DepRelView :data="data" :sentences="sentences" />
       </div>
       <div
         class="tab-pane fade"
@@ -43,7 +43,7 @@
         role="tabpanel"
         aria-labelledby="nav-details-tab"
       >
-        <DetailsTableView :data="data" :sentence="sentence" :corpora="corpora" />
+        <DetailsTableView :data="data" :sentences="sentences" :corpora="corpora" />
       </div>
     </div>
   </div>
@@ -62,7 +62,7 @@ import DetailsTableView from "@/components/results/DetailsTableView.vue";
 
 export default {
   name: "ResultsDetailsModalView",
-  props: ["data", "sentence", "corpora"],
+  props: ["data", "sentences", "corpora"],
   components: {
     DepRelView,
     DetailsTableView,

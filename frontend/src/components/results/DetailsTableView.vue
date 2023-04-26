@@ -4,7 +4,7 @@
       <tbody>
         <tr v-for="(item, index) in columnHeaders" :key="`tr-${index}`">
           <th>{{ item }}</th>
-          <td v-for="(token, tIndex) in data[2]" :key="`t${index}-${tIndex}`">
+          <td v-for="(token, tIndex) in sentences[1]" :key="`t${index}-${tIndex}`">
             <span v-if="item == 'head'" v-html="headToken(token)"> </span>
             <span
               v-else
@@ -27,7 +27,7 @@
 <script>
 export default {
   name: "ResultsDetailsTableView",
-  props: ["data", "corpora"],
+  props: ["data", "sentences", "corpora"],
   data() {
     return {
       columnHeaders: this.calcColumnHeaders()
@@ -38,11 +38,11 @@ export default {
       let token = "-"
       let headIndex = this.columnHeaders.indexOf("head")
       let lemmaIndex = this.columnHeaders.indexOf("lemma")
-      let startId = this.data[1]
+      let startId = this.sentences[0]
       if (headIndex && lemmaIndex) {
         let tokenId = tokenData[headIndex];
         if (tokenId) {
-          token = this.data[2][tokenId - startId][lemmaIndex];
+          token = this.sentences[1][tokenId - startId][lemmaIndex]
         }
       }
       return token;
@@ -64,9 +64,9 @@ export default {
         classes.push('bg-secondary')
       }
       if (item.indexOf('form') > -1) {
-        let startId = this.data[1]
-        let selectedStartId = this.data[3][0]
-        let selectedEndId = this.data[3].at(-1)
+        let startId = this.sentences[0]
+        let selectedStartId = this.data[1]
+        let selectedEndId = this.data.at(-1)
         if ((startId + index) >= selectedStartId && (startId + index) <= selectedEndId) {
           classes.push('text-bold')
         }

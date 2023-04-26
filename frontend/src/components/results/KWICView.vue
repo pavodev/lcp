@@ -128,7 +128,7 @@
             <div class="modal-body-content">
               <ResultsDetailsModalView
                 :data="data[modalIndex]"
-                :sentence="sentences[data[modalIndex][0]]"
+                :sentences="sentences[data[modalIndex][0]]"
                 :corpora="corpora"
                 :key="modalIndex"
                 v-if="modalVisible"
