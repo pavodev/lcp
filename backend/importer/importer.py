@@ -48,14 +48,16 @@ class Importer:
                 ]:
                     if t[4]:
                         q = (
-                            "COPY %s.token0 "
-                            "FROM '%s' "
-                            "WITH (FORMAT CSV, DELIMITER '%s', FORCE_NULL (%s));"
+                            f"COPY {self.ct.name}.token0 "
+                            f"FROM {PATH_BNC_TOKENS_} "
+                            f"WITH (FORMAT CSV, DELIMITER '{t[3]}', FORCE_NULL ({t[4]}));"
                         )
-                        params = (self.ct.name, PATH_BNC_TOKENS_, t[3], t[4])
+                        params = tuple()
+                        # todo: can any of the below be used as params? i don't know -- danny
+                        # params = (self.ct.name, PATH_BNC_TOKENS_, t[3], t[4])
                     else:
-                        q = "COPY %s.%s FROM '%s' WITH (DELIMITER '%s');"
-                        params = (t[0], t[1], t[2], t[3])
+                        q = f"COPY {t[0]}.{t[1]} FROM {t[2]} WITH (DELIMITER {t[3]});"
+                        params = tuple()
                     await acur.execute(q, params)
         return True
 
