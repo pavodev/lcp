@@ -246,8 +246,6 @@ async def query(
     query_depends: List[str] = []
     qs = app["query_service"]
 
-    print("\n\n\n\nTHE QUERY", query, "\n\n\n")
-
     for i in range(iterations):
 
         done = False
@@ -296,24 +294,32 @@ async def query(
                 )
                 query_type = "JSON"
                 # sql_query = json_to_sql(json.loads(query), **kwa)
-
                 try:
                     json_query = json.loads(query)
+                    if not i and not manual:
+                        form = json.dumps(json_query, indent=4)
+                        print(f"JSON query:\n\n\n{form}")
                 except json.JSONDecodeError as err:
+                    if not i and not manual:
+                        print(f"Text query:\n\n\n{query}")
                     json_query = convert(query)
+                    form = json.dumps(json_query, indent=4)
+                    if not i and not manual:
+                        print(f"JSON query\n\n\n{form}")
                     query_type = "DQD"
-                print(f"Detected query type: {query_type}")
+                if not i and not manual:
+                    print(f"Detected query type: {query_type}")
                 sql_query = json_to_sql(json_query, **kwa)
+                if not i and not manual:
+                    print(f"SQL query:\n\n\n{sql_query}")
             except Exception as err:
-                print("SQL GENERATION FAILED! for dev, assuming script passed", err)
+                if not i and not manual:
+                    print("SQL GENERATION FAILED! for dev, assuming script passed", err)
                 raise err
 
             ###################################################################
             # organise and submit query to rq via query service               #
             ###################################################################
-
-            if manual is None and not resuming and not i:
-                print(f"QUERY:\n\n\n{sql_query}\n\n\n")
 
             if manual is not None:
                 parent = job.id

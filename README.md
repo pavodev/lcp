@@ -30,10 +30,9 @@ Then clone this repo and do `pip install -r requirements.txt`
 To start backend:
 
 ```bash
-pip install aiohttp-devtools
 # optional:
 # pip install mypy && mypyc run.py
-adev runserver run.py --port 9090
+python run.py
 # or
 python -m aiohttp.web -H localhost -P 9090 run:create_app
 ```

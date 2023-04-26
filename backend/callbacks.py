@@ -159,7 +159,7 @@ def _sentences(
         "room": job.kwargs["room"],
         "query": depended.id,
         "base": base.id,
-        "percentage_done": depended.meta["percentage_done"],
+        "percentage_done": round(depended.meta["percentage_done"], 3),
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 

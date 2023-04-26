@@ -15,7 +15,6 @@ from typing import Optional
 
 
 # import redis.asyncio as redis
-# import asyncpg
 import uvloop
 
 from redis import Redis as redis
@@ -45,10 +44,6 @@ from aiohttp_catcher import Catcher, catch
 
 load_dotenv(override=True)
 
-UPLOAD_USER = os.getenv("SQL_UPLOAD_USERNAME")
-QUERY_USER = os.getenv("SQL_QUERY_USERNAME")
-UPLOAD_PASSWORD = os.getenv("SQL_UPLOAD_PASSWORD")
-QUERY_PASSWORD = os.getenv("SQL_QUERY_PASSWORD")
 HOST = os.getenv("SQL_HOST")
 DBNAME = os.getenv("SQL_DATABASE")
 PORT = int(os.getenv("SQL_PORT", 5432))
@@ -169,8 +164,6 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     resource = cors.add(app.router.add_resource("/check-file-permissions"))
     cors.add(resource.add_route("GET", check_file_permissions))
 
-    # conn = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
-    # app["db_conn"] = await asyncpg.connect(conn)
     # we keep two redis connections, for reasons
     app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT)
     app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT)
