@@ -44,8 +44,8 @@ async def test():
     conn = await psycopg.AsyncConnection.connect(connstr)
 
     importer = Importer(connection=conn, path_corpus_template=template)
-    importer.add_schema(ct.get_script_schema_setup())
-    importer.import_corpus()  # import files
+    await importer.add_schema(ct.get_script_schema_setup())
+    await importer.import_corpus()  # import files
 
 
 if __name__ == "__main__":
