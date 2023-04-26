@@ -4,10 +4,10 @@ import os
 
 import psycopg
 
-from corpus_data import CorpusData
-from corpus_template import CorpusTemplate
+from .corpus_data import CorpusData
+from .corpus_template import CorpusTemplate
+from .importer import Importer
 from dotenv import load_dotenv
-from importer import Importer
 from sshtunnel import SSHTunnelForwarder
 
 

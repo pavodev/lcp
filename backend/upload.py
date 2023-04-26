@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from .pg_upload import pg_create
 
-VALID_EXTENSIONS = {"vrt", "zip"}
+VALID_EXTENSIONS = ("vrt", "zip", "csv")
 
 
 async def _status_check(request: web.Request, job_id: str) -> web.Response:
@@ -51,22 +51,21 @@ async def upload(request: web.Request) -> web.Response:
     room = request.rel_url.query.get("room", None)
     api_key = request.rel_url.query["key"]
 
-    request_data = await request.json()
-    project_id = request_data.get("project")
+    # project_id = request_data.get("project")
+    project_id = request.rel_url.query.get("project", "unknown_project")
     if not project_id:
         return web.json_response({"status": "failed"})
 
-    # todo: where will uploads go?
-    # os.makedirs(os.path.join("uploads", username), exist_ok=True)
     data = await request.multipart()
     size = 0
-    config_name = None
     # if os.path.isfile(path):
     #     return web.json_response({"status": "failure", "error": "file exists"})
     has_file = False
     files = set()
     async for bit in data:
         if isinstance(bit.filename, str):
+            if not bit.filename.endswith(VALID_EXTENSIONS):
+                continue
             ext = os.path.splitext(bit.filename)[-1]
             # filename = str(project) + ext
             path = os.path.join("uploads", project_id, bit.filename)
@@ -118,14 +117,6 @@ async def make_schema(request: web.Request) -> web.Response:
     """
     request_data = await request.json()
     template = request_data["template"]
-    try:
-        template = json.loads(template)
-    except json.JSONDecodeError as err:
-        msg = str(err)
-        return web.json_response({"status": "failure", "message": msg})
-    except Exception as err:
-        msg = str(err)
-        return web.json_response({"status": "failure", "message": msg})
 
     create_ddl, constraints_ddl = await pg_create(template)
     uu = str(uuid4())

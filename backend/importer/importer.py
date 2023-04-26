@@ -3,7 +3,7 @@
 
 import os
 
-from config import (
+from .config import (
     PATH_BNC_SCRIPT_SCHEMA_SETUP,
     PATH_BNC_DATA_DOCUMENTS,
     PATH_BNC_DATA_SEGMENTS,
@@ -12,7 +12,7 @@ from config import (
     PATH_BNC_FORMS,
     PATH_BNC_TOKENS_,
 )
-from corpus_template import CorpusTemplate
+from .corpus_template import CorpusTemplate
 
 
 class Importer:
@@ -28,7 +28,7 @@ class Importer:
         # do not use os.system, use psycopg execute
         # psql postgres ROOT = "/".join(os.path.abspath(__file__).split("/")[:-1]) f"{ROOT}/scripts/bnc.sql"
         # os.system(f"psql {self.db_config.name} < {path_psql_script}")
-        script = "CREATE SCHEMA..."
+        script = f"CREATE SCHEMA..."
         params = tuple()
         # you need to always use this structure for cur.execute with the async connection:
         async with self.connection:

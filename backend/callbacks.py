@@ -212,7 +212,7 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     """
     user = job.kwargs["user"]
     room = job.kwargs.get("room")
-    if not user and not room:
+    if not room:
         return
     jso = {
         "user": user,
@@ -220,7 +220,6 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         "project": job.kwargs["project"],
         "action": "uploaded",
         "gui": job.kwargs["gui"],
-        "config": job.kwargs["config"],
         "room": room,
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

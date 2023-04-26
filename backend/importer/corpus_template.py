@@ -3,7 +3,7 @@
 
 import os
 
-from config import PATH_BNC_SCRIPT_SCHEMA_SETUP
+from .config import PATH_BNC_SCRIPT_SCHEMA_SETUP
 
 
 class CorpusTemplate:

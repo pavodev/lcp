@@ -146,7 +146,7 @@ class QueryService:
         room=None,
         constraints=None,
         queue: str = "alt",
-        gui=False,
+        gui: bool = False,
     ) -> Job:
         """
         Upload a new corpus to the system
@@ -176,13 +176,13 @@ class QueryService:
         job.delete()
         return "DELETED"
 
-    def create(self, create: str, constraints: str, project: str, queue: str = "alt"):
+    def create(self, create: str, project: str, queue: str = "alt", gui: bool = False):
         opts = {
             "on_success": _schema,
             "on_failure": _general_failure,
             "create": create,
             "project": project,
-            "constraints": constraints,
+            "gui": gui,
         }
         return self.app[queue].enqueue(
             _create_schema, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts

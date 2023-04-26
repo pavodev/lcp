@@ -13,9 +13,9 @@ async def _upload_data(**kwargs):
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    from importer.corpus_data import CorpusData
-    from importer.corpus_template import CorpusTemplate
-    from importer.importer import Importer
+    from .importer.corpus_data import CorpusData
+    from .importer.corpus_template import CorpusTemplate
+    from .importer.importer import Importer
 
     # these lines could be used if the data needs conversion...
     # from corpert import Corpert
@@ -28,8 +28,15 @@ async def _upload_data(**kwargs):
     # get template and understand it
     corpus_dir = os.path.join("uploads", kwargs["project"])
     template_path = os.path.join(corpus_dir, "template.json")
+
+    print("CORPUS", corpus_dir)
+    print("TEMPLATE", template_path)
+
     with open(template_path, "r") as fo:
         template = json.load(fo)
+
+    # bernhard: remove this return statement and make the rest work
+    return True
 
     ct = CorpusTemplate(template)
 

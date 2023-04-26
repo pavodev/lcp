@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
-from config import *
+from . import config
 
 
 class CorpusData:
@@ -15,13 +15,13 @@ class CorpusData:
 
         # SAMPLE-DATA (provided by Jonathan)
         self.path_data_documents = (
-            PATH_BNC_DATA_DOCUMENTS  # TODO: extract data «documents» from corpus
+            config.PATH_BNC_DATA_DOCUMENTS  # TODO: extract data «documents» from corpus
         )
-        self.path_data_segments = PATH_BNC_DATA_SEGMENTS  # TODO: " «segments» "
-        self.path_data_tokens = PATH_BNC_DATA_TOKENS  # TODO: " «tokens» "
-        self.path_data_forms = PATH_BNC_FORMS  # created from tokens
-        self.path_data_lemmata = PATH_BNC_LEMMATA  # "
-        self.path_data_tokens_ = PATH_BNC_TOKENS_  # tokens without duplicates
+        self.path_data_segments = config.PATH_BNC_DATA_SEGMENTS  # TODO: " «segments» "
+        self.path_data_tokens = config.PATH_BNC_DATA_TOKENS  # TODO: " «tokens» "
+        self.path_data_forms = config.PATH_BNC_FORMS  # created from tokens
+        self.path_data_lemmata = config.PATH_BNC_LEMMATA  # "
+        self.path_data_tokens_ = config.PATH_BNC_TOKENS_  # tokens without duplicates
 
         # csv schema definitions
         self.documents = ["document_id", "char_range", "meta"]
