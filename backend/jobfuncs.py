@@ -40,9 +40,8 @@ async def _upload_data(**kwargs):
 
     ct = CorpusTemplate(template)
 
-    # get corpus data paths and output to csv
-    corpus_data_paths: Set[str] = kwargs["paths"]
-    corpus = CorpusData(corpus_data_paths)
+    # get corpus data path and output to csv
+    corpus = CorpusData(corpus_dir)
     corpus.export_data_as_csv()
 
     # add schema and import corpus
