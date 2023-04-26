@@ -21,20 +21,24 @@ async def _upload_data(**kwargs):
     # from corpert import Corpert
     # corpus_data = Corpert(kwargs["path"]).run()
 
-    user: Optional[str] = kwargs["user"]
-    room: Optional[str] = kwargs.get("room")
-    corpus_data_paths: Set[str] = kwargs["paths"]
+    # user and room are not really used yet...
+    # user: Optional[str] = kwargs["user"]
+    # room: Optional[str] = kwargs.get("room")
 
+    # get template and understand it
     corpus_dir = os.path.join("uploads", kwargs["project"])
     template_path = os.path.join(corpus_dir, "template.json")
-
     with open(template_path, "r") as fo:
         template = json.load(fo)
 
     ct = CorpusTemplate(template)
+
+    # get corpus data paths and output to csv
+    corpus_data_paths: Set[str] = kwargs["paths"]
     corpus = CorpusData(corpus_data_paths)
     corpus.export_data_as_csv()
 
+    # add schema and import corpus
     conn = get_current_job()._db_conn
     importer = Importer(connection=conn, path_corpus_template=constraints)
     await importer.add_schema(ct.get_script_schema_setup())
