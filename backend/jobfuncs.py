@@ -54,6 +54,10 @@ async def _upload_data(**kwargs):
         return False
 
     constraints: str = kwargs["constraints"]
+    with open(constraints, "r") as fo:
+        constraints = fo.read()
+        if not constraints.strip().endswith(";"):
+            constraints = constraints + ";"
 
     async with conn:
         async with conn.cursor() as cur:
