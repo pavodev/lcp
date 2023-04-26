@@ -2,10 +2,11 @@
 
 import json
 import os
-
-import requests
+import sys
 
 from time import sleep
+
+import requests
 
 
 API_KEY = "YOUR_KEY_HERE"
