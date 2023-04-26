@@ -217,7 +217,7 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     jso = {
         "user": user,
         "status": "success" if result else "unknown",
-        "corpus_id": job.kwargs["corpus_id"],
+        "project": job.kwargs["project"],
         "action": "uploaded",
         "gui": job.kwargs["gui"],
         "config": job.kwargs["config"],

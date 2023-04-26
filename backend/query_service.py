@@ -142,7 +142,7 @@ class QueryService:
         self,
         data,
         user: str,
-        corpus_id: str,
+        project: str,
         room=None,
         constraints=None,
         queue: str = "alt",
@@ -156,7 +156,7 @@ class QueryService:
             "on_failure": _general_failure,
             "paths": data,
             "user": user,
-            "project_id": str(corpus_id),
+            "project": project,
             "gui": gui,
             "constraints": constraints,
             "room": room,
@@ -176,11 +176,12 @@ class QueryService:
         job.delete()
         return "DELETED"
 
-    def create(self, create: str, constraints: str, queue: str = "alt"):
+    def create(self, create: str, constraints: str, project: str, queue: str = "alt"):
         opts = {
             "on_success": _schema,
             "on_failure": _general_failure,
             "create": create,
+            "project": project,
             "constraints": constraints,
         }
         return self.app[queue].enqueue(

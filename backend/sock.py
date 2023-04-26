@@ -68,9 +68,9 @@ async def handle_redis_response(
                 # handle uploaded data (add to config, ws message if gui mode)
                 elif payload.get("action") == "uploaded":
                     conf = payload["config"]
-                    corpus_id = payload["corpus_id"]
+                    project = payload["project"]
                     # todo: better structure for this i guess?
-                    app["config"][-1][corpus_id] = conf
+                    app["config"][-1][project] = conf
                     if payload.get("gui"):
                         await push_msg(
                             app["websockets"],

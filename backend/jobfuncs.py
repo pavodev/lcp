@@ -22,10 +22,10 @@ async def _upload_data(**kwargs):
     room: Optional[str] = kwargs.get("room")
     corpus_data_paths: Set[str] = kwargs["paths"]
 
-    corpus_dir = os.path.dirname(corpus_data_paths[0])
-    template = os.path.join(corpus_dir, "template.json")
+    corpus_dir = os.path.join("uploads", kwargs["project"])
+    template_path = os.path.join(corpus_dir, "template.json")
 
-    with open(template, "r") as fo:
+    with open(template_path, "r") as fo:
         template = json.load(fo)
 
     ct = CorpusTemplate(template)

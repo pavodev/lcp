@@ -24,13 +24,13 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         return web.json_response(ret)
     status = job.get_status(refresh=True)
     msg = """Please wait: corpus processing in progress..."""
-    corpus_id = job.kwargs["corpus_id"]
+    project = job.kwargs["project"]
     if status == "failed":
         msg = (
             "Something has gone wrong. Check your config file and try uploading again."
         )
     elif status == "finished":
-        msg = f"""Upload is complete. You should be able to see your corpus in the web app, or query it by its identifier, {corpus_id}"""
+        msg = f"""Upload is complete. You should be able to see your corpus in the web app, or query it by its identifier, {project}"""
     ret = {"job": job.id, "status": status, "info": msg}
     return web.json_response(ret)
 
@@ -67,9 +67,8 @@ async def upload(request: web.Request) -> web.Response:
     files = set()
     async for bit in data:
         if isinstance(bit.filename, str):
-            os.path.join("uploads", project_id, bit.filename)
             ext = os.path.splitext(bit.filename)[-1]
-            # filename = str(corpus_id) + ext
+            # filename = str(project) + ext
             path = os.path.join("uploads", project_id, bit.filename)
             with open(path, "ba") as f:
                 while True:
@@ -104,7 +103,7 @@ async def upload(request: web.Request) -> web.Response:
             "status": "started",
             "job": job.id,
             "size": size,
-            "corpus_id": str(corpus_id),
+            "project": str(project),
             "info": info,
             "target": whole_url,
         }
@@ -139,5 +138,5 @@ async def make_schema(request: web.Request) -> web.Response:
     with open(os.path.join(directory, "template.json"), "w") as fo:
         json.dump(template, fo)
 
-    job = request.app["query_service"].create(create_ddl)
+    job = request.app["query_service"].create(create_ddl, project=uu)
     return web.json_response({"status": "started", "job": job.id, "project": uu})
