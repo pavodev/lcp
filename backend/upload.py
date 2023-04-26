@@ -103,7 +103,7 @@ async def upload(request: web.Request) -> web.Response:
             "status": "started",
             "job": job.id,
             "size": size,
-            "project": str(project),
+            "project": str(project_id),
             "info": info,
             "target": whole_url,
         }
