@@ -143,8 +143,8 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     resource = cors.add(app.router.add_resource("/validate"))
     cors.add(resource.add_route("POST", validate))
 
-    # resource = cors.add(app.router.add_resource("/upload"))
-    # cors.add(resource.add_route("POST", upload))
+    resource = cors.add(app.router.add_resource("/upload"))
+    cors.add(resource.add_route("POST", upload))
 
     resource = cors.add(app.router.add_resource("/create"))
     cors.add(resource.add_route("POST", make_schema))

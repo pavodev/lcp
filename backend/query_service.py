@@ -17,7 +17,7 @@ from .callbacks import (
     _schema,
 )
 
-from .jobfuncs import _db_query, _upload_data
+from .jobfuncs import _db_query, _upload_data, _create_schema
 
 
 class QueryService:
@@ -144,7 +144,7 @@ class QueryService:
         user: str,
         corpus_id: str,
         room=None,
-        config=None,
+        constraints=None,
         queue: str = "alt",
         gui=False,
     ) -> Job:
@@ -154,11 +154,11 @@ class QueryService:
         opts = {
             "on_success": _upload,
             "on_failure": _general_failure,
-            "path": data,
+            "paths": data,
             "user": user,
-            "corpus_id": str(corpus_id),
-            "config_path": config,
+            "project_id": str(corpus_id),
             "gui": gui,
+            "constraints": constraints,
             "room": room,
         }
         return self.app[queue].enqueue(
@@ -184,7 +184,7 @@ class QueryService:
             "constraints": constraints,
         }
         return self.app[queue].enqueue(
-            _schema, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _create_schema, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
         )
 
     def cancel_running_jobs(

@@ -10,6 +10,8 @@ from uuid import uuid4
 
 from .pg_upload import pg_create
 
+VALID_EXTENSIONS = {"vrt", "zip"}
+
 
 async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
@@ -49,20 +51,26 @@ async def upload(request: web.Request) -> web.Response:
     room = request.rel_url.query.get("room", None)
     api_key = request.rel_url.query["key"]
 
+    request_data = await request.json()
+    project_id = request_data.get("project")
+    if not project_id:
+        return web.json_response({"status": "failed"})
+
     # todo: where will uploads go?
-    os.makedirs(os.path.join("uploads", username), exist_ok=True)
+    # os.makedirs(os.path.join("uploads", username), exist_ok=True)
     data = await request.multipart()
     size = 0
-    corpus_id = uuid4()
     config_name = None
     # if os.path.isfile(path):
     #     return web.json_response({"status": "failure", "error": "file exists"})
     has_file = False
+    files = set()
     async for bit in data:
-        if bit.name == "file" and isinstance(bit.filename, str):
+        if isinstance(bit.filename, str):
+            os.path.join("uploads", project_id, bit.filename)
             ext = os.path.splitext(bit.filename)[-1]
-            filename = str(corpus_id) + ext
-            path = os.path.join("uploads", username, filename)
+            # filename = str(corpus_id) + ext
+            path = os.path.join("uploads", project_id, bit.filename)
             with open(path, "ba") as f:
                 while True:
                     chunk = await bit.read_chunk()
@@ -70,16 +78,11 @@ async def upload(request: web.Request) -> web.Response:
                         break
                     size += len(chunk)
                     f.write(chunk)
+                    files.add(path)
             if size:
                 has_file = True
-        if bit.name == "config":
-            config_name = os.path.splitext(path)[0] + ".json"
-            with open(config_name, "ba") as f:
-                while True:
-                    chunk = await bit.read_chunk()
-                    if not chunk:
-                        break
-                    f.write(chunk)
+
+    constraints_file = os.path.join("uploads", project_id, "constraints.sql")
 
     ret: Dict[str, Any] = {}
     if not has_file:
@@ -88,8 +91,9 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(ret)
 
     qs = request.app["query_service"]
-    kwa = dict(room=room, config=config_name, gui=gui_mode)
-    job = qs.upload(path, username, corpus_id, **kwa)
+    kwa = dict(room=room, constraints=constraints_file, gui=gui_mode)
+    path = os.path.join("uploads", project_id)
+    job = qs.upload(path, username, project_id, **kwa)
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
@@ -125,5 +129,15 @@ async def make_schema(request: web.Request) -> web.Response:
         return web.json_response({"status": "failure", "message": msg})
 
     create_ddl, constraints_ddl = await pg_create(template)
-    job = request.app["query_service"].create(create_ddl, constraints_ddl)
-    return web.json_response({"status": "started", "job": job.id})
+    uu = str(uuid4())
+    directory = os.path.join("uploads", uu)
+    if not os.path.isdir("uploads"):
+        os.makedirs("uploads")
+    os.makedirs(directory)
+    with open(os.path.join(directory, "constraints.sql"), "w") as fo:
+        fo.write(constraints_ddl)
+    with open(os.path.join(directory, "template.json"), "w") as fo:
+        json.dump(template, fo)
+
+    job = request.app["query_service"].create(create_ddl)
+    return web.json_response({"status": "started", "job": job.id, "project": uu})

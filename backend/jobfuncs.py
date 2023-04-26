@@ -20,17 +20,32 @@ async def _upload_data(**kwargs):
 
     user: Optional[str] = kwargs["user"]
     room: Optional[str] = kwargs.get("room")
+    corpus_data_paths: Set[str] = kwargs["paths"]
 
-    corpus_data_path: str = kwargs["path"]
-    corpus_template_path: str = kwargs["config_path"]
+    corpus_dir = os.path.dirname(corpus_data_paths[0])
+    template = os.path.join(corpus_dir, "template.json")
+
+    with open(template, "r") as fo:
+        template = json.load(fo)
+
+    ct = CorpusTemplate(template)
+    corpus = CorpusData(corpus_data_paths)
+    corpus.export_data_as_csv()
 
     conn = get_current_job()._db_conn
-    ct = CorpusTemplate(corpus_template_path)
-    corpus = CorpusData(corpus_data_path)
-    corpus.export_data_as_csv()
-    importer = Importer(connection=conn, path_corpus_template=corpus_template_path)
+    importer = Importer(connection=conn, path_corpus_template=constraints)
     await importer.add_schema(ct.get_script_schema_setup())
     success = await importer.import_corpus()
+
+    if not success:
+        return False
+
+    constraints: str = kwargs["constraints"]
+
+    async with conn:
+        async with conn.cursor() as cur:
+            await cur.execute(constraints)
+
     return success
 
 
@@ -42,7 +57,7 @@ async def _create_schema(**kwargs) -> None:
     async with conn:
         async with conn.cursor() as cur:
             await cur.execute(kwargs["create"])
-            await cur.execute(kwargs["constraints"])
+            # await cur.execute(kwargs["constraints"])
     return None
 
 
