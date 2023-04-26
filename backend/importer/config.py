@@ -4,7 +4,7 @@
 import os
 
 # Note: postgresql "COPY" demands ABSOLUTE PATHS !
-ROOT = '/'.join(os.path.abspath(__file__).split('/')[:-1])  # importer
+ROOT = "/".join(os.path.abspath(__file__).split("/")[:-1])  # importer
 
 # sample data provided by Jonathan
 PATH_BNC_SCRIPT_SCHEMA_SETUP = f"{ROOT}/scripts/bnc.sql"  # schema
@@ -20,14 +20,15 @@ PATH_BNC_TOKENS_ = f"{ROOT}/data/bnc/vert_tokens_.csv"
 
 class DBConfig:
 
-    """ general database configuration """
+    """general database configuration"""
 
-    def __init__(self,
+    def __init__(
+        self,
         name="postgres",
         host="127.0.0.1",
         port="5432",
         user="schroffbe",
-        pw='',
+        pw="",
     ):
         self.name = name
         self.host = host

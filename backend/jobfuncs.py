@@ -1,7 +1,7 @@
 from collections import Counter, defaultdict
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
-from typing import Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
 from .utils import Interrupted, _get_kwics
 
@@ -10,21 +10,39 @@ async def _upload_data(**kwargs):
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    from corpert import Corpert
+    from importer.corpus_data import CorpusData
+    from importer.corpus_template import CorpusTemplate
+    from importer.importer import Importer
 
-    corpus_data = Corpert(kwargs["path"]).run()
+    # these lines could be used if the data needs conversion...
+    # from corpert import Corpert
+    # corpus_data = Corpert(kwargs["path"]).run()
 
-    # todo: here we upload the corpus data to postgres...
-    return True
+    user: Optional[str] = kwargs["user"]
+    room: Optional[str] = kwargs.get("room")
+
+    corpus_data_path: str = kwargs["path"]
+    corpus_template_path: str = kwargs["config_path"]
+
+    conn = get_current_job()._db_conn
+    ct = CorpusTemplate(corpus_template_path)
+    corpus = CorpusData(corpus_data_path)
+    corpus.export_data_as_csv()
+    importer = Importer(connection=conn, path_corpus_template=corpus_template_path)
+    importer.add_schema(ct.get_script_schema_setup())
+    success = await importer.import_corpus()
+    return success
 
 
 async def _create_schema(**kwargs) -> None:
     """
     To be run by rq worker, create schema
     """
-    async with get_current_job()._db_conn.cursor() as acur:
-        await acur.execute(kwargs["create"])
-        await acur.execute(kwargs["constraints"])
+    conn = get_current_job()._db_conn
+    async with conn:
+        async with conn.cursor() as cur:
+            await cur.execute(kwargs["create"])
+            await cur.execute(kwargs["constraints"])
     return None
 
 

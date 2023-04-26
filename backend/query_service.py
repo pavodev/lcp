@@ -151,18 +151,13 @@ class QueryService:
         """
         Upload a new corpus to the system
         """
-
-        if config is not None:
-            with open(config, "r") as fo:
-                config = json.load(fo)
-
         opts = {
             "on_success": _upload,
             "on_failure": _general_failure,
             "path": data,
             "user": user,
             "corpus_id": str(corpus_id),
-            "config": config,
+            "config_path": config,
             "gui": gui,
             "room": room,
         }

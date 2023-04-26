@@ -46,7 +46,7 @@ async def go():
     connstr = (
         f"postgresql://{USER}:{PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
     )
-    conn = psycopg.AsyncConnection.connect(connstr)
+    conn = await psycopg.AsyncConnection.connect(connstr)
     pool = AsyncConnectionPool(
         connstr, num_workers=8, min_size=8, timeout=60, open=False
     )

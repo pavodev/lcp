@@ -2,15 +2,15 @@
 # -*- coding: utf8 -*-
 
 from config import DBConfig
-from CorpusTemplate import CorpusTemplate
-from CorpusData import CorpusData
-from Importer import Importer
+from corpus_data import CorpusData
+from corpus_template import CorpusTemplate
+from importer import Importer
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
 
-    ct = CorpusTemplate('fake/path/to/corpus_template/')
-    corpus = CorpusData('fake/path/to/corpus/')
+    ct = CorpusTemplate("fake/path/to/corpus_template/")
+    corpus = CorpusData("fake/path/to/corpus/")
     corpus.export_data_as_csv()  # export files
 
     importer = Importer(config=DBConfig()).connect()

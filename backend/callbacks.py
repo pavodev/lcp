@@ -211,17 +211,19 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     Success callback when user has uploaded a dataset
     """
     user = job.kwargs["user"]
-    if user:
-        jso = {
-            "user": user,
-            "status": "success" if result else "unknown",
-            "corpus_id": job.kwargs["corpus_id"],
-            "action": "uploaded",
-            "gui": job.kwargs["gui"],
-            "config": job.kwargs["config"],
-            "room": job.kwargs["room"],
-        }
-        job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    room = job.kwargs.get("room")
+    if not user and not room:
+        return
+    jso = {
+        "user": user,
+        "status": "success" if result else "unknown",
+        "corpus_id": job.kwargs["corpus_id"],
+        "action": "uploaded",
+        "gui": job.kwargs["gui"],
+        "config": job.kwargs["config"],
+        "room": room,
+    }
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _queries(
