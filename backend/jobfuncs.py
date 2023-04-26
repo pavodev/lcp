@@ -29,7 +29,7 @@ async def _upload_data(**kwargs):
     corpus = CorpusData(corpus_data_path)
     corpus.export_data_as_csv()
     importer = Importer(connection=conn, path_corpus_template=corpus_template_path)
-    importer.add_schema(ct.get_script_schema_setup())
+    await importer.add_schema(ct.get_script_schema_setup())
     success = await importer.import_corpus()
     return success
 
