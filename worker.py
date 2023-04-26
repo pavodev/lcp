@@ -21,8 +21,10 @@ import uvloop
 
 load_dotenv(override=True)
 
-USER = os.getenv("SQL_USERNAME")
-PASSWORD = os.getenv("SQL_PASSWORD")
+UPLOAD_USER = os.getenv("SQL_UPLOAD_USERNAME")
+QUERY_USER = os.getenv("SQL_QUERY_USERNAME")
+UPLOAD_PASSWORD = os.getenv("SQL_UPLOAD_PASSWORD")
+QUERY_PASSWORD = os.getenv("SQL_QUERY_PASSWORD")
 HOST = os.getenv("SQL_HOST")
 DBNAME = os.getenv("SQL_DATABASE")
 PORT = int(os.getenv("SQL_PORT", 25432))
@@ -43,12 +45,11 @@ tunnel.start()
 
 
 async def go():
-    connstr = (
-        f"postgresql://{USER}:{PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
-    )
-    conn = await psycopg.AsyncConnection.connect(connstr)
+    query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    conn = await psycopg.AsyncConnection.connect(upload_connstr)
     pool = AsyncConnectionPool(
-        connstr, num_workers=8, min_size=8, timeout=60, open=False
+        query_connstr, num_workers=8, min_size=8, timeout=60, open=False
     )
 
     class MyJob(Job):

@@ -21,13 +21,7 @@ const routes = [
     name: "query",
     component: () =>
       import(/* webpackChunkName: "about" */ "../views/QueryView.vue"),
-  },
-  {
-    path: "/query-test",
-    name: "query-test",
-    component: () =>
-      import(/* webpackChunkName: "about" */ "../views/QueryTestView.vue"),
-  },
+  }
 ];
 
 const router = createRouter({

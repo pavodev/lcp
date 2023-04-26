@@ -15,8 +15,8 @@ async def test():
 
     load_dotenv(override=True)
 
-    USER = os.getenv("SQL_USERNAME")
-    PASSWORD = os.getenv("SQL_PASSWORD")
+    USER = os.getenv("SQL_UPLOAD_USERNAME")
+    PASSWORD = os.getenv("SQL_UPLOAD_PASSWORD")
     HOST = os.getenv("SQL_HOST")
     DBNAME = os.getenv("SQL_DATABASE")
     PORT = int(os.getenv("SQL_PORT", 25432))
