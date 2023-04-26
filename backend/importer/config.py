@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
 import os
@@ -16,25 +16,3 @@ PATH_BNC_DATA_TOKENS = f"{ROOT}/data/bnc/vert_tokens.csv"
 PATH_BNC_LEMMATA = f"{ROOT}/data/bnc/vert_lemmata_.csv"
 PATH_BNC_FORMS = f"{ROOT}/data/bnc/vert_forms_.csv"
 PATH_BNC_TOKENS_ = f"{ROOT}/data/bnc/vert_tokens_.csv"
-
-
-class DBConfig:
-
-    """general database configuration"""
-
-    def __init__(
-        self,
-        name="postgres",
-        host="127.0.0.1",
-        port="5432",
-        user="schroffbe",
-        pw="",
-    ):
-        self.name = name
-        self.host = host
-        self.port = port
-        self.user = user
-        self.pw = pw
-
-    def get4psycopg(self):  # psycopg-init
-        return f"dbname='{self.name}' user='{self.user}' host='{self.host}' password='{self.pw}'"

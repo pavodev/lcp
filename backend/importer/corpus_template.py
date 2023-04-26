@@ -1,9 +1,8 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
 import os
 
-from config import DBConfig
 from config import PATH_BNC_SCRIPT_SCHEMA_SETUP
 
 

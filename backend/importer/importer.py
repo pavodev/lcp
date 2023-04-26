@@ -1,8 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
 import os
-import psycopg2
 
 from config import (
     PATH_BNC_SCRIPT_SCHEMA_SETUP,
@@ -26,10 +25,12 @@ class Importer:
         self.ct = CorpusTemplate(path_corpus_template)
 
     async def add_schema(self, path_psql_script):
+        # do not use os.system, use psycopg execute
         # psql postgres ROOT = "/".join(os.path.abspath(__file__).split("/")[:-1]) f"{ROOT}/scripts/bnc.sql"
-        os.system(f"psql {self.db_config.name} < {path_psql_script}")
+        # os.system(f"psql {self.db_config.name} < {path_psql_script}")
         script = "CREATE SCHEMA..."
         params = tuple()
+        # you need to always use this structure for cur.execute with the async connection:
         async with self.connection:
             async with self.connection.cursor() as acur:
                 await acur.execute(script, params)
