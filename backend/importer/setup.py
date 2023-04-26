@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
+import os
 
 import psycopg
 
@@ -10,7 +11,7 @@ from importer import Importer
 from sshtunnel import SSHTunnelForwarder
 
 
-if __name__ == "__main__":
+async def test():
 
     load_dotenv(override=True)
 
@@ -46,7 +47,10 @@ if __name__ == "__main__":
     importer.add_schema(ct.get_script_schema_setup())
     importer.import_corpus()  # import files
 
-    # TEST
-    # importer.cursor.execute("""SELECT version();""")
-    # print(importer.get_rows())  # db-connection
-    # importer.print_tables()  # data (all relations)
+
+if __name__ == "__main__":
+
+    import asyncio
+
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(test())
