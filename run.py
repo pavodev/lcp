@@ -56,7 +56,6 @@ VERBOSE = True if os.getenv("VERBOSE", "").lower() == "true" else False
 RHOST, RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
 REDIS_HOST = RHOST.split("/")[-1].strip()
 REDIS_PORT = int(RPORT.strip())
-print("HMMM", QUERY_USER, QUERY_PASSWORD)
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
