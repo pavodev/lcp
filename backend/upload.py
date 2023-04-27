@@ -1,16 +1,20 @@
 import json
 import os
 
-from aiohttp import web
-
-from io import BytesIO
-
+from tarfile import TarFile, is_tarfile
 from typing import Any, Dict, Union
 from uuid import uuid4
+from zipfile import ZipFile, is_zipfile
+
+
+from aiohttp import web
+from py7zr import SevenZipFile, is_7zfile
 
 from .pg_upload import pg_create
 
-VALID_EXTENSIONS = ("vrt", "zip", "csv")
+
+VALID_EXTENSIONS = ("vrt", "csv")
+COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 
 
 async def _status_check(request: web.Request, job_id: str) -> web.Response:
@@ -64,8 +68,9 @@ async def upload(request: web.Request) -> web.Response:
     files = set()
     async for bit in data:
         if isinstance(bit.filename, str):
-            if not bit.filename.endswith(VALID_EXTENSIONS):
+            if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
                 continue
+            to_delete = set()
             ext = os.path.splitext(bit.filename)[-1]
             # filename = str(project) + ext
             path = os.path.join("uploads", project_id, bit.filename)
@@ -77,6 +82,35 @@ async def upload(request: web.Request) -> web.Response:
                     size += len(chunk)
                     f.write(chunk)
                     files.add(path)
+            ziptar = [
+                (".zip", is_zipfile, ZipFile, "namelist"),
+                (".tar", is_tarfile, TarFile, "getnames"),
+                (".tar.gz", is_tarfile, TarFile, "getnames"),
+                (".tar.xz", is_tarfile, TarFile, "getnames"),
+                (".7z", is_7zfile, SevenZipFile, "getnames"),
+            ]
+            for ext, check, opener, method in ziptar:
+                if path.endswith(ext) and check(path):
+                    print(f"Extracting {ext} file: {path}")
+                    with opener(path, "r") as compressed:
+                        for f in getattr(compressed, method)():
+                            if not f.endswith(VALID_EXTENSIONS):
+                                continue
+                            dest = os.path.join("uploads", project_id, f)
+                            print(f"Uncompressing {f} to {dest}")
+                            if ext != ".7z":
+                                compressed.extract(f, dest)
+                            else:
+                                compressed.extract(dest, [f])
+                    print(f"Extracting {ext} done!")
+                    os.remove(path)  # todo: should we do this now?
+                elif path.endswith(ext) and not check(path):
+                    print(f"Something wrong with {path}. Ignoring...")
+                    size = 0
+                    os.remove(path)
+                    f = os.path.basename(path)
+                    ret = {"status": "failed", "msg": f"Problem uncompressing {f}"}
+                    return web.json_response(ret)
             if size:
                 has_file = True
 

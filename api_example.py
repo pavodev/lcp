@@ -13,6 +13,9 @@ import requests
 CREATE_URL = "http://localhost:9090/create"
 UPLOAD_URL = "http://localhost:9090/upload"
 
+VALID_EXTENSIONS = ("vrt", "csv")
+COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
+
 
 def _parse_cmd_line():
     """
@@ -92,19 +95,26 @@ def main(
             for p in os.listdir(base)
         }
         if filt:
-            files = {k: v for k, v in files.items() if filt in k and k.endswith(".csv")}
+            files = {
+                k: v
+                for k, v in files.items()
+                if filt in k and k.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENSIONS)
+            }
     else:
-        files = {os.path.splitext(corpus)[0]: corpus}
+        files = {os.path.splitext(corpus)[0]: open(corpus, "rb")}
 
     print("Sending data...")
 
     resp = requests.post(UPLOAD_URL, params=params, headers=headers, files=files)
 
-    print("Checking validity...")
-
     sleep(5)
 
+    print("Checking validity...")
+
     data = resp.json()
+    if "target" not in data:
+        print(f"Failed: {data}")
+        return
     new_url = data["target"]
 
     while True:
