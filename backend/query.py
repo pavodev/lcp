@@ -37,7 +37,10 @@ def _get_word_count(
     total = 0
     for corpus in corpora:
         conf = config[str(corpus)]
-        has_partitions = "partitions" in conf["mapping"]["layer"]["Token"]
+        try:
+            has_partitions = "partitions" in conf["mapping"]["layer"]["Token"]
+        except (KeyError, TypeError):
+            has_partitions = False
         if not has_partitions or not languages:
             total += sum(conf["token_counts"].values())
         else:

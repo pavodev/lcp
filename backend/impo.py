@@ -108,7 +108,7 @@ class Importer:
         for f in files:
             await self._copy_tbl(f)
 
-        self.token_count = await self.get_token_count(files)
+        self.token_count = await self.get_token_count()
 
     async def get_token_count(self):
         """
@@ -123,11 +123,11 @@ class Importer:
                 query = SQLstats.token_count(self.schema, token)
                 await cur.execute(query)
                 res = await cur.fetchone()
-
                 if res:
                     count = res[0]
                 else:
-                    raise Exception
+                    count = 5000
+                    # raise Exception
 
         return {token: count}
 
