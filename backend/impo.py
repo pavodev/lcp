@@ -1,4 +1,5 @@
 import aiofiles
+import json
 import os
 import psycopg2
 
@@ -25,8 +26,8 @@ class SQLstats:
     main_corp = dedent(
         f"""
         INSERT
-          INTO main.corpus (name, current_version, corpus_template, schema_path)
-        VALUES (%s, %s, %s, %s);"""
+          INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts)
+        VALUES (%s, %s, %s, %s, %s);"""
     )
 
 
@@ -47,6 +48,7 @@ class Importer:
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
+        self.token_count = 0
 
     async def create_constridx(self, constr_idxs):
         async with self.connection.connection() as conn:
@@ -68,8 +70,12 @@ class Importer:
 
     async def _copy_tbl(self, data_f):
         async with aiofiles.open(data_f) as f:
+            async for line in f:
+                self.token_count += 1
+            f.seek(0)
             headers = await f.readline()
             headers = headers.split("\t")
+            self.token_count -= 1
             # await f.seek(0)
 
             data_f = os.path.basename(data_f)
@@ -101,7 +107,16 @@ class Importer:
             await self._copy_tbl(f)
 
     async def create_entry_maincorpus(self):
-        await self.cur.execute(
-            SQLstats.main_corp, (self.name, self.version, self.template, self.schema)
-        )
-
+        async with self.connection.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                await cur.execute(
+                    SQLstats.main_corp,
+                    (
+                        self.name,
+                        self.version,
+                        json.dumps(self.template),
+                        self.schema,
+                        {"word0": self.token_count},
+                    ),
+                )

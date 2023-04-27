@@ -8,8 +8,10 @@ def _get_batches(config: Dict[str, Any]) -> Dict[str, int]:
     batches = {}
     # word_count = config["meta"].get("word_count", config.get("word_count", 10000000))
     counts = config["token_counts"]
-
-    mapping = config["mapping"]["layer"]["Token"]
+    mapping = config["mapping"]
+    if not mapping:
+        return counts
+    mapping = mapping["layer"]["Token"]
     if "partitions" in mapping:
         for lang, details in mapping["partitions"].items():
             named = details["relation"].replace("<batch>", "0")

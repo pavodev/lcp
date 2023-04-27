@@ -135,7 +135,7 @@ def main(
         print(data)
         if data["status"] in {"failed", "finished"}:
             break
-        sleep(3)
+        sleep(8)
 
 
 if __name__ == "__main__":

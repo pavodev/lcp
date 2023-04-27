@@ -38,6 +38,7 @@ async def _upload_data(**kwargs) -> bool:
     try:
         await importer.import_corpus(corpus_dir)
         await importer.create_constridx(constraints)
+        await importer.create_entry_maincorpus()
     except Exception as err:
         raise err
     return True
