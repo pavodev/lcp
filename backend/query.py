@@ -261,7 +261,8 @@ async def query(
             if not done and len(r) == 4:
                 all_batches, done_batches, total_results_so_far, needed = r
                 existing_results = utils._get_all_results(
-                    previous, connection=app["redis"]
+                    previous,
+                    connection=app["redis"],
                 )
             else:
                 current_batch, prev_job, _, _ = r
@@ -380,8 +381,9 @@ async def query(
             sents_query = _make_sents_query(query, current_batch[1], sect, lang)
             if simultaneous and first_job:
                 the_base = first_job.id
-            elif resuming and done:
-                the_base = prev_job.kwargs.get("base", prev_job.id)
+            elif resuming and done and base:
+                # the_base = prev_job.kwargs.get("base", prev_job.id)
+                the_base = base  # todo: is the above ever needed?
             else:
                 the_base = job.id if base is None else base
             sents_kwargs = dict(
