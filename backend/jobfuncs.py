@@ -13,14 +13,8 @@ async def _upload_data(**kwargs) -> bool:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    # from .importer.corpus_data import CorpusData
-    # from .importer.corpus_template import CorpusTemplate
-    # from .importer.importer import Importer
-    from import import Importer
 
-    # these lines could be used if the data needs conversion...
-    # from corpert import Corpert
-    # corpus_data = Corpert(kwargs["path"]).run()
+    from .impo import Importer
 
     # user and room are not really used yet...
     # user: Optional[str] = kwargs["user"]
@@ -30,33 +24,12 @@ async def _upload_data(**kwargs) -> bool:
     corpus_dir = os.path.join("uploads", kwargs["project"])
     template_path = os.path.join(corpus_dir, "template.json")
 
-    print("CORPUS", corpus_dir)
-    print("TEMPLATE", template_path)
-
-    """
-    conn = get_current_job()._db_conn
-    importer = Importer(connection=conn)
-
-    # @Jonathan: can you provide the sql-script (-> schema) and csv-files (-> data)? should work at least for bnc atm
-    if not await importer.add_schema(CorpusTemplate(path_to_schema_setup_script="PATH/TO/SCRIPT/REQUIRED")):
-        return False
-    if not await importer.import_corpus(CorpusData(path_corpus="PATH/TO/CORPUS/REQUIRED")):
-        return False
-
-    constraints: str = kwargs["constraints"]
-    with open(constraints, "r") as fo:
-        constraints = fo.read()
-        if not constraints.strip().endswith(";"):
-            constraints = constraints + ";"
-
-    async with conn:
-        async with conn.cursor() as cur:
-            await cur.execute(constraints)
-
-    TODO: delete csv-files and sql-script (may be functions of CorpusTemplate and CorpusData)?
-    """
     with open(template_path, "r") as fo:
         template = json.load(fo)
+
+    constraints: str = kwargs["constraints"]
+
+    conn = get_current_job()._db_conn
 
     with open(constraints, "r") as fo:
         constraints = fo.read()
@@ -66,6 +39,7 @@ async def _upload_data(**kwargs) -> bool:
     importer.create_constridx(constraints)
 
     return True
+
 
 async def _create_schema(**kwargs) -> None:
     """
