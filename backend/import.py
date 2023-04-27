@@ -42,8 +42,8 @@ class Importer:
         self.template = template
         self.schema = self.get_schema(template)
 
-    def create_schema(self, schma_ddl):
-        self.cur.execute(schma_ddl)
+    def create_constridx(self, constr_idxs):
+        self.cur.execute(constr_idxs)
 
     def _check_tbl_exists(self, table):
         self.cur.execute(SQLstats.check_tbl(table.schema, table.name))

@@ -13,9 +13,10 @@ async def _upload_data(**kwargs) -> bool:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    from .importer.corpus_data import CorpusData
-    from .importer.corpus_template import CorpusTemplate
-    from .importer.importer import Importer
+    # from .importer.corpus_data import CorpusData
+    # from .importer.corpus_template import CorpusTemplate
+    # from .importer.importer import Importer
+    from import import Importer
 
     # these lines could be used if the data needs conversion...
     # from corpert import Corpert
@@ -32,12 +33,10 @@ async def _upload_data(**kwargs) -> bool:
     print("CORPUS", corpus_dir)
     print("TEMPLATE", template_path)
 
-    with open(template_path, "r") as fo:
-        template = json.load(fo)
     """
     conn = get_current_job()._db_conn
     importer = Importer(connection=conn)
-    
+
     # @Jonathan: can you provide the sql-script (-> schema) and csv-files (-> data)? should work at least for bnc atm
     if not await importer.add_schema(CorpusTemplate(path_to_schema_setup_script="PATH/TO/SCRIPT/REQUIRED")):
         return False
@@ -53,9 +52,19 @@ async def _upload_data(**kwargs) -> bool:
     async with conn:
         async with conn.cursor() as cur:
             await cur.execute(constraints)
-    
+
     TODO: delete csv-files and sql-script (may be functions of CorpusTemplate and CorpusData)?
     """
+    with open(template_path, "r") as fo:
+        template = json.load(fo)
+
+    with open(constraints, "r") as fo:
+        constraints = fo.read()
+
+    importer = Importer(conn, template)
+    importer.import_corpus(corpus_dir)
+    importer.create_constridx(constraints)
+
     return True
 
 async def _create_schema(**kwargs) -> None:
