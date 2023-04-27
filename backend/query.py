@@ -9,7 +9,7 @@ from rq.job import Job
 from abstract_query.create import json_to_sql
 
 from . import utils
-from .callbacks import _query
+from .callbacks import _query, _sentences
 from .dqd_parser import convert
 from .utils import _determine_language
 from uuid import uuid4
@@ -141,6 +141,32 @@ async def _do_resume(
             total_results_requested=request_data["total_results_requested"],
         )
         current_batch = prev_job.kwargs["current_batch"]
+
+        associated_sents = prev_job.meta.get("associated")
+        if not associated_sents:
+            msg = "Sent job not finished. todo: fix this"
+            raise ValueError(msg)
+            pass
+        else:
+            sent_job = Job.fetch(associated_sents, connection=app["redis"])
+
+            _sentences(
+                sent_job,
+                app["redis"],
+                sent_job.result,
+                start_at=hit_limit,
+                total_results_requested=request_data["total_results_requested"],
+            )
+
+        basejob = Job.fetch(base, connection=app["redis"])
+        res_so_far = basejob.meta.get("_sentences", {})
+
+        sent_result = Job.fetch(base, connection=app["redis"]).result
+
+        latest_sents = basejob.meta.get("latest_sentences")
+        if latest_sents:
+            latest_sents = Job.fetch(latest_sents, connection=app["redis"])
+
         return True, (current_batch, prev_job, None, None)
     else:
         all_batches = prev_job.kwargs["all_batches"]
@@ -375,15 +401,17 @@ async def query(
         # prepare and submit sentences query                                  #
         #######################################################################
 
-        if sentences and current_batch:
+        if not done and sentences and current_batch:
             sect = config[str(current_batch[0])]
             lang = _determine_language(current_batch[2])
             sents_query = _make_sents_query(query, current_batch[1], sect, lang)
             if simultaneous and first_job:
                 the_base = first_job.id
             elif resuming and done and base:
-                # the_base = prev_job.kwargs.get("base", prev_job.id)
-                the_base = base  # todo: is the above ever needed?
+                the_base = base
+            elif resuming and done and not base:
+                # todo: not sure if this is right...
+                the_base = prev_job.kwargs.get("base", prev_job.id)
             else:
                 the_base = job.id if base is None else base
             sents_kwargs = dict(
@@ -411,7 +439,7 @@ async def query(
 
         jobs = {"status": "started", "job": job.id if job else previous}
 
-        if sentences:
+        if sentences and not done:
             jobs.update({"sentences": True, "sentences_job": sents_job.id})
 
         if simultaneous:

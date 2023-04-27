@@ -70,7 +70,7 @@ def _query(
     just_finished = job.kwargs["current_batch"]
     job.kwargs["done_batches"].append(just_finished)
 
-    status = _get_status(total_found, **job.kwargs)
+    status = _get_status(total_found, tot_req=total_requested, **job.kwargs)
     hit_limit = False if not limited else needed
     job.meta["_status"] = status
     job.meta["hit_limit"] = hit_limit
@@ -130,6 +130,9 @@ def _sentences(
     **kwargs,
 ) -> None:
 
+    total_requested = kwargs.get("total_results_requested")
+    start_at = kwargs.get("start_at")
+
     base = Job.fetch(job.kwargs["base"], connection=connection)
     if "_sentences" not in base.meta:
         base.meta["_sentences"] = {}
@@ -139,9 +142,15 @@ def _sentences(
         depends_on = depends_on[-1]
 
     depended = Job.fetch(depends_on, connection=connection)
+    if "associated" not in depended.meta:
+        depended.meta["associated"] = job.id
+    depended.save_meta()
+
     aargs: Tuple[int, bool, Optional[int], Union[int, bool], int] = depended.meta[
         "_args"
     ]
+    if "total_results_requested" in kwargs:
+        aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
     new_res, _ = _add_results(depended.result, *aargs, kwic=True, sents=result)
     results_so_far = _union_results(base.meta["_sentences"], new_res)
@@ -161,7 +170,11 @@ def _sentences(
         "base": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    if hasattr(job, "_redis"):
+        red = job._redis
+    else:
+        red = connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> None:
@@ -302,7 +315,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _get_status(n_results: int, **kwargs) -> str:
+def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """

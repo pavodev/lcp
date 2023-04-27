@@ -4,7 +4,7 @@ import jwt
 import os
 import re
 
-from collections import defaultdict
+from collections import defaultdict, Counter
 from datetime import date, datetime
 from functools import wraps
 from typing import (
@@ -161,6 +161,12 @@ def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, 
     out: Dict[int, Any] = {}
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
+
+    # base = Job.fetch(job.kwargs["base"], connection=connection)
+    # latest = Job.fetch(base.meta["latest_sentences"], connection=connection)
+    # latest_sents = base.meta["_sentences"]
+    # out = _union_results(out, latest_sents)
+
     while True:
         batch, _ = _add_results(job.result, 0, True, False, False, 0)
         out = _union_results(out, batch)
@@ -206,13 +212,14 @@ def _add_results(
     rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
+    n_skipped = Counter()
 
     if sents:
         bundle[-1] = {}
         for sent in sents:
             bundle[-1][str(sent[0])] = [sent[1], sent[2]]
 
-    for line in result:
+    for x, line in enumerate(result):
         key = int(line[0])
         rest = line[1]
         if not key:
@@ -225,8 +232,6 @@ def _add_results(
             elif not kwic and key not in kwics:
                 bundle[key] = []
 
-        counts[key] += 1
-
         if key in kwics and not kwic:
             continue
         elif key not in kwics and kwic:
@@ -236,16 +241,20 @@ def _add_results(
                 bundle[key] = [rest]
             else:
                 bundle[key].append(rest)
+            counts[key] += 1
             continue
 
         # doing kwics and this is a kwic line
-        if not unlimited and offset and counts[key] < offset:
+        if not unlimited and offset and n_skipped[key] < offset:
+            n_skipped[key] += 1
             continue
-        if restart is not False and counts[key] < restart:
+        if restart is not False and n_skipped[key] < restart:
+            n_skipped[key] += 1
             continue
         if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
             continue
         bundle[key].append(rest)
+        counts[key] += 1
 
     for k in kwics:
         if k not in bundle:

@@ -8,11 +8,11 @@ from textwrap import dedent
 
 
 class Globs:
-    base_map:dict = {}
-    layers:dict = {}
-    schema:list = []
-    tables:list = []
-    types:list = []
+    base_map: dict = {}
+    layers: dict = {}
+    schema: list = []
+    tables: list = []
+    types: list = []
 
 
 class reversor:
@@ -103,6 +103,7 @@ class Column(DDL):
         self.name = name
         self.type = type
         self.constrs = constrs
+        self.tabwidth = 8
         # self.analyse_constr(constr)
 
     def ret_tabulate(self, max):
@@ -566,7 +567,6 @@ def main():
 
     processor.process_schema()
     processor.process_layers()
-
 
     print("\n\n".join([x for x in Globs.schema]))
     print()
