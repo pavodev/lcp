@@ -21,7 +21,7 @@ const routes = [
     name: "query",
     component: () =>
       import(/* webpackChunkName: "about" */ "../views/QueryView.vue"),
-  }
+  },
 ];
 
 const router = createRouter({

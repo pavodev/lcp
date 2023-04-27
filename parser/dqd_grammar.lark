@@ -5,10 +5,6 @@ predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDEN
                 | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
                 | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                 | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
-                | "repeat" repeat_loop label? _NL [_INDENT predicate+ _DEDENT]      -> repeat
-                | "intersect" label? _NL [_INDENT (NAME _NL)+ _DEDENT]              -> intersect
-                | "group" label? _NL [_INDENT (NAME _NL)+ _DEDENT]                  -> group
-                | "all" label? "(" VARIABLE ")" _NL [_INDENT predicate+ _DEDENT]    -> all
                 | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
                 | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                 | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
