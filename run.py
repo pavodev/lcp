@@ -50,6 +50,7 @@ VERBOSE = True if os.getenv("VERBOSE", "").lower() == "true" else False
 RHOST, RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
 REDIS_HOST = RHOST.split("/")[-1].strip()
 REDIS_PORT = int(RPORT.strip())
+AIO_PORT = int(os.getenv("AIO_PORT", 9090))
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
@@ -174,7 +175,7 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
 
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
-    site = aiohttp.web.TCPSite(runner, port=9090)
+    site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
     await site.start()
     # wait forever
     await asyncio.Event().wait()

@@ -1,16 +1,18 @@
 let config = null;
 if (process.env.NODE_ENV === "production") {
   config = {
-    apiUrl: "http://localhost:9090",
-    appDomain: "uplord.linguistik.uzh.ch",
+    apiUrl: "http://lcp.linguistik.uzh.ch/be",
+    wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
+    appDomain: "lcp.linguistik.uzh.ch",
     environment: "production",
     apiHeaders: {},
     sentryDSN: null,
   };
 } else if (process.env.NODE_ENV === "test") {
   config = {
-    apiUrl: "http://localhost:9090",
-    appDomain: "uplord.test.linguistik.uzh.ch",
+    apiUrl: "http://lcp.test.linguistik.uzh.ch/be",
+    wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
+    appDomain: "lcp.test.linguistik.uzh.ch",
     environment: "test",
     apiHeaders: {},
     sentryDSN: null,
@@ -18,7 +20,7 @@ if (process.env.NODE_ENV === "production") {
 } else if (process.env.NODE_ENV === "dev") {
   config = {
     apiUrl: "http://localhost:9090",
-    appDomain: "uplord.dev.linguistik.uzh.ch",
+    appDomain: "lcp.dev.linguistik.uzh.ch",
     environment: "development",
     apiHeaders: {},
     sentryDSN: null,
