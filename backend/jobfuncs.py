@@ -29,17 +29,21 @@ async def _upload_data(**kwargs) -> bool:
 
     constraints: str = kwargs["constraints"]
 
-    await get_current_job()._pool.open()
+    await get_current_job()._upool.open()
 
     with open(constraints, "r") as fo:
         constraints = fo.read()
 
-    importer = Importer(get_current_job()._pool, template)
+    importer = Importer(get_current_job()._upool, template)
     try:
+        print("Importing corpus...")
         await importer.import_corpus(corpus_dir)
+        print("Setting constraints...")
         await importer.create_constridx(constraints)
+        print("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:
+        print(f"Error: {err}")
         raise err
     return True
 
@@ -48,10 +52,11 @@ async def _create_schema(**kwargs) -> None:
     """
     To be run by rq worker, create schema
     """
-    await get_current_job()._pool.open()
-    async with get_current_job()._pool.connection() as conn:
+    await get_current_job()._upool.open()
+    async with get_current_job()._upool.connection() as conn:
         await conn.set_autocommit(True)
         async with conn.cursor() as cur:
+            print("Creating schema...")
             await cur.execute(kwargs["create"])
             # await cur.execute(kwargs["constraints"])
     return None

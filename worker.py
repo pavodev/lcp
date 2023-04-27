@@ -61,6 +61,9 @@ async def go():
     pool = AsyncConnectionPool(
         query_connstr, num_workers=8, min_size=8, timeout=60, open=False
     )
+    upool = AsyncConnectionPool(
+        upload_connstr, num_workers=8, min_size=8, timeout=60, open=False
+    )
 
     class MyJob(Job):
         def __init__(self, *args, **kwargs):
@@ -68,6 +71,7 @@ async def go():
             self._connstr = upload_connstr
             self._db_conn = conn
             self._pool = pool
+            self._upool = upool
             self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT)
             self._redis.pubsub()
 
