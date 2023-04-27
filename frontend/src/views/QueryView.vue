@@ -3,6 +3,130 @@
     <Title :title="'Query'" />
     <div class="container mt-4">
       <div class="row">
+        <div class="col-5">
+          <div class="mb-3">
+            <label class="form-label">Corpora</label>
+            <multiselect
+              v-model="selectedCorpora"
+              :options="corporaOptions"
+              :multiple="false"
+              label="name"
+              track-by="value"
+            ></multiselect>
+          </div>
+          <!-- <div class="mb-3">
+            <label class="form-label">Room</label>
+            <input
+              type="text"
+              class="form-control"
+              disabled
+            />
+          </div> -->
+          <!-- <div class="mb-3">
+            <label class="form-label"
+              >Query name</label
+            >
+            <input type="text" class="form-control" v-model="queryName" />
+          </div> -->
+          <!-- <div class="mb-3">
+            <label class="form-label">User</label>
+            <input
+              type="text"
+              class="form-control"
+              v-model="userId"
+              disabled
+            />
+          </div> -->
+          <div class="row">
+            <div class="col-3">
+              <div class="mb-3">
+                <label class="form-label">Res. per page</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  disabled
+                  v-model="resultsPerPage"
+                />
+              </div>
+            </div>
+            <div class="col-3">
+              <div class="mb-3">
+                <label class="form-label">No. of results</label>
+                <input
+                  type="number"
+                  class="form-control"
+                  disabled
+                  v-model="nResults"
+                />
+              </div>
+            </div>
+            <div class="col-6">
+              <div class="mb-3">
+                <label class="form-label">Languages</label>
+                <multiselect
+                  v-model="languages"
+                  :options="availableLanguages"
+                  :multiple="true"
+                ></multiselect>
+              </div>
+            </div>
+          </div>
+          <div class="mb-3">
+            <button
+              type="button"
+              @click="submit"
+              class="btn btn-primary"
+              :disabled="
+                selectedCorpora.length == 0 ||
+                loading ||
+                (isQueryValidData != null && isQueryValidData.valid == false) ||
+                !query
+              "
+            >
+              Submit
+            </button>
+            <button
+              type="button"
+              @click="stop"
+              :disabled="loading == false"
+              class="btn btn-primary"
+            >
+              Stop
+            </button>
+            <!-- <button
+              type="button"
+              @click="resume"
+              class="btn btn-primary"
+              :disabled="selectedCorpora.length == 0"
+            >
+              Resume
+            </button>
+            <button
+              type="button"
+              @click="stop"
+              :disabled="loading == false"
+              class="btn btn-primary"
+            >
+              Stop
+            </button>
+            <button
+              type="button"
+              class="btn btn-primary"
+              data-bs-toggle="modal"
+              data-bs-target="#saveQueryModal"
+            >
+              Save query
+            </button>
+            <button type="button" @click="fetch" class="btn btn-primary">
+              Fetch
+            </button> -->
+            <!-- <button type="button" @click="validate" :disabled="!query.trim()" class="btn btn-primary">Validate</button> -->
+          </div>
+          <div class="lds-ripple" v-if="loading">
+            <div></div>
+            <div></div>
+          </div>
+        </div>
         <div class="col-7">
           <div class="form-floating mb-3">
             <nav>
@@ -80,132 +204,6 @@
               </div>
             </div>
           </div>
-          <!-- <div class="form-floating mb-3">
-            <textarea
-              class="form-control query-field"
-              placeholder="Query (e.g. test.*)"
-              :class="
-                isQueryValidData == null || isQueryValidData.valid == true
-                  ? 'ok'
-                  : 'error'
-              "
-              v-model="query"
-            ></textarea>
-            <label for="floatingTextarea">Query</label>
-            <p
-              class="error-text text-danger"
-              v-if="isQueryValidData && isQueryValidData.valid != true"
-            >
-              {{ isQueryValidData.error }}
-            </p>
-          </div> -->
-        </div>
-        <div class="col-5">
-          <div class="mb-3">
-            <label for="exampleInputEmail1" class="form-label">Corpora</label>
-            <multiselect
-              v-model="selectedCorpora"
-              :options="corporaOptions"
-              :multiple="false"
-              label="name"
-              track-by="value"
-            ></multiselect>
-          </div>
-          <!-- <div class="mb-3">
-            <label for="exampleInputEmail1" class="form-label">Room</label>
-            <input
-              type="text"
-              class="form-control"
-              disabled
-            />
-          </div> -->
-          <!-- <div class="mb-3">
-            <label for="exampleInputEmail1" class="form-label"
-              >Query name</label
-            >
-            <input type="text" class="form-control" v-model="queryName" />
-          </div> -->
-          <!-- <div class="mb-3">
-            <label for="exampleInputEmail1" class="form-label">User</label>
-            <input
-              type="text"
-              class="form-control"
-              v-model="userId"
-              disabled
-            />
-          </div> -->
-          <div class="row">
-            <div class="col-3">
-              <div class="mb-3">
-                <label for="exampleInputEmail1" class="form-label"
-                  >Res. per page</label
-                >
-                <input type="number" class="form-control" disabled v-model="resultsPerPage" />
-              </div>
-            </div>
-            <div class="col-3">
-              <div class="mb-3">
-                <label for="exampleInputEmail1" class="form-label"
-                  >No. of results</label
-                >
-                <input type="number" class="form-control" disabled v-model="nResults" />
-              </div>
-            </div>
-            <div class="col-6">
-              <div class="mb-3">
-                <label for="exampleInputEmail1" class="form-label"
-                  >Languages</label
-                >
-                <multiselect
-                  v-model="languages"
-                  :options="availableLanguages"
-                  :multiple="true"
-                ></multiselect>
-              </div>
-            </div>
-          </div>
-          <div class="mb-3">
-            <button
-              type="button"
-              @click="submit"
-              class="btn btn-primary"
-              :disabled="selectedCorpora.length == 0"
-            >
-              Submit
-            </button>
-            <!-- <button
-              type="button"
-              @click="resume"
-              class="btn btn-primary"
-              :disabled="selectedCorpora.length == 0"
-            >
-              Resume
-            </button>
-            <button
-              type="button"
-              @click="stop"
-              :disabled="loading == false"
-              class="btn btn-primary"
-            >
-              Stop
-            </button>
-            <button
-              type="button"
-              class="btn btn-primary"
-              data-bs-toggle="modal"
-              data-bs-target="#saveQueryModal"
-            >
-              Save query
-            </button>
-            <button type="button" @click="fetch" class="btn btn-primary">
-              Fetch
-            </button> -->
-            <!-- <button type="button" @click="validate" :disabled="!query.trim()" class="btn btn-primary">Validate</button> -->
-          </div>
-          <div class="lds-ripple" v-if="loading">
-            <div></div>
-            <div></div>
-          </div>
         </div>
         <!-- <div class="col-12">
           <button type="button" @click="submit" class="btn btn-primary" :disabled="selectedCorpora.length == 0">
@@ -224,20 +222,12 @@
         </div> -->
         <div class="col">
           <hr class="mt-5 mb-5" />
-          <!-- <h6>Query submit result</h6>
-          <div
-            v-html="JSON.stringify(queryData)"
-            v-if="queryData"
-            class="pre"
-          ></div> -->
-          <h6 class="mb-3">Query result (WS)</h6>
+          <h6 class="mb-3">Query result</h6>
           <div class="progress mb-2">
             <div
               class="progress-bar"
               :class="
-                loading
-                  ? 'progress-bar-striped progress-bar-animated'
-                  : ''
+                loading ? 'progress-bar-striped progress-bar-animated' : ''
               "
               role="progressbar"
               aria-label="Basic example"
@@ -246,14 +236,34 @@
               aria-valuemin="0"
               aria-valuemax="100"
             >
-              {{ percentageDone }}%
+              {{ percentageDone.toFixed(2) }}%
+            </div>
+          </div>
+          Total progress
+          <div class="progress mb-2">
+            <div
+              class="progress-bar"
+              :class="
+                loading ? 'progress-bar-striped progress-bar-animated' : ''
+              "
+              role="progressbar"
+              aria-label="Basic example"
+              :style="`width: ${percentageTotalDone}%`"
+              :aria-valuenow="percentageTotalDone"
+              aria-valuemin="0"
+              aria-valuemax="100"
+            >
+              {{ percentageTotalDone.toFixed(2) }}%
             </div>
           </div>
           <div class="row mb-4">
             <div class="col">
               <p class="mb-1">
                 Number of results:
-                <span class="text-bold" v-html="WSDataResults.n_results"></span>
+                <span
+                  class="text-bold"
+                  v-html="WSDataResults.total_results_so_far"
+                ></span>
               </p>
             </div>
             <div class="col">
@@ -268,12 +278,16 @@
             <div class="col">
               <p class="mb-1">
                 Batch done:
-                <span class="text-bold" v-html="WSDataResults.batches_done"></span>
+                <span
+                  class="text-bold"
+                  v-html="WSDataResults.batches_done"
+                ></span>
               </p>
             </div>
             <div class="col">
               <p class="mb-1">
-                Status: <span class="text-bold" v-html="WSDataResults.status"></span>
+                Status:
+                <span class="text-bold" v-html="WSDataResults.status"></span>
               </p>
             </div>
           </div>
@@ -282,12 +296,20 @@
     </div>
     <div class="container-fluid">
       <div class="row">
-        <div class="col-12" v-if="WSDataResults && WSDataResults.result">
+        <div
+          class="col-12"
+          v-if="
+            WSDataResults &&
+            WSDataResults.result &&
+            WSDataSentences &&
+            WSDataSentences.result
+          "
+        >
           <nav>
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
               <button
                 class="nav-link"
-                :class="index == 0 ? 'active': ''"
+                :class="index == 0 ? 'active' : ''"
                 :id="`nav-results-tab-${index}`"
                 data-bs-toggle="tab"
                 :data-bs-target="`#nav-results-${index}`"
@@ -295,11 +317,16 @@
                 role="tab"
                 :aria-controls="`nav-results-${index}`"
                 aria-selected="true"
-                v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+                v-for="(resultSet, index) in WSDataResults.result['0']
+                  .result_sets"
                 :key="`result-btn-${index}`"
               >
                 {{ resultSet.name }}
-                ({{ WSDataSentences && WSDataSentences.result[index + 1] ? WSDataSentences.result[index + 1].length : 0 }})
+                ({{
+                  WSDataSentences && WSDataSentences.result[index + 1]
+                    ? WSDataSentences.result[index + 1].length
+                    : 0
+                }})
               </button>
               <!-- <button
                 class="nav-link"
@@ -318,11 +345,12 @@
           <div class="tab-content" id="nav-tabContent">
             <div
               class="tab-pane fade show"
-              :class="index == 0 ? 'active': ''"
+              :class="index == 0 ? 'active' : ''"
               :id="`nav-results-${index}`"
               role="tabpanel"
               :aria-labelledby="`nav-results-${index}-tab`"
-              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+              v-for="(resultSet, index) in WSDataResults.result['0']
+                .result_sets"
               :key="`result-tab-${index}`"
             >
               <ResultsKWICView
@@ -475,7 +503,7 @@ export default {
   name: "QueryTestView",
   data() {
     return {
-      query: '',
+      query: "",
       queryDQD: `Turn d
     IsPresident = no
     PoliticalGroup != NI
@@ -487,9 +515,10 @@ sequence seq
         upos = DET
     Token@s t2
         upos = ADJ
+        lemma = ^c
     Token@s t3
-        lemma = ^f.*
         lemma.length > 5
+        upos = NOUN
 
 set tdeps
     Token@s tx
@@ -584,6 +613,7 @@ myColl3 => collocation
       simultaneousMode: false,
       currentResults: [],
       percentageDone: 0,
+      percentageTotalDone: 0,
       loading: false,
       stats: null,
       queryTest: "const noop = () => {}",
@@ -634,21 +664,37 @@ myColl3 => collocation
           : [];
     },
     WSDataResults() {
-      // this.percentageDone = this.WSDataResults.projected_results;
-      this.percentageDone = this.WSDataResults.percentage_done;
-      if (["finished"].includes(this.WSDataResults.status)) {
-        this.percentageDone = 100;
+      if (this.WSDataResults) {
+        if (this.WSDataResults.percentage_done) {
+          this.percentageDone = this.WSDataResults.percentage_done;
+        }
+        if (
+          this.WSDataResults.total_results_so_far &&
+          this.WSDataResults.projected_results
+        ) {
+          this.percentageTotalDone =
+            (this.WSDataResults.total_results_so_far /
+              this.WSDataResults.projected_results) *
+            100;
+        }
+        if (["finished"].includes(this.WSDataResults.status)) {
+          this.percentageDone = 100;
+          this.percentageTotalDone = 100;
+        }
+        if (["satisfied"].includes(this.WSDataResults.status)) {
+          // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
+          this.percentageDone = 100;
+        }
+        // console.log("XXX", this.percentageTotalDone, this.percentageDone);
       }
-      if (["satisfied"].includes(this.WSDataResults.status)) {
-        this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
-      }
+
       if (this.WSDataResults.percentage_done >= 100) {
         this.loading = false;
       }
     },
     query() {
       // console.log("Check is valid")
-      if (this.currentTab != 'dqd') {
+      if (this.currentTab != "dqd") {
         this.validate();
       }
     },
@@ -656,13 +702,13 @@ myColl3 => collocation
   methods: {
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      console.log("Page updated 1", currentPage, this.nResults, newNResults);
+      // console.log("Page updated 1", currentPage, this.nResults, newNResults);
       if (newNResults > this.nResults) {
         this.nResults = newNResults;
         this.submit(null, true);
-        console.log("Submit", newNResults);
+        // console.log("Submit", newNResults);
       }
-      console.log("Page updated 2", currentPage, this.nResults, newNResults);
+      // console.log("Page updated 2", currentPage, this.nResults, newNResults);
     },
     updateQueryDQD(queryDQD) {
       this.queryDQD = queryDQD;
@@ -707,13 +753,14 @@ myColl3 => collocation
         }
         if (data["action"] === "timeout") {
           console.log("Query job expired", data);
-          this.submit(null, false);
+          this.submit(null, false, false);
           return;
         }
         if (data["action"] === "validate") {
-          console.log('Query validation', data)
-          if (data.kind == "dqd" && data.valid == true){
-            this.query = JSON.stringify(data.json, null, 2)
+          console.log("Query validation", data);
+          if (data.kind == "dqd" && data.valid == true) {
+            console.log("Set query from server");
+            this.query = JSON.stringify(data.json, null, 2);
           }
           this.isQueryValidData = data;
           return;
@@ -763,10 +810,13 @@ myColl3 => collocation
         this.WSDataResults = data;
       }
     },
-    submit(event, resumeQuery = false) {
-      if (!resumeQuery) {
+    submit(event, resumeQuery = false, cleanResults = true) {
+      if (resumeQuery == false) {
         this.stop();
-        // this.WSDataResults = {};
+        if (cleanResults == true) {
+          this.WSDataResults = {};
+          this.WSDataSentences = {};
+        }
       }
       let data = {
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
@@ -796,6 +846,7 @@ myColl3 => collocation
     stop() {
       this.currentResults = [];
       this.percentageDone = 0;
+      this.percentageTotalDone = 0;
       this.$socket.sendObj({
         // room: this.roomId,
         room: null,
@@ -823,7 +874,7 @@ myColl3 => collocation
         room: null,
         action: "validate",
         user: this.userId,
-        query: this.currentTab == 'json' ? this.query : this.queryDQD + "\n",
+        query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
         // query_name: this.queryName,
       });
     },

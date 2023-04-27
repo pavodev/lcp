@@ -22,7 +22,6 @@ from redis import asyncio as aioredis
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
-from sshtunnel import SSHTunnelForwarder
 
 
 from backend.check_file_permissions import check_file_permissions
@@ -117,15 +116,6 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     )
 
     app["websockets"] = defaultdict(set)
-
-    tunnel = SSHTunnelForwarder(
-        os.getenv("SSH_HOST"),
-        ssh_username=os.getenv("SSH_USER"),
-        ssh_password=None,
-        ssh_pkey=os.getenv("SSH_PKEY"),
-        remote_bind_address=(HOST, PORT),
-    )
-    tunnel.start()
 
     resource = cors.add(app.router.add_resource("/corpora"))
     cors.add(resource.add_route("GET", corpora))
