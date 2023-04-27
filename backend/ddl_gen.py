@@ -541,7 +541,7 @@ def generate_ddl(corpus_temp):
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join([create_idxs, create_constr]),
+        "\n".join(["SET search_path TO efg2;\n" + create_idxs, create_constr]),
     )
 
 

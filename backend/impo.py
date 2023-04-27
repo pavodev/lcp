@@ -1,3 +1,4 @@
+import aiofiles
 import os
 import psycopg2
 
@@ -41,43 +42,53 @@ class Importer:
         self.schema = self.name + str(self.version)
 
     async def create_constridx(self, constr_idxs):
-        async with self.connection:
-            async with self.connection.cursor() as cur:
+        async with self.connection.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
                 await cur.execute(constr_idxs)
 
     async def _check_tbl_exists(self, table):
-        async with self.connection:
-            async with self.connection.cursor() as cur:
-                await cur.execute(SQLstats.check_tbl(table.schema, table.name))
-
-        if cur.fetchone()[0]:
-            return True
-        else:
-            raise Exception(f"Error: table '{table.name}' does not exist.")
+        async with self.connection.connection() as conn:
+            await conn.set_autocommit(True)
+            async with conn.cursor() as cur:
+                script = SQLstats.check_tbl(table.schema, table.name)
+                await cur.execute(script)
+                res = await cur.fetchone()
+                if res[0]:
+                    return True
+                else:
+                    raise Exception(f"Error: table '{table.name}' does not exist.")
 
     async def _copy_tbl(self, data_f):
-        with open(data_f) as f:
-            headers = f.readline().split("\t")
+        async with aiofiles.open(data_f) as f:
+            headers = await f.readline()
+            headers = headers.split("\t")
+            await f.seek(0)
+
+            data_f = os.path.basename(data_f)
 
             table = Table(self.schema, data_f.split(".")[0], headers)
 
-            self._check_tbl_exists(table)
+            await self._check_tbl_exists(table)
 
-            async with self.connection:
-                async with self.connection.cursor() as cur:
+            async with self.connection.connection() as conn:
+                await conn.set_autocommit(True)
+                async with conn.cursor() as cur:
+                    cop = SQLstats.copy_tbl(table.schema, table.name, table.col_repr())
                     try:
-                        await cur.copy_expert(
-                            SQLstats.copy_tbl(
-                                table.schema, table.name, table.col_repr()
-                            ),
-                            f,
-                        )
+                        async with cur.copy(cop) as copy:
+                            while data := await f.read():
+                                await copy.write(data)
                         return True
                     except Exception as e:
                         raise e
 
     async def import_corpus(self, data_dir):
-        files = [f for f in os.listdir(data_dir) if f.endswith(".csv")]
+        files = [
+            os.path.join(data_dir, f)
+            for f in os.listdir(data_dir)
+            if f.endswith(".csv")
+        ]
 
         for f in files:
-            self._copy_tbl(f)
+            await self._copy_tbl(f)
