@@ -13,6 +13,7 @@ class Globs:
     schema: list = []
     tables: list = []
     types: list = []
+    start_constrs: str = ""
 
 
 class reversor:
@@ -42,6 +43,11 @@ class DDL:
 
         DROP SCHEMA IF EXISTS {x} CASCADE;
         CREATE SCHEMA {x};
+        SET search_path TO {x};"""
+    )
+
+    create_cons = lambda x: dedent(
+        f"""
         SET search_path TO {x};"""
     )
 
@@ -514,6 +520,7 @@ class CTProcessor:
         schema_name = corpus_name + corpus_version
 
         self.globals.schema.append(DDL.create_scm(schema_name))
+        self.globals.start_constrs = DDL.create_cons(schema_name)
 
 
 def generate_ddl(corpus_temp):
@@ -541,7 +548,7 @@ def generate_ddl(corpus_temp):
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join(["SET search_path TO efg2;\n" + create_idxs, create_constr]),
+        "\n".join([Globs.start_constrs + create_idxs, create_constr]),
     )
 
 

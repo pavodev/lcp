@@ -22,6 +22,13 @@ class SQLstats:
         WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
     )
 
+    main_corp = dedent(
+        f"""
+        INSERT
+          INTO main.corpus (name, current_version, corpus_template, schema_path)
+        VALUES (%s, %s, %s, %s);"""
+    )
+
 
 class Table:
     def __init__(self, schema, name, columns=None):
@@ -92,3 +99,9 @@ class Importer:
 
         for f in files:
             await self._copy_tbl(f)
+
+    async def create_entry_maincorpus(self):
+        await self.cur.execute(
+            SQLstats.main_corp, (self.name, self.version, self.template, self.schema)
+        )
+
