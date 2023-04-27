@@ -13,7 +13,8 @@ async def validate(
     query: Union[str, bytes, bytearray] = "",
     query_name: Optional[str] = None,
     **kwargs: Dict[str, Any]
-) -> Union[Dict[str, Any], web.Response]:
+# ) -> Union[Dict[str, Any], web.Response]:  #TODO: Fix reponse types
+) -> Any:
     """
     Validate user query?
     """
@@ -23,7 +24,7 @@ async def validate(
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
     except json.JSONDecodeError as err:
         try:
-            json_query = convert(query)
+            json_query = convert(str(query))
             result = {
                 "kind": "dqd",
                 "valid": True,

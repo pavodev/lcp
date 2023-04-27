@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
-import os
 
+import os
 import psycopg
 
 from .corpus_data import CorpusData
@@ -31,21 +31,15 @@ async def test():
 
     tunnel.start()
 
-    template = "fake/path/to/corpus_template/"
-
-    ct = CorpusTemplate(template)
-    corpus = CorpusData("fake/path/to/corpus/")
-    corpus.export_data_as_csv()  # export files
-
     connstr = (
         f"postgresql://{USER}:{PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
     )
 
     conn = await psycopg.AsyncConnection.connect(connstr)
 
-    importer = Importer(connection=conn, path_corpus_template=template)
-    await importer.add_schema(ct.get_script_schema_setup())
-    await importer.import_corpus()  # import files
+    importer = Importer(connection=conn)
+    await importer.add_schema(CorpusTemplate(path_to_schema_setup_script="PATH/TO/SCRIPT/REQUIRED"))
+    await importer.import_corpus(CorpusData(path_corpus="PATH/TO/CORPUS/REQUIRED"))
 
 
 if __name__ == "__main__":

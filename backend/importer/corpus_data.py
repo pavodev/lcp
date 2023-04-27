@@ -1,40 +1,40 @@
 #!/usr/bin/env python3
 # -*- coding: utf8 -*-
 
-from . import config
+import os
 
 
 class CorpusData:
 
-    """Corpus Data Processor
-    - input: path to the corpus-data
-    - output: csv-files (--> db-data-import)
+    """ requires a path to a corpus containing the files:
+            vert_documents.csv, vert_segments.csv and vert_tokens.csv
+        TODO: generalization
     """
 
-    def __init__(self, path_corpus):
+    def __init__(
+            self,
+            path_corpus: str = '',  # path to the corpus-data
+            corpus_name: str = '',  # if None, dir-name of path_corpus will be assumed
+            path_schema_description: str = ''  # TODO: required, if the data-schema doesn't match the std-schema
+    ):
+        self.corpus_path = path_corpus
+        self.corpus_name = path_corpus.split('/')[-1] if not corpus_name else corpus_name
 
-        # SAMPLE-DATA (provided by Jonathan)
-        self.path_data_documents = (
-            config.PATH_BNC_DATA_DOCUMENTS  # TODO: extract data «documents» from corpus
-        )
-        self.path_data_segments = config.PATH_BNC_DATA_SEGMENTS  # TODO: " «segments» "
-        self.path_data_tokens = config.PATH_BNC_DATA_TOKENS  # TODO: " «tokens» "
-        self.path_data_forms = config.PATH_BNC_FORMS  # created from tokens
-        self.path_data_lemmata = config.PATH_BNC_LEMMATA  # "
-        self.path_data_tokens_ = config.PATH_BNC_TOKENS_  # tokens without duplicates
+        # current naming conventions TODO: define the csv-files produced from a corpus (path_schema_description)
+        self.path_data_documents = os.path.join(path_corpus, "vert_documents.csv")
+        self.path_data_segments = os.path.join(path_corpus, "vert_segments.csv")
+        self.path_data_tokens = os.path.join(path_corpus, "vert_tokens.csv")
+        self.path_data_forms = os.path.join(path_corpus, "vert_forms_.csv")  # (dynamically created)
+        self.path_data_lemmata = os.path.join(path_corpus, "vert_lemmata_.csv")  # (dynamically created)
+        self.path_data_tokens_ = os.path.join(path_corpus, "vert_tokens_.csv")  # (dynamically created)
 
-        # csv schema definitions
-        self.documents = ["document_id", "char_range", "meta"]
-        self.segments = ["segment_id", "char_range"]
-        self.tokens = [
-            "token_id",
-            "form_id",
-            "lemma_id",
-            "xpos1",
-            "xpos2",
-            "char_range",
-            "segment_id",
-        ]
+        if not path_schema_description:  # std csv schema definitions
+            self.documents = ["document_id", "char_range", "meta"]
+            self.segments = ["segment_id", "char_range"]
+            self.tokens = ["token_id", "form_id", "lemma_id", "xpos1", "xpos2", "char_range", "segment_id"]
+        else: pass  # TODO: mapping; schema-conventions required (path_schema_description)
+
+        self.export_data_as_csv()
 
     def export_data_as_csv(self):
         i_form, forms, i_lemma, lemmata = 1, {}, 1, {}

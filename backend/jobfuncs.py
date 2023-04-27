@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 from .utils import Interrupted, _get_kwics
 
 
-async def _upload_data(**kwargs):
+async def _upload_data(**kwargs) -> bool:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
@@ -34,23 +34,14 @@ async def _upload_data(**kwargs):
 
     with open(template_path, "r") as fo:
         template = json.load(fo)
-
-    # bernhard: remove this return statement and make the rest work
-    return True
-
-    ct = CorpusTemplate(template)
-
-    # get corpus data path and output to csv
-    corpus = CorpusData(corpus_dir)
-    corpus.export_data_as_csv()
-
-    # add schema and import corpus
+    """
     conn = get_current_job()._db_conn
-    importer = Importer(connection=conn, path_corpus_template=constraints)
-    await importer.add_schema(ct.get_script_schema_setup())
-    success = await importer.import_corpus()
-
-    if not success:
+    importer = Importer(connection=conn)
+    
+    # @Jonathan: can you provide the sql-script (-> schema) and csv-files (-> data)? should work at least for bnc atm
+    if not await importer.add_schema(CorpusTemplate(path_to_schema_setup_script="PATH/TO/SCRIPT/REQUIRED")):
+        return False
+    if not await importer.import_corpus(CorpusData(path_corpus="PATH/TO/CORPUS/REQUIRED")):
         return False
 
     constraints: str = kwargs["constraints"]
@@ -62,9 +53,10 @@ async def _upload_data(**kwargs):
     async with conn:
         async with conn.cursor() as cur:
             await cur.execute(constraints)
-
-    return success
-
+    
+    TODO: delete csv-files and sql-script (may be functions of CorpusTemplate and CorpusData)?
+    """
+    return True
 
 async def _create_schema(**kwargs) -> None:
     """

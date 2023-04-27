@@ -8,11 +8,11 @@ from textwrap import dedent
 
 
 class Globs:
-    base_map = {}
-    layers = {}
-    schema = []
-    tables = []
-    types = []
+    base_map:dict = {}
+    layers:dict = {}
+    schema:list = []
+    tables:list = []
+    types:list = []
 
 
 class reversor:

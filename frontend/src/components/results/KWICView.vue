@@ -68,6 +68,7 @@
       </tbody>
     </table>
     <PaginationComponent
+      v-if="data"
       :resultCount="data.length"
       :resultsPerPage="resultsPerPage"
       :currentPage="currentPage"

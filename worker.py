@@ -33,20 +33,26 @@ REDIS_HOST = rhost.split("/")[-1].strip()
 REDIS_PORT = int(rport.strip())
 
 
-tunnel = SSHTunnelForwarder(
-    os.getenv("SSH_HOST"),
-    ssh_username=os.getenv("SSH_USER"),
-    ssh_password=None,
-    ssh_pkey=os.getenv("SSH_PKEY"),
-    remote_bind_address=(HOST, PORT),
-)
-
-tunnel.start()
+if os.getenv("SSH_HOST"):
+    tunnel = SSHTunnelForwarder(
+        os.getenv("SSH_HOST"),
+        ssh_username=os.getenv("SSH_USER"),
+        ssh_password=None,
+        ssh_pkey=os.getenv("SSH_PKEY"),
+        remote_bind_address=(HOST, PORT),
+    )
+    tunnel.start()
+else:
+    tunnel = None
 
 
 async def go():
-    query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
-    upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    if tunnel:
+        query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+        upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    else:
+        upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+        query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
     conn = await psycopg.AsyncConnection.connect(upload_connstr)
     pool = AsyncConnectionPool(
         query_connstr, num_workers=8, min_size=8, timeout=60, open=False
