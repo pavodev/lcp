@@ -61,7 +61,7 @@ class TreeIndenter(Indenter):
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
-def merge_constraints(constraints: list) -> str:
+def merge_constraints(constraints: list) -> dict:
     retval = {}
     if len(constraints) == 1 and len(constraints[0].keys()) > 1:
         retval = {"constraints": {**constraints[0]}}
