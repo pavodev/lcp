@@ -30,6 +30,12 @@ class SQLstats:
         VALUES (%s, %s, %s, %s, %s);"""
     )
 
+    token_count = lambda x, y: dedent(
+        f"""
+        SELECT count(*)
+          FROM {x}.{y};"""
+    )
+
 
 class Table:
     def __init__(self, schema, name, columns=None):
@@ -48,7 +54,7 @@ class Importer:
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
-        self.token_count = {"word0": 1000}
+        self.token_count = None
 
     async def create_constridx(self, constr_idxs):
         async with self.connection.connection() as conn:
@@ -98,27 +104,32 @@ class Importer:
             for f in os.listdir(data_dir)
             if f.endswith(".csv")
         ]
-        self.token_count = await self.get_token_count(files)
 
         for f in files:
             await self._copy_tbl(f)
 
-    async def get_token_count(self, files):
+        self.token_count = await self.get_token_count(files)
+
+    async def get_token_count(self):
         """
-        Improve me please!
+        count inserted words/tokens in DB and return
+        TODO: not working for parallel
         """
-        ok = ("word.csv", "form.csv", "word0.csv", "form0.csv")
-        f = next((f for f in files if f.endswith(ok)), None)
-        if not f:
-            return {"word0": 5000}
-        name = os.path.splitext(os.path.basename(f))[0]
-        if not name.endswith("0"):
-            name += "0"
-        async with aiofiles.open(f) as fo:
-            count = -1
-            async for line in fo:
-                count += 1
-        return {name: count}
+
+        token = self.template["firstClass"]["token"] + "0"
+
+        async with self.connection.connection() as conn:
+            async with conn.cursor() as cur:
+                query = SQLstats.token_count(self.schema, token)
+                await cur.execute(query)
+                res = await cur.fetchone()
+
+                if res:
+                    count = res[0]
+                else:
+                    raise Exception
+
+        return {token: count}
 
     async def create_entry_maincorpus(self):
         async with self.connection.connection() as conn:
