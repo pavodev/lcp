@@ -97,7 +97,7 @@ class Column(DDL):
     _pk_constr = "ADD PRIMARY KEY ({});"
     _fk_constr = "ADD FOREIGN KEY ({}) REFERENCES {}({});"
     _uniq_constr = "ADD UNIQUE ({});"
-    _idx_constr = "CREATE INDEX {} ON ({});"
+    _idx_constr = "{} ({});"
 
     def __init__(self, name, type, **constrs):
         self.name = name
@@ -155,7 +155,6 @@ class Table(DDL):
     def __init__(self, name, cols, anchorings=None):
         self.name = name.strip()
         self.header_txt = f"CREATE TABLE {self.name} ("
-        self.constr_txt = f"ALTER TABLE {self.name} ALTER COLUMN %"
         self.cols = cols
         self.tabwidth = 8
         if anchorings:
@@ -205,7 +204,7 @@ class Table(DDL):
 
     def create_idxs(self):
         ret = [
-            f"ALTER TABLE {self.name} " + idx
+            f"CREATE INDEX ON {self.name} " + idx
             for col in self.cols
             if (idx := col.ret_idx())
         ]
@@ -537,8 +536,8 @@ def generate_ddl(corpus_temp):
     )
 
     return (
-        "\n".join([create_schema, create_tbls]) + ";",
-        "\n".join([create_idxs, create_constr]) + ";",
+        "\n".join([create_schema, create_tbls]),
+        "\n".join([create_idxs, create_constr]),
     )
 
 
