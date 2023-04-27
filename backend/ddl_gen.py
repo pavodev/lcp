@@ -560,13 +560,6 @@ def main():
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
-    a, b = generate_ddl(corpus_temp)
-    print(a)
-    print(b)
-
-    return
-
-
     Globs.base_map = corpus_temp["firstClass"]
 
     processor = CTProcessor(corpus_temp, Globs)
