@@ -524,8 +524,11 @@ def generate_ddl(corpus_temp):
     processor.process_layers()
 
     create_schema = "\n\n".join([x for x in Globs.schema])
-    create_tbls = "\n\n".join(
+    create_types = "\n\n".join(
         [x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)]
+    )
+    create_tbls = "\n\n".join(
+        [x.create_tbl() for x in sorted(Globs.tables, key=lambda x: x.name)]
     )
 
     create_idxs = "\n\n".join(
@@ -536,7 +539,7 @@ def generate_ddl(corpus_temp):
     )
 
     return (
-        "\n".join([create_schema, create_tbls]),
+        "\n".join([create_schema, create_types, create_tbls]),
         "\n".join([create_idxs, create_constr]),
     )
 
@@ -564,7 +567,6 @@ def main():
     processor.process_schema()
     processor.process_layers()
 
-    # import ipdb; ipdb.set_trace()
 
     print("\n\n".join([x for x in Globs.schema]))
     print()
