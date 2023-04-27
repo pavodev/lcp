@@ -321,9 +321,8 @@ def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
     """
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
-    requested = kwargs["total_results_requested"]
-    if requested in {-1, False, None}:
+    if tot_req in {-1, False, None}:
         return "partial"
-    if n_results >= requested:
+    if n_results >= tot_req:
         return "satisfied"
     return "partial"
