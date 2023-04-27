@@ -33,13 +33,12 @@ class Table:
 
 
 class Importer:
-    def get_schema(self):
-        return self.template["meta"]["name"] + str(self.template["meta"]["version"])
-
     def __init__(self, connection, template):
         self.connection = connection
         self.template = template
-        self.get_schema()
+        self.name = self.template["meta"]["name"]
+        self.version = self.template["meta"]["version"]
+        self.schema = self.name + str(self.version)
 
     async def create_constridx(self, constr_idxs):
         async with self.connection:
