@@ -48,7 +48,7 @@ class Importer:
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
-        self.token_count = 0
+        self.token_count = {"word0": 1000}
 
     async def create_constridx(self, constr_idxs):
         async with self.connection.connection() as conn:
@@ -70,12 +70,8 @@ class Importer:
 
     async def _copy_tbl(self, data_f):
         async with aiofiles.open(data_f) as f:
-            async for line in f:
-                self.token_count += 1
-            f.seek(0)
             headers = await f.readline()
             headers = headers.split("\t")
-            self.token_count -= 1
             # await f.seek(0)
 
             data_f = os.path.basename(data_f)
@@ -102,9 +98,27 @@ class Importer:
             for f in os.listdir(data_dir)
             if f.endswith(".csv")
         ]
+        self.token_count = await self.get_token_count(files)
 
         for f in files:
             await self._copy_tbl(f)
+
+    async def get_token_count(self, files):
+        """
+        Improve me please!
+        """
+        ok = ("word.csv", "form.csv", "word0.csv", "form0.csv")
+        f = next((f for f in files if f.endswith(ok)), None)
+        if not f:
+            return {"word0": 5000}
+        name = os.path.splitext(os.path.basename(f))[0]
+        if not name.endswith("0"):
+            name += "0"
+        async with aiofiles.open(f) as fo:
+            count = -1
+            async for line in fo:
+                count += 1
+        return {name: count}
 
     async def create_entry_maincorpus(self):
         async with self.connection.connection() as conn:
@@ -117,6 +131,6 @@ class Importer:
                         self.version,
                         json.dumps(self.template),
                         self.schema,
-                        {"word0": self.token_count},
+                        json.dumps(self.token_count),
                     ),
                 )
