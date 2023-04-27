@@ -48,7 +48,7 @@ def _parse_cmd_line():
         "-t",
         "--template",
         type=str,
-        required=True,
+        required=False,
         help="Template filepath",
     )
 
@@ -66,6 +66,17 @@ def main(
         filt = os.path.basename(base)
     else:
         base = corpus
+
+    if not template and os.path.isfile(corpus):
+        print("Error: no template specified and corpus is not a directory")
+        return
+    elif not template and os.path.isdir(corpus):
+        template = next((i for i in os.listdir(corpus) if i.endswith(".json")), None)
+        if template is None:
+            print("Error: no template specified and no JSON found in corpus directory.")
+            return
+        template = os.path.join(corpus, template)
+        print(f"Using template: {template}")
 
     headers = {"Content-Type": None}
 
