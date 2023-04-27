@@ -182,8 +182,44 @@ def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> N
     This callback is executed after successful creation of schema.
     We might want to notify some WS user?
     """
-    print(f"Schema created: {job.id}")
-    return
+    user = job.kwargs.get("user")
+    room = job.kwargs.get("room")
+    if not room:
+        return
+    jso = {
+        "user": user,
+        "status": "success" if not result else "error",
+        "project": job.kwargs["project"],
+        "action": "uploaded",
+        "gui": job.kwargs.get("gui", False),
+        "room": room,
+    }
+    if result:
+        jso["error"] = result
+
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+
+def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
+    """
+    Success callback when user has uploaded a dataset
+    """
+    user = job.kwargs.get("user")
+    room = job.kwargs.get("room")
+    if not room:
+        return
+    jso = {
+        "user": user,
+        "status": "success" if not result else "error",
+        "project": job.kwargs["project"],
+        "action": "uploaded",
+        "gui": job.kwargs.get("gui", False),
+        "room": room,
+    }
+    if result:
+        jso["error"] = result
+
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _general_failure(
@@ -216,25 +252,6 @@ def _general_failure(
     if "No such job" in jso["value"]:
         jso["status"] = "timeout"
         jso["action"] = "timeout"
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-
-
-def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
-    """
-    Success callback when user has uploaded a dataset
-    """
-    user = job.kwargs["user"]
-    room = job.kwargs.get("room")
-    if not room:
-        return
-    jso = {
-        "user": user,
-        "status": "success" if result else "unknown",
-        "project": job.kwargs["project"],
-        "action": "uploaded",
-        "gui": job.kwargs["gui"],
-        "room": room,
-    }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
