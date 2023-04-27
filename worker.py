@@ -51,8 +51,12 @@ async def go():
         query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
         upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
     else:
-        upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
-        query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+        upload_connstr = (
+            f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+        )
+        query_connstr = (
+            f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+        )
     conn = await psycopg.AsyncConnection.connect(upload_connstr)
     pool = AsyncConnectionPool(
         query_connstr, num_workers=8, min_size=8, timeout=60, open=False
@@ -61,6 +65,7 @@ async def go():
     class MyJob(Job):
         def __init__(self, *args, **kwargs):
             super().__init__(*args)
+            self._connstr = upload_connstr
             self._db_conn = conn
             self._pool = pool
             self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT)
