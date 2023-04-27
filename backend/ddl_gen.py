@@ -539,7 +539,7 @@ def generate_ddl(corpus_temp):
     )
 
     return (
-        "\n".join([create_schema, create_tbls]),
+        "\n".join([create_schema, create_types, create_tbls]),
         "\n".join([create_idxs, create_constr]),
     )
 
