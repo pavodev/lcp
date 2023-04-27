@@ -32,15 +32,14 @@ class Table:
         return "(" + ", ".join(self.columns) + ")"
 
 class Importer:
-    @staticmethod
-    def get_schema(template):
-        return template["meta"]["name"] + str(template["meta"]["version"])
+    def get_schema(self):
+        return self.template["meta"]["name"] + str(self.template["meta"]["version"])
 
     def __init__(self, connection, template):
         self.con = connection
         self.cur = con.cursor()
         self.template = template
-        self.schema = self.get_schema(template)
+        self.get_schema()
 
     def create_constridx(self, constr_idxs):
         self.cur.execute(constr_idxs)
