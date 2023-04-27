@@ -322,11 +322,18 @@
                 :key="`result-btn-${index}`"
               >
                 {{ resultSet.name }}
-                ({{
+                (<span v-if="resultSet.type == 'plain'">
+                {{
                   WSDataSentences && WSDataSentences.result[index + 1]
                     ? WSDataSentences.result[index + 1].length
                     : 0
-                }})
+                }}</span>
+                <span v-else>{{
+                  WSDataResults && WSDataResults.result[index + 1]
+                    ? WSDataResults.result[index + 1].length
+                    : 0
+                }}</span>
+                )
               </button>
               <!-- <button
                 class="nav-link"
@@ -515,8 +522,8 @@ sequence seq
         upos = DET
     Token@s t2
         upos = ADJ
-        lemma = ^c
     Token@s t3
+        lemma = ^fr.*
         lemma.length > 5
         upos = NOUN
 
@@ -684,6 +691,7 @@ myColl3 => collocation
         if (["satisfied"].includes(this.WSDataResults.status)) {
           // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
           this.percentageDone = 100;
+          this.loading = false;
         }
         // console.log("XXX", this.percentageTotalDone, this.percentageDone);
       }
@@ -826,7 +834,8 @@ myColl3 => collocation
         // room: this.roomId,
         room: null,
         // page_size: this.pageSize,
-        page_size: this.nResults,
+        // page_size: this.nResults,
+        page_size: this.resultsPerPage,
         languages: this.languages,
         total_results_requested: this.nResults,
         stats: true,
