@@ -283,7 +283,7 @@ class PartitionedTable(Table):
         max = self.hex2uuid(cur_min)
         min = self.hex2uuid(0)
 
-        tbl_n = f"{self.base_name}rest PARTITION OF {self.name}"
+        tbl_n = f"CREATE TABLE {self.base_name}rest PARTITION OF {self.name}"
         defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
         tbls.append(tbl_n + defn)
 
