@@ -63,7 +63,7 @@ class Importer:
         async with aiofiles.open(data_f) as f:
             headers = await f.readline()
             headers = headers.split("\t")
-            await f.seek(0)
+            # await f.seek(0)
 
             data_f = os.path.basename(data_f)
 
