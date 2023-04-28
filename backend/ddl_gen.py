@@ -605,6 +605,15 @@ class CTProcessor:
         )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
 
+        mapd = {}
+        mapd["layer"] = {}
+        mapd["layer"][self.globals.base_map["segment"]] = {}
+        mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
+        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = "prepared_" + seg_tab.name
+        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["columnHeaders"] = rel_cols_names
+        mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
+        self.globals.mapping = json.dumps(mapd)
+
         ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
         json_sel = (
@@ -663,6 +672,7 @@ def generate_ddl(corpus_temp):
                 Globs.perms,
             ]
         ),
+        Globs.mapping
     )
 
 

@@ -26,8 +26,8 @@ class SQLstats:
     main_corp = dedent(
         f"""
         INSERT
-          INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts)
-        VALUES (%s, %s, %s, %s, %s);"""
+          INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping)
+        VALUES (%s, %s, %s, %s, %s, %s);"""
     )
 
     token_count = lambda x, y: dedent(
@@ -48,13 +48,14 @@ class Table:
 
 
 class Importer:
-    def __init__(self, connection, template):
+    def __init__(self, connection, template, mapping):
         self.connection = connection
         self.template = template
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
         self.token_count = None
+        self.mapping
 
     async def create_constridx(self, constr_idxs):
         async with self.connection.connection() as conn:
@@ -145,5 +146,6 @@ class Importer:
                         json.dumps(self.template),
                         self.schema,
                         json.dumps(self.token_count),
+                        self.mapping
                     ),
                 )
