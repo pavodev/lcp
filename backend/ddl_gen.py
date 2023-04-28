@@ -8,12 +8,13 @@ from textwrap import dedent
 
 
 class Globs:
-    base_map: dict = {}
-    layers: dict = {}
-    schema: list = []
-    tables: list = []
-    types: list = []
-    start_constrs: str = ""
+    def __init__(self):
+        self.base_map: dict = {}
+        self.layers: dict = {}
+        self.schema: list = []
+        self.tables: list = []
+        self.types: list = []
+        self.start_constrs: str = ""
 
 
 class reversor:
@@ -327,19 +328,19 @@ class PartitionedTable(Table):
             tbl_n = f"CREATE TABLE {self.base_name}{i} PARTITION OF {self.name}"
             cur_min = self.half_hex(cur_max)
 
-            max = self.hex2uuid(cur_max)
-            min = self.hex2uuid(cur_min)
+            mmax = self.hex2uuid(cur_max)
+            mmin = self.hex2uuid(cur_min)
 
-            defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
+            defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
             tbls.append(tbl_n + defn)
 
             cur_max = cur_min
 
-        max = self.hex2uuid(cur_min)
-        min = self.hex2uuid(0)
+        mmax = self.hex2uuid(cur_min)
+        mmin = self.hex2uuid(0)
 
         tbl_n = f"CREATE TABLE {self.base_name}rest PARTITION OF {self.name}"
-        defn = f"{self.nl}FOR VALUES FROM ('{min}'::uuid) TO ('{max}'::uuid); "
+        defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
         tbls.append(tbl_n + defn)
 
         return tbls
@@ -386,10 +387,10 @@ class Type(DDL):
 
 
 class CTProcessor:
-    def __init__(self, corpus_template, globals):
+    def __init__(self, corpus_template, glos):
         self.corpus_temp = corpus_template
         self.layers = self._order_ct_layers(corpus_template["layer"])
-        self.globals = globals
+        self.globals = glos
 
     @staticmethod
     def _order_ct_layers(layers):
@@ -433,7 +434,7 @@ class CTProcessor:
             nullable = res if (res := vals.get("nullable")) else False
 
             # TODO: make this working also for e.g. "isGlobal" & "text"
-            if (type := vals.get("type")) == "text":
+            if (typ := vals.get("type")) == "text":
                 norm_col = f"{attr}_id"
                 norm_table = Table(
                     attr,
@@ -454,7 +455,7 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
-            elif type == "categorical":
+            elif typ == "categorical":
                 if vals.get("isGlobal"):
                     table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
 
@@ -463,7 +464,7 @@ class CTProcessor:
                     types.append(enum_type)
                     table_cols.append(Column(attr, attr, nullable=nullable))
 
-            elif not type and attr == "meta":
+            elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
 
             else:
@@ -478,7 +479,7 @@ class CTProcessor:
         table_name = l_name.lower()
 
         # create primary key column (if table that will be used to partition -> UUID)
-        if l_name == Globs.base_map["segment"]:
+        if l_name == self.globals.base_map["segment"]:
             table_cols.append(Column(f"{table_name}_id", "uuid", primary_key=True))
         else:
             table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
@@ -491,8 +492,8 @@ class CTProcessor:
         if l_params.get("layerType") == "span" and (child := l_params.get("contains")):
             anchs += self.globals.layers[child]["anchoring"]
 
-        if l_name == Globs.base_map["token"]:
-            part_ent = Globs.base_map["segment"].lower()
+        if l_name == self.globals.base_map["token"]:
+            part_ent = self.globals.base_map["segment"].lower()
             part_ent_col = f"{part_ent}_id"
 
             part_col = Column(
@@ -551,10 +552,10 @@ class CTProcessor:
         table_name = self.globals.layers[rel_structure.get("entity")]["table_name"]
         table = [x for x in self.globals.tables if x.name == table_name][0]
         fk_col = f"{rel_structure.get('entity').lower()}_id"
-        type = [x for x in table.cols if x.name == fk_col][0].type
+        typ = [x for x in table.cols if x.name == fk_col][0].type
         nullable = rel_structure.get("nullable")
 
-        return Column(name, type, nullable=nullable)
+        return Column(name, typ, nullable=nullable)
 
     def process_layers(self):
         for layer, params in self.layers.items():
@@ -594,7 +595,8 @@ class CTProcessor:
             x
             for x in tok_tab.primary_key()
             if self.globals.base_map["token"].lower() in x.name
-        ][0]
+        ]
+        tok_pk = tok_pk[0]
         rel_cols = sorted(
             [
                 x
@@ -609,8 +611,12 @@ class CTProcessor:
         mapd["layer"] = {}
         mapd["layer"][self.globals.base_map["segment"]] = {}
         mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
-        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = "prepared_" + seg_tab.name
-        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["columnHeaders"] = rel_cols_names
+        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = (
+            "prepared_" + seg_tab.name
+        )
+        mapd["layer"][self.globals.base_map["segment"]]["prepared"][
+            "columnHeaders"
+        ] = rel_cols_names
         mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
         self.globals.mapping = json.dumps(mapd)
 
@@ -639,40 +645,41 @@ class CTProcessor:
 
 
 def generate_ddl(corpus_temp):
-    Globs.base_map = corpus_temp["firstClass"]
+    globs = Globs()
+    globs.base_map = corpus_temp["firstClass"]
 
-    processor = CTProcessor(corpus_temp, Globs)
+    processor = CTProcessor(corpus_temp, globs)
 
     processor.process_schema()
     processor.process_layers()
     processor.create_compute_prep_segs()
 
-    create_schema = "\n\n".join([x for x in Globs.schema])
+    create_schema = "\n\n".join([x for x in globs.schema])
     create_types = "\n\n".join(
-        [x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)]
+        [x.create_DDL() for x in sorted(globs.types, key=lambda x: x.name)]
     )
     create_tbls = "\n\n".join(
-        [x.create_tbl() for x in sorted(Globs.tables, key=lambda x: x.name)]
+        [x.create_tbl() for x in sorted(globs.tables, key=lambda x: x.name)]
     )
 
     create_idxs = "\n\n".join(
-        [x.create_idxs() for x in sorted(Globs.tables, key=lambda x: x.name)]
+        [x.create_idxs() for x in sorted(globs.tables, key=lambda x: x.name)]
     )
     create_constr = "\n\n".join(
-        [x.create_constrs() for x in sorted(Globs.tables, key=lambda x: x.name)]
+        [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
     )
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
         "\n".join(
             [
-                Globs.start_constrs + create_idxs,
+                globs.start_constrs + create_idxs,
                 create_constr,
-                Globs.prep_seg,
-                Globs.perms,
+                globs.prep_seg,
+                globs.perms,
             ]
         ),
-        Globs.mapping
+        globs.mapping,
     )
 
 
@@ -697,36 +704,38 @@ def main():
     print(a + b)
     return
 
-    Globs.base_map = corpus_temp["firstClass"]
+    globs = Globs()
 
-    processor = CTProcessor(corpus_temp, Globs)
+    globs.base_map = corpus_temp["firstClass"]
+
+    processor = CTProcessor(corpus_temp, globs)
 
     processor.process_schema()
     processor.process_layers()
 
     processor.create_compute_prep_segs()
 
-    print("\n\n".join([x for x in Globs.schema]))
+    print("\n\n".join([x for x in globs.schema]))
     print()
     print(
-        "\n\n".join([x.create_DDL() for x in sorted(Globs.types, key=lambda x: x.name)])
+        "\n\n".join([x.create_DDL() for x in sorted(globs.types, key=lambda x: x.name)])
     )
     print()
     print(
         "\n\n".join(
-            [x.create_tbl() for x in sorted(Globs.tables, key=lambda x: x.name)]
+            [x.create_tbl() for x in sorted(globs.tables, key=lambda x: x.name)]
         )
     )
     print()
     print(
         "\n\n".join(
-            [x.create_idxs() for x in sorted(Globs.tables, key=lambda x: x.name)]
+            [x.create_idxs() for x in sorted(globs.tables, key=lambda x: x.name)]
         )
     )
     print()
     print(
         "\n\n".join(
-            [x.create_constrs() for x in sorted(Globs.tables, key=lambda x: x.name)]
+            [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
         )
     )
 
