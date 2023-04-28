@@ -86,15 +86,15 @@ class DDL:
            FROM ins;"""
     )
 
-#    jsonb_sel =
-#                                form
-#                              , lemma
-#                              , xpos1
-#                              , xpos2
-#                             ) AS toks
-#                        FROM token0
-#                        JOIN form      USING (form_id)
-#                        JOIN lemma     USING (lemma_id)
+    #    jsonb_sel =
+    #                                form
+    #                              , lemma
+    #                              , xpos1
+    #                              , xpos2
+    #                             ) AS toks
+    #                        FROM token0
+    #                        JOIN form      USING (form_id)
+    #                        JOIN lemma     USING (lemma_id)
 
     t = "\t"
     nl = "\n\t"
@@ -572,25 +572,59 @@ class CTProcessor:
         corpus_version = str(int(self.corpus_temp["meta"]["version"]))
         schema_name = corpus_name + corpus_version
 
-        self.globals.schema.append(DDL.create_scm(schema_name, corpus_name, corpus_version))
+        self.globals.schema.append(
+            DDL.create_scm(schema_name, corpus_name, corpus_version)
+        )
         self.globals.start_constrs = DDL.create_cons_preamble(schema_name)
         self.globals.perms = DDL.perms(schema_name)
 
     def create_compute_prep_segs(self):
-        tok_tab = [x for x in self.globals.tables if x.name == self.globals.base_map["token"].lower() + "0"][0]
-        seg_tab = [x for x in self.globals.tables if x.name == self.globals.base_map["segment"].lower()][0]
+        tok_tab = [
+            x
+            for x in self.globals.tables
+            if x.name == self.globals.base_map["token"].lower() + "0"
+        ][0]
+        seg_tab = [
+            x
+            for x in self.globals.tables
+            if x.name == self.globals.base_map["segment"].lower()
+        ][0]
 
-        tok_pk = [x for x in tok_tab.primary_key() if self.globals.base_map["token"].lower() in x.name][0]
-        rel_cols = sorted([x for x in tok_tab.cols if not (x.constrs.get("primary_key") or "range" in x.name)], key=lambda x: x.name)
+        tok_pk = [
+            x
+            for x in tok_tab.primary_key()
+            if self.globals.base_map["token"].lower() in x.name
+        ][0]
+        rel_cols = sorted(
+            [
+                x
+                for x in tok_tab.cols
+                if not (x.constrs.get("primary_key") or "range" in x.name)
+            ],
+            key=lambda x: x.name,
+        )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
 
         ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
-        json_sel = "\n                      , ".join(rel_cols_names) + \
-                  f"\n                     ) AS toks\n                FROM {tok_tab.name}\n                " + \
-                  "\n                ".join([f"JOIN {fk['table']} USING ({fk['column']})" for x in rel_cols if (fk := x.constrs.get("foreign_key"))])
+        json_sel = (
+            "\n                      , ".join(rel_cols_names)
+            + f"\n                     ) AS toks\n                FROM {tok_tab.name}\n                "
+            + "\n                ".join(
+                [
+                    f"JOIN {fk['table']} USING ({fk['column']})"
+                    for x in rel_cols
+                    if (fk := x.constrs.get("foreign_key"))
+                ]
+            )
+        )
 
-        query = DDL.compute_prep_segs(seg_tab.primary_key()[0].name, tok_pk.name, f"prepared_{seg_tab.name}") % json_sel
+        query = (
+            DDL.compute_prep_segs(
+                seg_tab.primary_key()[0].name, tok_pk.name, f"prepared_{seg_tab.name}"
+            )
+            % json_sel
+        )
 
         self.globals.prep_seg = "\n\n" + "\n".join([ddl, query])
 
@@ -621,7 +655,14 @@ def generate_ddl(corpus_temp):
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join([Globs.start_constrs + create_idxs, create_constr, Globs.prep_seg, Globs.perms]),
+        "\n".join(
+            [
+                Globs.start_constrs + create_idxs,
+                create_constr,
+                Globs.prep_seg,
+                Globs.perms,
+            ]
+        ),
     )
 
 
