@@ -302,8 +302,12 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
             schema_path,
             token_counts,
             mapping,
+            enabled,
         ) = tup
         ver = str(current_version)
+        if not enabled:
+            print(f"Corpus disabled: {name}={corpus_id}")
+            continue
         schema_path = schema_path.replace("<version>", ver)
         if not schema_path.endswith(ver):
             schema_path = f"{schema_path}{ver}"
