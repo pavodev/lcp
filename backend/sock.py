@@ -48,6 +48,9 @@ async def handle_redis_response(
 
                 # handle configuration message
                 if payload.get("action") == "set_config":
+                    if payload["disabled"]:
+                        for name, idx in payload["disabled"]:
+                            print(f"Corpus disabled: {name}={idx}")
                     print(f"Config loaded: {len(payload['config'])-1} corpora")
                     app["config"] = payload["config"]
                     if test:
