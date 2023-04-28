@@ -37,6 +37,12 @@ class DDL:
     base DDL class for DB entities
     """
 
+    perms = lambda x: dedent(
+        f"""
+        GRANT USAGE ON SCHEMA {x} TO lcp_dev_webuser;
+        GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO lcp_dev_webuser;\n\n"""
+    )
+
     create_scm = lambda x: dedent(
         f"""
         BEGIN;
@@ -48,7 +54,8 @@ class DDL:
 
     create_cons_preamble = lambda x: dedent(
         f"""
-        SET search_path TO {x};"""
+
+        SET search_path TO {x};\n"""
     )
 
     create_prepared_segs = lambda x, y: dedent(
@@ -561,6 +568,7 @@ class CTProcessor:
 
         self.globals.schema.append(DDL.create_scm(schema_name))
         self.globals.start_constrs = DDL.create_cons_preamble(schema_name)
+        self.globals.perms = DDL.perms(schema_name)
 
     def create_compute_prep_segs(self):
         tok_tab = [x for x in self.globals.tables if x.name == self.globals.base_map["token"].lower() + "0"][0]
@@ -607,7 +615,7 @@ def generate_ddl(corpus_temp):
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join([Globs.start_constrs + create_idxs, create_constr, Globs.prep_seg]),
+        "\n".join([Globs.start_constrs + create_idxs, create_constr, Globs.prep_seg, Globs.perms]),
     )
 
 
