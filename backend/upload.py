@@ -61,7 +61,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
             "Something has gone wrong. Check your config file and try uploading again."
         )
     elif status == "finished":
-        msg = f"""Upload is complete. You should be able to see your corpus in the web app, or query it by its identifier, {project}"""
+        msg = f"""Upload is complete. You should be able to see your corpus in the web app."""
     ret = {"job": job.id, "status": status, "info": msg}
     return web.json_response(ret)
 
