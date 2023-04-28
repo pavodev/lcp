@@ -17,6 +17,33 @@ VALID_EXTENSIONS = ("vrt", "csv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 
 
+async def _create_status_check(request: web.Request, job_id: str) -> web.Response:
+    """
+    What to do when user check status on an upload job
+    """
+    qs = request.app["query_service"]
+    job = qs.get(job_id)
+    if not job:
+        ret = {"job": job_id, "status": "failed", "error": "Job not found."}
+        return web.json_response(ret)
+    status = job.get_status(refresh=True)
+    msg = """Please wait: corpus processing in progress..."""
+    project = job.kwargs["project"]
+    if status == "failed":
+        msg = (
+            "Something has gone wrong. Check your config file and try uploading again."
+        )
+    elif status == "finished":
+        msg = f"""Template validated successfully"""
+    ret = {
+        "job": job.id,
+        "status": status,
+        "info": msg,
+        "project": job.kwargs["project"],
+    }
+    return web.json_response(ret)
+
+
 async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
     What to do when user check status on an upload job
@@ -158,7 +185,12 @@ async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTS JSON
     """
+    exists = request.rel_url.query.get("job")
+    if exists:
+        return await _create_status_check(request, exists)
+
     request_data = await request.json()
+
     template = request_data["template"]
 
     create_ddl, constraints_ddl, mapping = await pg_create(template)
@@ -174,5 +206,9 @@ async def make_schema(request: web.Request) -> web.Response:
     with open(os.path.join(directory, "template.json"), "w") as fo:
         json.dump(template, fo)
 
+    short_url = str(request.url).split("?", 1)[0]
     job = request.app["query_service"].create(create_ddl, project=uu)
-    return web.json_response({"status": "started", "job": job.id, "project": uu})
+    whole_url = f"{short_url}?job={job.id}"
+    return web.json_response(
+        {"status": "started", "job": job.id, "project": uu, "target": whole_url}
+    )
