@@ -587,7 +587,7 @@ class CTProcessor:
 
         json_sel = "\n                      , ".join(rel_cols_names) + \
                   f"\n                     ) AS toks\n                FROM {tok_tab.name}\n                " + \
-                  "\n                ".join([f"JOIN {fk['table']} USING {fk['column']}" for x in rel_cols if (fk := x.constrs.get("foreign_key"))])
+                  "\n                ".join([f"JOIN {fk['table']} USING ({fk['column']})" for x in rel_cols if (fk := x.constrs.get("foreign_key"))])
 
         query = DDL.compute_prep_segs(seg_tab.primary_key()[0].name, tok_pk.name, f"prepared_{seg_tab.name}") % json_sel
 
