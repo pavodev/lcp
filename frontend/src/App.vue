@@ -53,6 +53,7 @@
       </div>
     </nav>
     <router-view />
+    <NotificationView />
   </div>
 </template>
 
@@ -60,6 +61,8 @@
 import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
+
+import NotificationView from "@/components/NotificationView.vue";
 
 export default {
   mounted() {
@@ -70,6 +73,9 @@ export default {
     addActionClass(e) {
       e.currentTarget.querySelector(".nav-link").classList.add("active");
     },
+  },
+  components: {
+    NotificationView,
   },
   computed: {
     ...mapState(useUserStore, ["userData"]),

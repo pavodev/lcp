@@ -130,9 +130,10 @@
 </template>
 
 <script>
-import Title from "@/components/TitleComponent.vue";
 import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
+
+import Title from "@/components/TitleComponent.vue";
 import Utils from "@/utils";
 
 export default {
