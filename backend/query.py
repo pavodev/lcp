@@ -110,7 +110,6 @@ def _get_query_batches(
     all_languages = ["en", "de", "fr", "ca"]
     for corpus in corpora:
         batches = config[str(corpus)]["_batches"]
-        # config[corpus]['layer']['Token@en'] -- use this to determine languages?
         for name, size in batches.items():
             stripped = name.rstrip("0123456789")
             if stripped.endswith("rest"):
@@ -219,7 +218,10 @@ async def query(
         total_results_requested = manual["total_results_requested"]
         total_results_so_far = manual["total_results_so_far"]
         user = manual["user"]
-        corpora_to_use = [int(i) for i in manual["corpora"]]
+        corpora_to_use = manual["corpora"]
+        if not isinstance(corpora_to_use, list):
+            corpora_to_use = [corpora_to_use]
+        corpora_to_use = [int(i) for i in corpora_to_use]
         room = manual.get("room")
         sentences = manual.get("sentences", True)
         hit_limit = manual.get("hit_limit", False)
@@ -247,7 +249,10 @@ async def query(
         app = request.app
         config = request.app["config"]
         request_data = await request.json()
-        corpora_to_use = [int(i) for i in request_data["corpora"]]
+        corpora_to_use = request_data["corpora"]
+        if not isinstance(corpora_to_use, list):
+            corpora_to_use = [corpora_to_use]
+        corpora_to_use = [int(i) for i in corpora_to_use]
         query = request_data["query"]
         room = request_data.get("room")
         previous = request_data.get("previous")
