@@ -128,11 +128,17 @@ def main(
         return
     new_url = data["target"]
 
+    status = None
+
     while True:
         print("Checking progress...")
         resp = requests.post(new_url, params=params)
         data = resp.json()
-        print(data)
+        if data.get("status") != status:
+            print(data)
+            status = data["status"]
+        else:
+            print("...")
         if data["status"] in {"failed", "finished"}:
             break
         sleep(8)

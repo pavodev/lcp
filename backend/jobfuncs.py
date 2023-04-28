@@ -56,7 +56,7 @@ async def _create_schema(**kwargs) -> None:
     async with get_current_job()._upool.connection() as conn:
         await conn.set_autocommit(True)
         async with conn.cursor() as cur:
-            print("Creating schema...")
+            print("Creating schema...\n", kwargs["create"])
             await cur.execute(kwargs["create"])
             # await cur.execute(kwargs["constraints"])
     return None
