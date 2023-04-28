@@ -91,6 +91,7 @@ class Importer:
                 async with conn.cursor() as cur:
                     cop = SQLstats.copy_tbl(table.schema, table.name, table.col_repr())
                     try:
+                        print(f"Running copy...\n{cop}")
                         async with cur.copy(cop) as copy:
                             while data := await f.read():
                                 await copy.write(data)
@@ -106,6 +107,7 @@ class Importer:
         ]
 
         for f in files:
+            print(f"Doing file: {f}")
             await self._copy_tbl(f)
 
         self.token_count = await self.get_token_count()
