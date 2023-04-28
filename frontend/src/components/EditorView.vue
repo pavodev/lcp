@@ -291,6 +291,10 @@ export default {
     editor.getModel().onDidChangeContent(() => {
       this.updateContent()
     });
+
+    window.addEventListener('contextmenu', e => {
+      e.stopImmediatePropagation()
+    }, true);
   },
   methods: {
     columnHeaders() {
