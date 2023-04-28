@@ -46,10 +46,47 @@ class DDL:
         SET search_path TO {x};"""
     )
 
-    create_cons = lambda x: dedent(
+    create_cons_preamble = lambda x: dedent(
         f"""
         SET search_path TO {x};"""
     )
+
+    create_prepared_segs = lambda x, y: dedent(
+        f"""
+        CREATE TABLE prepared_{x} (
+            {y}         uuid    PRIMARY KEY REFERENCES {x} {y},
+            off_set     int,
+            content     jsonb
+        );"""
+    )
+
+    compute_prep_segs = lambda x, y, z: dedent(
+        f"""
+        WITH ins AS (
+               SELECT {x}
+                    , min({y}) AS off_set
+                    , to_jsonb(array_agg(toks ORDER BY {y}))
+                 FROM (
+                      SELECT {x}
+                           , {y}
+                           , jsonb_build_array(
+                                %s
+                       ORDER BY {y}) x
+                GROUP BY {x})
+         INSERT INTO {z}
+         SELECT *
+           FROM ins;"""
+    )
+
+#    jsonb_sel =
+#                                form
+#                              , lemma
+#                              , xpos1
+#                              , xpos2
+#                             ) AS toks
+#                        FROM token0
+#                        JOIN form      USING (form_id)
+#                        JOIN lemma     USING (lemma_id)
 
     t = "\t"
     nl = "\n\t"
@@ -173,6 +210,9 @@ class Table(DDL):
         )
         # self._max_strtype = max([len(col.type) for col in cols])
         self._process_cols()
+
+    def primary_key(self):
+        return [x for x in self.cols if x.constrs.get("primary_key")]
 
     def _order_cols(self):
         """
@@ -520,7 +560,25 @@ class CTProcessor:
         schema_name = corpus_name + corpus_version
 
         self.globals.schema.append(DDL.create_scm(schema_name))
-        self.globals.start_constrs = DDL.create_cons(schema_name)
+        self.globals.start_constrs = DDL.create_cons_preamble(schema_name)
+
+    def create_compute_prep_segs(self):
+        tok_tab = [x for x in self.globals.tables if x.name == self.globals.base_map["token"].lower() + "0"][0]
+        seg_tab = [x for x in self.globals.tables if x.name == self.globals.base_map["segment"].lower()][0]
+
+        tok_pk = [x for x in tok_tab.primary_key() if self.globals.base_map["token"].lower() in x.name][0]
+        rel_cols = sorted([x for x in tok_tab.cols if not (x.constrs.get("primary_key") or "range" in x.name)], key=lambda x: x.name)
+        rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
+
+        ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
+
+        json_sel = "\n                      , ".join(rel_cols_names) + \
+                  f"\n                     ) AS toks\n                FROM {tok_tab.name}\n                " + \
+                  "\n                ".join([f"JOIN {fk['table']} USING {fk['column']}" for x in rel_cols if (fk := x.constrs.get("foreign_key"))])
+
+        query = DDL.compute_prep_segs(seg_tab.primary_key()[0].name, tok_pk.name, f"prepared_{seg_tab.name}") % json_sel
+
+        self.globals.prep_seg = "\n\n" + "\n".join([ddl, query])
 
 
 def generate_ddl(corpus_temp):
@@ -530,6 +588,7 @@ def generate_ddl(corpus_temp):
 
     processor.process_schema()
     processor.process_layers()
+    processor.create_compute_prep_segs()
 
     create_schema = "\n\n".join([x for x in Globs.schema])
     create_types = "\n\n".join(
@@ -548,7 +607,7 @@ def generate_ddl(corpus_temp):
 
     return (
         "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join([Globs.start_constrs + create_idxs, create_constr]),
+        "\n".join([Globs.start_constrs + create_idxs, create_constr, Globs.prep_seg]),
     )
 
 
