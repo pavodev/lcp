@@ -61,7 +61,7 @@ class DDL:
     create_prepared_segs = lambda x, y: dedent(
         f"""
         CREATE TABLE prepared_{x} (
-            {y}         uuid    PRIMARY KEY REFERENCES {x} {y},
+            {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
             off_set     int,
             content     jsonb
         );"""
@@ -651,6 +651,8 @@ def main():
 
     processor.process_schema()
     processor.process_layers()
+
+    processor.create_compute_prep_segs()
 
     print("\n\n".join([x for x in Globs.schema]))
     print()
