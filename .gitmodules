@@ -1,3 +1,6 @@
 [submodule "abstract-query"]
   path = abstract-query
   url = ../abstract-query.git
+[submodule "lcp-upload"]
+	path = lcp-upload
+	url = https://gitlab.uzh.ch/LiRI/projects/lcp-upload
