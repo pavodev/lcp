@@ -43,12 +43,13 @@ class DDL:
         GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO lcp_dev_webuser;\n\n"""
     )
 
-    create_scm = lambda x: dedent(
+    create_scm = lambda x, y, z: dedent(
         f"""
         BEGIN;
 
         DROP SCHEMA IF EXISTS {x} CASCADE;
         CREATE SCHEMA {x};
+        DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
         SET search_path TO {x};"""
     )
 
@@ -571,7 +572,7 @@ class CTProcessor:
         corpus_version = str(int(self.corpus_temp["meta"]["version"]))
         schema_name = corpus_name + corpus_version
 
-        self.globals.schema.append(DDL.create_scm(schema_name))
+        self.globals.schema.append(DDL.create_scm(schema_name, corpus_name, corpus_version))
         self.globals.start_constrs = DDL.create_cons_preamble(schema_name)
         self.globals.perms = DDL.perms(schema_name)
 
