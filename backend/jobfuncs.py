@@ -38,7 +38,7 @@ async def _upload_data(**kwargs) -> bool:
     try:
         print("Importing corpus...")
         await importer.import_corpus(corpus_dir)
-        print("Setting constraints...")
+        print(f"Setting constraints...\n\n{constraints}")
         await importer.create_constridx(constraints)
         print("Adding to corpus list...")
         await importer.create_entry_maincorpus()

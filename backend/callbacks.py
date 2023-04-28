@@ -322,6 +322,10 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
             "schema_path": schema_path,
             "token_counts": token_counts,
             "mapping": mapping,
+            "segment": corpus_template["firstClass"]["segment"],
+            "token": corpus_template["firstClass"]["token"],
+            "document": corpus_template["firstClass"]["document"],
+            # "column_names": corpus_template["layer"]["Token"]["Attributes"],
         }
         corpus_template.update(rest)
 

@@ -21,10 +21,11 @@ def _make_sents_query(
     """
     Build a query to fetch sentences (uuids to be filled in later)
     """
+    name = config["segment"]
     underlang = f"_{lang}" if lang else ""
-    seg_name = f"prepared_segment{underlang}"
-    script = f"SELECT segment_id, off_set, content FROM {schema}.{seg_name} "
-    end = "WHERE segment_id = ANY('{{ {allowed} }}');"
+    seg_name = f"prepared_{name}{underlang}"
+    script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
+    end = f"WHERE {name}" + "_id = ANY('{{ {allowed} }}');"
     return script + end
 
 
