@@ -1,5 +1,5 @@
-import json
 import os
+import sys
 
 from collections import defaultdict
 
@@ -95,7 +95,6 @@ async def cleanup_background_tasks(app: web.Application) -> None:
 
 
 async def create_app(*args, **kwargs) -> Optional[web.Application]:
-
     test = kwargs.get("test")
 
     catcher = Catcher()
@@ -173,19 +172,25 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     app.on_cleanup.append(cleanup_background_tasks)
     app.on_shutdown.append(on_shutdown)
 
+    return app
+
+
+async def start_app():
+    app = await create_app()
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
     await site.start()
     # wait forever
     await asyncio.Event().wait()
-    # return app
     return None
 
 
-if __name__ == "__main__" or (__name__ == "run" and not "_TEST" in os.environ):
+if __name__ == "__main__" or (
+    sys.argv[0].endswith("adev") and not "_TEST" in os.environ
+):
     # we do not want to run this code when unit testing, but we do want to allow mypy
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    app = asyncio.run(create_app())
+    asyncio.run(start_app())
     # web.run_app(app, port=9090)

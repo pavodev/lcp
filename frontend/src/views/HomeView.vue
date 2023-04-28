@@ -5,7 +5,7 @@
       <div class="row">
         <!-- <p>Select corpora to query:</p> -->
         <div
-          class="col-4"
+          class="col-4 mb-3"
           v-for="corpus in corpora"
           :key="corpus.id"
           @click="openCorpus(corpus)"
