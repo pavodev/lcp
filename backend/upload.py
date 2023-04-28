@@ -106,7 +106,7 @@ async def upload(request: web.Request) -> web.Response:
                             else:
                                 compressed.extract(dest, [f])
                             try:
-                                os.rename(dest, just_f)
+                                os.rename(os.path.join(dest, f), just_f)
                             except Exception as err:
                                 print(f"Warning: {err}")
                                 pass

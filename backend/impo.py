@@ -55,7 +55,7 @@ class Importer:
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
         self.token_count = None
-        self.mapping
+        self.mapping = mapping
 
     async def create_constridx(self, constr_idxs):
         async with self.connection.connection() as conn:
@@ -146,6 +146,6 @@ class Importer:
                         json.dumps(self.template),
                         self.schema,
                         json.dumps(self.token_count),
-                        self.mapping
+                        self.mapping,
                     ),
                 )
