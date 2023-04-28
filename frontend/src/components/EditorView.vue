@@ -283,6 +283,9 @@ export default {
       language: "DQDmonaco",
       value: this.query,
       minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      renderLineHighlight: "none",
+      folding: false,
     });
 
     editor.getModel().onDidChangeContent(() => {
