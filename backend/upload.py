@@ -96,12 +96,21 @@ async def upload(request: web.Request) -> web.Response:
                         for f in getattr(compressed, method)():
                             if not f.endswith(VALID_EXTENSIONS):
                                 continue
-                            dest = os.path.join("uploads", project_id, f)
+                            just_f = os.path.join(
+                                "uploads", project_id, os.path.basename(f)
+                            )
+                            dest = os.path.join("uploads", project_id)
                             print(f"Uncompressing {f} to {dest}")
                             if ext != ".7z":
                                 compressed.extract(f, dest)
                             else:
                                 compressed.extract(dest, [f])
+                            try:
+                                os.rename(dest, just_f)
+                            except Exception as err:
+                                print(f"Warning: {err}")
+                                pass
+                            print("Extracted", dest, f)
                     print(f"Extracting {ext} done!")
                     os.remove(path)  # todo: should we do this now?
                 elif path.endswith(ext) and not check(path):
