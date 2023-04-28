@@ -5,7 +5,7 @@
       <div class="row">
         <!-- <p>Select corpora to query:</p> -->
         <div
-          class="col-4"
+          class="col-4 mb-3"
           v-for="corpus in corpora"
           :key="corpus.id"
           @click="openCorpus(corpus)"
@@ -130,9 +130,10 @@
 </template>
 
 <script>
-import Title from "@/components/TitleComponent.vue";
 import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
+
+import Title from "@/components/TitleComponent.vue";
 import Utils from "@/utils";
 
 export default {

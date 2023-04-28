@@ -1,7 +1,7 @@
 let config = null;
 if (process.env.NODE_ENV === "production") {
   config = {
-    apiUrl: "http://lcp.linguistik.uzh.ch/be",
+    apiUrl: "https://lcp.linguistik.uzh.ch/be",
     wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
     appDomain: "lcp.linguistik.uzh.ch",
     environment: "production",
@@ -10,7 +10,7 @@ if (process.env.NODE_ENV === "production") {
   };
 } else if (process.env.NODE_ENV === "test") {
   config = {
-    apiUrl: "http://lcp.test.linguistik.uzh.ch/be",
+    apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
     wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
     appDomain: "lcp.test.linguistik.uzh.ch",
     environment: "test",

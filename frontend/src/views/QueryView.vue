@@ -500,6 +500,7 @@ textarea {
 import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useUserStore } from "@/stores/userStore";
+import { useNotificationStore } from "@/stores/notificationStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ResultsTableView from "@/components/results/TableView.vue";
@@ -757,6 +758,11 @@ myColl3 => collocation
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "interrupted") {
           console.log("Query interrupted", data);
+          this.loading = false
+          useNotificationStore().add({
+            type: 'error',
+            text: data.toString()
+          })
           return;
         }
         if (data["action"] === "timeout") {
@@ -765,9 +771,9 @@ myColl3 => collocation
           return;
         }
         if (data["action"] === "validate") {
-          console.log("Query validation", data);
+          // console.log("Query validation", data);
           if (data.kind == "dqd" && data.valid == true) {
-            console.log("Set query from server");
+            // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
           this.isQueryValidData = data;
@@ -787,15 +793,19 @@ myColl3 => collocation
         } else if (data["action"] === "stopped") {
           if (data["n"]) {
             console.log("queries stopped", data);
+            useNotificationStore().add({
+              type: 'success',
+              text: "Query stopped"
+            })
           }
           return;
         } else if (data["action"] === "query_result") {
-          console.log("query_result", data);
+          // console.log("query_result", data);
           data["n_results"] = data["result"].length;
           this.WSDataResults = data;
           return;
         } else if (data["action"] === "sentences") {
-          console.log("sentences", data);
+          // console.log("sentences", data);
           this.WSDataSentences = data;
           return;
         }
