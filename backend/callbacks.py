@@ -291,6 +291,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     Run by worker: make config data
     """
     fixed: Dict[int, Dict] = {-1: {}}
+    disabled: List[Tuple(str, int)] = []
     for tup in result:
         (
             corpus_id,
@@ -302,8 +303,13 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
             schema_path,
             token_counts,
             mapping,
+            enabled,
         ) = tup
         ver = str(current_version)
+        if not enabled:
+            print(f"Corpus disabled: {name}={corpus_id}")
+            disabled.append((name, corpus_id))
+            continue
         schema_path = schema_path.replace("<version>", ver)
         if not schema_path.endswith(ver):
             schema_path = f"{schema_path}{ver}"
@@ -327,7 +333,12 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 
-    jso = {"config": fixed, "_is_config": True, "action": "set_config"}
+    jso = {
+        "config": fixed,
+        "_is_config": True,
+        "action": "set_config",
+        "disabled": disabled,
+    }
 
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
