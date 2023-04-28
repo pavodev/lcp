@@ -27,6 +27,11 @@ async def _upload_data(**kwargs) -> bool:
     with open(template_path, "r") as fo:
         template = json.load(fo)
 
+    mapping_path = os.path.join(corpus_dir, "_mapping.json")
+
+    with open(mapping_path, "r") as fo:
+        mapping = json.load(fo)
+
     constraints: str = kwargs["constraints"]
 
     await get_current_job()._upool.open()
@@ -34,7 +39,7 @@ async def _upload_data(**kwargs) -> bool:
     with open(constraints, "r") as fo:
         constraints = fo.read()
 
-    importer = Importer(get_current_job()._upool, template)
+    importer = Importer(get_current_job()._upool, template, mapping)
     try:
         print("Importing corpus...")
         await importer.import_corpus(corpus_dir)

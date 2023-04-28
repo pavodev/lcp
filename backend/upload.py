@@ -161,7 +161,7 @@ async def make_schema(request: web.Request) -> web.Response:
     request_data = await request.json()
     template = request_data["template"]
 
-    create_ddl, constraints_ddl = await pg_create(template)
+    create_ddl, constraints_ddl, mapping = await pg_create(template)
     uu = str(uuid4())
     directory = os.path.join("uploads", uu)
     if not os.path.isdir("uploads"):
@@ -169,6 +169,8 @@ async def make_schema(request: web.Request) -> web.Response:
     os.makedirs(directory)
     with open(os.path.join(directory, "constraints.sql"), "w") as fo:
         fo.write(constraints_ddl)
+    with open(os.path.join(directory, "_mapping.json"), "w") as fo:
+        json.dump(mapping, fo)
     with open(os.path.join(directory, "template.json"), "w") as fo:
         json.dump(template, fo)
 
