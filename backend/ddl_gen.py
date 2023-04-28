@@ -517,12 +517,17 @@ class CTProcessor:
         self.globals.types += types
 
     def _process_relation(self, entity):
+        # TODO: create FK constraints
         l_name, l_params = list(entity.items())[0]
         table_name = l_name.lower()
         tables, table_cols, types = [], [], []
 
-        source_col = self._get_relation_col(l_params["source"])
-        target_col = self._get_relation_col(l_params["target"])
+        source_col = self._get_relation_col(l_params["attributes"].pop("source"))
+        target_col = self._get_relation_col(l_params["attributes"].pop("target"))
+
+        if not source_col and target_col:
+            raise Exception
+
         table_cols.append(source_col)
         table_cols.append(target_col)
 
