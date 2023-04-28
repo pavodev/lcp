@@ -810,6 +810,16 @@ myColl3 => collocation
           return;
         }
       }
+      else if (Object.prototype.hasOwnProperty.call(data, "status")) {
+        if (data["status"] == "failed") {
+          this.loading = false
+          useNotificationStore().add({
+            type: 'error',
+            text: data.value
+          })
+        }
+      }
+
       // we might need this block for stats related stuff later, don't worry about it much right now
       if (this.simultaneousMode) {
         this.allResults = this.allResults.concat(data["result"]);

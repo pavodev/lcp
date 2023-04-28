@@ -1,7 +1,8 @@
 <template>
   <div id="notifications">
     <div
-      class="alert alert-success notification"
+      class="alert notification"
+      :class="`alert-${alertClass(message.type)}`"
       role="alert"
       v-for="(message, index) in messages"
       :key="index"
@@ -70,6 +71,14 @@ export default {
     }
   },
   methods: {
+    alertClass(type) {
+      let retval = "success"
+      switch (type) {
+        case "error":
+          retval = "danger"
+      }
+      return retval
+    },
     countDownChanged(dismissCountDown, index) {
       this.messages[index].dismissCountDown = dismissCountDown;
     },
