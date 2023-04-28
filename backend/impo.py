@@ -51,6 +51,7 @@ class Importer:
     def __init__(self, connection, template, mapping):
         self.connection = connection
         self.template = template
+        self.template["uploaded"] = True
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
