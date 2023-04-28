@@ -313,6 +313,8 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         schema_path = schema_path.replace("<version>", ver)
         if not schema_path.endswith(ver):
             schema_path = f"{schema_path}{ver}"
+        cols = corpus_template["layer"]
+        cols = cols[corpus_template["firstClass"]["token"]]["attributes"]
         rest = {
             "shortname": name,
             "corpus_id": int(corpus_id),
@@ -325,7 +327,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
             "segment": corpus_template["firstClass"]["segment"],
             "token": corpus_template["firstClass"]["token"],
             "document": corpus_template["firstClass"]["document"],
-            # "column_names": corpus_template["layer"]["Token"]["Attributes"],
+            "column_names": cols,
         }
         corpus_template.update(rest)
 
