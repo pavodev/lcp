@@ -27,8 +27,8 @@ class QueryService:
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
-        self.timeout = int(os.getenv("QUERY_TIMEOUT", 180))
-        self.query_ttl = int(os.getenv("QUERY_TTL", 500))
+        self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+        self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
 
     def query(
         self,
