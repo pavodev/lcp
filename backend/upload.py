@@ -21,6 +21,8 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     """
     What to do when user check status on an upload job
     """
+    short_url = str(request.url).split("?", 1)[0]
+    whole_url = f"{short_url}?job={job_id}"
     qs = request.app["query_service"]
     job = qs.get(job_id)
     if not job:
@@ -30,9 +32,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     msg = """Please wait: corpus processing in progress..."""
     project = job.kwargs["project"]
     if status == "failed":
-        msg = (
-            "Something has gone wrong. Check your config file and try uploading again."
-        )
+        msg = f"Error: {str(job.latest_result())}"
     elif status == "finished":
         msg = f"""Template validated successfully"""
     ret = {
@@ -40,6 +40,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         "status": status,
         "info": msg,
         "project": job.kwargs["project"],
+        "target": whole_url,
     }
     return web.json_response(ret)
 
@@ -57,13 +58,24 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     msg = """Please wait: corpus processing in progress..."""
     project = job.kwargs["project"]
     if status == "failed":
-        msg = (
-            "Something has gone wrong. Check your config file and try uploading again."
-        )
+        msg = f"Error: {str(job.latest_result())}"
     elif status == "finished":
         msg = f"""Upload is complete. You should be able to see your corpus in the web app."""
     ret = {"job": job.id, "status": status, "info": msg}
     return web.json_response(ret)
+
+
+async def _ensure_word0(path: str) -> None:
+    """
+    In case the user didn't call word.csv word0.csv
+    """
+    for f in os.listdir(path):
+        for tok in ("word",):
+            if f.endswith(f"{tok}.csv"):
+                src = os.path.join(path, f)
+                dest = src.replace(".csv", "0.csv")
+                os.rename(src, dest)
+                print(f"Moved: {src}->{dest}")
 
 
 async def upload(request: web.Request) -> web.Response:
@@ -140,6 +152,7 @@ async def upload(request: web.Request) -> web.Response:
                             print("Extracted", dest, f)
                     print(f"Extracting {ext} done!")
                     os.remove(path)  # todo: should we do this now?
+                    print(f"Deleted: {path}")
                 elif path.endswith(ext) and not check(path):
                     print(f"Something wrong with {path}. Ignoring...")
                     size = 0
@@ -149,6 +162,8 @@ async def upload(request: web.Request) -> web.Response:
                     return web.json_response(ret)
             if size:
                 has_file = True
+
+    await _ensure_word0(os.path.join("uploads", project_id))
 
     constraints_file = os.path.join("uploads", project_id, "constraints.sql")
 
@@ -161,6 +176,7 @@ async def upload(request: web.Request) -> web.Response:
     qs = request.app["query_service"]
     kwa = dict(room=room, constraints=constraints_file, gui=gui_mode)
     path = os.path.join("uploads", project_id)
+    print(f"Uploading data to DB: {project_id}")
     job = qs.upload(path, username, project_id, **kwa)
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"

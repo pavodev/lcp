@@ -301,12 +301,13 @@ class PartitionedTable(Table):
     def __init__(
         self, name, cols, anchorings=None, column_part="segment_id", num_part=10
     ):
-        super(PartitionedTable, self).__init__(name, cols, anchorings)
+        super().__init__(name, cols, anchorings)
         self.base_name = self.name
         self.name = f"{self.base_name}0"
         self.num_partitions = num_part + 1  # rest is same size as smallest partition
         self.col_partitions = column_part
         self.header_txt = f"CREATE TABLE {self.name} ("
+        self.batchnames = []
 
     def _create_maintbl(self):
         return (
@@ -325,7 +326,10 @@ class PartitionedTable(Table):
         cur_max = self.max_id
 
         for i in range(1, self.num_partitions):
-            tbl_n = f"CREATE TABLE {self.base_name}{i} PARTITION OF {self.name}"
+            batchname = f"{self.base_name}{i}"
+            if batchname not in self.batchnames:
+                self.batchnames.append(batchname)
+            tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
             cur_min = self.half_hex(cur_max)
 
             mmax = self.hex2uuid(cur_max)
@@ -339,7 +343,10 @@ class PartitionedTable(Table):
         mmax = self.hex2uuid(cur_min)
         mmin = self.hex2uuid(0)
 
-        tbl_n = f"CREATE TABLE {self.base_name}rest PARTITION OF {self.name}"
+        batchname = f"{self.base_name}rest"
+        if batchname not in self.batchnames:
+            self.batchnames.append(batchname)
+        tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
         defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
         tbls.append(tbl_n + defn)
 
@@ -391,6 +398,7 @@ class CTProcessor:
         self.corpus_temp = corpus_template
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.globals = glos
+        self.batchnames = []
 
     @staticmethod
     def _order_ct_layers(layers):
@@ -506,6 +514,9 @@ class CTProcessor:
             table = PartitionedTable(
                 table_name, table_cols, anchorings=anchs, column_part=part_ent_col
             )
+            for batch in table.batchnames:
+                if batch not in table.batchnames:
+                    self.batchnames.append(batch)
         else:
             table = Table(table_name, table_cols, anchorings=anchs)
 
@@ -609,7 +620,12 @@ class CTProcessor:
 
         mapd = {}
         mapd["layer"] = {}
+        tokname = self.globals.base_map["token"]
         mapd["layer"][self.globals.base_map["segment"]] = {}
+        mapd["layer"][tokname] = {
+            "batches": len(self.batchnames) + 1,
+            "relation": f"{tokname}<batch>",
+        }
         mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
         mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = (
             "prepared_" + seg_tab.name

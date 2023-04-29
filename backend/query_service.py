@@ -28,6 +28,7 @@ class QueryService:
     def __init__(self, app, *args, **kwargs):
         self.app = app
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+        self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
 
     def query(
@@ -162,7 +163,10 @@ class QueryService:
             "room": room,
         }
         return self.app[queue].enqueue(
-            _upload_data, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _upload_data,
+            result_ttl=self.query_ttl,
+            job_timeout=self.upload_timeout,
+            **opts,
         )
 
     def cancel(self, job_id: str) -> str:

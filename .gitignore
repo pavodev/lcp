@@ -5,3 +5,4 @@ run.cpython*
 build/
 worker.cpython*
 uploads/*
+.coverage
