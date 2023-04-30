@@ -29,10 +29,10 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
     status = job.get_status(refresh=True)
-    msg = """Please wait: corpus processing in progress..."""
+    msg = f"""Please wait: corpus processing in progress..."""
     project = job.kwargs["project"]
     if status == "failed":
-        msg = f"Error: {str(job.latest_result())}"
+        msg = f"Error: {str(job.latest_result().exc_string)}"
     elif status == "finished":
         msg = f"""Template validated successfully"""
     ret = {
@@ -55,27 +55,46 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
     status = job.get_status(refresh=True)
-    msg = """Please wait: corpus processing in progress..."""
+    msg = f"""Please wait: corpus processing in progress..."""
     project = job.kwargs["project"]
     if status == "failed":
-        msg = f"Error: {str(job.latest_result())}"
+        msg = f"Error: {str(job.latest_result().exc_string)}"
     elif status == "finished":
         msg = f"""Upload is complete. You should be able to see your corpus in the web app."""
-    ret = {"job": job.id, "status": status, "info": msg}
+    ret = {
+        "job": job.id,
+        "status": status,
+        "info": msg,
+    }
     return web.json_response(ret)
 
 
-async def _ensure_word0(path: str) -> None:
+def _ensure_word0(path: str) -> None:
     """
     In case the user didn't call word.csv word0.csv
     """
-    for f in os.listdir(path):
-        for tok in ("word",):
-            if f.endswith(f"{tok}.csv"):
-                src = os.path.join(path, f)
-                dest = src.replace(".csv", "0.csv")
-                os.rename(src, dest)
-                print(f"Moved: {src}->{dest}")
+    template = os.path.join(path, "template.json")
+    with open(template, "r") as fo:
+        data = json.load(fo)
+    tok = data["firstClass"]["token"]
+    src = os.path.join(path, tok.lower() + ".csv")
+    if os.path.isfile(src):
+        dest = src.replace(".csv", "0.csv")
+        os.rename(src, dest)
+        print(f"Moved: {src}->{dest}")
+
+
+def _correct_doc(path):
+    template = os.path.join(path, "template.json")
+    with open(template, "r") as fo:
+        data = json.load(fo)
+    doc = data["firstClass"]["document"]
+    docpath = os.path.join(path, f"{doc}.csv".lower())
+    with open(docpath, "r") as fo:
+        data = fo.read()
+    data = data.replace("\t'{", "\t{").replace("}'\n", "}\n")
+    with open(docpath, "w") as fo:
+        fo.write(data)
 
 
 async def upload(request: web.Request) -> web.Response:
@@ -163,7 +182,8 @@ async def upload(request: web.Request) -> web.Response:
             if size:
                 has_file = True
 
-    await _ensure_word0(os.path.join("uploads", project_id))
+    _ensure_word0(os.path.join("uploads", project_id))
+    _correct_doc(os.path.join("uploads", project_id))
 
     constraints_file = os.path.join("uploads", project_id, "constraints.sql")
 

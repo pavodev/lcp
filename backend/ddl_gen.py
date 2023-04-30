@@ -515,7 +515,7 @@ class CTProcessor:
                 table_name, table_cols, anchorings=anchs, column_part=part_ent_col
             )
             for batch in table.batchnames:
-                if batch not in table.batchnames:
+                if batch not in self.batchnames:
                     self.batchnames.append(batch)
         else:
             table = Table(table_name, table_cols, anchorings=anchs)

@@ -1,4 +1,5 @@
 import aiohttp
+import asyncio
 import json
 import jwt
 import os
@@ -324,3 +325,24 @@ def _determine_language(batch: str) -> Optional[str]:
         if batch.endswith(f"_{lan}"):
             return lan
     return None
+
+
+async def gather(n, *tasks):
+    semaphore = asyncio.Semaphore(n)
+
+    async def sem_coro(coro):
+        async with semaphore:
+            return await coro
+
+    fixed = []
+    for task in tasks:
+        if not isinstance(task, asyncio.Task):
+            task = asyncio.create_task(task)
+        fixed.append(task)
+    tasks = fixed
+
+    try:
+        asyncio.gather(*(sem_coro(c) for c in tasks))
+    except (Exception, BaseException) as err:
+        for task in tasks:
+            task.cancel()

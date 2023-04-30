@@ -1,5 +1,6 @@
 import json
 import os
+import shutil
 
 from collections import Counter, defaultdict
 from rq.connections import get_current_connection
@@ -39,6 +40,8 @@ async def _upload_data(**kwargs) -> bool:
     with open(constraints, "r") as fo:
         constraints = fo.read()
 
+    print("Starting importer")
+
     importer = Importer(get_current_job()._upool, template, mapping)
     try:
         print("Importing corpus...")
@@ -49,7 +52,11 @@ async def _upload_data(**kwargs) -> bool:
         await importer.create_entry_maincorpus()
     except Exception as err:
         print(f"Error: {err}")
+        shutil.rmtree(corpus_dir)  # todo: should we do this?
         raise err
+
+    shutil.rmtree(corpus_dir)  # todo: should we do this?
+
     return True
 
 

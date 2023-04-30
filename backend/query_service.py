@@ -189,7 +189,10 @@ class QueryService:
             "gui": gui,
         }
         return self.app[queue].enqueue(
-            _create_schema, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _create_schema,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            **opts,
         )
 
     def cancel_running_jobs(
