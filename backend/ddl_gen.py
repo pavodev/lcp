@@ -6,14 +6,17 @@ import re
 from collections import OrderedDict
 from textwrap import dedent
 
+from typing import Dict, List
+
 
 class Globs:
     def __init__(self):
-        self.base_map: dict = {}
-        self.layers: dict = {}
-        self.schema: list = []
-        self.tables: list = []
-        self.types: list = []
+        self.base_map: Dict = {}
+        self.layers: Dict = {}
+        self.schema: List = []
+        self.tables: List = []
+        self.types: List = []
+        self.num_partitions: int = 0
         self.start_constrs: str = ""
 
 
@@ -307,7 +310,6 @@ class PartitionedTable(Table):
         self.num_partitions = num_part + 1  # rest is same size as smallest partition
         self.col_partitions = column_part
         self.header_txt = f"CREATE TABLE {self.name} ("
-        self.batchnames = []
 
     def _create_maintbl(self):
         return (
@@ -327,8 +329,6 @@ class PartitionedTable(Table):
 
         for i in range(1, self.num_partitions):
             batchname = f"{self.base_name}{i}"
-            if batchname not in self.batchnames:
-                self.batchnames.append(batchname)
             tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
             cur_min = self.half_hex(cur_max)
 
@@ -344,8 +344,6 @@ class PartitionedTable(Table):
         mmin = self.hex2uuid(0)
 
         batchname = f"{self.base_name}rest"
-        if batchname not in self.batchnames:
-            self.batchnames.append(batchname)
         tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
         defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
         tbls.append(tbl_n + defn)
@@ -398,7 +396,6 @@ class CTProcessor:
         self.corpus_temp = corpus_template
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.globals = glos
-        self.batchnames = []
 
     @staticmethod
     def _order_ct_layers(layers):
@@ -514,13 +511,13 @@ class CTProcessor:
             table = PartitionedTable(
                 table_name, table_cols, anchorings=anchs, column_part=part_ent_col
             )
-            for batch in table.batchnames:
-                if batch not in self.batchnames:
-                    self.batchnames.append(batch)
         else:
             table = Table(table_name, table_cols, anchorings=anchs)
 
         tables.append(table)
+
+        if isinstance(table, PartitionedTable) and not self.globals.num_partitions:
+            self.globals.num_partitions = table.num_partitions
 
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["anchoring"] = anchs
@@ -623,7 +620,7 @@ class CTProcessor:
         tokname = self.globals.base_map["token"]
         mapd["layer"][self.globals.base_map["segment"]] = {}
         mapd["layer"][tokname] = {
-            "batches": len(self.batchnames) + 1,
+            "batches": self.globals.num_partitions + 1,
             "relation": f"{tokname}<batch>",
         }
         mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}

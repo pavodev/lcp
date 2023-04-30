@@ -52,7 +52,10 @@ class Table:
 
 
 class Importer:
-    def __init__(self, connection, template, mapping):
+    def __init__(self, connection, template, mapping, project_dir):
+        """
+        Manage the import of a corpus into the DB via async psycopg connection
+        """
         self.connection = connection
         self.template = template
         self.template["uploaded"] = True
@@ -62,16 +65,27 @@ class Importer:
         self.token_count = None
         self.mapping = mapping
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
-        if self.max_concurrent > 1:
-            print(f"Processing concurrently * {self.max_concurrent}")
-        else:
-            print("Processing without concurrency")
-        self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_BYTES", 1e9)))
+        self.batchsize = float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9
         self.max_bytes = os.getenv("IMPORT_MAX_MEMORY_GB", "1")
         if self.max_bytes in {"-1", "0", ""}:
             self.max_bytes = None
         else:
-            self.max_bytes = int(self.max_bytes) * 1000000000
+            self.max_bytes = int(self.max_bytes) * 1e9
+        self.project_dir = project_dir
+        if self.max_concurrent > 1:
+            self.update_progress(f"Processing concurrently * {self.max_concurrent}")
+        else:
+            self.update_progress("Processing without concurrency")
+
+    def update_progress(self, msg):
+        """
+        Both print and write progress information. We do this so the webapp
+        can read this file to calculate progress information to show the user
+        """
+        print(msg)
+        path = os.path.join(self.project_dir, ".progress.txt")
+        with open(path, "a") as fo:
+            fo.write(msg.rstrip() + "\n")
 
     async def _get_positions(self, f, size):
         """
@@ -98,6 +112,10 @@ class Importer:
         return positions
 
     async def copy_batch(self, start, chunk, cop, path, fsize, tot):
+        """
+        Copy a chunk of CSV into the DB, going no larger than self.batchsize
+        plus potentially the remainder of a line
+        """
         base = os.path.basename(path)
         async with aiofiles.open(path) as f:
             await f.seek(start)
@@ -111,16 +129,24 @@ class Importer:
                 async with cur.copy(cop) as copy:
                     await copy.write(data)
                     pc = min(100, round(tell * 100 / fsize, 2))
-                    print(f":progress:-1:{pc}%:{len(data)}:{tot} == {base}")
+                    self.update_progress(
+                        f":progress:-1:{pc}%:{len(data)}:{tot} == {base}"
+                    )
         return True
 
     async def create_constridx(self, constr_idxs):
+        """
+        Set constraints on the imported corpus
+        """
         async with self.connection.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(constr_idxs)
 
     async def _check_tbl_exists(self, table):
+        """
+        Ensure that a table exists or raise AttributeError
+        """
         async with self.connection.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -132,6 +158,9 @@ class Importer:
                 raise AttributeError(f"Error: table '{table.name}' does not exist.")
 
     async def _copy_tbl(self, data_f, fsize, tot):
+        """
+        Import data_f to the DB, with or without concurrency
+        """
         base = os.path.basename(data_f)
 
         async with aiofiles.open(data_f) as f:
@@ -162,15 +191,16 @@ class Importer:
                             done += chunk
                             perc = round(done * 100 / tot, 2)
                             port = round(chunk * 100 / tot, 2)
-                            print(
+                            self.update_progress(
                                 f":progress:{perc}%:{port}:{len(data)}:{tot} -- {base}"
                             )
         return True
 
-    async def import_corpus(self, path):
+    async def import_corpus(self):
         """
-        Import all the .csv files in the corpus path
+        Import all the .csv files in the corpus path and count the total tokens
         """
+        path = self.project_dir
         sizes = [
             (os.path.join(path, f), os.path.getsize(os.path.join(path, f)))
             for f in os.listdir(path)
@@ -182,7 +212,12 @@ class Importer:
 
     async def process_data(self, iterable, method, *args):
         """
-        Do the execution of copy_bath or copy_table from iterable data
+        Do the execution of copy_bath or copy_table (method) from iterable data
+
+        If the size of the combined tasks goes beyond self.max_bytes, we start
+        those in the queue and wait for them to finish before adding more.
+
+        All processing occurs with self.max_concurrent respected
         """
         # name = method.__name__
         name = "import"
@@ -191,14 +226,14 @@ class Importer:
         for first, size in iterable:
             current_size += size
             if self.max_bytes and current_size >= self.max_bytes and tasks:
-                print(
+                self.update_progress(
                     f"Doing {len(tasks)} {name} tasks...({current_size} >= {self.max_bytes})"
                 )
                 await gather(self.max_concurrent, *tasks, name=name)
                 tasks = []
                 current_size = 0
             tasks.append(method(first, size, *args))
-        print(f"Doing {len(tasks)} remaining {name} tasks...")
+        self.update_progress(f"Doing {len(tasks)} remaining {name} tasks...")
         return await gather(self.max_concurrent, *tasks, name=name)
 
     async def get_token_count(self):
@@ -218,6 +253,9 @@ class Importer:
         raise ValueError("could not get token count")
 
     async def create_entry_maincorpus(self):
+        """
+        Add a row to main.corpus with metadata about the imported corpus
+        """
         async with self.connection.connection() as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:

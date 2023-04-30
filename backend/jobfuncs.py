@@ -42,10 +42,10 @@ async def _upload_data(**kwargs) -> bool:
 
     print("Starting importer")
 
-    importer = Importer(get_current_job()._upool, template, mapping)
+    importer = Importer(get_current_job()._upool, template, mapping, corpus_dir)
     try:
         print("Importing corpus...")
-        await importer.import_corpus(corpus_dir)
+        await importer.import_corpus()
         print(f"Setting constraints...\n\n{constraints}")
         await importer.create_constridx(constraints)
         print("Adding to corpus list...")
@@ -54,6 +54,10 @@ async def _upload_data(**kwargs) -> bool:
         print(f"Error: {err}")
         shutil.rmtree(corpus_dir)  # todo: should we do this?
         raise err
+
+    progfile = os.path.join(self.project_dir, ".progress.txt")
+    if os.path.isfile(progfile):
+        os.remove(progfile)
 
     shutil.rmtree(corpus_dir)  # todo: should we do this?
 

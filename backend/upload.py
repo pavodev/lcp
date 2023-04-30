@@ -51,6 +51,10 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
     qs = request.app["query_service"]
     job = qs.get(job_id)
+    project = job.kwargs["project"]
+    progfile = os.path.join("uploads", project, ".progress.txt")
+    progress = _get_progress(progfile)
+
     if not job:
         ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
@@ -65,8 +69,33 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         "job": job.id,
         "status": status,
         "info": msg,
+        "project": project,
     }
+    if progress:
+        ret["progress"] = progress
     return web.json_response(ret)
+
+
+def _get_progress(progfile):
+    """
+    Attempt to get progress from saved file
+    """
+    if not os.path.isfile(progfile):
+        return None
+    with open(progfile, "r") as fo:
+        data = fo.read()
+    data = [
+        i.lstrip(":progress:").split()[0].split(":")
+        for i in data.splitlines()
+        if i.startswith(":progress")
+    ]
+    if not data:
+        return None
+    done_bytes = sum([int(i[-2]) for i in data])
+    total = int(data[0][-1])
+    return (done_bytes, total)
+    # progress = round(done_bytes * 100.0 / total, 2)
+    # return f"{progress}%"
 
 
 def _ensure_word0(path: str) -> None:
