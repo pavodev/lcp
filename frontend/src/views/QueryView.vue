@@ -785,13 +785,19 @@ myColl3 => collocation
           return;
         }
         if (data["action"] === "update_config") {
+          // todo: when a new corpus is added, all connected websockets
+          // will get this message containing the new config data. plz
+          // ensure that it gets added to the corpusstore properly and
+          // the app is updated accordingly
           console.log("Latest config", data["config"])
           delete data["config"]["-1"]
+          // todo: no idea if this is right:
           useCorpusStore().corpora = Object.keys(data["config"]).map(corpusId => {
             let corpus = data["config"][corpusId]
             corpus.meta["id"] = corpusId
             return corpus
           });
+          console.log('NOW', useCorpusStore().corpora)
           // we could also do this but we already have the data here...
           // useCorpusStore().fetchCorpora();
           return;

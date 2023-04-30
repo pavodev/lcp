@@ -157,13 +157,13 @@ class Importer:
                     return True
                 raise AttributeError(f"Error: table '{table.name}' does not exist.")
 
-    async def _copy_tbl(self, data_f, fsize, tot):
+    async def _copy_tbl(self, csv_path, fsize, tot):
         """
-        Import data_f to the DB, with or without concurrency
+        Import csv_path to the DB, with or without concurrency
         """
-        base = os.path.basename(data_f)
+        base = os.path.basename(csv_path)
 
-        async with aiofiles.open(data_f) as f:
+        async with aiofiles.open(csv_path) as f:
             headers = await f.readline()
             positions = await self._get_positions(f, fsize)
 
@@ -172,13 +172,13 @@ class Importer:
         cop = SQLstats.copy_tbl(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent > 1:
-            args = (cop, data_f, fsize, tot)
+            args = (cop, csv_path, fsize, tot)
             await self.process_data(positions, self.copy_batch, *args)
             return True
 
         # no concurrency:
         done = 0
-        async with aiofiles.open(data_f) as f:
+        async with aiofiles.open(csv_path) as f:
             await f.readline()
             async with self.connection.connection() as conn:
                 await conn.set_autocommit(True)
