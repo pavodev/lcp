@@ -62,6 +62,10 @@ class Importer:
         self.token_count = None
         self.mapping = mapping
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
+        if self.max_concurrent > 1:
+            print(f"Processing concurrently * {self.max_concurrent}")
+        else:
+            print("Processing without concurrency")
         self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_BYTES", 1e9)))
         self.max_bytes = os.getenv("IMPORT_MAX_MEMORY_GB", "1")
         if self.max_bytes in {"-1", "0", ""}:
@@ -155,7 +159,6 @@ class Importer:
                             await f.seek(start)
                             data = await f.read(chunk)
                             await copy.write(data)
-                            to_go -= chunk
                             done += chunk
                             perc = round(done * 100 / tot, 2)
                             port = round(chunk * 100 / tot, 2)
@@ -181,16 +184,22 @@ class Importer:
         """
         Do the execution of copy_bath or copy_table from iterable data
         """
+        # name = method.__name__
+        name = "import"
         current_size = 0
         tasks = []
         for first, size in iterable:
             current_size += size
             if self.max_bytes and current_size >= self.max_bytes and tasks:
-                await gather(self.max_concurrent, *tasks)
+                print(
+                    f"Doing {len(tasks)} {name} tasks...({current_size} >= {self.max_bytes})"
+                )
+                await gather(self.max_concurrent, *tasks, name=name)
                 tasks = []
                 current_size = 0
             tasks.append(method(first, size, *args))
-        return await gather(self.max_concurrent, *tasks)
+        print(f"Doing {len(tasks)} remaining {name} tasks...")
+        return await gather(self.max_concurrent, *tasks, name=name)
 
     async def get_token_count(self):
         """

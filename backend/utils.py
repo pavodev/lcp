@@ -327,23 +327,23 @@ def _determine_language(batch: str) -> Optional[str]:
     return None
 
 
-async def gather(n, *tasks):
+async def gather(n, *tasks, name=None):
     semaphore = asyncio.Semaphore(n)
 
     async def sem_coro(coro):
         async with semaphore:
             return await coro
 
-    # fixed = []
-    # for task in tasks:
-    #    if not isinstance(task, asyncio.Task):
-    #        task = asyncio.create_task(task)
-    #    fixed.append(task)
-    # tasks = fixed
-
+    group = asyncio.gather(
+        *(asyncio.create_task(sem_coro(c), name=name) for c in tasks)
+    )
     try:
-        group = asyncio.gather(*(sem_coro(c) for c in tasks))
-    except (Exception, BaseException) as err:
-        group.cancel()
-        # for task in tasks:
-        #    task.cancel()
+        await group
+    except (Exception, BaseException, KeyboardInterrupt, SystemExit) as err:
+        tasks = asyncio.all_tasks()
+        current = asyncio.current_task()
+        name = current.get_name()
+        tasks.remove(current)
+        for task in tasks:
+            if name and task.get_name() == name:
+                task.cancel()
