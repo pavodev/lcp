@@ -334,15 +334,16 @@ async def gather(n, *tasks):
         async with semaphore:
             return await coro
 
-    fixed = []
-    for task in tasks:
-        if not isinstance(task, asyncio.Task):
-            task = asyncio.create_task(task)
-        fixed.append(task)
-    tasks = fixed
+    # fixed = []
+    # for task in tasks:
+    #    if not isinstance(task, asyncio.Task):
+    #        task = asyncio.create_task(task)
+    #    fixed.append(task)
+    # tasks = fixed
 
     try:
-        asyncio.gather(*(sem_coro(c) for c in tasks))
+        group = asyncio.gather(*(sem_coro(c) for c in tasks))
     except (Exception, BaseException) as err:
-        for task in tasks:
-            task.cancel()
+        group.cancel()
+        # for task in tasks:
+        #    task.cancel()

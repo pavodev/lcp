@@ -784,6 +784,18 @@ myColl3 => collocation
           this.stats = data;
           return;
         }
+        if (data["action"] === "update_config") {
+          console.log("Latest config", data["config"])
+          delete data["config"]["-1"]
+          useCorpusStore().corpora = Object.keys(data["config"]).map(corpusId => {
+            let corpus = data["config"][corpusId]
+            corpus.meta["id"] = corpusId
+            return corpus
+          });
+          // we could also do this but we already have the data here...
+          // useCorpusStore().fetchCorpora();
+          return;
+        }
         if (data["action"] === "fetch_queries") {
           console.log("do something here with the fetched queries?", data);
           return;

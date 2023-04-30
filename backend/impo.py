@@ -140,7 +140,7 @@ class Importer:
 
         if self.max_concurrent > 1:
             args = (cop, data_f, fsize, tot)
-            await self.execute(positions, self.copy_batch, *args)
+            await self.process_data(positions, self.copy_batch, *args)
             return True
 
         # no concurrency:
@@ -174,10 +174,10 @@ class Importer:
             if f.endswith(".csv")
         ]
         corpus_size = sum(s[1] for s in sizes)
-        await self.execute(sizes, self.copy_tbl, *(corpus_size,))
+        await self.process_data(sizes, self._copy_tbl, *(corpus_size,))
         self.token_count = await self.get_token_count()
 
-    async def execute(self, iterable, method, *args):
+    async def process_data(self, iterable, method, *args):
         """
         Do the execution of copy_bath or copy_table from iterable data
         """

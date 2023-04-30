@@ -53,6 +53,8 @@ async def handle_redis_response(
                             print(f"Corpus disabled: {name}={idx}")
                     print(f"Config loaded: {len(payload['config'])-1} corpora")
                     app["config"] = payload["config"]
+                    payload["action"] = "update_config"
+                    await push_msg(app["websockets"], None, payload)
                     if test:
                         return
                     continue
@@ -70,19 +72,20 @@ async def handle_redis_response(
 
                 # handle uploaded data (add to config, ws message if gui mode)
                 elif payload.get("action") == "uploaded":
+                    app["query_service"].get_config()
                     # conf = payload["config"]
                     # project = payload["project"]
                     # todo: better structure for this i guess?
                     # app["config"][-1][project] = conf
-                    if payload.get("gui"):
-                        await push_msg(
-                            app["websockets"],
-                            room,
-                            payload,
-                            skip=None,
-                            just=(room, user),
-                        )
-                        continue
+                    # if payload.get("gui"):
+                    #    await push_msg(
+                    #        app["websockets"],
+                    #        room,
+                    #        payload,
+                    #        skip=None,
+                    #        just=None
+                    #    )
+                    #    continue
 
                 elif payload.get("action") == "sentences":
 
