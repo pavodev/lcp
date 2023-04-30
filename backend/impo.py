@@ -64,7 +64,7 @@ class Importer:
         self.schema = self.name + str(self.version)
         self.token_count = None
         self.mapping = mapping
-        self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
+        self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
         self.batchsize = float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9
         self.max_bytes = os.getenv("IMPORT_MAX_MEMORY_GB", "1")
         if self.max_bytes in {"-1", "0", ""}:
@@ -72,7 +72,9 @@ class Importer:
         else:
             self.max_bytes = int(self.max_bytes) * 1e9
         self.project_dir = project_dir
-        if self.max_concurrent > 1:
+        if self.max_concurrent < 1:
+            self.update_progress(f"Processing concurrently without limit...")
+        elif self.max_concurrent > 1:
             self.update_progress(f"Processing concurrently * {self.max_concurrent}")
         else:
             self.update_progress("Processing without concurrency")
@@ -171,7 +173,7 @@ class Importer:
         await self._check_tbl_exists(table)
         cop = SQLstats.copy_tbl(table.schema, table.name, table.col_repr())
 
-        if self.max_concurrent > 1:
+        if self.max_concurrent != 1:
             args = (cop, csv_path, fsize, tot)
             await self.process_data(positions, self.copy_batch, *args)
             return True

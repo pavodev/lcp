@@ -146,9 +146,7 @@ def _sentences(
         depended.meta["associated"] = job.id
     depended.save_meta()
 
-    aargs: Tuple[int, bool, Optional[int], Union[int, bool], int] = depended.meta[
-        "_args"
-    ]
+    aargs: Tuple[int, bool, Optional[Any], Any, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
@@ -291,7 +289,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     Run by worker: make config data
     """
     fixed: Dict[int, Dict] = {-1: {}}
-    disabled: List[Tuple(str, int)] = []
+    disabled: List[Tuple[str, int]] = []
     for tup in result:
         (
             corpus_id,
@@ -308,7 +306,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         ver = str(current_version)
         if not enabled:
             print(f"Corpus disabled: {name}={corpus_id}")
-            disabled.append([name, corpus_id])
+            disabled.append((name, corpus_id))
             continue
 
         schema_path = schema_path.replace("<version>", ver)

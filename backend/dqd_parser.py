@@ -3,6 +3,8 @@ import lark
 from lark import Lark
 from lark.indenter import Indenter
 
+from typing import Iterable
+
 
 dqd_grammar = r"""
     ?start: _NL* [predicate+]
@@ -56,6 +58,8 @@ class TreeIndenter(Indenter):
     INDENT_type = "_INDENT"
     DEDENT_type = "_DEDENT"
     tab_len = 8
+    # this fixes mypy but not sure if it breaks anything:
+    always_accept: Iterable[str] = ()
 
 
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())

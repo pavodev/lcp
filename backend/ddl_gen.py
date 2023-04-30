@@ -10,7 +10,7 @@ from typing import Dict, List
 
 
 class Globs:
-    def __init__(self):
+    def __init__(self) -> None:
         self.base_map: Dict = {}
         self.layers: Dict = {}
         self.schema: List = []

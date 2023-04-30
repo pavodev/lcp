@@ -55,7 +55,7 @@ async def _upload_data(**kwargs) -> bool:
         shutil.rmtree(corpus_dir)  # todo: should we do this?
         raise err
 
-    progfile = os.path.join(self.project_dir, ".progress.txt")
+    progfile = os.path.join(corpus_dir, ".progress.txt")
     if os.path.isfile(progfile):
         os.remove(progfile)
 

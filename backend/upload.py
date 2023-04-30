@@ -157,7 +157,6 @@ async def upload(request: web.Request) -> web.Response:
         if isinstance(bit.filename, str):
             if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
                 continue
-            to_delete = set()
             ext = os.path.splitext(bit.filename)[-1]
             # filename = str(project) + ext
             path = os.path.join("uploads", project_id, bit.filename)
@@ -181,10 +180,10 @@ async def upload(request: web.Request) -> web.Response:
                     print(f"Extracting {ext} file: {path}")
                     with opener(path, "r") as compressed:
                         for f in getattr(compressed, method)():
-                            if not f.endswith(VALID_EXTENSIONS):
+                            if not str(f).endswith(VALID_EXTENSIONS):
                                 continue
                             just_f = os.path.join(
-                                "uploads", project_id, os.path.basename(f)
+                                "uploads", project_id, os.path.basename(str(f))
                             )
                             dest = os.path.join("uploads", project_id)
                             print(f"Uncompressing {f} to {dest}")
@@ -193,7 +192,7 @@ async def upload(request: web.Request) -> web.Response:
                             else:
                                 compressed.extract(dest, [f])
                             try:
-                                os.rename(os.path.join(dest, f), just_f)
+                                os.rename(os.path.join(dest, str(f)), just_f)
                             except Exception as err:
                                 print(f"Warning: {err}")
                                 pass
@@ -205,8 +204,8 @@ async def upload(request: web.Request) -> web.Response:
                     print(f"Something wrong with {path}. Ignoring...")
                     size = 0
                     os.remove(path)
-                    f = os.path.basename(path)
-                    ret = {"status": "failed", "msg": f"Problem uncompressing {f}"}
+                    fp = os.path.basename(path)
+                    ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
                     return web.json_response(ret)
             if size:
                 has_file = True
@@ -216,11 +215,11 @@ async def upload(request: web.Request) -> web.Response:
 
     constraints_file = os.path.join("uploads", project_id, "constraints.sql")
 
-    ret: Dict[str, Any] = {}
+    return_data: Dict[str, Union[str, int]] = {}
     if not has_file:
         msg = "No file sent?"
-        ret.update({"status": "failed", "info": msg})
-        return web.json_response(ret)
+        return_data.update({"status": "failed", "info": msg})
+        return web.json_response(return_data)
 
     qs = request.app["query_service"]
     kwa = dict(room=room, constraints=constraints_file, gui=gui_mode)
@@ -232,7 +231,7 @@ async def upload(request: web.Request) -> web.Response:
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
         {whole_url}    
     """
-    ret.update(
+    return_data.update(
         {
             "status": "started",
             "job": job.id,
@@ -243,7 +242,7 @@ async def upload(request: web.Request) -> web.Response:
         }
     )
 
-    return web.json_response(ret)
+    return web.json_response(return_data)
 
 
 async def make_schema(request: web.Request) -> web.Response:

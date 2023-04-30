@@ -213,7 +213,7 @@ def _add_results(
     rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
-    n_skipped = Counter()
+    n_skipped: Dict[int, int] = Counter()
 
     if sents:
         bundle[-1] = {}
@@ -328,15 +328,19 @@ def _determine_language(batch: str) -> Optional[str]:
 
 
 async def gather(n, *tasks, name=None):
-    semaphore = asyncio.Semaphore(n)
 
-    async def sem_coro(coro):
-        async with semaphore:
-            return await coro
+    if n > 0:
+        semaphore = asyncio.Semaphore(n)
 
-    group = asyncio.gather(
-        *(asyncio.create_task(sem_coro(c), name=name) for c in tasks)
-    )
+        async def sem_coro(coro):
+            async with semaphore:
+                return await coro
+
+        group = asyncio.gather(
+            *(asyncio.create_task(sem_coro(c), name=name) for c in tasks)
+        )
+    else:
+        group = asyncio.gather(*(asyncio.create_task(c) for c in tasks))
     try:
         await group
     except (Exception, BaseException, KeyboardInterrupt, SystemExit) as err:
