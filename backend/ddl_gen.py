@@ -620,7 +620,7 @@ class CTProcessor:
         tokname = self.globals.base_map["token"]
         mapd["layer"][self.globals.base_map["segment"]] = {}
         mapd["layer"][tokname] = {
-            "batches": self.globals.num_partitions + 1,
+            "batches": self.globals.num_partitions,
             "relation": f"{tokname}<batch>",
         }
         mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
