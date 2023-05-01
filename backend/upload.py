@@ -94,7 +94,7 @@ def _get_progress(progfile: str) -> Optional[Tuple[int, int]]:
     if not bits:
         return None
     done_bytes = sum([int(i[-2]) for i in bits])
-    total = int(data[0][-1])
+    total = int(bits[0][-1])
     return (done_bytes, total)
     # progress = round(done_bytes * 100.0 / total, 2)
     # return f"{progress}%"
