@@ -1,11 +1,27 @@
-import aiofiles
 import asyncio
 import json
 import os
-import psycopg2
+
 import sys
 
 from textwrap import dedent
+from typing import (
+    Any,
+    Awaitable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Union,
+    Callable,
+    Tuple,
+    Coroutine,
+)
+
+import aiofiles
+from aiofiles.threadpool.text import AsyncTextIOWrapper
+
+from psycopg_pool import AsyncConnectionPool
 
 from .utils import gather
 
@@ -42,17 +58,28 @@ class SQLstats:
 
 
 class Table:
-    def __init__(self, schema, name, columns=None):
+    def __init__(
+        self, schema: str, name: str, columns: Optional[Iterable[str]] = None
+    ) -> None:
         self.schema = schema
         self.name = name
         self.columns = columns
 
-    def col_repr(self):
-        return "(" + ", ".join(self.columns) + ")"
+    def col_repr(self) -> str:
+        if self.columns:
+            return "(" + ", ".join(self.columns) + ")"
+        else:
+            return ""
 
 
 class Importer:
-    def __init__(self, connection, template, mapping, project_dir):
+    def __init__(
+        self,
+        connection: AsyncConnectionPool,
+        template: Dict[str, Any],
+        mapping: Dict[str, Any],
+        project_dir: str,
+    ) -> None:
         """
         Manage the import of a corpus into the DB via async psycopg connection
         """
@@ -62,15 +89,15 @@ class Importer:
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
         self.schema = self.name + str(self.version)
-        self.token_count = None
+        self.token_count: Dict[str, int] = {}
         self.mapping = mapping
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
-        self.batchsize = float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9
-        self.max_bytes = os.getenv("IMPORT_MAX_MEMORY_GB", "1")
-        if self.max_bytes in {"-1", "0", ""}:
-            self.max_bytes = None
+        self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9)
+        self.max_bytes = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
+        if self.max_bytes == -1:
+            self.max_bytes = 0
         else:
-            self.max_bytes = int(self.max_bytes) * 1e9
+            self.max_bytes = int(self.max_bytes * 1e9)
         self.project_dir = project_dir
         if self.max_concurrent < 1:
             self.update_progress(f"Processing concurrently without limit...")
@@ -79,7 +106,7 @@ class Importer:
         else:
             self.update_progress("Processing without concurrency")
 
-    def update_progress(self, msg):
+    def update_progress(self, msg: str) -> None:
         """
         Both print and write progress information. We do this so the webapp
         can read this file to calculate progress information to show the user
@@ -89,7 +116,9 @@ class Importer:
         with open(path, "a") as fo:
             fo.write(msg.rstrip() + "\n")
 
-    async def _get_positions(self, f, size):
+    async def _get_positions(
+        self, f: AsyncTextIOWrapper, size: int
+    ) -> List[Tuple[int, int]]:
         """
         Get the locations in an open aiofile to seek and read to
         """
@@ -108,12 +137,13 @@ class Importer:
             if not lines.endswith("\n"):
                 rest = await f.readline()
                 bat += len(bytes(rest, "utf-8"))
-            lines = None
             positions.append((start_at, bat))
             start_at = await f.tell()
         return positions
 
-    async def copy_batch(self, start, chunk, cop, path, fsize, tot):
+    async def copy_batch(
+        self, start: int, chunk: int, cop: str, path: str, fsize: int, tot: int
+    ) -> bool:
         """
         Copy a chunk of CSV into the DB, going no larger than self.batchsize
         plus potentially the remainder of a line
@@ -131,12 +161,10 @@ class Importer:
                 async with cur.copy(cop) as copy:
                     await copy.write(data)
                     pc = min(100, round(tell * 100 / fsize, 2))
-                    self.update_progress(
-                        f":progress:-1:{pc}%:{len(data)}:{tot} == {base}"
-                    )
+                    self.update_progress(f":progress:{pc}%:{len(data)}:{tot} == {base}")
         return True
 
-    async def create_constridx(self, constr_idxs):
+    async def create_constridx(self, constr_idxs: str) -> None:
         """
         Set constraints on the imported corpus
         """
@@ -145,7 +173,7 @@ class Importer:
             async with conn.cursor() as cur:
                 await cur.execute(constr_idxs)
 
-    async def _check_tbl_exists(self, table):
+    async def _check_tbl_exists(self, table: Table) -> bool:
         """
         Ensure that a table exists or raise AttributeError
         """
@@ -155,11 +183,11 @@ class Importer:
                 script = SQLstats.check_tbl(table.schema, table.name)
                 await cur.execute(script)
                 res = await cur.fetchone()
-                if res[0]:
+                if res and res[0]:
                     return True
                 raise AttributeError(f"Error: table '{table.name}' does not exist.")
 
-    async def _copy_tbl(self, csv_path, fsize, tot):
+    async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> bool:
         """
         Import csv_path to the DB, with or without concurrency
         """
@@ -192,13 +220,12 @@ class Importer:
                             await copy.write(data)
                             done += chunk
                             perc = round(done * 100 / tot, 2)
-                            port = round(chunk * 100 / tot, 2)
                             self.update_progress(
-                                f":progress:{perc}%:{port}:{len(data)}:{tot} -- {base}"
+                                f":progress:{perc}%{len(data)}:{tot} -- {base}"
                             )
         return True
 
-    async def import_corpus(self):
+    async def import_corpus(self) -> None:
         """
         Import all the .csv files in the corpus path and count the total tokens
         """
@@ -212,7 +239,12 @@ class Importer:
         await self.process_data(sizes, self._copy_tbl, *(corpus_size,))
         self.token_count = await self.get_token_count()
 
-    async def process_data(self, iterable, method, *args):
+    async def process_data(
+        self,
+        iterable: Iterable[Tuple[Union[str, int], int]],
+        method: Callable,
+        *args: Any,
+    ) -> None:
         """
         Do the execution of copy_bath or copy_table (method) from iterable data
 
@@ -224,7 +256,7 @@ class Importer:
         # name = method.__name__
         name = "import"
         current_size = 0
-        tasks = []
+        tasks: List[Coroutine] = []
         for first, size in iterable:
             current_size += size
             if self.max_bytes and current_size >= self.max_bytes and tasks:
@@ -236,9 +268,10 @@ class Importer:
                 current_size = 0
             tasks.append(method(first, size, *args))
         self.update_progress(f"Doing {len(tasks)} remaining {name} tasks...")
-        return await gather(self.max_concurrent, *tasks, name=name)
+        await gather(self.max_concurrent, *tasks, name=name)
+        return None
 
-    async def get_token_count(self):
+    async def get_token_count(self) -> Dict[str, int]:
         """
         count inserted words/tokens in DB and return
         TODO: not working for parallel
@@ -254,7 +287,7 @@ class Importer:
                     return {token: res[0]}
         raise ValueError("could not get token count")
 
-    async def create_entry_maincorpus(self):
+    async def create_entry_maincorpus(self) -> None:
         """
         Add a row to main.corpus with metadata about the imported corpus
         """
@@ -272,3 +305,4 @@ class Importer:
                         self.mapping,
                     ),
                 )
+        return None
