@@ -58,14 +58,7 @@ def _query(
 
     new_res, n_results = _add_results(*aargs, kwic=False)
     results_so_far = _union_results(results_so_far, new_res)
-
-    # kwics = _get_kwics(results_so_far[0])
-    # for k in kwics:
-    #    for line in results_so_far.get(k, []):
-    #        ids = [i for i in line if isinstance(i, (str, int))]
-    #        ids = sorted(ids)
-    #        lines_sent_to_fe.add(tuple(ids))
-    # add everything: _add_results(result, 0, True, False, False, 0)
+    limit = False if n_results < total_requested else total_found - total_requested
 
     just_finished = job.kwargs["current_batch"]
     job.kwargs["done_batches"].append(just_finished)
@@ -109,7 +102,7 @@ def _query(
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
-            "hit_limit": hit_limit,
+            "hit_limit": limit,
             "total_results_so_far": total_found,
             "batch_matches": n_results,
             "sentences": job.kwargs["sentences"],
