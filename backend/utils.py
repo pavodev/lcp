@@ -344,6 +344,7 @@ async def gather(n, *tasks, name=None):
     try:
         await group
     except (Exception, BaseException, KeyboardInterrupt, SystemExit) as err:
+        print(f"Error: {str(err)}")
         tasks = asyncio.all_tasks()
         current = asyncio.current_task()
         name = current.get_name()
@@ -351,3 +352,4 @@ async def gather(n, *tasks, name=None):
         for task in tasks:
             if name and task.get_name() == name:
                 task.cancel()
+        raise err
