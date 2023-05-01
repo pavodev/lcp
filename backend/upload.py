@@ -2,7 +2,7 @@ import json
 import os
 
 from tarfile import TarFile, is_tarfile
-from typing import Any, Dict, Union
+from typing import Any, Dict, Optional, Tuple, Union
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -72,11 +72,11 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         "project": project,
     }
     if progress:
-        ret["progress"] = progress
+        ret["progress"] = f"{progress[0]}/{progress[1]}"
     return web.json_response(ret)
 
 
-def _get_progress(progfile):
+def _get_progress(progfile: str) -> Optional[Tuple[int, int]]:
     """
     Attempt to get progress from saved file
     """
@@ -84,14 +84,16 @@ def _get_progress(progfile):
         return None
     with open(progfile, "r") as fo:
         data = fo.read()
-    data = [
+    if "\nSetting constraints..." in data:
+        return (-1, -1)
+    bits = [
         i.lstrip(":progress:").split()[0].split(":")
         for i in data.splitlines()
         if i.startswith(":progress")
     ]
-    if not data:
+    if not bits:
         return None
-    done_bytes = sum([int(i[-2]) for i in data])
+    done_bytes = sum([int(i[-2]) for i in bits])
     total = int(data[0][-1])
     return (done_bytes, total)
     # progress = round(done_bytes * 100.0 / total, 2)
@@ -113,7 +115,11 @@ def _ensure_word0(path: str) -> None:
         print(f"Moved: {src}->{dest}")
 
 
-def _correct_doc(path):
+def _correct_doc(path: str) -> None:
+    """
+    Fix incorrect JSON formatting...
+    todo: remove this when fixed upstream
+    """
     template = os.path.join(path, "template.json")
     with open(template, "r") as fo:
         data = json.load(fo)
@@ -224,7 +230,7 @@ async def upload(request: web.Request) -> web.Response:
     qs = request.app["query_service"]
     kwa = dict(room=room, constraints=constraints_file, gui=gui_mode)
     path = os.path.join("uploads", project_id)
-    print(f"Uploading data to DB: {project_id}")
+    print(f"Uploading data to database: {project_id}")
     job = qs.upload(path, username, project_id, **kwa)
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"

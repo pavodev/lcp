@@ -7,6 +7,7 @@ from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
 from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
 
+from .impo import Importer
 from .utils import Interrupted, _get_kwics
 
 
@@ -14,9 +15,6 @@ async def _upload_data(**kwargs) -> bool:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-
-    from .impo import Importer
-
     # user and room are not really used yet...
     # user: Optional[str] = kwargs["user"]
     # room: Optional[str] = kwargs.get("room")
