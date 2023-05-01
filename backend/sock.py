@@ -3,9 +3,10 @@ import json
 from time import sleep
 
 import aiohttp
-import aioredis
 import async_timeout
 import asyncio
+
+from redis import asyncio as aioredis
 
 from rq.job import Job
 from typing import Any, Dict, List, Optional, Tuple, Union

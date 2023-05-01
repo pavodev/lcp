@@ -177,8 +177,6 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
 
 async def start_app() -> None:
     app = await create_app()
-    if not app:
-        return None
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
@@ -188,11 +186,12 @@ async def start_app() -> None:
     return None
 
 
-if __name__ == "__main__" or (
-    sys.argv[0].endswith("adev") and not "_TEST" in os.environ
-):
-    # we do not want to run this code when unit testing, but we do want to allow mypy
-    uvloop.install()  # documentation has this and the below...
+# test mode should not start a loop
+if "_TEST" in os.environ:
+    pass
+
+# development mode starts a dev server
+elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
 
     if sys.version_info >= (3, 11):
         with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
