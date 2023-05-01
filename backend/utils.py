@@ -328,7 +328,10 @@ def _determine_language(batch: str) -> Optional[str]:
 
 
 async def gather(n, *tasks, name=None):
-
+    """
+    A replacement for asyncio.gather that runs a maximum of n tasks at once.
+    If any task errors, we cancel all tasks in the group that share the same name
+    """
     if n > 0:
         semaphore = asyncio.Semaphore(n)
 
@@ -343,7 +346,7 @@ async def gather(n, *tasks, name=None):
         group = asyncio.gather(*(asyncio.create_task(c) for c in tasks))
     try:
         await group
-    except (Exception, BaseException, KeyboardInterrupt, SystemExit) as err:
+    except BaseException as err:
         print(f"Error: {str(err)}")
         tasks = asyncio.all_tasks()
         current = asyncio.current_task()
