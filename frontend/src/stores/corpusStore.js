@@ -8,11 +8,10 @@ export const useCorpusStore = defineStore("corpusData", {
   }),
   getters: {},
   actions: {
-    fetchQuery(data) {
-      httpApi.post(`/query`, data).then((r) => {
-        this.queryData = r.data;
-        return r.data;
-      });
+    async fetchQuery(data) {
+      let r = await httpApi.post(`/query`, data)
+      this.queryData = await r.data;
+      return this.queryData
     },
     saveQuery(data) {
       httpApi.post(`/store`, data).then((r) => {

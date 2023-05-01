@@ -3,7 +3,15 @@
     <nav class="navbar navbar-expand-lg bg-liri mb-3">
       <div class="container">
         <a class="navbar-brand" href="#">LCP</a>
-        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <button
+          class="navbar-toggler"
+          type="button"
+          data-bs-toggle="collapse"
+          data-bs-target="#navbarNav"
+          aria-controls="navbarNav"
+          aria-expanded="false"
+          aria-label="Toggle navigation"
+        >
           <span class="navbar-toggler-icon"></span>
         </button>
         <div class="collapse navbar-collapse" id="navbarNav">
@@ -16,7 +24,10 @@
             </li>
             <li class="nav-item">
               <router-link class="nav-link" to="/query">
-                <FontAwesomeIcon :icon="['fas', 'magnifying-glass']" class="me-1" />
+                <FontAwesomeIcon
+                  :icon="['fas', 'magnifying-glass']"
+                  class="me-1"
+                />
                 Query
               </router-link>
             </li>
@@ -36,17 +47,14 @@
                 class="nav-link"
                 to="/Shibboleth.sso/Logout"
                 v-if="userData && userData.user && userData.user.id"
-                >
-                  <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
-                  Logout <small>({{ userData.user.displayName }})</small>
-                </router-link
               >
-              <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else
-                >
-                  <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
-                  Login
-                </router-link
-              >
+                <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
+                Logout <small>({{ userData.user.displayName }})</small>
+              </router-link>
+              <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else>
+                <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
+                Login
+              </router-link>
             </li>
           </ul>
         </div>
@@ -54,6 +62,7 @@
     </nav>
     <router-view />
     <NotificationView />
+    <LoadingView />
   </div>
 </template>
 
@@ -62,12 +71,13 @@ import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 
+import LoadingView from "@/components/LoadingView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 
 export default {
   mounted() {
     useUserStore().fetchUserData();
-    useCorpusStore().fetchCorpora()
+    useCorpusStore().fetchCorpora();
   },
   methods: {
     addActionClass(e) {
@@ -75,6 +85,7 @@ export default {
     },
   },
   components: {
+    LoadingView,
     NotificationView,
   },
   computed: {

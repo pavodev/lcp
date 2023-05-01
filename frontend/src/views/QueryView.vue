@@ -77,7 +77,7 @@
               @click="submit"
               class="btn btn-primary"
               :disabled="
-                selectedCorpora.length == 0 ||
+                (selectedCorpora && selectedCorpora.length == 0) ||
                 loading ||
                 (isQueryValidData != null && isQueryValidData.valid == false) ||
                 !query
@@ -323,11 +323,12 @@
               >
                 {{ resultSet.name }}
                 (<span v-if="resultSet.type == 'plain'">
-                {{
-                  WSDataSentences && WSDataSentences.result[index + 1]
-                    ? WSDataSentences.result[index + 1].length
-                    : 0
-                }}</span>
+                  {{
+                    WSDataSentences && WSDataSentences.result[index + 1]
+                      ? WSDataSentences.result[index + 1].length
+                      : 0
+                  }}</span
+                >
                 <span v-else>{{
                   WSDataResults && WSDataResults.result[index + 1]
                     ? WSDataResults.result[index + 1].length
@@ -498,9 +499,10 @@ textarea {
 
 <script>
 import { mapState } from "pinia";
+
 import { useCorpusStore } from "@/stores/corpusStore";
-import { useUserStore } from "@/stores/userStore";
 import { useNotificationStore } from "@/stores/notificationStore";
+import { useUserStore } from "@/stores/userStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ResultsTableView from "@/components/results/TableView.vue";
@@ -626,6 +628,7 @@ myColl3 => collocation
       stats: null,
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
+      failedStatus: false,
       // nResults: 50,
     };
   },
@@ -725,8 +728,8 @@ myColl3 => collocation
     },
     sendLeft() {
       this.$socket.sendObj({
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         action: "left",
         user: this.userId,
       });
@@ -734,8 +737,8 @@ myColl3 => collocation
     connectToRoom() {
       this.waitForConnection(() => {
         this.$socket.sendObj({
-          // room: this.roomId,
-          room: null,
+          room: this.roomId,
+          // room: null,
           action: "joined",
           user: this.userId,
         });
@@ -758,15 +761,16 @@ myColl3 => collocation
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "interrupted") {
           console.log("Query interrupted", data);
-          this.loading = false
+          this.loading = false;
           useNotificationStore().add({
-            type: 'error',
-            text: data.toString()
-          })
+            type: "error",
+            text: data.toString(),
+          });
           return;
         }
         if (data["action"] === "timeout") {
           console.log("Query job expired", data);
+          this.failedStatus = true;
           this.submit(null, false, false);
           return;
         }
@@ -812,13 +816,21 @@ myColl3 => collocation
           if (data["n"]) {
             console.log("queries stopped", data);
             useNotificationStore().add({
-              type: 'success',
-              text: "Query stopped"
-            })
+              type: "success",
+              text: "Query stopped",
+            });
+            this.loading = false
           }
           return;
         } else if (data["action"] === "query_result") {
           // console.log("query_result", data);
+          if (
+            this.failedStatus &&
+            data.result.length < this.WSDataResults.n_results
+          ) {
+            return;
+          }
+          this.failedStatus = false;
           data["n_results"] = data["result"].length;
           this.WSDataResults = data;
           return;
@@ -827,14 +839,13 @@ myColl3 => collocation
           this.WSDataSentences = data;
           return;
         }
-      }
-      else if (Object.prototype.hasOwnProperty.call(data, "status")) {
+      } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {
-          this.loading = false
+          this.loading = false;
           useNotificationStore().add({
-            type: 'error',
-            text: data.value
-          })
+            type: "error",
+            text: data.value,
+          });
         }
       }
 
@@ -856,8 +867,9 @@ myColl3 => collocation
         this.WSDataResults = data;
       }
     },
-    submit(event, resumeQuery = false, cleanResults = true) {
+    async submit(event, resumeQuery = false, cleanResults = true) {
       if (resumeQuery == false) {
+        this.failedStatus = false;
         this.stop();
         if (cleanResults == true) {
           this.WSDataResults = {};
@@ -869,8 +881,8 @@ myColl3 => collocation
         corpora: this.selectedCorpora.value,
         query: this.query,
         user: this.userId,
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         // page_size: this.pageSize,
         // page_size: this.nResults,
         page_size: this.resultsPerPage,
@@ -883,9 +895,11 @@ myColl3 => collocation
       if (resumeQuery) {
         data["previous"] = this.WSDataResults.job;
       }
-      useCorpusStore().fetchQuery(data);
-      this.loading = true;
-      this.percentageDone = 0.001;
+      let retval = await useCorpusStore().fetchQuery(data);
+      if (retval.status == "started") {
+        this.loading = true;
+        this.percentageDone = 0.001;
+      }
     },
     resume() {
       this.submit(null, true);
@@ -894,9 +908,10 @@ myColl3 => collocation
       this.currentResults = [];
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
+      this.failedStatus = false;
       this.$socket.sendObj({
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         action: "stop",
         user: this.userId,
       });
@@ -907,8 +922,8 @@ myColl3 => collocation
     },
     enough(job) {
       this.$socket.sendObj({
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         action: "enough_results",
         user: this.userId,
         job: job,
@@ -917,8 +932,8 @@ myColl3 => collocation
     validate() {
       // console.log("RRRR")
       this.$socket.sendObj({
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         action: "validate",
         user: this.userId,
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
@@ -931,8 +946,8 @@ myColl3 => collocation
         corpora: this.selectedCorpora.value,
         query: this.query,
         user: this.userId,
-        // room: this.roomId,
-        room: null,
+        room: this.roomId,
+        // room: null,
         page_size: this.pageSize,
         languages: this.languages,
         total_results_requested: this.nResults,
@@ -943,8 +958,8 @@ myColl3 => collocation
     fetch() {
       let data = {
         user: this.userId,
-        // room: this.roomId
-        room: null,
+        room: this.roomId
+        // room: null,
       };
       useCorpusStore().fetchQueries(data);
     },

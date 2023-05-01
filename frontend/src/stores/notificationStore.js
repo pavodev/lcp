@@ -6,10 +6,10 @@ export const useNotificationStore = defineStore("notificationData", {
   }),
   getters: {},
   actions: {
-    add(message){
+    add(message) {
       this.notifications.push(message)
     },
-    clear(){
+    clear() {
       this.notifications = []
     },
   },
