@@ -176,7 +176,11 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
 
 
 async def start_app() -> None:
-    app = await create_app()
+    maybe_app = await create_app()
+    if not maybe_app:
+        return None
+    else:
+        app = maybe_app
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
