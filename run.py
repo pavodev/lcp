@@ -175,8 +175,10 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     return app
 
 
-async def start_app():
+async def start_app() -> None:
     app = await create_app()
+    if not app:
+        return None
     runner = aiohttp.web.AppRunner(app)
     await runner.setup()
     site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
@@ -191,6 +193,11 @@ if __name__ == "__main__" or (
 ):
     # we do not want to run this code when unit testing, but we do want to allow mypy
     uvloop.install()  # documentation has this and the below...
-    asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-    asyncio.run(start_app())
-    # web.run_app(app, port=9090)
+
+    if sys.version_info >= (3, 11):
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(start_app())
+    else:
+        uvloop.install()
+        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+        asyncio.run(start_app())
