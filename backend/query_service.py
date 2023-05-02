@@ -145,7 +145,6 @@ class QueryService:
         user: str,
         project: str,
         room=None,
-        constraints=None,
         queue: str = "alt",
         gui: bool = False,
     ) -> Job:
@@ -159,7 +158,6 @@ class QueryService:
             "user": user,
             "project": project,
             "gui": gui,
-            "constraints": constraints,
             "room": room,
         }
         return self.app[queue].enqueue(

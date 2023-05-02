@@ -21,40 +21,29 @@ async def _upload_data(**kwargs) -> bool:
 
     # get template and understand it
     corpus_dir = os.path.join("uploads", kwargs["project"])
-    template_path = os.path.join(corpus_dir, "template.json")
 
-    with open(template_path, "r") as fo:
-        template = json.load(fo)
+    data_path = os.path.join(corpus_dir, "_data.json")
 
-    mapping_path = os.path.join(corpus_dir, "_mapping.json")
+    with open(data_path, "r") as fo:
+        data = json.load(fo)
 
-    with open(mapping_path, "r") as fo:
-        mapping = json.load(fo)
-
-    prep_seg = os.path.join(corpus_dir, "_prep_seg.json")
-
-    with open(prep_seg, "r") as fo:
-        prep_seg = json.load(fo)
-        prep_seg_create = prep_seg["create"]
-        prep_seg_inserts = prep_seg["inserts"]
-
-    constraints: str = kwargs["constraints"]
+    template = data["template"]
+    mapping = data["mapping"]
+    constraints = data["main_constraints"]
+    prep_seg_create = data["prep_seg_create"]
+    prep_seg_insert = data["prep_seg_insert"]
+    batches = data["batchnames"]
 
     await get_current_job()._upool.open()
 
-    with open(constraints, "r") as fo:
-        constraints = fo.read()
-
     print("Starting importer")
-
     importer = Importer(get_current_job()._upool, template, mapping, corpus_dir)
     try:
         print("Importing corpus...")
         await importer.import_corpus()
-        print(f"Setting constraints...\n\n{constraints}")
-        await importer.create_constridx(constraints)
-        print("Computing prepared segments")
-        await importer.prepare_segments(prep_seg_create, prep_seg_inserts)
+        importer.update_progress(f"Setting constraints...\n\n{constraints}")
+        await importer.run_script(constraints)
+        await importer.prepare_segments(prep_seg_create, prep_seg_insert, batches)
         print("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:

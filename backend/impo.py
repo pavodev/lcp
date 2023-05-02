@@ -164,15 +164,6 @@ class Importer:
                     self.update_progress(f":progress:{pc}%:{len(data)}:{tot} == {base}")
         return True
 
-    async def create_constridx(self, constr_idxs: str) -> None:
-        """
-        Set constraints on the imported corpus
-        """
-        async with self.connection.connection() as conn:
-            await conn.set_autocommit(True)
-            async with conn.cursor() as cur:
-                await cur.execute(constr_idxs)
-
     async def _check_tbl_exists(self, table: Table) -> bool:
         """
         Ensure that a table exists or raise AttributeError
@@ -203,7 +194,9 @@ class Importer:
 
         if self.max_concurrent != 1:
             args = (cop, csv_path, fsize, tot)
-            await self.process_data(positions, self.copy_batch, *args)
+            await self.process_data(
+                self.max_concurrent, positions, self.copy_batch, *args
+            )
             return True
 
         # no concurrency:
@@ -236,11 +229,14 @@ class Importer:
             if f.endswith(".csv")
         ]
         corpus_size = sum(s[1] for s in sizes)
-        await self.process_data(sizes, self._copy_tbl, *(corpus_size,))
+        await self.process_data(
+            self.max_concurrent, sizes, self._copy_tbl, *(corpus_size,)
+        )
         self.token_count = await self.get_token_count()
 
     async def process_data(
         self,
+        max_concurrent: int,
         iterable: Iterable[Tuple[Union[str, int], int]],
         method: Callable,
         *args: Any,
@@ -263,12 +259,12 @@ class Importer:
                 self.update_progress(
                     f"Doing {len(tasks)} {name} tasks...({current_size} >= {self.max_bytes})"
                 )
-                await gather(self.max_concurrent, *tasks, name=name)
+                await gather(max_concurrent, *tasks, name=name)
                 tasks = []
                 current_size = 0
             tasks.append(method(first, size, *args))
         self.update_progress(f"Doing {len(tasks)} remaining {name} tasks...")
-        await gather(self.max_concurrent, *tasks, name=name)
+        await gather(max_concurrent, *tasks, name=name)
         return None
 
     async def get_token_count(self) -> Dict[str, int]:
@@ -287,7 +283,7 @@ class Importer:
                     return {token: res[0]}
         raise ValueError("could not get token count")
 
-    async def run_script(self, script, size, *args):
+    async def run_script(self, script, size: Optional[int] = 0, *args):
         """
         Run a simple script -- used for prepared segments
         """
@@ -295,17 +291,18 @@ class Importer:
             async with conn.cursor() as cur:
                 await cur.execute(script)
 
-    async def prepare_segments(self, create, inserts):
+    async def prepare_segments(self, create, insert, batchnames):
         """
         Run the prepared segment scripts, potentially concurrently
         """
-        print("Running\n", create)
+        self.update_progress("Computing prepared segments...")
+        self.update_progress("Running:" + create)
         await self.run_script(create, -1)
-        if inserts:
-            print(f"Running inserts * {len(inserts)}\n{inserts[0]}\n")
-        iterable = [(i, 1) for i in inserts]
+        if insert:
+            self.update_progress(f"Running inserts * {len(batchnames)}\n{insert}\n")
+        inserts = [(insert.format(batch=batch), 1) for batch in batchnames]
         args = tuple()
-        await self.process_data(iterable, self.run_script, *tuple())
+        await self.process_data(0, inserts, self.run_script, *tuple())
 
     async def create_entry_maincorpus(self) -> None:
         """

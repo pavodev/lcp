@@ -8,6 +8,22 @@ from textwrap import dedent
 
 from typing import Dict, List
 
+from dataclasses import asdict, dataclass, field
+from typing import Any, Dict, List, Optional, Set
+
+
+@dataclass
+class DataNeededLater:
+    main_create: str = ""
+    main_constraints: str = ""
+    prep_seg_create: str = ""
+    prep_seg_insert: str = ""
+    batchnames: List[str] = field(default_factory=list)
+    mapping: Dict[Any, Any] = field(default_factory=dict)
+
+    def asdict(self):
+        return asdict(self)
+
 
 class Globs:
     def __init__(self) -> None:
@@ -19,7 +35,8 @@ class Globs:
         self.num_partitions: int = 0
         self.start_constrs: str = ""
         self.prep_seg_create: str = ""
-        self.prep_seg_inserts: List[str] = []
+        self.prep_seg_insert: str = ""
+        self.batchnames: List[str] = []
 
 
 class reversor:
@@ -309,7 +326,7 @@ class PartitionedTable(Table):
         super().__init__(name, cols, anchorings)
         self.base_name = self.name
         self.name = f"{self.base_name}0"
-        self.num_partitions = num_part + 1  # rest is same size as smallest partition
+        self.num_partitions = num_part
         self.col_partitions = column_part
         self.header_txt = f"CREATE TABLE {self.name} ("
 
@@ -644,7 +661,30 @@ class CTProcessor:
 
         ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
-        self.globals.prep_seg_create = "\n\n" + searchpath + "\n" + ddl
+        self.globals.prep_seg_create = f"\n\n{searchpath}\n{ddl}"
+
+        json_sel = (
+            "\n                      , ".join(rel_cols_names)
+            + f"\n                     ) AS toks\n                FROM {{batch}}\n                "
+            + "\n                ".join(
+                [
+                    f"JOIN {fk['table']} USING ({fk['column']})"
+                    for x in rel_cols
+                    if (fk := x.constrs.get("foreign_key"))
+                ]
+            )
+        )
+
+        query = (
+            DDL.compute_prep_segs(
+                seg_tab.primary_key()[0].name,
+                tok_pk.name,
+                f"prepared_{seg_tab.name}",
+            )
+            % json_sel
+        )
+
+        self.globals.prep_seg_insert = f"\n\n{searchpath}\n{query}"
 
         # todo: check this again
         for i in range(1, self.globals.num_partitions):
@@ -652,28 +692,7 @@ class CTProcessor:
                 batch = batchname.replace("<batch>", "rest")
             else:
                 batch = batchname.replace("<batch>", str(i))
-            json_sel = (
-                "\n                      , ".join(rel_cols_names)
-                + f"\n                     ) AS toks\n                FROM {batch}\n                "
-                + "\n                ".join(
-                    [
-                        f"JOIN {fk['table']} USING ({fk['column']})"
-                        for x in rel_cols
-                        if (fk := x.constrs.get("foreign_key"))
-                    ]
-                )
-            )
-
-            query = (
-                DDL.compute_prep_segs(
-                    seg_tab.primary_key()[0].name,
-                    tok_pk.name,
-                    f"prepared_{seg_tab.name}",
-                )
-                % json_sel
-            )
-
-            self.globals.prep_seg_inserts.append("\n\n" + searchpath + "\n" + query)
+            self.globals.batchnames.append(batch)
 
 
 def generate_ddl(corpus_temp):
@@ -701,19 +720,23 @@ def generate_ddl(corpus_temp):
         [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
     )
 
-    return (
-        "\n".join([create_schema, create_types, create_tbls]),
-        "\n".join(
-            [
-                globs.start_constrs + create_idxs,
-                create_constr,
-                globs.perms,
-            ]
-        ),
-        globs.prep_seg_create,
-        globs.prep_seg_inserts,
-        globs.mapping,
+    main_create = "\n".join([create_schema, create_types, create_tbls])
+    main_constraints = "\n".join(
+        [
+            globs.start_constrs + create_idxs,
+            create_constr,
+            globs.perms,
+        ]
     )
+
+    return DataNeededLater(
+        main_create,
+        main_constraints,
+        globs.prep_seg_create,
+        globs.prep_seg_insert,
+        globs.batchnames,
+        globs.mapping,
+    ).asdict()
 
 
 def main():

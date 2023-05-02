@@ -85,6 +85,8 @@ def _get_progress(progfile: str) -> Optional[Tuple[int, int]]:
     with open(progfile, "r") as fo:
         data = fo.read()
     if "\nSetting constraints..." in data:
+        return (-2, -2)
+    if "\nComputing prepared segments" in data:
         return (-1, -1)
     bits = [
         i.lstrip(":progress:").split()[0].split(":")
@@ -104,9 +106,10 @@ def _ensure_word0(path: str) -> None:
     """
     In case the user didn't call word.csv word0.csv
     """
-    template = os.path.join(path, "template.json")
+    template = os.path.join(path, "_data.json")
     with open(template, "r") as fo:
         data = json.load(fo)
+        data = data["template"]
     tok = data["firstClass"]["token"]
     src = os.path.join(path, tok.lower() + ".csv")
     if os.path.isfile(src):
@@ -120,9 +123,10 @@ def _correct_doc(path: str) -> None:
     Fix incorrect JSON formatting...
     todo: remove this when fixed upstream
     """
-    template = os.path.join(path, "template.json")
+    template = os.path.join(path, "_data.json")
     with open(template, "r") as fo:
         data = json.load(fo)
+        data = data["template"]
     doc = data["firstClass"]["document"]
     docpath = os.path.join(path, f"{doc}.csv".lower())
     with open(docpath, "r") as fo:
@@ -219,8 +223,6 @@ async def upload(request: web.Request) -> web.Response:
     _ensure_word0(os.path.join("uploads", project_id))
     _correct_doc(os.path.join("uploads", project_id))
 
-    constraints_file = os.path.join("uploads", project_id, "constraints.sql")
-
     return_data: Dict[str, Union[str, int]] = {}
     if not has_file:
         msg = "No file sent?"
@@ -228,7 +230,7 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(room=room, constraints=constraints_file, gui=gui_mode)
+    kwa = dict(room=room, gui=gui_mode)
     path = os.path.join("uploads", project_id)
     print(f"Uploading data to database: {project_id}")
     job = qs.upload(path, username, project_id, **kwa)
@@ -263,29 +265,19 @@ async def make_schema(request: web.Request) -> web.Response:
 
     template = request_data["template"]
 
-    (
-        create_ddl,
-        constraints_ddl,
-        prep_seg_create,
-        prep_seg_inserts,
-        mapping,
-    ) = await pg_create(template)
+    pieces = await pg_create(template)
+    pieces["template"] = template
     uu = str(uuid4())
     directory = os.path.join("uploads", uu)
     if not os.path.isdir("uploads"):
         os.makedirs("uploads")
     os.makedirs(directory)
-    with open(os.path.join(directory, "constraints.sql"), "w") as fo:
-        fo.write(constraints_ddl)
-    with open(os.path.join(directory, "_mapping.json"), "w") as fo:
-        json.dump(mapping, fo)
-    with open(os.path.join(directory, "template.json"), "w") as fo:
-        json.dump(template, fo)
-    with open(os.path.join(directory, "_prep_seg.json"), "w") as fo:
-        json.dump({"create": prep_seg_create, "inserts": prep_seg_inserts}, fo)
+
+    with open(os.path.join(directory, "_data.json"), "w") as fo:
+        json.dump(pieces, fo)
 
     short_url = str(request.url).split("?", 1)[0]
-    job = request.app["query_service"].create(create_ddl, project=uu)
+    job = request.app["query_service"].create(pieces["main_create"], project=uu)
     whole_url = f"{short_url}?job={job.id}"
     return web.json_response(
         {"status": "started", "job": job.id, "project": uu, "target": whole_url}
