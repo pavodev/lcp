@@ -287,6 +287,26 @@ class Importer:
                     return {token: res[0]}
         raise ValueError("could not get token count")
 
+    async def run_script(self, script, size, *args):
+        """
+        Run a simple script -- used for prepared segments
+        """
+        async with self.connection.connection() as conn:
+            async with conn.cursor() as cur:
+                await cur.execute(script)
+
+    async def prepare_segments(self, create, inserts):
+        """
+        Run the prepared segment scripts, potentially concurrently
+        """
+        print("Running\n", create)
+        await self.run_script(create, -1)
+        if inserts:
+            print(f"Running inserts * {len(inserts)}\n{inserts[0]}\n")
+        iterable = [(i, 1) for i in inserts]
+        args = tuple()
+        await self.process_data(iterable, self.run_script, *tuple())
+
     async def create_entry_maincorpus(self) -> None:
         """
         Add a row to main.corpus with metadata about the imported corpus

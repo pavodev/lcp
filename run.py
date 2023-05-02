@@ -2,43 +2,35 @@ import os
 import sys
 
 from collections import defaultdict
+from typing import Optional
 
-import aiohttp
 import aiohttp_cors
 import async_timeout
 import asyncio
-
-from aiohttp import WSCloseCode, web
-from dotenv import load_dotenv
-from redis import Redis
-from typing import Optional
-
-
-# import redis.asyncio as redis
 import uvloop
 
+from aiohttp import WSCloseCode, web
+from aiohttp_catcher import Catcher, catch
+from dotenv import load_dotenv
+from redis import Redis
 from redis import Redis as redis
 from redis import asyncio as aioredis
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
 
-
 from backend.check_file_permissions import check_file_permissions
+from backend.corpora import corpora
 from backend.document import document
 from backend.lama_user_data import lama_user_data
 from backend.query import query
+from backend.query_service import QueryService
 from backend.sock import handle_redis_response, sock
 from backend.store import fetch_queries, store_query
 from backend.upload import make_schema, upload
-from backend.video import video
-
-from backend import utils
-from backend.corpora import corpora
-from backend.query_service import QueryService
+from backend.utils import handle_timeout
 from backend.validate import validate
-
-from aiohttp_catcher import Catcher, catch
+from backend.video import video
 
 
 load_dotenv(override=True)
@@ -74,7 +66,7 @@ async def on_shutdown(app: web.Application) -> None:
     msg = "Server shutdown"
     for (ws, uid) in app["websockets"].values():
         try:
-            await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message=msg)
+            await ws.close(code=WSCloseCode.GOING_AWAY, message=msg)
         except Exception as err:
             print(f"Issue closing websocket for {uid}: {err}")
 
@@ -100,7 +92,7 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     catcher = Catcher()
 
     await catcher.add_scenario(
-        catch(NoSuchJobError).with_status_code(200).and_call(utils.handle_timeout)
+        catch(NoSuchJobError).with_status_code(200).and_call(handle_timeout)
     )
 
     app = web.Application(middlewares=[catcher.middleware])
@@ -181,9 +173,9 @@ async def start_app() -> None:
         return None
     else:
         app = maybe_app
-    runner = aiohttp.web.AppRunner(app)
+    runner = web.AppRunner(app)
     await runner.setup()
-    site = aiohttp.web.TCPSite(runner, port=AIO_PORT)
+    site = web.TCPSite(runner, port=AIO_PORT)
     await site.start()
     # wait forever
     await asyncio.Event().wait()
@@ -193,6 +185,9 @@ async def start_app() -> None:
 # test mode should not start a loop
 if "_TEST" in os.environ:
     pass
+
+elif __name__ == "run":
+    asyncio.run(start_app())
 
 # development mode starts a dev server
 elif __name__ == "__main__" or sys.argv[0].endswith("adev"):

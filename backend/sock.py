@@ -105,7 +105,7 @@ async def handle_redis_response(
 
                 await asyncio.sleep(0.1)
         except asyncio.TimeoutError as err:
-            print(f"Timeout: {err}")
+            print(f"Warning: timeout in websocket listener:\n{message}")
         except Exception as err:
             to_send = {"error": str(err), "status": "failed"}
             print("Error", err)

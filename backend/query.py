@@ -1,18 +1,18 @@
 import json
 import os
 
+from uuid import uuid4
+
 from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
+from abstract_query.create import json_to_sql
 from aiohttp import web
 from rq.job import Job
-
-from abstract_query.create import json_to_sql
 
 from . import utils
 from .callbacks import _query, _sentences
 from .dqd_parser import convert
 from .utils import _determine_language
-from uuid import uuid4
 
 
 def _make_sents_query(

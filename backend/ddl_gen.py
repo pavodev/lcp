@@ -18,6 +18,8 @@ class Globs:
         self.types: List = []
         self.num_partitions: int = 0
         self.start_constrs: str = ""
+        self.prep_seg_create: str = ""
+        self.prep_seg_inserts: List[str] = []
 
 
 class reversor:
@@ -619,9 +621,10 @@ class CTProcessor:
         mapd["layer"] = {}
         tokname = self.globals.base_map["token"]
         mapd["layer"][self.globals.base_map["segment"]] = {}
+        batchname = f"{tokname}<batch>"
         mapd["layer"][tokname] = {
             "batches": self.globals.num_partitions,
-            "relation": f"{tokname}<batch>",
+            "relation": batchname,
         }
         mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
         mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = (
@@ -633,28 +636,44 @@ class CTProcessor:
         mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
         self.globals.mapping = json.dumps(mapd)
 
+        corpus_name = re.sub("\W", "_", self.corpus_temp["meta"]["name"].lower())
+        corpus_version = str(int(self.corpus_temp["meta"]["version"]))
+        schema_name = corpus_name + corpus_version
+
+        searchpath = f"\nSET search_path TO {schema_name};"
+
         ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
-        json_sel = (
-            "\n                      , ".join(rel_cols_names)
-            + f"\n                     ) AS toks\n                FROM {tok_tab.name}\n                "
-            + "\n                ".join(
-                [
-                    f"JOIN {fk['table']} USING ({fk['column']})"
-                    for x in rel_cols
-                    if (fk := x.constrs.get("foreign_key"))
-                ]
-            )
-        )
+        self.globals.prep_seg_create = "\n\n" + searchpath + "\n" + ddl
 
-        query = (
-            DDL.compute_prep_segs(
-                seg_tab.primary_key()[0].name, tok_pk.name, f"prepared_{seg_tab.name}"
+        # todo: check this again
+        for i in range(1, self.globals.num_partitions):
+            if i == self.globals.num_partitions - 1 and i > 1:
+                batch = batchname.replace("<batch>", "rest")
+            else:
+                batch = batchname.replace("<batch>", str(i))
+            json_sel = (
+                "\n                      , ".join(rel_cols_names)
+                + f"\n                     ) AS toks\n                FROM {batch}\n                "
+                + "\n                ".join(
+                    [
+                        f"JOIN {fk['table']} USING ({fk['column']})"
+                        for x in rel_cols
+                        if (fk := x.constrs.get("foreign_key"))
+                    ]
+                )
             )
-            % json_sel
-        )
 
-        self.globals.prep_seg = "\n\n" + "\n".join([ddl, query])
+            query = (
+                DDL.compute_prep_segs(
+                    seg_tab.primary_key()[0].name,
+                    tok_pk.name,
+                    f"prepared_{seg_tab.name}",
+                )
+                % json_sel
+            )
+
+            self.globals.prep_seg_inserts.append("\n\n" + searchpath + "\n" + query)
 
 
 def generate_ddl(corpus_temp):
@@ -688,10 +707,11 @@ def generate_ddl(corpus_temp):
             [
                 globs.start_constrs + create_idxs,
                 create_constr,
-                globs.prep_seg,
                 globs.perms,
             ]
         ),
+        globs.prep_seg_create,
+        globs.prep_seg_inserts,
         globs.mapping,
     )
 

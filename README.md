@@ -2,7 +2,7 @@
 
 > uplord monorepository
 
-First, install Python 3.11 (though anything from 3.8 onward should work).
+First, install Python 3.11 (though anything from 3.9 onward should work).
 
 Then, install the following dependencies:
 
@@ -77,7 +77,7 @@ In seconds, how long should query data stay in Redis? If a user tries to change 
 
 > `IMPORT_MAX_CONCURRENT`
 
-When importing a new corpus, how many concurrent tasks can be spawned? Set to -1 or 0 for no limit, set to 1 for no concurrency, or larger to set the concurrency limit
+When importing a new corpus, how many concurrent tasks can be spawned? Set to -1 or 0 for no limit, set to 1 for no concurrency, or larger to set the concurrency limit.
 
 > `IMPORT_MAX_MEMORY_GB`
 
@@ -85,7 +85,7 @@ When processing concurrently, a lot of data can be read into memory for COPY tas
 
 > `IMPORT_MAX_COPY_GB`
 
-In GB, how much data can be read in one chunk for `COPY` tasks? Note that the limit can be exceeded by a few bytes in practice to complete an incomplete CSV line
+In GB, how much data can be read in one chunk for `COPY` tasks? Note that the limit can be exceeded by a few bytes in practice to complete an incomplete CSV line.
 
 > `MAX_SIMULTANEOUS_JOBS_PER_USER`
 

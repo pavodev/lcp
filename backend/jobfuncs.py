@@ -31,6 +31,13 @@ async def _upload_data(**kwargs) -> bool:
     with open(mapping_path, "r") as fo:
         mapping = json.load(fo)
 
+    prep_seg = os.path.join(corpus_dir, "_prep_seg.json")
+
+    with open(prep_seg, "r") as fo:
+        prep_seg = json.load(fo)
+        prep_seg_create = prep_seg["create"]
+        prep_seg_inserts = prep_seg["inserts"]
+
     constraints: str = kwargs["constraints"]
 
     await get_current_job()._upool.open()
@@ -46,6 +53,8 @@ async def _upload_data(**kwargs) -> bool:
         await importer.import_corpus()
         print(f"Setting constraints...\n\n{constraints}")
         await importer.create_constridx(constraints)
+        print("Computing prepared segments")
+        await importer.prepare_segments(prep_seg_create, prep_seg_inserts)
         print("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:
