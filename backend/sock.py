@@ -1,22 +1,22 @@
+import asyncio
 import json
+import traceback
 
 from time import sleep
-
-import aiohttp
-import async_timeout
-import asyncio
-
-from redis import asyncio as aioredis
-
-from rq.job import Job
 from typing import Any, Dict, List, Optional, Tuple, Union
+
+import async_timeout
+
+from aiohttp import WSCloseCode, WSMsgType, web
+from redis import asyncio as aioredis
+from rq.job import Job
 
 from .query import query
 from .validate import validate
 
 
 async def handle_redis_response(
-    channel: aioredis.client.PubSub, app: aiohttp.web.Application, test: bool = False
+    channel: aioredis.client.PubSub, app: web.Application, test: bool = False
 ) -> None:
     """
     If redis publishes a message, it gets picked up here and broadcast to the
@@ -108,7 +108,7 @@ async def handle_redis_response(
             print(f"Warning: timeout in websocket listener:\n{message}")
         except Exception as err:
             to_send = {"error": str(err), "status": "failed"}
-            print("Error", err)
+            print(f"Error: {str(err)}\n{traceback.format_exc()}")
             await push_msg(
                 app["websockets"],
                 room,
@@ -119,7 +119,7 @@ async def handle_redis_response(
 
 
 async def _handle_query(
-    app: aiohttp.web.Application,
+    app: web.Application,
     payload: Dict[str, Any],
     user: str,
     room: Optional[str],
@@ -216,19 +216,19 @@ async def push_msg(
             #     return
 
 
-async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
+async def sock(request: web.Request) -> web.WebSocketResponse:
     """
     Socket has to handle incoming messages, but also send a message when
     queries have finished processing
     """
-    ws = aiohttp.web.WebSocketResponse()
+    ws = web.WebSocketResponse()
     await ws.prepare(request)
     qs = request.app["query_service"]
     sockets = request.app["websockets"]
 
     async for msg in ws:
 
-        if msg.type != aiohttp.WSMsgType.TEXT:
+        if msg.type != WSMsgType.TEXT:
             continue
 
         payload = msg.json()
@@ -264,18 +264,21 @@ async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
             sleep(2)
             jobs += qs.cancel_running_jobs(user_id, session_id)
             jobs = list(set(jobs))
-            response = {
-                "status": "stopped",
-                "n": len(jobs),
-                "action": "stopped",
-                "jobs": jobs,
-            }
-            await push_msg(sockets, session_id, response, just=ident)
+            if jobs:
+                response = {
+                    "status": "stopped",
+                    "n": len(jobs),
+                    "action": "stopped",
+                    "jobs": jobs,
+                }
+                await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "validate":
             payload["_ws"] = True
-            response = await validate(**payload)
-            await push_msg(sockets, session_id, response, just=ident)
+            resp = await validate(**payload)
+            if isinstance(resp, web.Response):
+                continue
+            await push_msg(sockets, session_id, resp, just=ident)
 
         elif action == "enough_results":
             job = payload["job"]
@@ -314,6 +317,6 @@ async def sock(request: aiohttp.web.Request) -> aiohttp.web.WebSocketResponse:
             await push_msg(sockets, session_id, response)
 
     # connection closed
-    await ws.close(code=aiohttp.WSCloseCode.GOING_AWAY, message=b"Server shutdown")
+    await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
 
     return ws

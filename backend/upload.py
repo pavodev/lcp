@@ -10,7 +10,7 @@ from zipfile import ZipFile, is_zipfile
 from aiohttp import web
 from py7zr import SevenZipFile, is_7zfile
 
-from .pg_upload import pg_create
+from .ddl_gen import generate_ddl
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -265,7 +265,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     template = request_data["template"]
 
-    pieces = await pg_create(template)
+    pieces = generate_ddl(template)
     pieces["template"] = template
     uu = str(uuid4())
     directory = os.path.join("uploads", uu)

@@ -346,10 +346,14 @@ async def gather(n, *tasks, name=None):
         group = asyncio.gather(*(asyncio.create_task(c) for c in tasks))
     try:
         await group
-    except BaseException as err:
+    except (BaseException) as err:
         print(f"Error: {str(err)}")
         tasks = asyncio.all_tasks()
         current = asyncio.current_task()
+        try:
+            current.cancel()
+        except:
+            pass
         name = current.get_name()
         tasks.remove(current)
         for task in tasks:

@@ -94,6 +94,7 @@ class Importer:
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
         self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9)
         self.max_bytes = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
+        self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         if self.max_bytes == -1:
             self.max_bytes = 0
         else:
@@ -155,7 +156,7 @@ class Importer:
             tell = await f.tell()
             if not data or not data.strip():
                 return True
-        async with self.connection.connection() as conn:
+        async with self.connection.connection(self.upload_timeout) as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 async with cur.copy(cop) as copy:
@@ -168,7 +169,7 @@ class Importer:
         """
         Ensure that a table exists or raise AttributeError
         """
-        async with self.connection.connection() as conn:
+        async with self.connection.connection(self.upload_timeout) as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 script = SQLstats.check_tbl(table.schema, table.name)
@@ -203,7 +204,7 @@ class Importer:
         done = 0
         async with aiofiles.open(csv_path) as f:
             await f.readline()
-            async with self.connection.connection() as conn:
+            async with self.connection.connection(self.upload_timeout) as conn:
                 await conn.set_autocommit(True)
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
@@ -237,7 +238,7 @@ class Importer:
     async def process_data(
         self,
         max_concurrent: int,
-        iterable: Iterable[Tuple[Union[str, int], int]],
+        iterable: Iterable[Union[Tuple[Union[str, int], int], str]],
         method: Callable,
         *args: Any,
     ) -> None:
@@ -249,21 +250,30 @@ class Importer:
 
         All processing occurs with self.max_concurrent respected
         """
-        # name = method.__name__
         name = "import"
         current_size = 0
         tasks: List[Coroutine] = []
-        for first, size in iterable:
+        batches = (
+            f"in batches of {max_concurrent}" if max_concurrent > 0 else "concurrently"
+        )
+        for tup in iterable:
+            first: Union[str, int]
+            if isinstance(tup, str):
+                first, size = tup, 1
+            else:
+                first, size = tup
             current_size += size
             if self.max_bytes and current_size >= self.max_bytes and tasks:
                 self.update_progress(
-                    f"Doing {len(tasks)} {name} tasks...({current_size} >= {self.max_bytes})"
+                    f"Doing {len(tasks)} {method.__name__} tasks {batches}...({current_size} >= {self.max_bytes})"
                 )
                 await gather(max_concurrent, *tasks, name=name)
                 tasks = []
                 current_size = 0
             tasks.append(method(first, size, *args))
-        self.update_progress(f"Doing {len(tasks)} remaining {name} tasks...")
+        self.update_progress(
+            f"Doing {len(tasks)} remaining {method.__name__} tasks {batches}...({current_size} vs. {self.max_bytes})"
+        )
         await gather(max_concurrent, *tasks, name=name)
         return None
 
@@ -274,7 +284,7 @@ class Importer:
         """
         token = self.template["firstClass"]["token"] + "0"
 
-        async with self.connection.connection() as conn:
+        async with self.connection.connection(self.upload_timeout) as conn:
             async with conn.cursor() as cur:
                 query = SQLstats.token_count(self.schema, token)
                 await cur.execute(query)
@@ -287,7 +297,7 @@ class Importer:
         """
         Run a simple script -- used for prepared segments
         """
-        async with self.connection.connection() as conn:
+        async with self.connection.connection(self.upload_timeout) as conn:
             async with conn.cursor() as cur:
                 await cur.execute(script)
 
@@ -299,16 +309,16 @@ class Importer:
         self.update_progress("Running:" + create)
         await self.run_script(create, -1)
         if insert:
-            self.update_progress(f"Running inserts * {len(batchnames)}\n{insert}\n")
-        inserts = [(insert.format(batch=batch), 1) for batch in batchnames]
+            self.update_progress(f"Running {len(batchnames)} insert tasks:\n{insert}\n")
+        inserts = [insert.format(batch=batch) for batch in batchnames]
         args = tuple()
-        await self.process_data(0, inserts, self.run_script, *tuple())
+        await self.process_data(self.max_concurrent, inserts, self.run_script, *args)
 
     async def create_entry_maincorpus(self) -> None:
         """
         Add a row to main.corpus with metadata about the imported corpus
         """
-        async with self.connection.connection() as conn:
+        async with self.connection.connection(self.upload_timeout) as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(

@@ -13,8 +13,7 @@ async def validate(
     query: Union[str, bytes, bytearray] = "",
     query_name: Optional[str] = None,
     **kwargs: Dict[str, Any]
-# ) -> Union[Dict[str, Any], web.Response]:  #TODO: Fix reponse types
-) -> Any:
+) -> Union[Dict[str, Any], web.Response]:
     """
     Validate user query?
     """

@@ -2,10 +2,10 @@ import json
 import os
 import shutil
 
-from collections import Counter, defaultdict
+from collections import Counter
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
-from typing import Any, Dict, List, Mapping, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from .impo import Importer
 from .utils import Interrupted, _get_kwics
@@ -21,7 +21,6 @@ async def _upload_data(**kwargs) -> bool:
 
     # get template and understand it
     corpus_dir = os.path.join("uploads", kwargs["project"])
-
     data_path = os.path.join(corpus_dir, "_data.json")
 
     with open(data_path, "r") as fo:
@@ -30,33 +29,29 @@ async def _upload_data(**kwargs) -> bool:
     template = data["template"]
     mapping = data["mapping"]
     constraints = data["main_constraints"]
-    prep_seg_create = data["prep_seg_create"]
-    prep_seg_insert = data["prep_seg_insert"]
+    constrs = [i for i in constraints.splitlines() if i.strip()]
+    create = data["prep_seg_create"]
+    inserts = data["prep_seg_insert"]
     batches = data["batchnames"]
 
     await get_current_job()._upool.open()
 
-    print("Starting importer")
     importer = Importer(get_current_job()._upool, template, mapping, corpus_dir)
     try:
-        print("Importing corpus...")
+        importer.update_progress("Importing corpus...")
         await importer.import_corpus()
         importer.update_progress(f"Setting constraints...\n\n{constraints}")
-        await importer.run_script(constraints)
-        await importer.prepare_segments(prep_seg_create, prep_seg_insert, batches)
-        print("Adding to corpus list...")
+        await importer.process_data(
+            importer.max_concurrent, constrs, importer.run_script, *tuple()
+        )
+        await importer.prepare_segments(create, inserts, batches)
+        importer.update_progress("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:
         print(f"Error: {err}")
-        shutil.rmtree(corpus_dir)  # todo: should we do this?
         raise err
-
-    progfile = os.path.join(corpus_dir, ".progress.txt")
-    if os.path.isfile(progfile):
-        os.remove(progfile)
-
-    shutil.rmtree(corpus_dir)  # todo: should we do this?
-
+    finally:
+        shutil.rmtree(corpus_dir)  # todo: should we do this?
     return True
 
 
@@ -64,14 +59,62 @@ async def _create_schema(**kwargs) -> None:
     """
     To be run by rq worker, create schema
     """
+    timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
     await get_current_job()._upool.open()
-    async with get_current_job()._upool.connection() as conn:
+    async with get_current_job()._upool.connection(timeout) as conn:
         await conn.set_autocommit(True)
         async with conn.cursor() as cur:
             print("Creating schema...\n", kwargs["create"])
             await cur.execute(kwargs["create"])
-            # await cur.execute(kwargs["constraints"])
     return None
+
+
+def _make_sent_query(
+    query: str,
+    associated: Union[str, List[str]],
+    current_batch: Tuple[int, str, str],
+    resuming: bool,
+):
+    """
+    Helper to format the query to retrieve sentences: add sent ids
+    """
+    conn = get_current_connection()
+    if isinstance(associated, list):
+        associated = associated[-1]
+    job = Job.fetch(associated, connection=conn)
+    hit_limit = job.meta.get("hit_limit")
+    if job.get_status(refresh=True) in ("stopped", "canceled"):
+        raise Interrupted()
+    if job.result is None:
+        raise Interrupted()
+    if not job.result:
+        return []
+    prev_results = job.result
+    # so we don't double count on resuming
+    if resuming:
+        start_at = job.meta.get("start_at", 0)
+    else:
+        start_at = 0
+
+    seg_ids = set()
+    result_sets = job.meta["result_sets"]
+    kwics = _get_kwics(result_sets)
+    counts: Dict[int, int] = Counter()
+
+    for res in prev_results:
+        key = int(res[0])
+        rest = res[1]
+        if key in kwics:
+            counts[key] += 1
+            if start_at and counts[key] < start_at:
+                continue
+            elif hit_limit is not False and counts[key] > hit_limit:
+                continue
+            seg_ids.add(str(rest[0]))
+
+    form = ", ".join(sorted(seg_ids))
+
+    return query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
 
 
 async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
@@ -83,57 +126,20 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
     is_config = kwargs.get("config", False)
     is_store = kwargs.get("store", False)
     is_sentences = kwargs.get("is_sentences", False)
-    current_batch = kwargs.get("current_batch")
-    resuming = kwargs.get("resuming", False)
-    start_at = 0
-    hit_limit = False
 
-    if is_sentences and current_batch:
-        associated_query = kwargs["depends_on"]
-        conn = get_current_connection()
-        if isinstance(associated_query, list):
-            associated_query = associated_query[-1]
-        associated_query = Job.fetch(associated_query, connection=conn)
-        hit_limit = associated_query.meta.get("hit_limit")
-        if associated_query.get_status(refresh=True) in ("stopped", "canceled"):
-            raise Interrupted()
-        if associated_query.result is None:
-            raise Interrupted()
-        if not associated_query.result:
-            return {}
-        prev_results = associated_query.result
-        # so we don't double count on resuming
-        if resuming:
-            start_at = associated_query.meta.get("start_at", 0)
+    if is_sentences:
+        current_batch = kwargs["current_batch"]
+        resuming = kwargs.get("resuming", False)
+        query = _make_sent_query(query, kwargs["depends_on"], current_batch, resuming)
 
-        seg_ids = set()
-
-        result_sets = associated_query.meta["result_sets"]
-        kwics = _get_kwics(result_sets)
-        counts: Dict[int, int] = defaultdict(int)
-
-        for res in prev_results:
-            key = int(res[0])
-            rest = res[1]
-            if key in kwics:
-                counts[key] += 1
-                if start_at and counts[key] < start_at:
-                    continue
-                elif hit_limit is not False and counts[key] > hit_limit:
-                    continue
-                seg_ids.add(str(rest[0]))
-
-        form = ", ".join(sorted(seg_ids))
-
-        query = query.format(
-            schema=current_batch[1], table=current_batch[2], allowed=form
-        )
-
+    name = "_upool" if is_store else "_pool"
     # this open call should be made before any other db calls in the app just in case
-    await get_current_job()._pool.open()
+    await getattr(get_current_job(), name).open()
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
 
-    async with get_current_job()._pool.connection() as conn:
-        # await conn.set_autocommit(True)
+    async with getattr(get_current_job(), name).connection(timeout) as conn:
+        if is_store:
+            await conn.set_autocommit(True)
         async with conn.cursor() as cur:
             result = await cur.execute(query, params)
             if is_store:
