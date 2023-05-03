@@ -31,8 +31,7 @@ async def _upload_data(**kwargs) -> bool:
         template["project"] = kwargs["project"]
     mapping = data["mapping"]
     constraints = data["main_constraints"]
-    # todo: add this back when order problem is solved (no multiple keys on document)
-    # constrs = [i for i in constraints.splitlines() if i.strip()]
+    constrs = [i for i in constraints.splitlines() if i.strip()]
     create = data["prep_seg_create"]
     inserts = data["prep_seg_insert"]
     batches = data["batchnames"]
@@ -44,10 +43,9 @@ async def _upload_data(**kwargs) -> bool:
         importer.update_progress("Importing corpus...")
         await importer.import_corpus()
         importer.update_progress(f"Setting constraints...\n\n{constraints}")
-        # todo: add this back when order problem is solved
-        # await importer.process_data(
-        #    importer.max_concurrent, constrs, importer.run_script, *tuple()
-        # )
+        await importer.process_data(
+            importer.max_concurrent, constrs, importer.run_script, *tuple()
+        )
         await importer.run_script(constraints)
         await importer.prepare_segments(create, inserts, batches)
         importer.update_progress("Adding to corpus list...")
