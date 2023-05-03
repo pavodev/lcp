@@ -16,8 +16,17 @@ async def corpora(request: web.Request) -> web.Response:
     Return config to frontend
     """
     # request_json = await request.json()
-    # user = request_json["user"]
-    # requested = request_json["corpora"]
-    # return all requested corpora that user can access
-    # possible_corpora = set([i for i in requested if _has_access(user, i)])
-    return web.json_response({"config": request.app["config"]})
+    user = request_json["user"]
+    user_data = utils._lama_user_details(request.headers)
+    ids = set()
+    for sub in user_data.get("subscription", {}).get("subscriptions", []):
+        ids.add(sub["id"])
+    for proj in user_data.get("publicProjects", []):
+        ids.add(proj["id"])
+    corpora = {}
+    for k, v in request.app["config"].items():
+        if k == -1:
+            corpora[k] = v
+        elif v.get("project") in ids or "project" not in v:
+            corpora[k] = v
+    return web.json_response({"config": corpora})

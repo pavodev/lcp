@@ -132,27 +132,35 @@ def get_user_identifier(headers: Dict[str, Any]) -> Optional[str]:
     persistent_name = headers.get("X-Principal-Name")
     edu_person_unique_id = headers.get("X-Edu-Person-Unique-Id")
     mail = headers.get("X-Mail")
-    retval = None
 
     if persistent_id and bool(re.match("(.*)!(.*)!(.*)", persistent_id)):
-        retval = persistent_id
+        return persistent_id
     elif persistent_name and str(persistent_name).count("@") == 1:
-        retval = persistent_name
+        return persistent_name
     elif edu_person_unique_id and str(edu_person_unique_id).count("@") == 1:
-        retval = edu_person_unique_id
+        return edu_person_unique_id
     elif mail and _check_email(mail):
-        retval = mail
-    return retval
+        return mail
+    return None
 
 
 async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
     """
     todo: not tested yet, but the syntax is something like this
     """
-    url = f"{os.getenv('LAMA_API_URL')}/user/details"
+    url = f"{os.environ['LAMA_API_URL']}/user/details"
     async with aiohttp.ClientSession() as session:
         async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
             return await resp.json()
+
+
+async def _lama_project_create(headers: Dict, jso: Dict) -> Dict:
+    url = f"{os.environ['LAMA_API_URL']}/profile"
+    async with aiohttp.ClientSession() as session:
+        headers = _extract_lama_headers(headers)
+        async with session.post(url, headers=headers, json=jso) as resp:
+            text = await resp.text()
+            resp = await resp.json(content_type=None)
 
 
 def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, Any]:

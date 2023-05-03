@@ -1,6 +1,7 @@
 import json
 import os
 
+from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
 from typing import Any, Dict, Optional, Tuple, Union
 from uuid import uuid4
@@ -11,6 +12,7 @@ from aiohttp import web
 from py7zr import SevenZipFile, is_7zfile
 
 from .ddl_gen import generate_ddl
+from .utils import _lama_project_create, ensure_authorised
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -136,6 +138,7 @@ def _correct_doc(path: str) -> None:
         fo.write(data)
 
 
+@ensure_authorised
 async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
@@ -253,6 +256,7 @@ async def upload(request: web.Request) -> web.Response:
     return web.json_response(return_data)
 
 
+@ensure_authorised
 async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTS JSON
@@ -265,8 +269,21 @@ async def make_schema(request: web.Request) -> web.Response:
 
     template = request_data["template"]
 
+    today = datetime.today()
+    later = today + timedelta(weeks=52, days=2)
+
+    new_project = {
+        "title": template["meta"]["name"],
+        "unit ": "",
+        "description": template["meta"].get("corpusDescription", ""),
+        "url": template["meta"].get("url", ""),
+        "startDate": template["meta"].get("startDate", today.strftime("%Y-%m-%d")),
+        "finishDate": template["meta"].get("finishData", later.strftime("%Y-%m-%d")),
+    }
+    # resp = await _lama_project_create(request.headers, new_project)
     pieces = generate_ddl(template)
     pieces["template"] = template
+    # uu = resp["id"]
     uu = str(uuid4())
     directory = os.path.join("uploads", uu)
     if not os.path.isdir("uploads"):
