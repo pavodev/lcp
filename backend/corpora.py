@@ -15,9 +15,9 @@ async def corpora(request: web.Request) -> web.Response:
     """
     Return config to frontend
     """
-    # request_json = await request.json()
+    request_json = await request.json()
     user = request_json["user"]
-    user_data = utils._lama_user_details(request.headers)
+    user_data = await utils._lama_user_details(request.headers)
     ids = set()
     for sub in user_data.get("subscription", {}).get("subscriptions", []):
         ids.add(sub["id"])

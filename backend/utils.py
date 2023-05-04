@@ -373,9 +373,7 @@ def _determine_language(batch: str) -> Optional[str]:
     return None
 
 
-async def gather(
-    n, *tasks: Tuple[asyncio.Task], name: Optional[str] = None
-) -> Iterable[Any]:
+async def gather(n, *tasks: Any, name: Optional[str] = None) -> Iterable[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -396,15 +394,16 @@ async def gather(
         return await group
     except (BaseException) as err:
         print(f"Error while gathering tasks: {str(err)}. Cancelling others...")
-        tasks = asyncio.all_tasks()
+        running_tasks = asyncio.all_tasks()
         current = asyncio.current_task()
-        try:
-            current.cancel()
-        except:
-            pass
-        name = current.get_name()
-        tasks.remove(current)
-        for task in tasks:
+        if current is not None:
+            try:
+                current.cancel()
+            except:
+                pass
+            name = current.get_name()
+            running_tasks.remove(current)
+        for task in running_tasks:
             if name and task.get_name() == name:
                 task.cancel()
         raise err

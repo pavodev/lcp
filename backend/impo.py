@@ -245,7 +245,7 @@ class Importer:
         method: Callable,
         *args: Any,
         **kwargs: Any,
-    ) -> None:
+    ) -> List[Any]:
         """
         Do the execution of copy_bath or copy_table (method) from iterable data
 
@@ -271,7 +271,7 @@ class Importer:
                 cs = current_size / 1e6
                 self.update_progress(
                     f"Doing {len(tasks)} {method.__name__} tasks {batches}..."
-                    + f"({cs:.2f}MB >= {self.max_bytes / 1e6}MB)"
+                    + f"({cs:.2f}MB >= {self.max_bytes / 1e9}GB)"
                 )
                 gathered += await gather(mc, *tasks, name=name)
                 tasks = []
@@ -280,7 +280,7 @@ class Importer:
             cs = current_size / 1e6
         self.update_progress(
             f"Doing {len(tasks)} remaining {method.__name__} tasks "
-            + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e6}MB)"
+            + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e9}GB)"
         )
         gathered += await gather(mc, *tasks, name=name)
         return gathered

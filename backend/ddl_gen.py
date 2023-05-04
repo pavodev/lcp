@@ -281,13 +281,13 @@ class Table(DDL):
         ]
         return ret
 
-    def create_DDL(self) -> str:
+    def create_DDL(self, schema: str) -> str:
         return (
             self.create_tbl()
             + "\n\n"
-            + "\n".join(self.create_constrs())
+            + "\n".join(self.create_constrs(schema))
             + "\n\n"
-            + "\n".join(self.create_idxs())
+            + "\n".join(self.create_idxs(schema))
         )
 
 
@@ -731,7 +731,7 @@ def generate_ddl(corpus_temp: Dict[str, Any]):
 
     # todo: i don't think this defaultdict trick is needed, all the tables
     # must have unique names right?
-    constraints = defaultdict(list)
+    constraints: Dict[str, List[str]] = defaultdict(list)
     for table in sorted(globs.tables):
         constraints[table.name] += table.create_idxs(schema_name)
         constraints[table.name] += table.create_constrs(schema_name)

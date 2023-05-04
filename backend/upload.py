@@ -154,9 +154,9 @@ async def upload(request: web.Request) -> web.Response:
     Handle upload of data (save files, insert into db)
     """
     url = request.url
-    job_id = request.rel_url.query.get("job")
-    check = request.rel_url.query.get("check")
-    if check:
+    job_id = request.rel_url.query["job"]
+    checking = request.rel_url.query.get("check")
+    if checking:
         return await _status_check(request, job_id)
 
     gui_mode = request.rel_url.query.get("gui", False)
