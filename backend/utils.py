@@ -155,6 +155,41 @@ async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
             return await resp.json()
 
 
+async def _lama_project_create(headers: Mapping[str, Any], project_data: Dict ) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, json=project_data, headers=_extract_lama_headers(headers)) as resp:
+            return await resp.json()
+
+
+async def _lama_api_create(headers: Mapping[str, Any], project_id: str) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/create"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
+            return await resp.json()
+
+
+async def _lama_api_revoke(
+    headers: Mapping[str, Any], project_id: str, apikey_id: str
+) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/{apikey_id}/revoke"
+    data = {"comment": "Revoked by user"}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, headers=_extract_lama_headers(headers), json=data
+        ) as resp:
+            return await resp.json()
+
+
 def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch

@@ -322,7 +322,7 @@
                 :key="`result-btn-${index}`"
               >
                 {{ resultSet.name }}
-                (<span v-if="resultSet.type == 'plain'">
+                <small>(<span v-if="resultSet.type == 'plain'">
                   {{
                     WSDataSentences && WSDataSentences.result[index + 1]
                       ? WSDataSentences.result[index + 1].length
@@ -334,7 +334,7 @@
                     ? WSDataResults.result[index + 1].length
                     : 0
                 }}</span>
-                )
+                )</small>
               </button>
               <!-- <button
                 class="nav-link"

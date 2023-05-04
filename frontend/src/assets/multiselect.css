@@ -1,10 +1,10 @@
 .multiselect__tag {
-  background-color: #1e9989 !important;
+  background-color: #2a7f62 !important;
   padding-right: 22px;
   margin-right: 4px;
 }
 .multiselect__option--highlight {
-  background-color: #1e9989 !important;
+  background-color: #2a7f62 !important;
 }
 .multiselect__clear:before {
   transform: rotate(45deg);

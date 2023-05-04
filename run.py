@@ -23,6 +23,9 @@ from backend.check_file_permissions import check_file_permissions
 from backend.corpora import corpora
 from backend.document import document
 from backend.lama_user_data import lama_user_data
+from backend.project import project_api_create
+from backend.project import project_api_revoke
+from backend.project import project_create
 from backend.query import query
 from backend.query_service import QueryService
 from backend.sock import handle_redis_response, sock
@@ -64,7 +67,7 @@ async def on_shutdown(app: web.Application) -> None:
     Close websocket connections on app shutdown
     """
     msg = "Server shutdown"
-    for (ws, uid) in app["websockets"].values():
+    for ws, uid in app["websockets"].values():
         try:
             await ws.close(code=WSCloseCode.GOING_AWAY, message=msg)
         except Exception as err:
@@ -140,6 +143,17 @@ async def create_app(*args, **kwargs) -> Optional[web.Application]:
     resource = cors.add(app.router.add_resource("/store"))
     cors.add(resource.add_route("POST", store_query))
 
+    resource = cors.add(app.router.add_resource("/project"))
+    cors.add(resource.add_route("POST", project_create))
+
+    resource = cors.add(app.router.add_resource("/project/{project_id}/api/create"))
+    cors.add(resource.add_route("POST", project_api_create))
+
+    resource = cors.add(
+        app.router.add_resource("/project/{project_id}/api/{apikey_id}/revoke")
+    )
+    cors.add(resource.add_route("POST", project_api_revoke))
+
     resource = cors.add(app.router.add_resource("/settings"))
     cors.add(resource.add_route("GET", lama_user_data))
 
@@ -191,7 +205,6 @@ elif __name__ == "run":
 
 # development mode starts a dev server
 elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
-
     if sys.version_info >= (3, 11):
         with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
             runner.run(start_app())
