@@ -7,7 +7,9 @@ import VueNativeSock from 'vue-native-websocket-vue3'
 import Multiselect from 'vue-multiselect';
 import config from "@/config";
 import Vue3Mermaid from "vue3-mermaid";
+import DatePicker from 'vue-datepicker-next';
 
+import 'vue-datepicker-next/index.css';
 import "vue-multiselect/dist/vue-multiselect.css";
 import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
@@ -24,6 +26,7 @@ createApp(App).use(
     reconnectionDelay: 1000
 })
   .component('multiselect', Multiselect)
+  .component('DatePicker', DatePicker)
   .component('FontAwesomeIcon', FontAwesomeIcon)
   .use(pinia)
   .use(router)

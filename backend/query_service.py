@@ -178,12 +178,30 @@ class QueryService:
         job.delete()
         return "DELETED"
 
-    def create(self, create: str, project: str, queue: str = "alt", gui: bool = False):
+    def create(
+        self,
+        create: str,
+        project: str,
+        path: str,
+        schema_name: str,
+        user: Optional[str],
+        room: Optional[str],
+        project_name: str,
+        queue: str = "alt",
+        drops: Optional[List[str]] = None,
+        gui: bool = False,
+    ):
         opts = {
             "on_success": _schema,
             "on_failure": _general_failure,
             "create": create,
             "project": project,
+            "user": user,
+            "room": room,
+            "path": path,
+            "project_name": project_name,
+            "drops": drops,
+            "schema_name": schema_name,
             "gui": gui,
         }
         return self.app[queue].enqueue(

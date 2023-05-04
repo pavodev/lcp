@@ -1,5 +1,7 @@
 import json
 import os
+import re
+import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
@@ -8,11 +10,18 @@ from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
 
+import aiohttp
 from aiohttp import web
 from py7zr import SevenZipFile, is_7zfile
+from rq.job import Job
 
 from .ddl_gen import generate_ddl
-from .utils import _lama_project_create, ensure_authorised
+from .utils import (
+    _lama_project_create,
+    _lama_user_details,
+    ensure_authorised,
+    _lama_check_api_key,
+)
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -42,6 +51,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         "status": status,
         "info": msg,
         "project": job.kwargs["project"],
+        "project_name": job.kwargs["project_name"],
         "target": whole_url,
     }
     return web.json_response(ret)
@@ -144,35 +154,36 @@ async def upload(request: web.Request) -> web.Response:
     Handle upload of data (save files, insert into db)
     """
     url = request.url
-    exists = request.rel_url.query.get("job")
-    if exists:
-        return await _status_check(request, exists)
+    job_id = request.rel_url.query.get("job")
+    check = request.rel_url.query.get("check")
+    if check:
+        return await _status_check(request, job_id)
 
     gui_mode = request.rel_url.query.get("gui", False)
 
-    # todo: best way to encode user? maybe not needed if api key exists
-    username = request.rel_url.query.get("user", "unknown_user")
-    room = request.rel_url.query.get("room", None)
-    api_key = request.rel_url.query["key"]
+    job = Job.fetch(job_id, connection=request.app["redis"])
+    project_id = job.kwargs["project"]
+    username = job.kwargs["user"]
+    room = job.kwargs["room"]
+    project_name = job.kwargs["project_name"]
+    cpath = job.kwargs["path"]
 
-    # project_id = request_data.get("project")
-    project_id = request.rel_url.query.get("project", "unknown_project")
+    username = request.rel_url.query.get("user_id", "")
+    room = request.rel_url.query.get("room", None)
+
     if not project_id:
         return web.json_response({"status": "failed"})
 
     data = await request.multipart()
     size = 0
-    # if os.path.isfile(path):
-    #     return web.json_response({"status": "failure", "error": "file exists"})
     has_file = False
-    files = set()
     async for bit in data:
         if isinstance(bit.filename, str):
             if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
                 continue
             ext = os.path.splitext(bit.filename)[-1]
             # filename = str(project) + ext
-            path = os.path.join("uploads", project_id, bit.filename)
+            path = os.path.join("uploads", cpath, bit.filename)
             with open(path, "ba") as f:
                 while True:
                     chunk = await bit.read_chunk()
@@ -180,7 +191,6 @@ async def upload(request: web.Request) -> web.Response:
                         break
                     size += len(chunk)
                     f.write(chunk)
-                    files.add(path)
             ziptar = [
                 (".zip", is_zipfile, ZipFile, "namelist"),
                 (".tar", is_tarfile, TarFile, "getnames"),
@@ -196,9 +206,9 @@ async def upload(request: web.Request) -> web.Response:
                             if not str(f).endswith(VALID_EXTENSIONS):
                                 continue
                             just_f = os.path.join(
-                                "uploads", project_id, os.path.basename(str(f))
+                                "uploads", cpath, os.path.basename(str(f))
                             )
-                            dest = os.path.join("uploads", project_id)
+                            dest = os.path.join("uploads", cpath)
                             print(f"Uncompressing {f} to {dest}")
                             if ext != ".7z":
                                 compressed.extract(f, dest)
@@ -223,8 +233,8 @@ async def upload(request: web.Request) -> web.Response:
             if size:
                 has_file = True
 
-    _ensure_word0(os.path.join("uploads", project_id))
-    _correct_doc(os.path.join("uploads", project_id))
+    _ensure_word0(os.path.join("uploads", cpath))
+    _correct_doc(os.path.join("uploads", cpath))
 
     return_data: Dict[str, Union[str, int]] = {}
     if not has_file:
@@ -234,9 +244,9 @@ async def upload(request: web.Request) -> web.Response:
 
     qs = request.app["query_service"]
     kwa = dict(room=room, gui=gui_mode)
-    path = os.path.join("uploads", project_id)
-    print(f"Uploading data to database: {project_id}")
-    job = qs.upload(path, username, project_id, **kwa)
+    path = os.path.join("uploads", cpath)
+    print(f"Uploading data to database: {cpath}")
+    job = qs.upload(path, username, cpath, **kwa)
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
@@ -248,6 +258,7 @@ async def upload(request: web.Request) -> web.Response:
             "job": job.id,
             "size": size,
             "project": str(project_id),
+            "project_name": project_name,
             "info": info,
             "target": whole_url,
         }
@@ -268,34 +279,103 @@ async def make_schema(request: web.Request) -> web.Response:
     request_data = await request.json()
 
     template = request_data["template"]
+    project = request_data.get("project")
 
     today = datetime.today()
     later = today + timedelta(weeks=52, days=2)
 
-    new_project = {
-        "title": template["meta"]["name"],
-        "unit ": "",
-        "description": template["meta"].get("corpusDescription", ""),
-        "url": template["meta"].get("url", ""),
-        "startDate": template["meta"].get("startDate", today.strftime("%Y-%m-%d")),
-        "finishDate": template["meta"].get("finishData", later.strftime("%Y-%m-%d")),
-    }
-    # resp = await _lama_project_create(request.headers, new_project)
+    status = await _lama_check_api_key(request.headers)
+
+    # user_id = status["account"]["eduPersonId"]
+    user_id = status["account"]["email"]
+    home_org = status["account"]["homeOrganization"]
+    existing_project = status["profile"]
+
+    ids = (existing_project["id"], existing_project["title"])
+    if project and project not in ids:
+        admin = os.environ["LAMA_USER"]
+        admin_org = os.getenv("LAMA_HOME_ORGANIZATION", admin.split("@")[-1])
+        headers = {
+            "X-API-Key": os.environ["LAMA_API_KEY"],
+            "X-Remote-User": admin,
+            "X-Schac-Home-Organization": admin_org,
+            "X-Persistent-Id": os.environ["LAMA_PERSISTENT_ID"],
+        }
+        start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
+        finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
+        profile = {
+            "title": project,
+            "unit": "LiRI",
+            "startDate": start,
+            "finishDate": finish,
+        }
+        try:
+            existing_project = await _lama_project_create(headers, profile)
+            print(f"New project created: {project}", existing_project)
+        except Exception as err:
+            tb = traceback.format_exc()
+            msg = f"Could not create project: {project} already exists?"
+            print(msg)
+            error = {
+                "status": "failed",
+                "message": f"{msg} -- {err}",
+                "traceback": tb,
+            }
+            return web.json_response(error)
+
+    corpus_folder = str(uuid4())
+
+    proj_id = existing_project["id"]
+
+    corpus_name = template["meta"]["name"]
+    corpus_version = template["meta"]["version"]
+    corpus_name = re.sub(r"\W", "_", template["meta"]["name"].lower())
+    corpus_name = re.sub(r"_+", "_", corpus_name)
+    schema_name = f"{corpus_name}__{corpus_folder.split('-', 2)[1]}"
+
+    sames = [
+        i["schema_name"]
+        for i in request.app["config"].values()
+        if "meta" in i
+        and "schema_name" in i
+        and i["meta"]["name"] == corpus_name
+        and i["meta"]["version"] == corpus_version
+    ]
+    drops = [f"DROP SCHEMA IF EXISTS {i} CASCADE;" for i in set(sames)]
+
+    template["project"] = proj_id
+    template["schema_name"] = schema_name
+
     pieces = generate_ddl(template)
     pieces["template"] = template
-    # uu = resp["id"]
-    uu = str(uuid4())
-    directory = os.path.join("uploads", uu)
-    if not os.path.isdir("uploads"):
-        os.makedirs("uploads")
+
+    corpus_path = os.path.join(proj_id, schema_name)
+
+    directory = os.path.join("uploads", corpus_path)
     os.makedirs(directory)
 
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 
     short_url = str(request.url).split("?", 1)[0]
-    job = request.app["query_service"].create(pieces["main_create"], project=uu)
+    job = request.app["query_service"].create(
+        pieces["create"],
+        project=proj_id,
+        path=corpus_path,
+        schema_name=schema_name,
+        user=user_id,
+        room=None,
+        drops=drops,
+        project_name=existing_project["title"],
+    )
     whole_url = f"{short_url}?job={job.id}"
     return web.json_response(
-        {"status": "started", "job": job.id, "project": uu, "target": whole_url}
+        {
+            "status": "started",
+            "job": job.id,
+            "project": proj_id,
+            "path": corpus_path,
+            "target": whole_url,
+            "user_id": user_id,
+        }
     )

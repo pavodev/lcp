@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 
-from collections import Counter
+from collections import Counter, defaultdict
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
 from typing import Any, Dict, List, Optional, Tuple, Union
@@ -30,28 +30,32 @@ async def _upload_data(**kwargs) -> bool:
     if "project" not in template:
         template["project"] = kwargs["project"]
     mapping = data["mapping"]
-    constraints = data["main_constraints"]
-    constrs = [i for i in constraints.splitlines() if i.strip()]
+    schema_name = template["schema_name"]
+    constraints = data["constraints"]
+    perms = data["perms"]
+    constraints.append(perms)
     create = data["prep_seg_create"]
     inserts = data["prep_seg_insert"]
     batches = data["batchnames"]
 
-    await get_current_job()._upool.open()
+    upool = get_current_job()._upool
+    await upool.open()
 
-    importer = Importer(get_current_job()._upool, template, mapping, corpus_dir)
+    importer = Importer(upool, template, mapping, corpus_dir, schema_name, len(batches))
     try:
         importer.update_progress("Importing corpus...")
         await importer.import_corpus()
         importer.update_progress(f"Setting constraints...\n\n{constraints}")
-        await importer.process_data(
-            importer.max_concurrent, constrs, importer.run_script, *tuple()
-        )
-        await importer.run_script(constraints)
+        await importer.process_data(constraints, importer.run_script)
         await importer.prepare_segments(create, inserts, batches)
         importer.update_progress("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:
         print(f"Error: {err}")
+        try:
+            await importer.cleanup()
+        except:
+            pass
         raise err
     finally:
         shutil.rmtree(corpus_dir)  # todo: should we do this?
@@ -62,13 +66,21 @@ async def _create_schema(**kwargs) -> None:
     """
     To be run by rq worker, create schema
     """
+    drops = kwargs["drops"]
+    schema_name = kwargs["schema_name"]
     timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
     await get_current_job()._upool.open()
     async with get_current_job()._upool.connection(timeout) as conn:
         await conn.set_autocommit(True)
         async with conn.cursor() as cur:
-            print("Creating schema...\n", kwargs["create"])
-            await cur.execute(kwargs["create"])
+            try:
+                if drops:
+                    await cur.execute("\n".join(drops))
+                print("Creating schema...\n", kwargs["create"])
+                await cur.execute(kwargs["create"])
+            except:
+                script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
+                await cur.execute(script)
     return None
 
 

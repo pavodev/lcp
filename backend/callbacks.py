@@ -181,6 +181,7 @@ def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> N
         "user": user,
         "status": "success" if not result else "error",
         "project": job.kwargs["project"],
+        "project_name": job.kwargs["project_name"],
         "action": "uploaded",
         "gui": job.kwargs.get("gui", False),
         "room": room,

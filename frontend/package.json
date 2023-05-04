@@ -24,6 +24,7 @@
     "videojs-abloop": "^1.2.0",
     "vue": "^3.2.13",
     "vue-chartjs": "^5.2.0",
+    "vue-datepicker-next": "^1.0.3",
     "vue-multiselect": "^3.0.0-beta.1",
     "vue-native-websocket-vue3": "^3.1.6",
     "vue-router": "^4.0.3",

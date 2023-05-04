@@ -1,9 +1,11 @@
 import argparse
 import json
 import math
+import os
 import re
 
-from collections import abc
+from collections import abc, defaultdict
+from functools import total_ordering
 from textwrap import dedent
 
 from typing import Dict, List
@@ -14,12 +16,13 @@ from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 @dataclass
 class DataNeededLater:
-    main_create: str = ""
-    main_constraints: str = ""
+    create: str = ""
+    constraints: List[str] = field(default_factory=list)
     prep_seg_create: str = ""
     prep_seg_insert: str = ""
     batchnames: List[str] = field(default_factory=list)
     mapping: str = ""
+    perms: str = ""
 
     def asdict(self) -> Dict[str, Union[str, List[str], Dict[Any, Any]]]:
         return asdict(self)
@@ -61,17 +64,15 @@ class DDL:
     base DDL class for DB entities
     """
 
-    perms = lambda x: dedent(
+    perms = lambda x, y: dedent(
         f"""
-        GRANT USAGE ON SCHEMA {x} TO lcp_dev_webuser;
-        GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO lcp_dev_webuser;\n\n"""
+        GRANT USAGE ON SCHEMA {x} TO {y};
+        GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
     )
 
     create_scm = lambda x, y, z: dedent(
         f"""
         BEGIN;
-
-        DROP SCHEMA IF EXISTS {x} CASCADE;
         CREATE SCHEMA {x};
         DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
         SET search_path TO {x};"""
@@ -154,7 +155,7 @@ class DDL:
 class Column(DDL):
     _not_null_constr = "ALTER COLUMN {} SET NOT NULL;"
     _pk_constr = "ADD PRIMARY KEY ({});"
-    _fk_constr = "ADD FOREIGN KEY ({}) REFERENCES {{schema}}.{}({});"
+    _fk_constr = "ADD FOREIGN KEY ({}) REFERENCES {}.{}({});"
     _uniq_constr = "ADD UNIQUE ({});"
     _idx_constr = "{} ({});"
 
@@ -177,7 +178,7 @@ class Column(DDL):
         )
         # + self.t * (math.ceil((self._max_strtype - len(self.type)) / 8) + 1)
 
-    def ret_constrs(self) -> str:
+    def ret_constrs(self, schema) -> str:
         """
         method for generating all DLL constraints for a column (if there are any)
         """
@@ -191,7 +192,9 @@ class Column(DDL):
                 ret.append(self._pk_constr.format(self.name))
             elif k == "foreign_key" and v:
                 assert isinstance(v, dict)
-                ret.append(self._fk_constr.format(self.name, v["table"], v["column"]))
+                ret.append(
+                    self._fk_constr.format(self.name, schema, v["table"], v["column"])
+                )
             elif k == "unique" and v:
                 ret.append(self._uniq_constr.format(self.name))
             elif k == "not_null" and v:
@@ -211,6 +214,7 @@ class Column(DDL):
             return self._idx_constr.format("", self.name)
 
 
+@total_ordering
 class Table(DDL):
     def __init__(
         self, name: str, cols: List[Column], anchorings: Optional[List] = None
@@ -227,7 +231,13 @@ class Table(DDL):
             * self.tabwidth
         )
         # self._max_strtype = max([len(col.type) for col in cols])
-        self._process_cols()
+        self._order_cols()
+
+    def __lt__(self, other: Any) -> bool:
+        return self.name < other.name
+
+    def __eq__(self, other: Any) -> bool:
+        return self.name == other.name
 
     def primary_key(self) -> List[Column]:
         return [x for x in self.cols if x.constrs.get("primary_key")]
@@ -243,9 +253,6 @@ class Table(DDL):
             reverse=True,
         )
 
-    def _process_cols(self) -> None:
-        self._order_cols()
-
     def create_tbl(self) -> str:
         return (
             self.header_txt
@@ -258,39 +265,38 @@ class Table(DDL):
             + self.end
         )
 
-    def create_constrs(self) -> str:
+    def create_constrs(self, schema: str) -> List[str]:
         ret = [
-            f"ALTER TABLE {{schema}}.{self.name} " + constr
+            f"ALTER TABLE {schema}.{self.name} " + constr
             for col in self.cols
-            if (constr := col.ret_constrs())
+            if (constr := col.ret_constrs(schema))
         ]
+        return ret
 
-        return "\n".join(ret)
-
-    def create_idxs(self) -> str:
+    def create_idxs(self, schema: str) -> List[str]:
         ret = [
-            f"CREATE INDEX ON {{schema}}.{self.name} " + idx
+            f"CREATE INDEX ON {schema}.{self.name} " + idx
             for col in self.cols
             if (idx := col.ret_idx())
         ]
-
-        return "\n".join(ret)
+        return ret
 
     def create_DDL(self) -> str:
         return (
             self.create_tbl()
             + "\n\n"
-            + self.create_constrs()
+            + "\n".join(self.create_constrs())
             + "\n\n"
-            + self.create_idxs()
+            + "\n".join(self.create_idxs())
         )
 
 
+@total_ordering
 class PartitionedTable(Table):
     max_id = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
     @staticmethod
-    def half_hex(num) -> str:
+    def half_hex(num: Union[int, str]) -> str:
         if isinstance(num, str):
             num = int(num, 16)
         res = hex(int(num / 2))
@@ -363,7 +369,7 @@ class PartitionedTable(Table):
 
         return tbls
 
-    def create_constrs(self) -> str:
+    def create_constrs(self, schema: str) -> List[str]:
         ret = []
 
         pks = []
@@ -374,16 +380,15 @@ class PartitionedTable(Table):
 
         pks = sorted(pks, key=lambda x: x != self.col_partitions)
         ret.append(
-            f"ALTER TABLE {{schema}}.{self.name} ADD PRIMARY KEY ({', '.join(pks)});"
+            f"ALTER TABLE {schema}.{self.name} ADD PRIMARY KEY ({', '.join(pks)});"
         )
 
         ret += [
-            f"ALTER TABLE {{schema}}.{self.name} " + constr
+            f"ALTER TABLE {schema}.{self.name} " + constr
             for col in self.cols
-            if (constr := col.ret_constrs())
+            if (constr := col.ret_constrs(schema))
         ]
-
-        return "\n".join(ret)
+        return ret
 
     def create_tbl(self) -> str:
         main_t = [self._create_maintbl()]
@@ -392,6 +397,7 @@ class PartitionedTable(Table):
         return "\n\n".join(main_t + sub_ts)
 
 
+@total_ordering
 class Type(DDL):
     def __init__(self, name: str, values: List[str]):
         self.name = name.strip()
@@ -405,13 +411,19 @@ class Type(DDL):
             + self.end
         )
 
+    def __lt__(self, other: Any) -> bool:
+        return self.name < other.name
+
+    def __eq__(self, other: Any) -> bool:
+        return self.name == other.name
+
 
 class CTProcessor:
     def __init__(self, corpus_template: Dict[str, Any], glos: Globs):
         self.corpus_temp = corpus_template
+        self.schema_name = corpus_template["schema_name"]
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.globals = glos
-        self.schema_name = ""
 
     @staticmethod
     def _order_ct_layers(layers: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -495,9 +507,9 @@ class CTProcessor:
 
     def _process_unitspan(self, entity: Dict) -> None:
         l_name, l_params = list(entity.items())[0]
-        tables: List = []
-        table_cols: List = []
-        types: List = []
+        tables: List[Table] = []
+        table_cols: List[Column] = []
+        types: List[Type] = []
 
         table_name = l_name.lower()
 
@@ -551,9 +563,9 @@ class CTProcessor:
         # TODO: create FK constraints
         l_name, l_params = list(entity.items())[0]
         table_name = l_name.lower()
-        tables: List = []
-        table_cols: List = []
-        types: List = []
+        tables: List[Table] = []
+        table_cols: List[Column] = []
+        types: List[Type] = []
 
         source_col = self._get_relation_col(l_params["attributes"].pop("source"))
         target_col = self._get_relation_col(l_params["attributes"].pop("target"))
@@ -600,14 +612,18 @@ class CTProcessor:
                 )
 
     def process_schema(self) -> str:
-        corpus_name = re.sub("\W", "_", self.corpus_temp["meta"]["name"].lower())
+        corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
+        corpus_name = re.sub(r"_+", "_", corpus_name)
         corpus_version = str(int(self.corpus_temp["meta"]["version"]))
-        schema_name = corpus_name + corpus_version
+        corpus_version = re.sub(r"\W", "_", corpus_version.lower())
+        corpus_version = re.sub(r"_+", "_", corpus_version)
+        schema_name = self.schema_name
 
         self.globals.schema.append(
             DDL.create_scm(schema_name, corpus_name, corpus_version)
         )
-        self.globals.perms = DDL.perms(schema_name)
+        query_user = os.getenv("SQL_QUERY_USERNAME", "lcp_dev_webuser")
+        self.globals.perms = DDL.perms(schema_name, query_user)
         return schema_name
 
     def create_compute_prep_segs(self) -> None:
@@ -659,7 +675,7 @@ class CTProcessor:
         corpus_name = re.sub("\W", "_", self.corpus_temp["meta"]["name"].lower())
         corpus_version = str(int(self.corpus_temp["meta"]["version"]))
 
-        searchpath = f"\nSET search_path TO {corpus_name}{corpus_version};"
+        searchpath = f"\nSET search_path TO {self.schema_name};"
 
         ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
@@ -708,36 +724,27 @@ def generate_ddl(corpus_temp: Dict[str, Any]):
     processor.create_compute_prep_segs()
 
     create_schema = "\n\n".join([x for x in globs.schema])
-    create_types = "\n\n".join(
-        [x.create_DDL() for x in sorted(globs.types, key=lambda x: x.name)]
-    )
-    create_tbls = "\n\n".join(
-        [x.create_tbl() for x in sorted(globs.tables, key=lambda x: x.name)]
-    )
+    create_types = "\n\n".join([x.create_DDL() for x in sorted(globs.types)])
+    create_tbls = "\n\n".join([x.create_tbl() for x in sorted(globs.tables)])
 
-    create_idxs = "\n\n".join(
-        [x.create_idxs() for x in sorted(globs.tables, key=lambda x: x.name)]
-    )
-    create_constr = "\n\n".join(
-        [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
-    )
+    create = "\n".join([create_schema, create_types, create_tbls])
 
-    main_create = "\n".join([create_schema, create_types, create_tbls])
-    main_constraints = "\n".join(
-        [
-            create_idxs,
-            create_constr,
-            globs.perms,
-        ]
-    )
+    # todo: i don't think this defaultdict trick is needed, all the tables
+    # must have unique names right?
+    constraints = defaultdict(list)
+    for table in sorted(globs.tables):
+        constraints[table.name] += table.create_idxs(schema_name)
+        constraints[table.name] += table.create_constrs(schema_name)
+    formed_constraints = ["\n".join(i) for i in constraints.values()]
 
     return DataNeededLater(
-        main_create,
-        main_constraints.format(schema=schema_name),
+        create,
+        formed_constraints,
         globs.prep_seg_create,
         globs.prep_seg_insert,
         globs.batchnames,
         globs.mapping,
+        globs.perms,
     ).asdict()
 
 

@@ -13,12 +13,21 @@ export const useUserStore = defineStore("userData", {
   state: () => ({
     userData: null,
     roomId: roomId,
+    projects: [],
   }),
   getters: {},
   actions: {
     fetchUserData() {
       httpApi.get(`/settings`).then((r) => {
         this.userData = r.data;
+        if (this.userData.publicProfiles.length) {
+          this.projects = this.userData.publicProfiles
+        }
+        this.userData.subscription.subscriptions.forEach(subscription => {
+          subscription.profiles.forEach(profile => {
+            this.projects.push(profile)
+          })
+        })
 
         // Terms of use
         if (this.userData.termsOfUse.needToAccept === true) {

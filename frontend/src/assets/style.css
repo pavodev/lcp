@@ -9,8 +9,8 @@ body {
 
 .btn-primary {
   --bs-btn-color: #fff;
-  --bs-btn-bg: #1e9989;
-  --bs-btn-border-color: #1e9989;
+  --bs-btn-bg: #2a7f62;
+  --bs-btn-border-color: #2a7f62;
   --bs-btn-hover-color: #fff;
   --bs-btn-hover-bg: #178375;
   --bs-btn-hover-border-color: #178375;
@@ -20,12 +20,12 @@ body {
   --bs-btn-active-border-color: #178375;
   --bs-btn-active-shadow: inset 0 3px 5px rgba(0, 0, 0, 0.125);
   --bs-btn-disabled-color: #fff;
-  --bs-btn-disabled-bg: #1e9989;
-  --bs-btn-disabled-border-color: #1e9989;
+  --bs-btn-disabled-bg: #2a7f62;
+  --bs-btn-disabled-border-color: #2a7f62;
 }
 
 .progress {
-  --bs-progress-bar-bg: #1e9989;
+  --bs-progress-bar-bg: #2a7f62;
 }
 
 .navbar {
@@ -33,7 +33,7 @@ body {
 }
 
 nav.bg-liri {
-  background-color: #1e9989;
+  background-color: #2a7f62;
 }
 
 .nav-link {
@@ -78,7 +78,7 @@ nav a.router-link-exact-active {
 }
 .lds-ripple div {
   position: absolute;
-  border: 2px solid #1e9989;
+  border: 2px solid #2a7f62;
   opacity: 1;
   border-radius: 50%;
   animation: lds-ripple 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
@@ -121,4 +121,22 @@ nav a.router-link-exact-active {
   margin-left: 30px;
   margin-right: 30px;
   --bs-modal-width: 100%;
+}
+
+
+/* .nav-tabs .nav-item.show .nav-link, .nav-tabs .nav-link.active {
+  color: #fff;
+  background-color: #2a7f62;
+  border-color: #308569;
+} */
+
+:root {
+  --bs-link-color: #2a7f62;
+  --bs-link-hover-color: #1d644d;
+}
+
+.nav-tabs {
+  --bs-nav-tabs-link-active-color: #fff;
+  --bs-nav-tabs-link-active-bg: #2a7f62;
+  --bs-nav-tabs-link-active-border-color: #2a7f62;
 }

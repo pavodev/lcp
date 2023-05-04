@@ -79,6 +79,8 @@ class Importer:
         template: Dict[str, Any],
         mapping: Dict[str, Any],
         project_dir: str,
+        schema_name: str,
+        n_batches: int,
     ) -> None:
         """
         Manage the import of a corpus into the DB via async psycopg connection
@@ -88,7 +90,8 @@ class Importer:
         self.template["uploaded"] = True
         self.name = self.template["meta"]["name"]
         self.version = self.template["meta"]["version"]
-        self.schema = self.name + str(self.version)
+        self.schema = schema_name
+        self.n_batches = n_batches
         self.token_count: Dict[str, int] = {}
         self.mapping = mapping
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
@@ -117,6 +120,11 @@ class Importer:
         with open(path, "a") as fo:
             fo.write(msg.rstrip() + "\n")
 
+    async def cleanup(self):
+        script = f"DROP SCHEMA IF EXISTS {self.schema} CASCADE;"
+        self.update_progress(f"Running cleanup:\n{script}")
+        await self.run_script(script)
+
     async def _get_positions(
         self, f: AsyncTextIOWrapper, size: int
     ) -> List[Tuple[int, int]]:
@@ -138,7 +146,7 @@ class Importer:
             if not lines.endswith("\n"):
                 rest = await f.readline()
                 bat += len(bytes(rest, "utf-8"))
-            positions.append((start_at, bat))
+            positions.append((start_at, min(bat, to_go)))
             start_at = await f.tell()
         return positions
 
@@ -195,9 +203,7 @@ class Importer:
 
         if self.max_concurrent != 1:
             args = (cop, csv_path, fsize, tot)
-            await self.process_data(
-                self.max_concurrent, positions, self.copy_batch, *args
-            )
+            await self.process_data(positions, self.copy_batch, *args)
             return True
 
         # no concurrency:
@@ -230,17 +236,15 @@ class Importer:
             if f.endswith(".csv")
         ]
         corpus_size = sum(s[1] for s in sizes)
-        await self.process_data(
-            self.max_concurrent, sizes, self._copy_tbl, *(corpus_size,)
-        )
+        await self.process_data(sizes, self._copy_tbl, *(corpus_size,))
         self.token_count = await self.get_token_count()
 
     async def process_data(
         self,
-        max_concurrent: int,
-        iterable: Iterable[Union[Tuple[Union[str, int], int], str]],
+        iterable: Iterable[Union[Tuple[Union[str, int], int], str]],  # sorry
         method: Callable,
         *args: Any,
+        **kwargs: Any,
     ) -> None:
         """
         Do the execution of copy_bath or copy_table (method) from iterable data
@@ -250,56 +254,66 @@ class Importer:
 
         All processing occurs with self.max_concurrent respected
         """
+        mc = self.max_concurrent
         name = "import"
         current_size = 0
         tasks: List[Coroutine] = []
-        batches = (
-            f"in batches of {max_concurrent}" if max_concurrent > 0 else "concurrently"
-        )
+        batches = f"in batches of {mc}" if mc > 0 else "concurrently"
+        gathered: List[Any] = []
         for tup in iterable:
             first: Union[str, int]
-            if isinstance(tup, str):
-                first, size = tup, 1
+            if isinstance(tup, (str, int)):
+                first, size = tup, 0
             else:
                 first, size = tup
             current_size += size
             if self.max_bytes and current_size >= self.max_bytes and tasks:
+                cs = current_size / 1e6
                 self.update_progress(
-                    f"Doing {len(tasks)} {method.__name__} tasks {batches}...({current_size} >= {self.max_bytes})"
+                    f"Doing {len(tasks)} {method.__name__} tasks {batches}..."
+                    + f"({cs:.2f}MB >= {self.max_bytes / 1e6}MB)"
                 )
-                await gather(max_concurrent, *tasks, name=name)
+                gathered += await gather(mc, *tasks, name=name)
                 tasks = []
                 current_size = 0
-            tasks.append(method(first, size, *args))
+            tasks.append(method(first, size, *args, **kwargs))
+            cs = current_size / 1e6
         self.update_progress(
-            f"Doing {len(tasks)} remaining {method.__name__} tasks {batches}...({current_size} vs. {self.max_bytes})"
+            f"Doing {len(tasks)} remaining {method.__name__} tasks "
+            + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e6}MB)"
         )
-        await gather(max_concurrent, *tasks, name=name)
-        return None
+        gathered += await gather(mc, *tasks, name=name)
+        return gathered
 
     async def get_token_count(self) -> Dict[str, int]:
         """
         count inserted words/tokens in DB and return
         TODO: not working for parallel
         """
-        token = self.template["firstClass"]["token"] + "0"
+        token = self.template["firstClass"]["token"]
+        names = []
+        queries = []
+        for i in range(self.n_batches + 1):
+            formed = f"{token}{i}" if i < self.n_batches else f"{token}rest"
+            names.append(formed)
+            query = SQLstats.token_count(self.schema, formed)
+            queries.append(query)
+        response = await self.process_data(queries, self.run_script, give=True)
 
-        async with self.connection.connection(self.upload_timeout) as conn:
-            async with conn.cursor() as cur:
-                query = SQLstats.token_count(self.schema, token)
-                await cur.execute(query)
-                res = await cur.fetchone()
-                if res:
-                    return {token: res[0]}
-        raise ValueError("could not get token count")
+        res: Dict[str, Any] = {k: int(v[0]) for k, v in zip(names, response)}
+        return res
 
-    async def run_script(self, script, size: Optional[int] = 0, *args):
+    async def run_script(self, script, *args, give: bool = False):
         """
         Run a simple script -- used for prepared segments
         """
         async with self.connection.connection(self.upload_timeout) as conn:
+            await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(script)
+                if give:
+                    got = await cur.fetchone()
+                    return got
 
     async def prepare_segments(self, create, insert, batchnames):
         """
@@ -307,12 +321,12 @@ class Importer:
         """
         self.update_progress("Computing prepared segments...")
         self.update_progress("Running:" + create)
-        await self.run_script(create, -1)
+        await self.run_script(create)
         if insert:
             self.update_progress(f"Running {len(batchnames)} insert tasks:\n{insert}\n")
         inserts = [insert.format(batch=batch) for batch in batchnames]
         args = tuple()
-        await self.process_data(self.max_concurrent, inserts, self.run_script, *args)
+        await self.process_data(inserts, self.run_script, *args)
 
     async def create_entry_maincorpus(self) -> None:
         """

@@ -10,10 +10,12 @@ from datetime import date, datetime
 from functools import wraps
 from typing import (
     Any,
+    Awaitable,
     Callable,
     Dict,
     List,
     Optional,
+    Iterable,
     Reversible,
     Tuple,
     Union,
@@ -154,13 +156,49 @@ async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
             return await resp.json()
 
 
-async def _lama_project_create(headers: Dict, jso: Dict) -> Dict:
-    url = f"{os.environ['LAMA_API_URL']}/profile"
+async def _lama_project_create(headers: Mapping[str, Any], project_data: Dict) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile"
     async with aiohttp.ClientSession() as session:
-        headers = _extract_lama_headers(headers)
-        async with session.post(url, headers=headers, json=jso) as resp:
-            text = await resp.text()
-            resp = await resp.json(content_type=None)
+        async with session.post(url, json=project_data, headers=headers) as resp:
+            return await resp.json()
+
+
+async def _lama_api_create(headers: Mapping[str, Any], project_id: str) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/create"
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
+            return await resp.json(content_type=None)
+
+
+async def _lama_api_revoke(
+    headers: Mapping[str, Any], project_id: str, apikey_id: str
+) -> Dict:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/{apikey_id}/revoke"
+    data = {"comment": "Revoked by user"}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            url, headers=_extract_lama_headers(headers), json=data
+        ) as resp:
+            return await resp.json(content_type=None)
+
+
+async def _lama_check_api_key(headers) -> Dict:
+    url = f"{os.environ['LAMA_API_URL']}/profile/api/check"
+    key = headers["X-API-Key"]
+    secret = headers["X-API-Secret"]
+    api_headers = {"X-API-Key": key, "X-API-Secret": secret}
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=api_headers) as resp:
+            return await resp.json()
 
 
 def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, Any]:
@@ -335,7 +373,9 @@ def _determine_language(batch: str) -> Optional[str]:
     return None
 
 
-async def gather(n, *tasks, name=None):
+async def gather(
+    n, *tasks: Tuple[asyncio.Task], name: Optional[str] = None
+) -> Iterable[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -343,7 +383,7 @@ async def gather(n, *tasks, name=None):
     if n > 0:
         semaphore = asyncio.Semaphore(n)
 
-        async def sem_coro(coro):
+        async def sem_coro(coro: Awaitable[Any]):
             async with semaphore:
                 return await coro
 
@@ -353,9 +393,9 @@ async def gather(n, *tasks, name=None):
     else:
         group = asyncio.gather(*(asyncio.create_task(c) for c in tasks))
     try:
-        await group
+        return await group
     except (BaseException) as err:
-        print(f"Error: {str(err)}")
+        print(f"Error while gathering tasks: {str(err)}. Cancelling others...")
         tasks = asyncio.all_tasks()
         current = asyncio.current_task()
         try:

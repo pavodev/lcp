@@ -1,5 +1,8 @@
 <template>
   <div id="notifications">
+    <div v-if="messages.length > 1" class="notification close-all">
+      <span class="close-all-button" @click="removeAllMessages">Clear all</span>
+    </div>
     <div
       class="alert notification"
       :class="`alert-${alertClass(message.type)}`"
@@ -7,7 +10,11 @@
       v-for="(message, index) in messages"
       :key="index"
     >
-      {{ message.text }}
+      <span v-html="message.text" />
+      <small class="close-button" @click="removeMessage(index)">
+        <FontAwesomeIcon :icon="['fas', 'xmark']" />
+      </small>
+      <small class="countdown-text">{{ message.dismissCountDown }}</small>
     </div>
   </div>
 </template>
@@ -22,11 +29,52 @@
   z-index: 100000;
 }
 
+.countdown-text {
+  position: absolute;
+  top: 15px;
+  right: 30px;
+  text-align: right;
+  width: 30px;
+  user-select: none;
+}
+
+.close-button {
+  position: absolute;
+  top: 15px;
+  right: 10px;
+  cursor: pointer;
+  user-select: none;
+}
+.close-button:hover {
+  opacity: 1;
+}
+
 .notification {
   width: 50%;
   margin: auto;
   text-align: left;
   margin-top: 7px;
+  position: relative;
+}
+
+.close-all {
+  text-align: right;
+}
+
+.close-all-button {
+  background-color: #2a7f62;
+  text-transform: uppercase;
+  color: #fff;
+  font-size: 10px;
+  border-radius: 3px;
+  padding: 3px 5px;
+  font-weight: bold;
+  opacity: 0.6;
+  cursor: pointer;
+  transition: 0.3s all;
+}
+.close-all-button:hover {
+  opacity: 1;
 }
 
 small {
@@ -43,8 +91,9 @@ export default {
   name: "NotificationsView",
   data() {
     return {
-      dismissSecs: 5,
+      dismissSecs: 7,
       messages: [],
+      timer: null,
     };
   },
   computed: {
@@ -59,32 +108,56 @@ export default {
             this.messages.push({
               ...element,
               show: true,
-              dismissCountDown: this.dismissSecs,
+              dismissCountDown: element.timeout || this.dismissSecs,
             });
-            setTimeout(() => this.removeMessages(), 5000)
+            this.startTimer();
           });
-          useNotificationStore().clear()
+          useNotificationStore().clear();
         }
       },
       immediate: true,
       deep: true,
-    }
+    },
   },
   methods: {
+    startTimer() {
+      this.clearTimer();
+      this.timer = setInterval(() => this.countDownChanged(), 1000);
+    },
+    clearTimer() {
+      if (this.timer) {
+        clearTimeout(this.timer);
+      }
+    },
     alertClass(type) {
-      let retval = "success"
+      let retval = "success";
       switch (type) {
         case "error":
-          retval = "danger"
+          retval = "danger";
       }
-      return retval
+      return retval;
     },
-    countDownChanged(dismissCountDown, index) {
-      this.messages[index].dismissCountDown = dismissCountDown;
+    countDownChanged() {
+      this.messages.forEach((message) => {
+        message.dismissCountDown--;
+      });
+      this.messages = this.messages.filter(
+        (message) => message.dismissCountDown > 0
+      );
+      if (this.messages.length == 0) {
+        this.clearTimer();
+      }
     },
-    removeMessages() {
-      this.messages = []
-    }
+    removeMessage(index) {
+      this.messages = this.messages.filter((message, idx) => index != idx);
+      if (this.messages.length == 0) {
+        this.clearTimer();
+      }
+    },
+    removeAllMessages() {
+      this.messages = [];
+      this.clearTimer();
+    },
   },
 };
 </script>
