@@ -45,7 +45,7 @@ async def _upload_data(**kwargs) -> bool:
     try:
         importer.update_progress("Importing corpus...")
         await importer.import_corpus()
-        importer.update_progress(f"Setting constraints...\n\n{constraints}")
+        importer.update_progress(f"Setting constraints...\n\n{'\n\n'.join(constraints)}")
         await importer.process_data(constraints, importer.run_script)
         await importer.prepare_segments(create, inserts, batches)
         importer.update_progress("Adding to corpus list...")
