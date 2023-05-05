@@ -245,14 +245,14 @@ def _get_kwics(result):
 
 
 def _add_results(
-    result: List[List],
+    result: List[Tuple],
     so_far: int,
     unlimited: bool,
     offset: Optional[int],
     restart: Union[bool, int],
     total_requested: int,
     kwic: bool = False,
-    sents: Optional[List[Tuple[str, int, List[Any]]]] = None,
+    sents: Optional[List[Tuple[Union[str, UUID], int, List[Any]]]] = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?

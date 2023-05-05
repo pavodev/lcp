@@ -4,6 +4,7 @@ from collections import defaultdict
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from uuid import UUID
 
 from redis import Redis as RedisConnection
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
@@ -22,7 +23,7 @@ PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
 def _query(
-    job: Job, connection: RedisConnection, result: List[List], *args, **kwargs
+    job: Job, connection: RedisConnection, result: List[Tuple], *args, **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -30,10 +31,8 @@ def _query(
     restart = kwargs.get("hit_limit", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     results_so_far = job.kwargs.get("existing_results", {})
-    # lines_sent_to_fe = set()
     results_so_far = {int(k): v for k, v in results_so_far.items()}
-    results_this_batch = len([i for i in result if int(i[0]) == 1])
-    total_found = total_before_now + results_this_batch
+
     total_requested = (
         job.kwargs["total_results_requested"]
         if restart is False
@@ -50,9 +49,8 @@ def _query(
     else:
         needed = total_requested - total_before_now
 
-    unlimited = needed in {-1, False, None} or job.kwargs.get("simultaneous", False)
-
-    limited = not unlimited and total_found > job.kwargs["needed"]
+    choices = {-1, False, None}
+    unlimited = needed in choices or job.kwargs.get("simultaneous", False) or False
 
     aargs = (
         result,
@@ -64,6 +62,11 @@ def _query(
     )
 
     new_res, n_results = _add_results(*aargs, kwic=False)
+
+    total_found = total_before_now + n_results
+
+    limited = not unlimited and total_found > job.kwargs["needed"]
+
     results_so_far = _union_results(results_so_far, new_res)
     limit = False if n_results < total_requested else total_found - total_requested
 
@@ -125,7 +128,7 @@ def _query(
 def _sentences(
     job: Job,
     connection: RedisConnection,
-    result: List[Tuple[str, int, List[Any]]],
+    result: List[Tuple[Union[str, UUID], int, List[Any]]],
     *args,
     **kwargs,
 ) -> None:
