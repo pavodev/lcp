@@ -3,11 +3,12 @@ import json
 import traceback
 
 from time import sleep
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple, Union
 
 import async_timeout
 
 from aiohttp import WSCloseCode, WSMsgType, web
+from aiohttp.http_websocket import WSMessage
 from redis import asyncio as aioredis
 from rq.job import Job
 
@@ -15,17 +16,17 @@ from .query import query
 from .validate import validate
 
 
-async def handle_redis_response(
-    channel: aioredis.client.PubSub, app: web.Application, test: bool = False
-) -> None:
+async def handle_redis_response(channel, app, test=False):
     """
     If redis publishes a message, it gets picked up here and broadcast to the
     correct websockets...
+
+    This function cannot yet be handled by mypy, so leave it unannotated please
     """
     while True:
         try:
-            room: Optional[str] = None
-            user: Optional[str] = None
+            room = None
+            user = None
             async with async_timeout.timeout(2):
                 message = await channel.get_message(ignore_subscribe_messages=True)
                 if isinstance(message, dict) and message.get("data"):
@@ -54,15 +55,15 @@ async def handle_redis_response(
 
                     # handle configuration message
                     elif action == "set_config":
-                        if payload["disabled"]:
+                        if payload.get("disabled"):
                             for name, idx in payload["disabled"]:
                                 print(f"Corpus disabled: {name}={idx}")
                         print(f"Config loaded: {len(payload['config'])-1} corpora")
                         app["config"] = payload["config"]
-                        payload["action"] = "update_config"
-                        await push_msg(app["websockets"], None, payload)
-                        if test:
-                            return
+                        # payload["action"] = "update_config"
+                        # await push_msg(app["websockets"], None, payload)
+                        # if test:
+                        #    return
 
                     # handle fetch/store queries message
                     elif action in ("fetch_queries", "store_query"):
@@ -149,6 +150,8 @@ async def _handle_query(
         payload["config"] = app["config"]
         if payload["base"] is None:
             payload["base"] = job
+        if "done_batches" in payload:
+            payload["done_batches"] = [tuple(x) for x in payload["done_batches"]]
         if not payload.get("simultaneous"):
             await query(None, manual=payload, app=app)
         # return  # return will prevent partial results from going back to frontend
@@ -180,7 +183,7 @@ async def _handle_query(
 
 
 async def push_msg(
-    sockets: Dict[Optional[str], Tuple[Any, str]],
+    sockets: Dict[Optional[str], Set[Tuple[Any, str]]],
     session_id: Optional[str],
     msg: Dict[str, Any],
     skip: Optional[Tuple[Optional[str], Optional[str]]] = None,
@@ -223,16 +226,21 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     qs = request.app["query_service"]
     sockets = request.app["websockets"]
 
-    async for msg in ws:
+    x: Optional[WSMessage] = None
+    # async for x in ws:
+    while True:
+        x = await ws.receive()
+        if x.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+            raise StopAsyncIteration
 
-        if msg.type != WSMsgType.TEXT:
+        if x.type != WSMsgType.TEXT:
             continue
 
-        payload = msg.json()
+        payload = x.json()
         action = payload["action"]
         session_id = payload.get("room")
         user_id = payload["user"]
-        ident = (session_id, user_id)
+        ident: Tuple[Optional[str], Optional[str]] = (session_id, user_id)
 
         if action == "joined":
             originally = len(sockets[session_id])
@@ -258,8 +266,6 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
         elif action == "stop":
             jobs = qs.cancel_running_jobs(user_id, session_id)
-            sleep(2)
-            jobs += qs.cancel_running_jobs(user_id, session_id)
             jobs = list(set(jobs))
             if jobs:
                 response = {
@@ -280,13 +286,15 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
         elif action == "enough_results":
             job = payload["job"]
             jobs = qs.cancel_running_jobs(user_id, session_id, base=job)
+            jobs = list(set(jobs))
             response = {
                 "status": "stopped",
                 "n": len(jobs),
                 "action": "stopped",
                 "jobs": jobs,
             }
-            await push_msg(sockets, session_id, response, just=ident)
+            if jobs:
+                await push_msg(sockets, session_id, response, just=ident)
 
         elif action == "populate":
             sockets[session_id].add((ws, user_id))
@@ -314,6 +322,6 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
             await push_msg(sockets, session_id, response)
 
     # connection closed
-    await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
+    # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
 
     return ws

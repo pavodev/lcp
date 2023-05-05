@@ -212,17 +212,11 @@ class QueryService:
     ) -> List[str]:
         if specific_job:
             rel_jobs = [str(specific_job)]
-            finished = []
         else:
             rel_jobs = self.app["query"].started_job_registry.get_job_ids()
             rel_jobs += self.app["query"].scheduled_job_registry.get_job_ids()
-            # the two lines below are probably overkill...
-            finished = self.app["query"].finished_job_registry.get_job_ids()
-            rel_jobs += finished
-            set_fin = set(finished)
 
         jobs = set(rel_jobs)
-
         ids = []
 
         for job in jobs:
@@ -235,18 +229,11 @@ class QueryService:
                 try:
                     maybe.cancel()
                     send_stop_job_command(self.app["redis"], job)
+                    ids.append(job)
                 except InvalidJobOperation:
                     print(f"Already canceled: {job}")
-                    continue
                 except Exception as err:
                     print("Unknown error, please debug", err, job)
-                    continue
-                if job not in set_fin:
-                    self.app["canceled"].add(job)
-                    print(f"Killing job: {job}")
-                    ids.append(job)
-                else:
-                    print(f"Stopped finished job anyway: {job}")
         return ids
 
     def get(self, job_id: str) -> Optional[Job]:

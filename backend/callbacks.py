@@ -70,8 +70,8 @@ def _query(
     results_so_far = _union_results(results_so_far, new_res)
     limit = False if n_results < total_requested else total_found - total_requested
 
-    just_finished = job.kwargs["current_batch"]
-    job.kwargs["done_batches"].append(just_finished)
+    just_finished = tuple(job.kwargs["current_batch"])
+    done_part.append(just_finished)
 
     status = _get_status(total_found, tot_req=total_requested, **job.kwargs)
     hit_limit = False if not limited else needed
@@ -115,6 +115,7 @@ def _query(
             "hit_limit": limit,
             "total_results_so_far": total_found,
             "batch_matches": n_results,
+            "done_batches": done_part,
             "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,
         }

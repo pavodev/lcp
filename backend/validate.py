@@ -1,5 +1,4 @@
 import json
-import traceback
 
 from typing import Any, Dict, Optional, Union
 
@@ -19,11 +18,11 @@ async def validate(
     Validate user query?
     """
     is_websocket: bool = kwargs.get("_ws", False)
+    result: Dict[str, Any] = {}
     try:
         json.loads(query)
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
     except json.JSONDecodeError as err:
-        tb = traceback.format_exc()
         try:
             json_query = convert(query)
             result = {
@@ -34,7 +33,6 @@ async def validate(
                 "status": 200,
             }
         except Exception as err:
-            tb = traceback.format_exc()
             result = {
                 "kind": "dqd?",
                 "valid": False,

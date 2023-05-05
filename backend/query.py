@@ -65,38 +65,33 @@ def _decide_batch(
     Find the best next batch to query
     """
     buffer = 0.1  # set to zero for picking smaller batches
-    if not done_batches:
-        # return next(b for b in batches if not b[1].endswith("rest"))
+    if not len(done_batches):
         return batches[0]
-    if hit_limit:
+    if hit_limit is not False:  # do not change to 'if hit limit!'
         return done_batches[-1]
-    if needed in {-1, False, None}:
-        return next(
-            p
-            for p in batches
-            if tuple(p) not in done_batches and list(p) not in done_batches
-        )
     total_words_processed_so_far = sum([x[-1] for x in done_batches])
     proportion_that_matches = so_far / total_words_processed_so_far
-    for schema, corpus, name, size in batches:
-        if (schema, corpus, name, size) in done_batches or [
-            schema,
-            corpus,
-            name,
-            size,
-        ] in done_batches:
+    first_not_done: Optional[Tuple[int, str, str, int]] = None
+    for batch in batches:
+        already_done = False
+        for tup in done_batches:
+            if all(str(tup[n]) == str(batch[n]) for n in range(len(tup))):
+                already_done = True
+        if already_done:
             continue
+        if not first_not_done:
+            first_not_done = batch
+            if needed in {-1, False, None}:
+                return batch
         # should we do this? next-smallest for low number of matches?
         if not so_far or so_far < page_size:
-            return (schema, corpus, name, size)
-        expected = size * proportion_that_matches
+            return batch
+        expected = batch[-1] * proportion_that_matches
         if float(so_far + expected) >= float(needed + (needed * buffer)):
-            return (schema, corpus, name, size)
-    return next(
-        p
-        for p in reversed(batches)
-        if tuple(p) not in done_batches and list(p) not in done_batches
-    )
+            return batch
+    if not first_not_done:
+        raise ValueError("Could not find batch")
+    return first_not_done
 
 
 def _get_query_batches(
@@ -209,6 +204,10 @@ async def query(
     simultaneous: Optional[str] = None
     previous: str = ""
     job: Optional[Job] = None
+    current_batch: Optional[Tuple[int, str, str, int]] = None
+    all_batches: List[Tuple[int, str, str, int]] = []
+    done_batches: List[Tuple[int, str, str, int]] = []
+
     if manual is not None and isinstance(app, web.Application):
         resuming = False
         job = Job.fetch(manual["job"], connection=app["redis"])
@@ -228,10 +227,10 @@ async def query(
         languages = set([i.strip() for i in manual.get("languages", [])])
         query = job.kwargs["original_query"]
         page_size = job.kwargs.get("page_size", 20)  # todo: user may change
-        previous_batch = job.kwargs["current_batch"]
-        done_batches = job.kwargs["done_batches"]
+        previous_batch = tuple(job.kwargs["current_batch"])
+        done_batches = manual["done_batches"]
         all_batches = job.kwargs["all_batches"]
-        done_batches.append(previous_batch)
+        # done_batches.append(previous_batch)
         needed = (
             total_results_requested - total_results_so_far
             if total_results_requested not in unlimited
@@ -241,7 +240,6 @@ async def query(
         #######################################################################
         # request is from the frontend, most likely a new query...            #
         #######################################################################
-        done_batches = []
         existing_results = {}
         hit_limit = False
         job = None
@@ -274,7 +272,6 @@ async def query(
 
     iterations = len(all_batches) if simultaneous else 1
     http_response: List[Dict[str, Any]] = []
-    current_batch: Optional[Tuple[int, str, str, int]] = None
     first_job = None
     depends_on_chain: List[str] = []
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
@@ -283,16 +280,15 @@ async def query(
 
     for it in range(iterations):
 
-        done = False
-
         ########################################################################
         # handle resumed queries                                               #
         ########################################################################
 
         r: Any = None
+        done = False
 
         if resuming:
-            rargs: Tuple[Any, Any, Any, int] = (
+            rargs: Tuple[Dict[str, Any], web.Application, str, int] = (
                 request_data,
                 app,
                 previous,
@@ -336,7 +332,6 @@ async def query(
                     lang=lang,
                 )
                 query_type = "JSON"
-                # sql_query = json_to_sql(json.loads(query), **kwa)
                 try:
                     json_query = json.loads(query)
                     if not it and not manual:
@@ -466,7 +461,7 @@ async def query(
         if sentences and not done:
             jobs.update({"sentences": True, "sentences_job": sents_job.id})
 
-        if simultaneous:
+        if simultaneous and current_batch is not None:
             done_batches.append(current_batch)
             current_batch = None
 
