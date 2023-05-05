@@ -1,9 +1,9 @@
 from aiohttp import web
 
-from . import utils
+from .utils import ensure_authorised
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def document(request: web.Request) -> web.Response:
     """
     Return a corpus document via the doc_export functionality

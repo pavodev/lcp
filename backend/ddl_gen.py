@@ -64,71 +64,73 @@ class DDL:
     base DDL class for DB entities
     """
 
-    perms = lambda x, y: dedent(
-        f"""
-        GRANT USAGE ON SCHEMA {x} TO {y};
-        GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
-    )
+    def __init__(self):
 
-    create_scm = lambda x, y, z: dedent(
-        f"""
-        BEGIN;
-        CREATE SCHEMA {x};
-        DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
-        SET search_path TO {x};"""
-    )
+        self.perms = lambda x, y: dedent(
+            f"""
+            GRANT USAGE ON SCHEMA {x} TO {y};
+            GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
+        )
 
-    create_prepared_segs = lambda x, y: dedent(
-        f"""
-        CREATE TABLE prepared_{x} (
-            {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
-            off_set     int,
-            content     jsonb
-        );"""
-    )
+        self.create_scm = lambda x, y, z: dedent(
+            f"""
+            BEGIN;
+            CREATE SCHEMA {x};
+            DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
+            SET search_path TO {x};"""
+        )
 
-    compute_prep_segs = lambda x, y, z: dedent(
-        f"""
-        WITH ins AS (
-               SELECT {x}
-                    , min({y}) AS off_set
-                    , to_jsonb(array_agg(toks ORDER BY {y}))
-                 FROM (
-                      SELECT {x}
-                           , {y}
-                           , jsonb_build_array(
-                                %s
-                       ORDER BY {y}) x
-                GROUP BY {x})
-         INSERT INTO {z}
-         SELECT *
-           FROM ins;"""
-    )
+        self.create_prepared_segs = lambda x, y: dedent(
+            f"""
+            CREATE TABLE prepared_{x} (
+                {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
+                off_set     int,
+                content     jsonb
+            );"""
+        )
 
-    t = "\t"
-    nl = "\n\t"
-    end = "\n);"
-    tabwidth = 8
+        self.compute_prep_segs = lambda x, y, z: dedent(
+            f"""
+            WITH ins AS (
+                   SELECT {x}
+                        , min({y}) AS off_set
+                        , to_jsonb(array_agg(toks ORDER BY {y}))
+                     FROM (
+                          SELECT {x}
+                               , {y}
+                               , jsonb_build_array(
+                                    %s
+                           ORDER BY {y}) x
+                    GROUP BY {x})
+             INSERT INTO {z}
+             SELECT *
+               FROM ins;"""
+        )
 
-    anchoring = {
-        "location": ("2d_coord", "point"),
-        "stream": ("char_range", "int4range"),
-        "time": ("frame_range", "int4range"),
-    }
+        self.t = "\t"
+        self.nl = "\n\t"
+        self.end = "\n);"
+        self.tabwidth = 8
 
-    type_sizes = {
-        "bigint": 8,
-        "float": 8,
-        "int": 4,
-        "int2": 2,
-        "int4": 4,
-        "int8": 8,
-        "int4range": 4,
-        "int8range": 8,
-        "smallint": 2,
-        "text": 4,
-        "uuid": 16,
-    }
+        self.anchoring = {
+            "location": ("2d_coord", "point"),
+            "stream": ("char_range", "int4range"),
+            "time": ("frame_range", "int4range"),
+        }
+
+        self._type_sizes = {
+            "bigint": 8,
+            "float": 8,
+            "int": 4,
+            "int2": 2,
+            "int4": 4,
+            "int8": 8,
+            "int4range": 4,
+            "int8range": 8,
+            "smallint": 2,
+            "text": 4,
+            "uuid": 16,
+        }
 
     def create_str(self):
         raise NotImplementedError
@@ -142,13 +144,15 @@ class DDL:
         else:
             return string
 
-    @classmethod
-    def inlined(cls, args: List[str]):
+    def inlined(self, args: List[str]):
         """
         method returning indented lines with comma at end for printing
         """
         return (
-            cls.nl + cls.nl.join(map(lambda x: x + ",", args[:-1])) + cls.nl + args[-1]
+            self.nl
+            + self.nl.join(map(lambda x: x + ",", args[:-1]))
+            + self.nl
+            + args[-1]
         )
 
 
@@ -214,7 +218,6 @@ class Column(DDL):
             return self._idx_constr.format("", self.name)
 
 
-@total_ordering
 class Table(DDL):
     def __init__(
         self, name: str, cols: List[Column], anchorings: Optional[List] = None
@@ -223,6 +226,7 @@ class Table(DDL):
         self.header_txt = f"CREATE TABLE {self.name} ("
         self.cols = cols
         self.tabwidth = 8
+        self.type_sizes: Dict[str, int] = {}
         if anchorings:
             for anchor in anchorings:
                 self.cols.append(Column(*self.anchoring[anchor]))
@@ -231,7 +235,7 @@ class Table(DDL):
             * self.tabwidth
         )
         # self._max_strtype = max([len(col.type) for col in cols])
-        self._order_cols()
+        # self._order_cols()
 
     def __lt__(self, other: Any) -> bool:
         return self.name < other.name
@@ -242,16 +246,18 @@ class Table(DDL):
     def primary_key(self) -> List[Column]:
         return [x for x in self.cols if x.constrs.get("primary_key")]
 
-    def _order_cols(self) -> None:
-        """
-        method for ordering attributes for optimized storage
+    # def _order_cols(self) -> None:
+    #    """
+    #    method for ordering attributes for optimized storage
 
-        """
-        self.cols = sorted(
-            self.cols,
-            key=lambda x: (self.type_sizes.get(x.type, 4), reversor(x.name)),
-            reverse=True,
-        )
+    #    this method breaks mypy so it is temporarily disabled
+    #    """
+    #    self.cols = sorted(
+    #        self.cols,
+    #        key=lambda x: (self.type_sizes.get(x.type, 4), reversor(x.name)),
+    #        reverse=True,
+    #    )
+    #    return None
 
     def create_tbl(self) -> str:
         return (
@@ -291,7 +297,6 @@ class Table(DDL):
         )
 
 
-@total_ordering
 class PartitionedTable(Table):
     max_id = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
@@ -378,7 +383,11 @@ class PartitionedTable(Table):
                 pks.append(col.name)
                 col.constrs.pop("primary_key")
 
-        pks = sorted(pks, key=lambda x: x != self.col_partitions)
+        # mypy cannot handle the lambda that used to be here :(
+        starts = [i for i in pks if i == self.col_partitions]
+        ends = [i for i in pks if i != self.col_partitions]
+        pks = starts + ends
+
         ret.append(
             f"ALTER TABLE {schema}.{self.name} ADD PRIMARY KEY ({', '.join(pks)});"
         )
@@ -397,7 +406,6 @@ class PartitionedTable(Table):
         return "\n\n".join(main_t + sub_ts)
 
 
-@total_ordering
 class Type(DDL):
     def __init__(self, name: str, values: List[str]):
         self.name = name.strip()
@@ -424,6 +432,7 @@ class CTProcessor:
         self.schema_name = corpus_template["schema_name"]
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.globals = glos
+        self.ddl = DDL()
 
     @staticmethod
     def _order_ct_layers(layers: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -620,10 +629,10 @@ class CTProcessor:
         schema_name = self.schema_name
 
         self.globals.schema.append(
-            DDL.create_scm(schema_name, corpus_name, corpus_version)
+            self.ddl.create_scm(schema_name, corpus_name, corpus_version)
         )
         query_user = os.getenv("SQL_QUERY_USERNAME", "lcp_dev_webuser")
-        self.globals.perms = DDL.perms(schema_name, query_user)
+        self.globals.perms = self.ddl.perms(schema_name, query_user)
         return schema_name
 
     def create_compute_prep_segs(self) -> None:
@@ -677,7 +686,7 @@ class CTProcessor:
 
         searchpath = f"\nSET search_path TO {self.schema_name};"
 
-        ddl = DDL.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
+        ddl = self.ddl.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
 
         self.globals.prep_seg_create = f"\n\n{searchpath}\n{ddl}"
 
@@ -694,7 +703,7 @@ class CTProcessor:
         )
 
         query = (
-            DDL.compute_prep_segs(
+            self.ddl.compute_prep_segs(
                 seg_tab.primary_key()[0].name,
                 tok_pk.name,
                 f"prepared_{seg_tab.name}",
@@ -759,8 +768,6 @@ def main() -> None:
 
     args = parser.parse_args()
 
-    DDL.tabwidth = args.tabwidth
-
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
@@ -768,12 +775,15 @@ def main() -> None:
 
     print(a + b)
     return
+    # need to comment out the below for mypy
+    """
 
     globs = Globs()
 
     globs.base_map = corpus_temp["firstClass"]
 
     processor = CTProcessor(corpus_temp, globs)
+    processor.ddl.tabwidth = args.tabwidth
 
     processor.process_schema()
     processor.process_layers()
@@ -803,6 +813,7 @@ def main() -> None:
             [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
         )
     )
+    """
 
 
 if __name__ == "__main__":

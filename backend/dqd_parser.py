@@ -52,8 +52,8 @@ dqd_grammar = r"""
 
 class TreeIndenter(Indenter):
     NL_type = "_NL"
-    OPEN_PAREN_types = []
-    CLOSE_PAREN_types = []
+    OPEN_PAREN_types: List[str] = []
+    CLOSE_PAREN_types: List[str] = []
     INDENT_type = "_INDENT"
     DEDENT_type = "_DEDENT"
     tab_len = 8

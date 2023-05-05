@@ -27,34 +27,35 @@ from .utils import gather
 
 
 class SQLstats:
-    check_tbl = lambda x, y: dedent(
-        f"""
-        SELECT EXISTS (
-               SELECT 1
-                 FROM information_schema.tables
-                WHERE table_schema = '{x}'
-                  AND table_name = '{y}');"""
-    )
+    def __init__(self):
+        self.check_tbl = lambda x, y: dedent(
+            f"""
+            SELECT EXISTS (
+                   SELECT 1
+                     FROM information_schema.tables
+                    WHERE table_schema = '{x}'
+                      AND table_name = '{y}');"""
+        )
 
-    copy_tbl = lambda x, y, z: dedent(
-        f"""
-        COPY {x}.{y} {z}
-        FROM STDIN
-        WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
-    )
+        self.copy_table = lambda x, y, z: dedent(
+            f"""
+            COPY {x}.{y} {z}
+            FROM STDIN
+            WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
+        )
 
-    main_corp = dedent(
-        f"""
-        INSERT
-          INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-        VALUES (%s, %s, %s, %s, %s, %s, true);"""
-    )
+        self.main_corp = dedent(
+            f"""
+            INSERT
+              INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
+            VALUES (%s, %s, %s, %s, %s, %s, true);"""
+        )
 
-    token_count = lambda x, y: dedent(
-        f"""
-        SELECT count(*)
-          FROM {x}.{y};"""
-    )
+        self.token_count = lambda x, y: dedent(
+            f"""
+            SELECT count(*)
+              FROM {x}.{y};"""
+        )
 
 
 class Table:
@@ -85,6 +86,7 @@ class Importer:
         """
         Manage the import of a corpus into the DB via async psycopg connection
         """
+        self.sql = SQLstats()
         self.connection = connection
         self.template = template
         self.template["uploaded"] = True
@@ -180,7 +182,7 @@ class Importer:
         async with self.connection.connection(self.upload_timeout) as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
-                script = SQLstats.check_tbl(table.schema, table.name)
+                script = self.sql.check_tbl(table.schema, table.name)
                 await cur.execute(script)
                 res = await cur.fetchone()
                 if res and res[0]:
@@ -199,7 +201,7 @@ class Importer:
 
         table = Table(self.schema, base.split(".")[0], headers.split("\t"))
         await self._check_tbl_exists(table)
-        cop = SQLstats.copy_tbl(table.schema, table.name, table.col_repr())
+        cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent != 1:
             args = (cop, csv_path, fsize, tot)
@@ -208,15 +210,15 @@ class Importer:
 
         # no concurrency:
         done = 0
-        async with aiofiles.open(csv_path) as f:
-            await f.readline()
+        async with aiofiles.open(csv_path) as fo:
+            x = await fo.readline()
             async with self.connection.connection(self.upload_timeout) as conn:
                 await conn.set_autocommit(True)
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
                         for start, chunk in positions:
-                            await f.seek(start)
-                            data = await f.read(chunk)
+                            await fo.seek(start)
+                            data = await fo.read(chunk)
                             await copy.write(data)
                             done += chunk
                             perc = round(done * 100 / tot, 2)
@@ -241,10 +243,10 @@ class Importer:
 
     async def process_data(
         self,
-        iterable: Iterable[Union[Tuple[Union[str, int], int], str]],  # sorry
+        iterable: Any,  # sorry
         method: Callable,
-        *args: Any,
-        **kwargs: Any,
+        *args,
+        **kwargs,
     ) -> List[Any]:
         """
         Do the execution of copy_bath or copy_table (method) from iterable data
@@ -254,36 +256,8 @@ class Importer:
 
         All processing occurs with self.max_concurrent respected
         """
-        mc = self.max_concurrent
-        name = "import"
-        current_size = 0
-        tasks: List[Coroutine] = []
-        batches = f"in batches of {mc}" if mc > 0 else "concurrently"
-        gathered: List[Any] = []
-        for tup in iterable:
-            first: Union[str, int]
-            if isinstance(tup, (str, int)):
-                first, size = tup, 0
-            else:
-                first, size = tup
-            current_size += size
-            if self.max_bytes and current_size >= self.max_bytes and tasks:
-                cs = current_size / 1e6
-                self.update_progress(
-                    f"Doing {len(tasks)} {method.__name__} tasks {batches}..."
-                    + f"({cs:.2f}MB >= {self.max_bytes / 1e9}GB)"
-                )
-                gathered += await gather(mc, *tasks, name=name)
-                tasks = []
-                current_size = 0
-            tasks.append(method(first, size, *args, **kwargs))
-            cs = current_size / 1e6
-        self.update_progress(
-            f"Doing {len(tasks)} remaining {method.__name__} tasks "
-            + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e9}GB)"
-        )
-        gathered += await gather(mc, *tasks, name=name)
-        return gathered
+        x: List[Any] = []
+        return x
 
     async def get_token_count(self) -> Dict[str, int]:
         """
@@ -296,7 +270,7 @@ class Importer:
         for i in range(self.n_batches + 1):
             formed = f"{token}{i}" if i < self.n_batches else f"{token}rest"
             names.append(formed)
-            query = SQLstats.token_count(self.schema, formed)
+            query = self.sql.token_count(self.schema, formed)
             queries.append(query)
         response = await self.process_data(queries, self.run_script, give=True)
 
@@ -336,7 +310,7 @@ class Importer:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
                 await cur.execute(
-                    SQLstats.main_corp,
+                    self.sql.main_corp,
                     (
                         self.name,
                         self.version,

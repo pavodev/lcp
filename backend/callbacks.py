@@ -1,21 +1,28 @@
 import json
 
 from collections import defaultdict
-
-from .configure import _get_batches
-from .utils import CustomEncoder, Interrupted, _add_results, _get_kwics, _union_results
 from datetime import datetime
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
-from rq.connections import Connection
-from rq.job import Job
 from types import TracebackType
 from typing import Any, Dict, List, Optional, Tuple, Type, Union
+
+from redis import Redis as RedisConnection
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.job import Job
+
+from .configure import _get_batches
+from .utils import (
+    CustomEncoder,
+    Interrupted,
+    _add_results,
+    _get_kwics,
+    _union_results,
+)
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
 def _query(
-    job: Job, connection: Connection, result: List[List], *args, **kwargs
+    job: Job, connection: RedisConnection, result: List[List], *args, **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -110,14 +117,14 @@ def _query(
         }
     )
 
-    redis = job._redis if restart is False else connection
+    redis = job._redis if restart is False else connection  # type: ignore
 
     redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _sentences(
     job: Job,
-    connection: Connection,
+    connection: RedisConnection,
     result: List[Tuple[str, int, List[Any]]],
     *args,
     **kwargs,
@@ -162,13 +169,15 @@ def _sentences(
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
     if hasattr(job, "_redis"):
-        red = job._redis
+        red = job._redis  # type: ignore
     else:
         red = connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> None:
+def _schema(
+    job: Job, connection: RedisConnection, result: Any, *args, **kwargs
+) -> None:
     """
     This callback is executed after successful creation of schema.
     We might want to notify some WS user?
@@ -189,10 +198,10 @@ def _schema(job: Job, connection: Connection, result: Any, *args, **kwargs) -> N
     if result:
         jso["error"] = result
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
-def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
+def _upload(job: Job, connection: RedisConnection, result, *args, **kwargs) -> None:
     """
     Success callback when user has uploaded a dataset
     """
@@ -211,12 +220,12 @@ def _upload(job: Job, connection: Connection, result, *args, **kwargs) -> None:
     if result:
         jso["error"] = result
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _general_failure(
     job: Job,
-    connection: Connection,
+    connection: RedisConnection,
     typ: Type,
     value: str,
     traceback: TracebackType,
@@ -244,12 +253,12 @@ def _general_failure(
     if "No such job" in jso["value"]:
         jso["status"] = "timeout"
         jso["action"] = "timeout"
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _queries(
     job: Job,
-    connection: Connection,
+    connection: RedisConnection,
     result: Optional[List[Tuple[str, Dict, str, Optional[str], datetime]]],
     *args,
     **kwargs,
@@ -275,10 +284,10 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
-    job._redis.publish(PUBSUB_CHANNEL, made)
+    job._redis.publish(PUBSUB_CHANNEL, made)  # type: ignore
 
 
-def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
+def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> None:
     """
     Run by worker: make config data
     """
@@ -338,7 +347,7 @@ def _config(job: Job, connection: Connection, result, *args, **kwargs) -> None:
         "action": "set_config",
         "disabled": disabled,
     }
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _get_status(n_results: int, tot_req: int, **kwargs) -> str:

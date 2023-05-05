@@ -2,10 +2,10 @@ from uuid import uuid4
 
 from aiohttp import web
 
-from . import utils
+from .utils import ensure_authorised
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def fetch_queries(request: web.Request) -> web.Response:
     """
     User wants to retrieve their stored queries from the DB
@@ -19,7 +19,7 @@ async def fetch_queries(request: web.Request) -> web.Response:
     return web.json_response(jobs)
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def store_query(request: web.Request) -> web.Response:
     """
     User wants to store one or more queries in the DB

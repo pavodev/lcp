@@ -9,10 +9,9 @@ from abstract_query.create import json_to_sql
 from aiohttp import web
 from rq.job import Job
 
-from . import utils
 from .callbacks import _query, _sentences
 from .dqd_parser import convert
-from .utils import _determine_language
+from .utils import _determine_language, _get_all_results, ensure_authorised
 
 
 def _make_sents_query(
@@ -91,7 +90,7 @@ def _decide_batch(
         if not so_far or so_far < page_size:
             return (schema, corpus, name, size)
         expected = size * proportion_that_matches
-        if so_far + expected >= (needed + (needed * buffer)):
+        if float(so_far + expected) >= float(needed + (needed * buffer)):
             return (schema, corpus, name, size)
     return next(
         p
@@ -126,7 +125,7 @@ def _get_query_batches(
 async def _do_resume(
     request_data: Dict,
     app: web.Application,
-    previous: Optional[str],
+    previous: str,
     total_results_requested: Optional[int],
 ) -> Tuple[bool, Tuple[Any, Any, Any, Any]]:
     """
@@ -190,7 +189,7 @@ async def _do_resume(
         )
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def query(
     request: web.Request,
     manual: Optional[Dict] = None,
@@ -208,7 +207,8 @@ async def query(
     ###########################################################################
     unlimited = {-1, False, None}
     simultaneous: Optional[str] = None
-    previous: Optional[str] = None
+    previous: str = ""
+    job: Optional[Job] = None
     if manual is not None and isinstance(app, web.Application):
         resuming = False
         job = Job.fetch(manual["job"], connection=app["redis"])
@@ -244,7 +244,7 @@ async def query(
         done_batches = []
         existing_results = {}
         hit_limit = False
-        job = False
+        job = None
         total_results_so_far = 0
         app = request.app
         config = request.app["config"]
@@ -255,7 +255,7 @@ async def query(
         corpora_to_use = [int(i) for i in corpora_to_use]
         query = request_data["query"]
         room = request_data.get("room")
-        previous = request_data.get("previous")
+        previous = request_data.get("previous", "")
         resuming = request_data.get("resume", False)
         sentences = request_data.get("sentences", True)
         page_size = request_data.get("page_size", 10)
@@ -295,7 +295,7 @@ async def query(
 
             if not done and len(r) == 4:
                 all_batches, done_batches, total_results_so_far, needed = r
-                existing_results = utils._get_all_results(
+                existing_results = _get_all_results(
                     previous,
                     connection=app["redis"],
                 )
@@ -357,7 +357,7 @@ async def query(
             # organise and submit query to rq via query service               #
             ###################################################################
 
-            if manual is not None:
+            if manual is not None and job is not None:
                 parent = job.id
             elif resuming:
                 parent = previous
@@ -395,10 +395,17 @@ async def query(
 
             # still figuring this out a little bit
             divv = (i + 1) % max_jobs if max_jobs else -1
-            if simultaneous and i and max_jobs and max_jobs != -1 and not divv:
+            if (
+                job is not None
+                and simultaneous
+                and i
+                and max_jobs
+                and max_jobs != -1
+                and not divv
+            ):
                 query_depends.append(job.id)
 
-            if current_batch is not None:
+            if current_batch is not None and job is not None:
                 print(
                     f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}"
                 )
@@ -422,7 +429,7 @@ async def query(
                 # todo: not sure if this is right...
                 the_base = prev_job.kwargs.get("base", prev_job.id)
             else:
-                the_base = job.id if base is None else base
+                the_base = job.id if base is None and job is not None else base
             sents_kwargs = dict(
                 user=user,
                 room=room,
@@ -432,7 +439,7 @@ async def query(
                 resuming=done,
                 simultaneous=simultaneous,
             )
-            depends_on = job.id if not done else previous
+            depends_on = job.id if not done and job is not None else previous
             if simultaneous:
                 depends_on_chain.append(depends_on)
                 to_use = depends_on_chain

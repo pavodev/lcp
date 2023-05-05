@@ -26,84 +26,83 @@ async def handle_redis_response(
         try:
             async with async_timeout.timeout(1):
                 message = await channel.get_message(ignore_subscribe_messages=True)
-                if message is None:
-                    continue
-                payload = json.loads(message["data"])
-                user = payload.get("user")
-                room = payload.get("room")
+                if message is not None:
+                    payload = json.loads(message["data"])
+                    user = payload.get("user")
+                    room = payload.get("room")
 
-                if payload.get("status") == "timeout":
-                    await push_msg(app["websockets"], room, payload, just=(room, user))
-                    continue
+                    if payload.get("status") == "timeout":
+                        await push_msg(
+                            app["websockets"], room, payload, just=(room, user)
+                        )
 
-                # error handling
-                if payload.get("status") == "failed":
-                    await push_msg(app["websockets"], room, payload, just=(room, user))
-                    continue
+                    # error handling
+                    elif payload.get("status") == "failed":
+                        await push_msg(
+                            app["websockets"], room, payload, just=(room, user)
+                        )
 
-                # interrupt was sent? -- currently not used
-                if payload.get("status") == "interrupted":
-                    payload["action"] = "interrupted"
-                    await push_msg(app["websockets"], room, payload, just=(room, user))
-                    continue
+                    # interrupt was sent? -- currently not used
+                    elif payload.get("status") == "interrupted":
+                        payload["action"] = "interrupted"
+                        await push_msg(
+                            app["websockets"], room, payload, just=(room, user)
+                        )
 
-                # handle configuration message
-                if payload.get("action") == "set_config":
-                    if payload["disabled"]:
-                        for name, idx in payload["disabled"]:
-                            print(f"Corpus disabled: {name}={idx}")
-                    print(f"Config loaded: {len(payload['config'])-1} corpora")
-                    app["config"] = payload["config"]
-                    payload["action"] = "update_config"
-                    await push_msg(app["websockets"], None, payload)
-                    if test:
-                        return
-                    continue
+                    # handle configuration message
+                    elif payload.get("action") == "set_config":
+                        if payload["disabled"]:
+                            for name, idx in payload["disabled"]:
+                                print(f"Corpus disabled: {name}={idx}")
+                        print(f"Config loaded: {len(payload['config'])-1} corpora")
+                        app["config"] = payload["config"]
+                        payload["action"] = "update_config"
+                        await push_msg(app["websockets"], None, payload)
+                        if test:
+                            return
 
-                # handle fetch/store queries message
-                elif payload.get("action") in ("fetch_queries", "store_query"):
-                    await push_msg(
-                        app["websockets"],
-                        room,
-                        payload,
-                        skip=None,
-                        just=(room, user),
-                    )
-                    continue
+                    # handle fetch/store queries message
+                    elif payload.get("action") in ("fetch_queries", "store_query"):
+                        await push_msg(
+                            app["websockets"],
+                            room,
+                            payload,
+                            skip=None,
+                            just=(room, user),
+                        )
 
-                # handle uploaded data (add to config, ws message if gui mode)
-                elif payload.get("action") == "uploaded":
-                    app["query_service"].get_config()
-                    # conf = payload["config"]
-                    # project = payload["project"]
-                    # todo: better structure for this i guess?
-                    # app["config"][-1][project] = conf
-                    # if payload.get("gui"):
-                    #    await push_msg(
-                    #        app["websockets"],
-                    #        room,
-                    #        payload,
-                    #        skip=None,
-                    #        just=None
-                    #    )
-                    #    continue
+                    # handle uploaded data (add to config, ws message if gui mode)
+                    elif payload.get("action") == "uploaded":
+                        app["query_service"].get_config()
+                        # conf = payload["config"]
+                        # project = payload["project"]
+                        # todo: better structure for this i guess?
+                        # app["config"][-1][project] = conf
+                        # if payload.get("gui"):
+                        #    await push_msg(
+                        #        app["websockets"],
+                        #        room,
+                        #        payload,
+                        #        skip=None,
+                        #        just=None
+                        #    )
+                        #    continue
 
-                elif payload.get("action") == "sentences":
+                    elif payload.get("action") == "sentences":
 
-                    await push_msg(
-                        app["websockets"],
-                        room,
-                        payload,
-                        skip=None,
-                        just=(room, user),
-                    )
-                    continue
+                        await push_msg(
+                            app["websockets"],
+                            room,
+                            payload,
+                            skip=None,
+                            just=(room, user),
+                        )
 
-                # handle query progress
-                else:
-                    await _handle_query(app, payload, user, room)
+                    # handle query progress
+                    else:
+                        await _handle_query(app, payload, user, room)
 
-                await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.1)
         except asyncio.TimeoutError as err:
             print(f"Warning: timeout in websocket listener:\n{message}")
         except Exception as err:
@@ -129,7 +128,7 @@ async def _handle_query(
     a query iteration. Create a websocket message to send to correct frontends
     """
     status = payload.get("status", "unknown")
-    job = payload.get("job")
+    job = payload["job"]
     the_job = Job.fetch(job, connection=app["redis"])
     job_status = the_job.get_status(refresh=True)
     if job_status in ("stopped", "canceled") or job in app["canceled"]:

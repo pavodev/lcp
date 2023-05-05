@@ -2,10 +2,10 @@ import os
 
 from aiohttp import web
 
-from . import utils
+from .utils import ensure_authorised
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def video(request: web.Request) -> web.Response:
     corpora = [i.strip() for i in request.rel_url.query["corpora"].split(",")]
     out = {}

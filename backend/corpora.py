@@ -1,6 +1,6 @@
 from aiohttp import web
 
-from . import utils
+from .utils import _lama_user_details, ensure_authorised
 
 
 def _has_access(user, corpus):
@@ -10,14 +10,12 @@ def _has_access(user, corpus):
     return True
 
 
-@utils.ensure_authorised
+@ensure_authorised
 async def corpora(request: web.Request) -> web.Response:
     """
     Return config to frontend
     """
-    request_json = await request.json()
-    user = request_json["user"]
-    user_data = await utils._lama_user_details(request.headers)
+    user_data = await _lama_user_details(request.headers)
     ids = set()
     for sub in user_data.get("subscription", {}).get("subscriptions", []):
         ids.add(sub["id"])

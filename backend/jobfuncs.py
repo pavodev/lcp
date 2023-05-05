@@ -38,7 +38,7 @@ async def _upload_data(**kwargs) -> bool:
     inserts = data["prep_seg_insert"]
     batches = data["batchnames"]
 
-    upool = get_current_job()._upool
+    upool = get_current_job()._upool  # type: ignore
     await upool.open()
 
     importer = Importer(upool, template, mapping, corpus_dir, schema_name, len(batches))
@@ -70,8 +70,8 @@ async def _create_schema(**kwargs) -> None:
     drops = kwargs["drops"]
     schema_name = kwargs["schema_name"]
     timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
-    await get_current_job()._upool.open()
-    async with get_current_job()._upool.connection(timeout) as conn:
+    await get_current_job()._upool.open()  # type: ignore
+    async with get_current_job()._upool.connection(timeout) as conn:  # type: ignore
         await conn.set_autocommit(True)
         async with conn.cursor() as cur:
             try:
@@ -150,10 +150,10 @@ async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
 
     name = "_upool" if is_store else "_pool"
     # this open call should be made before any other db calls in the app just in case
-    await getattr(get_current_job(), name).open()
+    await getattr(get_current_job(), name).open()  # type: ignore
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
 
-    async with getattr(get_current_job(), name).connection(timeout) as conn:
+    async with getattr(get_current_job(), name).connection(timeout) as conn:  # type: ignore
         if is_store:
             await conn.set_autocommit(True)
         async with conn.cursor() as cur:

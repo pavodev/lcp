@@ -28,7 +28,7 @@ from uuid import UUID
 
 from aiohttp import web
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
-from rq.connections import Connection
+from redis import Redis as RedisConnection
 from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
@@ -63,32 +63,33 @@ def ensure_authorised(func: Callable):
     """
     return func
 
-    @wraps(func)
-    async def deco(request: web.Request, *args, **kwargs):
-        headers = await _lama_user_details(getattr(request, "headers", request))
+    # todo:
+    # @wraps(func)
+    # async def deco(request: web.Request, *args, **kwargs):
+    #    headers = await _lama_user_details(getattr(request, "headers", request))
 
-        if "X-Access-Token" in headers:
-            token = headers.get("X-Access-Token")
-            try:
-                decoded = jwt.decode(
-                    token, os.getenv("JWT_SECRET_KEY"), algorithms=["HS256"]
-                )
-                request.jwt = decoded
-            except Exception as err:
-                raise err
-        if "X-Display-Name" in headers:
-            username = headers.get("X-Display-Name")
-            request.username = username
-        if "X-Mail" in headers:
-            username = headers.get("X-Mail")
-            request.username = username
+    #    if "X-Access-Token" in headers:
+    #        token = headers.get("X-Access-Token")
+    #        try:
+    #            decoded = jwt.decode(
+    #                token, os.getenv("JWT_SECRET_KEY"), algorithms=["HS256"]
+    #            )
+    #            request.jwt = decoded
+    #        except Exception as err:
+    #            raise err
+    #    if "X-Display-Name" in headers:
+    #        username = headers.get("X-Display-Name")
+    #        request.username = username
+    #    if "X-Mail" in headers:
+    #        username = headers.get("X-Mail")
+    #        request.username = username
 
-        if not request.username:
-            raise ValueError("401? No username")
+    #    if not request.username:
+    #        raise ValueError("401? No username")
 
-        return func(request, *args, **kwargs)
+    #    return func(request, *args, **kwargs)
 
-    return deco
+    # return deco
 
 
 def _extract_lama_headers(headers: Mapping) -> Dict[str, str]:
@@ -201,7 +202,9 @@ async def _lama_check_api_key(headers) -> Dict:
             return await resp.json()
 
 
-def _get_all_results(job: Union[Job, str], connection: Connection) -> Dict[int, Any]:
+def _get_all_results(
+    job: Union[Job, str], connection: RedisConnection
+) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
@@ -373,7 +376,12 @@ def _determine_language(batch: str) -> Optional[str]:
     return None
 
 
-async def gather(n, *tasks: Any, name: Optional[str] = None) -> Iterable[Any]:
+async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
+    async with semaphore:
+        return await coro
+
+
+async def gather(n: int, *tasks: Any, name: Optional[str] = None) -> Iterable[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -381,15 +389,11 @@ async def gather(n, *tasks: Any, name: Optional[str] = None) -> Iterable[Any]:
     if n > 0:
         semaphore = asyncio.Semaphore(n)
 
-        async def sem_coro(coro: Awaitable[Any]):
-            async with semaphore:
-                return await coro
-
         group = asyncio.gather(
-            *(asyncio.create_task(sem_coro(c), name=name) for c in tasks)
+            *([asyncio.create_task(sem_coro(semaphore, c), name=name) for c in tasks])
         )
     else:
-        group = asyncio.gather(*(asyncio.create_task(c) for c in tasks))
+        group = asyncio.gather(*[asyncio.create_task(c) for c in tasks])
     try:
         return await group
     except (BaseException) as err:
