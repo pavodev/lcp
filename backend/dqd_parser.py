@@ -66,7 +66,7 @@ parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 def merge_constraints(constraints: List) -> Dict[str, Any]:
     retval = {}
-    if len(constraints) == 1 and len(constraints[0].keys()) > 1:
+    if len(constraints) == 1 and len(constraints[0]) > 1:
         retval = {"constraints": {**constraints[0]}}
     elif len(constraints) == 1:
         retval = constraints[0]
@@ -77,8 +77,7 @@ def merge_constraints(constraints: List) -> Dict[str, Any]:
                 "args": [
                     (
                         constraint.get("constraints")
-                        if len(constraint.keys()) == 1
-                        and "constraints" in constraint.keys()
+                        if len(constraint) == 1 and "constraints" in constraint
                         else constraint
                     )
                     for constraint in constraints
@@ -89,15 +88,14 @@ def merge_constraints(constraints: List) -> Dict[str, Any]:
 
 
 def merge_filter(filters: List) -> Union[Dict[str, Any], str]:
-    retval = {}
     if len(filters) == 1:
-        retval = filters[0]
+        return filters[0]
     elif len(filters) > 1:
-        retval = {"filters": {"operator": "AND", "args": filters}}
-    return retval
+        return {"filters": {"operator": "AND", "args": filters}}
+    return {}
 
 
-def to_dict(tree: Any):
+def to_dict(tree: Any) -> Any:
     if isinstance(tree, Token):
         return tree.value
 

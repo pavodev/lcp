@@ -7,7 +7,7 @@ from mypyc.build import mypycify
 
 MODULE_PATH = "backend"
 
-SKIPS = {"sock.py", "dqd_parser.py"}  # todo: make the files in here work
+SKIPS = {"sock.py"}  # todo: make the files in here work
 
 # use build_ext to do mypy c compilation
 if any(a == "build_ext" for a in sys.argv):
