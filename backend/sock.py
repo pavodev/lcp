@@ -26,9 +26,9 @@ async def handle_redis_response(
         try:
             room: Optional[str] = None
             user: Optional[str] = None
-            async with async_timeout.timeout(1):
+            async with async_timeout.timeout(2):
                 message = await channel.get_message(ignore_subscribe_messages=True)
-                if message is not None:
+                if isinstance(message, dict) and message.get("data"):
                     payload = json.loads(message["data"])
                     user = payload.get("user")
                     room = payload.get("room")
@@ -77,10 +77,6 @@ async def handle_redis_response(
                     # handle uploaded data (add to config, ws message if gui mode)
                     elif action == "uploaded":
                         app["query_service"].get_config()
-                        # conf = payload["config"]
-                        # project = payload["project"]
-                        # todo: better structure for this i guess?
-                        # app["config"][-1][project] = conf
                         # if payload.get("gui"):
                         #    await push_msg(
                         #        app["websockets"],
@@ -89,7 +85,6 @@ async def handle_redis_response(
                         #        skip=None,
                         #        just=None
                         #    )
-                        #    continue
 
                     elif action == "sentences":
                         await push_msg(
@@ -105,18 +100,19 @@ async def handle_redis_response(
                         await _handle_query(app, payload, user, room)
 
                     await asyncio.sleep(0.1)
-        except asyncio.TimeoutError as err:
+        except (asyncio.TimeoutError, asyncio.CancelledError) as err:
             print(f"Warning: timeout in websocket listener:\n{message}")
         except Exception as err:
             to_send = {"error": str(err), "status": "failed"}
             print(f"Error: {str(err)}\n{traceback.format_exc()}")
-            await push_msg(
-                app["websockets"],
-                None,
-                to_send,
-                skip=None,
-                just=(room, user),
-            )
+            if user or room:
+                await push_msg(
+                    app["websockets"],
+                    None,
+                    to_send,
+                    skip=None,
+                    just=(room, user),
+                )
 
 
 async def _handle_query(
