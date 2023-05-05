@@ -133,15 +133,16 @@ def _make_sent_query(
     return query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
 
 
-async def _db_query(query: str, **kwargs) -> Optional[Union[Dict, List]]:
+async def _db_query(**kwargs) -> Optional[List[Tuple[Any]]]:
     """
     The function queued by RQ, which executes our DB query
     """
-    single_result = kwargs.get("single", False)
-    params = kwargs.get("params", tuple())
-    is_config = kwargs.get("config", False)
-    is_store = kwargs.get("store", False)
-    is_sentences = kwargs.get("is_sentences", False)
+    query: str = kwargs["query"]
+    single_result: bool = kwargs.get("single", False)
+    params: Tuple[Any] = kwargs.get("params", tuple())
+    is_config: bool = kwargs.get("config", False)
+    is_store: bool = kwargs.get("store", False)
+    is_sentences: bool = kwargs.get("is_sentences", False)
 
     if is_sentences:
         current_batch = kwargs["current_batch"]

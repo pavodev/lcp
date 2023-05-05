@@ -1,20 +1,23 @@
 import os
+import sys
 
 from setuptools import setup
 
-ext_modules = None
-
-# if these lines are used, we build a mypy version of the app that fails
-# whenever types do not match exactly (!)
-
 from mypyc.build import mypycify
 
-files = ["run.py"]
-for i in os.listdir("backend"):
-    if "query" not in i and i.endswith(".py"):  # todo: make query work
-        files.append(os.path.join("backend", i))
+MODULE_PATH = "backend"
 
-ext_modules = mypycify(files, multi_file=True, separate=False, verbose=True)
+SKIPS = {"sock.py", "dqd_parser.py"}  # todo: make the files in here work
+
+# use build_ext to do mypy c compilation
+if any(a == "build_ext" for a in sys.argv):
+    files = ["run.py", "worker.py"]
+    for i in os.listdir(MODULE_PATH):
+        if i not in SKIPS and i.endswith(".py"):
+            files.append(os.path.join(MODULE_PATH, i))
+    ext_modules = mypycify(files, multi_file=True, separate=False, verbose=True)
+else:
+    ext_modules = None
 
 with open("requirements.txt") as f:
     REQUIRED = [i for i in f.read().splitlines() if i and not i.strip().startswith("#")]
@@ -37,9 +40,9 @@ setup(
     author="Danny McDonald",
     include_package_data=True,
     zip_safe=False,
-    packages=["backend"],
+    packages=[MODULE_PATH],
     package_data={
-        "backend": ["backend/py.typed"],
+        MODULE_PATH: ["backend/py.typed"],
     },
     author_email="mcddjx@gmail.com",
     license="MIT",

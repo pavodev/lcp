@@ -15,7 +15,7 @@ from .utils import _determine_language, _get_all_results, ensure_authorised
 
 
 def _make_sents_query(
-    query: str, schema: str, config: Dict, lang: Optional[str]
+    query: str, schema: str, config: Dict[str, Any], lang: Optional[str]
 ) -> str:
     """
     Build a query to fetch sentences (uuids to be filled in later)
@@ -29,7 +29,7 @@ def _make_sents_query(
 
 
 def _get_word_count(
-    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
+    corpora: List[int], config: Dict[str, Dict[str, Any]], languages: Set[str]
 ) -> int:
     """
     Sum the word counts for corpora being searched
@@ -54,13 +54,13 @@ def _get_word_count(
 
 
 def _decide_batch(
-    done_batches: List[Union[Tuple[int, str, str, int], List[Any]]],
-    batches: List[Union[Tuple[int, str, str, int], List[Any]]],
+    done_batches: List[Tuple[int, str, str, int]],
+    batches: List[Tuple[int, str, str, int]],
     so_far: int,
     needed: int,
     hit_limit: Union[bool, int],
     page_size: int,
-) -> Union[Tuple[int, str, str, int], List[Any]]:
+) -> Tuple[int, str, str, int]:
     """
     Find the best next batch to query
     """
@@ -101,11 +101,11 @@ def _decide_batch(
 
 def _get_query_batches(
     corpora: List[int], config: Dict[str, Dict], languages: Set[str]
-) -> List[Tuple]:
+) -> List[Tuple[int, str, str, int]]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
     """
-    out = []
+    out: List[Tuple[int, str, str, int]] = []
     all_languages = ["en", "de", "fr", "ca"]
     for corpus in corpora:
         batches = config[str(corpus)]["_batches"]
@@ -127,7 +127,7 @@ async def _do_resume(
     app: web.Application,
     previous: str,
     total_results_requested: Optional[int],
-) -> Tuple[bool, Tuple[Any, Any, Any, Any]]:
+) -> Tuple[bool, Tuple[Any, Any, int, int]]:
     """
     Resume a query!
     """
@@ -169,7 +169,7 @@ async def _do_resume(
         if latest_sents:
             latest_sents = Job.fetch(latest_sents, connection=app["redis"])
 
-        return True, (current_batch, prev_job, None, None)
+        return True, (current_batch, prev_job, -1, -1)
     else:
         all_batches = prev_job.kwargs["all_batches"]
         done_batches = prev_job.kwargs["done_batches"]
@@ -218,10 +218,10 @@ async def query(
         total_results_requested = manual["total_results_requested"]
         total_results_so_far = manual["total_results_so_far"]
         user = manual["user"]
-        corpora_to_use = manual["corpora"]
-        if not isinstance(corpora_to_use, list):
-            corpora_to_use = [corpora_to_use]
-        corpora_to_use = [int(i) for i in corpora_to_use]
+        corp = manual["corpora"]
+        if not isinstance(corp, list):
+            corp = [corp]
+        corpora_to_use = [int(i) for i in corp]
         room = manual.get("room")
         sentences = manual.get("sentences", True)
         hit_limit = manual.get("hit_limit", False)
@@ -249,10 +249,10 @@ async def query(
         app = request.app
         config = request.app["config"]
         request_data = await request.json()
-        corpora_to_use = request_data["corpora"]
-        if not isinstance(corpora_to_use, list):
-            corpora_to_use = [corpora_to_use]
-        corpora_to_use = [int(i) for i in corpora_to_use]
+        corp = request_data["corpora"]
+        if not isinstance(corp, list):
+            corp = [corp]
+        corpora_to_use = [int(i) for i in corp]
         query = request_data["query"]
         room = request_data.get("room")
         previous = request_data.get("previous", "")
@@ -273,15 +273,15 @@ async def query(
     ############################################################################
 
     iterations = len(all_batches) if simultaneous else 1
-    http_response = []
-    current_batch = None
+    http_response: List[Dict[str, Any]] = []
+    current_batch: Optional[Tuple[int, str, str, int]] = None
     first_job = None
-    depends_on_chain = []
+    depends_on_chain: List[str] = []
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
     query_depends: List[str] = []
     qs = app["query_service"]
 
-    for i in range(iterations):
+    for it in range(iterations):
 
         done = False
 
@@ -289,8 +289,15 @@ async def query(
         # handle resumed queries                                               #
         ########################################################################
 
+        r: Any = None
+
         if resuming:
-            rargs = (request_data, app, previous, total_results_requested)
+            rargs: Tuple[Any, Any, Any, int] = (
+                request_data,
+                app,
+                previous,
+                total_results_requested,
+            )
             done, r = await _do_resume(*rargs)
 
             if not done and len(r) == 4:
@@ -332,24 +339,24 @@ async def query(
                 # sql_query = json_to_sql(json.loads(query), **kwa)
                 try:
                     json_query = json.loads(query)
-                    if not i and not manual:
+                    if not it and not manual:
                         form = json.dumps(json_query, indent=4)
                         print(f"JSON query:\n\n\n{form}")
                 except json.JSONDecodeError as err:
-                    if not i and not manual:
+                    if not it and not manual:
                         print(f"Text query:\n\n\n{query}")
                     json_query = convert(query)
                     form = json.dumps(json_query, indent=4)
-                    if not i and not manual:
+                    if not it and not manual:
                         print(f"JSON query\n\n\n{form}")
                     query_type = "DQD"
-                if not i and not manual:
+                if not it and not manual:
                     print(f"Detected query type: {query_type}")
                 sql_query = json_to_sql(json_query, **kwa)
-                if not i and not manual:
+                if not it and not manual:
                     print(f"SQL query:\n\n\n{sql_query}")
             except Exception as err:
-                if not i and not manual:
+                if not it and not manual:
                     print("SQL GENERATION FAILED! for dev, assuming script passed", err)
                 raise err
 
@@ -387,18 +394,18 @@ async def query(
                 simultaneous=simultaneous,
             )
 
-            job = qs.query(depends_on=query_depends, kwargs=query_kwargs)
+            job = qs.query(depends_on=query_depends, **query_kwargs)
 
             ###################################################################
             # simultaneous query setup for next iteration                     #
             ###################################################################
 
             # still figuring this out a little bit
-            divv = (i + 1) % max_jobs if max_jobs else -1
+            divv = (it + 1) % max_jobs if max_jobs else -1
             if (
                 job is not None
                 and simultaneous
-                and i
+                and it
                 and max_jobs
                 and max_jobs != -1
                 and not divv
@@ -410,7 +417,7 @@ async def query(
                     f"\nNow querying: {current_batch[1]}.{current_batch[2]} ... {job.id}"
                 )
 
-            if simultaneous and not i:
+            if simultaneous and not it:
                 first_job = job
 
         #######################################################################
@@ -440,12 +447,13 @@ async def query(
                 simultaneous=simultaneous,
             )
             depends_on = job.id if not done and job is not None else previous
+            to_use: Union[List[str], str] = []
             if simultaneous:
                 depends_on_chain.append(depends_on)
                 to_use = depends_on_chain
             else:
                 to_use = depends_on
-            sents_job = qs.sentences(depends_on=to_use, kwargs=sents_kwargs)
+            sents_job = qs.sentences(depends_on=to_use, **sents_kwargs)
             # if simultaneous:
             #    depends_on_chain.append(stats_job.id)
 

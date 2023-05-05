@@ -32,27 +32,28 @@ async def handle_redis_response(
                     payload = json.loads(message["data"])
                     user = payload.get("user")
                     room = payload.get("room")
+                    status = payload.get("status")
+                    action = payload.get("action")
 
-                    if payload.get("status") == "timeout":
+                    if status == "timeout":
                         await push_msg(
                             app["websockets"], room, payload, just=(room, user)
                         )
 
-                    # error handling
-                    elif payload.get("status") == "failed":
+                    elif status == "failed":
                         await push_msg(
                             app["websockets"], room, payload, just=(room, user)
                         )
 
                     # interrupt was sent? -- currently not used
-                    elif payload.get("status") == "interrupted":
+                    elif status == "interrupted":
                         payload["action"] = "interrupted"
                         await push_msg(
                             app["websockets"], room, payload, just=(room, user)
                         )
 
                     # handle configuration message
-                    elif payload.get("action") == "set_config":
+                    elif action == "set_config":
                         if payload["disabled"]:
                             for name, idx in payload["disabled"]:
                                 print(f"Corpus disabled: {name}={idx}")
@@ -64,7 +65,7 @@ async def handle_redis_response(
                             return
 
                     # handle fetch/store queries message
-                    elif payload.get("action") in ("fetch_queries", "store_query"):
+                    elif action in ("fetch_queries", "store_query"):
                         await push_msg(
                             app["websockets"],
                             room,
@@ -74,7 +75,7 @@ async def handle_redis_response(
                         )
 
                     # handle uploaded data (add to config, ws message if gui mode)
-                    elif payload.get("action") == "uploaded":
+                    elif action == "uploaded":
                         app["query_service"].get_config()
                         # conf = payload["config"]
                         # project = payload["project"]
@@ -90,8 +91,7 @@ async def handle_redis_response(
                         #    )
                         #    continue
 
-                    elif payload.get("action") == "sentences":
-
+                    elif action == "sentences":
                         await push_msg(
                             app["websockets"],
                             room,
@@ -186,7 +186,7 @@ async def _handle_query(
 async def push_msg(
     sockets: Dict[Optional[str], Tuple[Any, str]],
     session_id: Optional[str],
-    msg: Union[Dict, List],
+    msg: Dict[str, Any],
     skip: Optional[Tuple[Optional[str], Optional[str]]] = None,
     just: Optional[Tuple[Optional[str], Optional[str]]] = None,
 ) -> None:

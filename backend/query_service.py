@@ -34,43 +34,35 @@ class QueryService:
     def query(
         self,
         queue: str = "query",
-        depends_on=None,
-        kwargs: Dict = None,
+        **kwargs,
     ) -> Job:
         """
         Here we send the query to RQ and therefore to redis
         """
-        opts = {
-            "on_success": _query,
-            "on_failure": _general_failure,
-            "kwargs": kwargs,
-        }
-        if depends_on:
-            opts["depends_on"] = depends_on
         return self.app[queue].enqueue(
-            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _db_query,
+            on_success=_query,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            kwargs=kwargs,
         )
 
     def sentences(
         self,
         queue: str = "query",
-        depends_on: Optional[str] = None,
-        kwargs: Dict[str, Any] = {},
+        **kwargs,
     ) -> Job:
         kwargs["is_sentences"] = True
-        kwargs["depends_on"] = depends_on
-        opts = {
-            "is_sentences": True,
-            "on_success": _sentences,
-            "on_failure": _general_failure,
-            "kwargs": kwargs,
-            "depends_on": depends_on,
-            "current_batch": kwargs["current_batch"],
-            "base": kwargs["base"],
-            "resuming": kwargs["resuming"],
-        }
+        depends_on = kwargs.get("depends_on")
         return self.app[queue].enqueue(
-            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _db_query,
+            on_success=_sentences,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            depends_on=depends_on,
+            kwargs=kwargs,
         )
 
     def get_config(self, queue: str = "alt", **kwargs) -> Job:
