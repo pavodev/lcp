@@ -6,3 +6,4 @@ build/
 worker.cpython*
 uploads/*
 .coverage
+*.so

@@ -24,6 +24,8 @@ async def handle_redis_response(
     """
     while True:
         try:
+            room: Optional[str] = None
+            user: Optional[str] = None
             async with async_timeout.timeout(1):
                 message = await channel.get_message(ignore_subscribe_messages=True)
                 if message is not None:
@@ -110,7 +112,7 @@ async def handle_redis_response(
             print(f"Error: {str(err)}\n{traceback.format_exc()}")
             await push_msg(
                 app["websockets"],
-                room,
+                None,
                 to_send,
                 skip=None,
                 just=(room, user),
@@ -120,7 +122,7 @@ async def handle_redis_response(
 async def _handle_query(
     app: web.Application,
     payload: Dict[str, Any],
-    user: str,
+    user: Optional[str],
     room: Optional[str],
 ) -> None:
     """
@@ -185,8 +187,8 @@ async def push_msg(
     sockets: Dict[Optional[str], Tuple[Any, str]],
     session_id: Optional[str],
     msg: Union[Dict, List],
-    skip: Optional[Tuple[Optional[str], str]] = None,
-    just: Optional[Tuple[Optional[str], str]] = None,
+    skip: Optional[Tuple[Optional[str], Optional[str]]] = None,
+    just: Optional[Tuple[Optional[str], Optional[str]]] = None,
 ) -> None:
     """
     Send JSON websocket message
