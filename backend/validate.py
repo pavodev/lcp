@@ -1,6 +1,6 @@
 import json
 
-from typing import Any, Dict, Optional, Union
+from typing import Any, Dict, Optional
 
 from aiohttp import web
 

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import argparse
 import json
 import math
@@ -11,7 +13,7 @@ from textwrap import dedent
 from typing import Dict, List
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 
 @dataclass
@@ -24,7 +26,7 @@ class DataNeededLater:
     mapping: str = ""
     perms: str = ""
 
-    def asdict(self) -> Dict[str, Union[str, List[str], Dict[Any, Any]]]:
+    def asdict(self) -> Dict[str, str | List[str] | Dict[Any, Any]]:
         return asdict(self)
 
 
@@ -301,7 +303,7 @@ class PartitionedTable(Table):
     max_id = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF
 
     @staticmethod
-    def half_hex(num: Union[int, str]) -> str:
+    def half_hex(num: int | str) -> str:
         if isinstance(num, str):
             num = int(num, 16)
         res = hex(int(num / 2))
@@ -309,7 +311,7 @@ class PartitionedTable(Table):
         return res
 
     @staticmethod
-    def hex2uuid(num: Union[int, str]) -> str:
+    def hex2uuid(num: int | str) -> str:
         if isinstance(num, int):
             num = hex(num)
         form = re.match(
@@ -349,7 +351,7 @@ class PartitionedTable(Table):
 
     def _create_subtbls(self) -> List[str]:
         tbls = []
-        cur_max: Union[str, int] = self.max_id
+        cur_max: str | int = self.max_id
 
         for i in range(1, self.num_partitions):
             batchname = f"{self.base_name}{i}"

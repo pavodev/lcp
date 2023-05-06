@@ -1,9 +1,10 @@
+from __future__ import annotations
 import json
 
 from collections import defaultdict
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, Tuple, Type
 from uuid import UUID
 
 from redis import Redis as RedisConnection
@@ -129,7 +130,7 @@ def _query(
 def _sentences(
     job: Job,
     connection: RedisConnection,
-    result: List[Tuple[Union[str, UUID], int, List[Any]]],
+    result: List[Tuple[str | UUID, int, List[Any]]],
     *args,
     **kwargs,
 ) -> None:

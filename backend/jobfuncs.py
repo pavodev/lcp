@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import shutil
@@ -5,7 +7,7 @@ import shutil
 from collections import Counter, defaultdict
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from .impo import Importer
 from .utils import Interrupted, _get_kwics
@@ -87,7 +89,7 @@ async def _create_schema(**kwargs) -> None:
 
 def _make_sent_query(
     query: str,
-    associated: Union[str, List[str]],
+    associated: str | List[str],
     current_batch: Tuple[int, str, str],
     resuming: bool,
 ):

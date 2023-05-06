@@ -1,3 +1,4 @@
+from __future__ import annotations
 import json
 import os
 import re
@@ -5,7 +6,7 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Any, Dict, Optional, Tuple, Union
+from typing import Any, Dict, Optional, Tuple
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -236,7 +237,7 @@ async def upload(request: web.Request) -> web.Response:
     _ensure_word0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
 
-    return_data: Dict[str, Union[str, int]] = {}
+    return_data: Dict[str, str | int] = {}
     if not has_file:
         msg = "No file sent?"
         return_data.update({"status": "failed", "info": msg})

@@ -1,8 +1,9 @@
+from __future__ import annotations
 from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token
 
-from typing import Any, Dict, Iterable, List, Union
+from typing import Any, Dict, Iterable, List
 
 
 dqd_grammar = r"""
@@ -87,7 +88,7 @@ def merge_constraints(constraints: List) -> Dict[str, Any]:
     return retval
 
 
-def merge_filter(filters: List) -> Union[Dict[str, Any], str]:
+def merge_filter(filters: List) -> Dict[str, Any] | str:
     if len(filters) == 1:
         return filters[0]
     elif len(filters) > 1:

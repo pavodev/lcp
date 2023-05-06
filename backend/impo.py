@@ -12,7 +12,6 @@ from typing import (
     Iterable,
     List,
     Optional,
-    Union,
     Callable,
     Tuple,
     Coroutine,

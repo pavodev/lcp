@@ -1,3 +1,4 @@
+from __future__ import annotations
 import aiohttp
 import asyncio
 import json
@@ -18,7 +19,6 @@ from typing import (
     Iterable,
     Reversible,
     Tuple,
-    Union,
     Sequence,
     Mapping,
     Sized,
@@ -202,9 +202,7 @@ async def _lama_check_api_key(headers) -> Dict:
             return await resp.json()
 
 
-def _get_all_results(
-    job: Union[Job, str], connection: RedisConnection
-) -> Dict[int, Any]:
+def _get_all_results(job: Job | str, connection: RedisConnection) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
@@ -249,10 +247,10 @@ def _add_results(
     so_far: int,
     unlimited: bool,
     offset: Optional[int],
-    restart: Union[bool, int],
+    restart: bool | int,
     total_requested: int,
     kwic: bool = False,
-    sents: Optional[List[Tuple[Union[str, UUID], int, List[Any]]]] = None,
+    sents: Optional[List[Tuple[str | UUID, int, List[Any]]]] = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?

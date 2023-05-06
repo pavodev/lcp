@@ -3,7 +3,7 @@ import json
 import traceback
 
 from time import sleep
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import async_timeout
 
