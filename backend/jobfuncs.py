@@ -135,7 +135,7 @@ def _make_sent_query(
     return query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
 
 
-async def _db_query(**kwargs) -> Optional[List[Tuple[Any]]]:
+async def _db_query(**kwargs) -> List[Tuple[Any]] | None:
     """
     The function queued by RQ, which executes our DB query
     """

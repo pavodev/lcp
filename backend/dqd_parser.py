@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token

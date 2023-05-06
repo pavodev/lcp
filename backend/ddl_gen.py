@@ -13,7 +13,7 @@ from textwrap import dedent
 from typing import Dict, List
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 
 @dataclass
@@ -221,9 +221,7 @@ class Column(DDL):
 
 
 class Table(DDL):
-    def __init__(
-        self, name: str, cols: List[Column], anchorings: Optional[List] = None
-    ):
+    def __init__(self, name: str, cols: List[Column], anchorings: List | None):
         self.name = name.strip()
         self.header_txt = f"CREATE TABLE {self.name} ("
         self.cols = cols
@@ -326,7 +324,7 @@ class PartitionedTable(Table):
         self,
         name: str,
         cols: List[Column],
-        anchorings: Optional[List] = None,
+        anchorings: List | None,
         column_part: str = "segment_id",
         num_part: int = 10,
     ):

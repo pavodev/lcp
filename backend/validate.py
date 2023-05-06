@@ -1,6 +1,8 @@
+from __future__ import annotations
+
 import json
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from aiohttp import web
 
@@ -8,11 +10,11 @@ from .dqd_parser import convert
 
 
 async def validate(
-    user: Optional[str] = None,
-    room: Optional[str] = None,
+    user: str | None = None,
+    room: str | None = None,
     query: str = "",
-    query_name: Optional[str] = None,
-    **kwargs
+    query_name: str | None = None,
+    **kwargs,
 ) -> Any:
     """
     Validate user query?

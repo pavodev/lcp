@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import traceback
 
 from time import sleep
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 
 import async_timeout
 
@@ -119,8 +121,8 @@ async def handle_redis_response(channel, app, test=False):
 async def _handle_query(
     app: web.Application,
     payload: Dict[str, Any],
-    user: Optional[str],
-    room: Optional[str],
+    user: str | None,
+    room: str | None,
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -183,11 +185,11 @@ async def _handle_query(
 
 
 async def push_msg(
-    sockets: Dict[Optional[str], Set[Tuple[Any, str]]],
-    session_id: Optional[str],
+    sockets: Dict[str | None, Set[Tuple[Any, str]]],
+    session_id: str | None,
     msg: Dict[str, Any],
-    skip: Optional[Tuple[Optional[str], Optional[str]]] = None,
-    just: Optional[Tuple[Optional[str], Optional[str]]] = None,
+    skip: Tuple[str | None, str | None] | None = None,
+    just: Tuple[str | None, str | None] | None = None,
 ) -> None:
     """
     Send JSON websocket message
@@ -226,7 +228,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     qs = request.app["query_service"]
     sockets = request.app["websockets"]
 
-    x: Optional[WSMessage] = None
+    x: WSMessage | None = None
     # async for x in ws:
     while True:
         x = await ws.receive()
@@ -240,7 +242,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
         action = payload["action"]
         session_id = payload.get("room")
         user_id = payload["user"]
-        ident: Tuple[Optional[str], Optional[str]] = (session_id, user_id)
+        ident: Tuple[str | None, str | None] = (session_id, user_id)
 
         if action == "joined":
             originally = len(sockets[session_id])

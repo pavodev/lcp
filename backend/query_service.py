@@ -1,7 +1,9 @@
+from __future__ import annotations
+
 import json
 import os
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
@@ -79,7 +81,7 @@ class QueryService:
         )
 
     def fetch_queries(
-        self, user: str, room: Optional[str] = None, queue: str = "alt", limit: int = 10
+        self, user: str, room: str | None = None, queue: str = "alt", limit: int = 10
     ) -> Job:
         """
         Get previous saved queries for this user/room
@@ -109,7 +111,7 @@ class QueryService:
         query_data: Dict,
         idx: int,
         user: str,
-        room: Optional[str] = None,
+        room: str | None = None,
         queue: str = "alt",
     ) -> Job:
         """
@@ -176,11 +178,11 @@ class QueryService:
         project: str,
         path: str,
         schema_name: str,
-        user: Optional[str],
-        room: Optional[str],
+        user: str | None,
+        room: str | None,
         project_name: str,
         queue: str = "alt",
-        drops: Optional[List[str]] = None,
+        drops: List[str] | None = None,
         gui: bool = False,
     ):
         opts = {
@@ -206,9 +208,9 @@ class QueryService:
     def cancel_running_jobs(
         self,
         user: str,
-        room: Optional[str],
-        specific_job: Optional[str] = None,
-        base: Optional[str] = None,
+        room: str | None,
+        specific_job: str | None = None,
+        base: str | None = None,
     ) -> List[str]:
         if specific_job:
             rel_jobs = [str(specific_job)]
@@ -236,7 +238,7 @@ class QueryService:
                     print("Unknown error, please debug", err, job)
         return ids
 
-    def get(self, job_id: str) -> Optional[Job]:
+    def get(self, job_id: str) -> Job | None:
         try:
             job = Job.fetch(job_id, connection=self.app["redis"])
             return job

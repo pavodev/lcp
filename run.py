@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 import os
 import sys
 
 from collections import defaultdict
-from typing import Optional
 
 import aiohttp_cors
 import async_timeout
@@ -87,7 +88,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["redis_listener"]
 
 
-async def create_app(*args, **kwargs) -> Optional[web.Application]:
+async def create_app(*args, **kwargs) -> web.Application | None:
     test = kwargs.get("test")
 
     catcher = Catcher()

@@ -1,10 +1,11 @@
 from __future__ import annotations
+
 import json
 
 from collections import defaultdict
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
 from uuid import UUID
 
 from redis import Redis as RedisConnection
@@ -151,7 +152,7 @@ def _sentences(
         depended.meta["associated"] = job.id
     depended.save_meta()
 
-    aargs: Tuple[int, bool, Optional[Any], Any, Any] = depended.meta["_args"]
+    aargs: Tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
@@ -264,7 +265,7 @@ def _general_failure(
 def _queries(
     job: Job,
     connection: RedisConnection,
-    result: Optional[List[Tuple[str, Dict, str, Optional[str], datetime]]],
+    result: List[Tuple[str, Dict, str, str | None, datetime]] | None,
     *args,
     **kwargs,
 ) -> None:

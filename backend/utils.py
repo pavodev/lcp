@@ -15,7 +15,6 @@ from typing import (
     Callable,
     Dict,
     List,
-    Optional,
     Iterable,
     Reversible,
     Tuple,
@@ -127,7 +126,7 @@ def _check_email(email: str) -> bool:
     return bool(re.fullmatch(regex, email))
 
 
-def get_user_identifier(headers: Dict[str, Any]) -> Optional[str]:
+def get_user_identifier(headers: Dict[str, Any]) -> str | None:
     """
     Get best possible identifier
     """
@@ -246,11 +245,11 @@ def _add_results(
     result: List[Tuple],
     so_far: int,
     unlimited: bool,
-    offset: Optional[int],
+    offset: int | None,
     restart: bool | int,
     total_requested: int,
     kwic: bool = False,
-    sents: Optional[List[Tuple[str | UUID, int, List[Any]]]] = None,
+    sents: List[Tuple[str | UUID, int, List[Any]]] | None = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?
@@ -361,7 +360,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
-def _determine_language(batch: str) -> Optional[str]:
+def _determine_language(batch: str) -> str | None:
     """
     Helper to find language from batch
     """
@@ -379,7 +378,7 @@ async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
         return await coro
 
 
-async def gather(n: int, *tasks: Any, name: Optional[str] = None) -> Iterable[Any]:
+async def gather(n: int, *tasks: Any, name: str | None = None) -> Iterable[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name

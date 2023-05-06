@@ -81,8 +81,8 @@ def _decide_batch(
             first_not_done = batch
             if needed in {-1, False, None}:
                 return batch
-        # should we do this? next-smallest for low number of matches?
-        if page_size > 0 and so_far < page_size:
+        # todo: should we do this? next-smallest for low number of matches?
+        if page_size > 0 and so_far < min(page_size, 25):
             return batch
         expected = batch[-1] * proportion_that_matches
         if float(expected) >= float(needed + (needed * buffer)):
@@ -119,7 +119,7 @@ async def _do_resume(
     request_data: Dict,
     app: web.Application,
     previous: str,
-    total_results_requested: Optional[int],
+    total_results_requested: int | None,
 ) -> Tuple[bool, Tuple[Any, Any, int, int]]:
     """
     Resume a query!

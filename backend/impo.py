@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import json
 import os
@@ -11,7 +13,6 @@ from typing import (
     Dict,
     Iterable,
     List,
-    Optional,
     Callable,
     Tuple,
     Coroutine,
@@ -59,7 +60,7 @@ class SQLstats:
 
 class Table:
     def __init__(
-        self, schema: str, name: str, columns: Optional[Iterable[str]] = None
+        self, schema: str, name: str, columns: Iterable[str] | None = None
     ) -> None:
         self.schema = schema
         self.name = name

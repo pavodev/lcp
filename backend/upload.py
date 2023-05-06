@@ -6,7 +6,7 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Tuple
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -89,7 +89,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     return web.json_response(ret)
 
 
-def _get_progress(progfile: str) -> Optional[Tuple[int, int]]:
+def _get_progress(progfile: str) -> Tuple[int, int] | None:
     """
     Attempt to get progress from saved file
     """
