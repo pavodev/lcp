@@ -166,6 +166,7 @@ class Column(DDL):
     _idx_constr = "{} ({});"
 
     def __init__(self, name: str, typ: str, **constrs):
+        super().__init__()
         self.name = name
         self.type = typ
         self.constrs = constrs
@@ -221,7 +222,8 @@ class Column(DDL):
 
 
 class Table(DDL):
-    def __init__(self, name: str, cols: List[Column], anchorings: List | None):
+    def __init__(self, name: str, cols: List[Column], anchorings: List | None = None):
+        super().__init__()
         self.name = name.strip()
         self.header_txt = f"CREATE TABLE {self.name} ("
         self.cols = cols
@@ -324,7 +326,7 @@ class PartitionedTable(Table):
         self,
         name: str,
         cols: List[Column],
-        anchorings: List | None,
+        anchorings: List | None = None,
         column_part: str = "segment_id",
         num_part: int = 10,
     ):
@@ -408,6 +410,7 @@ class PartitionedTable(Table):
 
 class Type(DDL):
     def __init__(self, name: str, values: List[str]):
+        super().__init__()
         self.name = name.strip()
         self.header_txt = f"CREATE TYPE {self.name} AS ENUM ("
         self.values = sorted(set(values))
