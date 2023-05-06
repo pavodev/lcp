@@ -1,9 +1,11 @@
+from __future__ import annotations
+
 import json
 import os
 
 from uuid import uuid4
 
-from typing import Any, Dict, List, Optional, Set, Tuple, Union
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from abstract_query.create import json_to_sql
 from aiohttp import web
@@ -58,7 +60,7 @@ def _decide_batch(
     batches: List[Tuple[int, str, str, int]],
     so_far: int,
     needed: int,
-    hit_limit: Union[bool, int],
+    hit_limit: bool | int,
     page_size: int,
 ) -> Tuple[int, str, str, int]:
     """
@@ -73,21 +75,17 @@ def _decide_batch(
     proportion_that_matches = so_far / total_words_processed_so_far
     first_not_done: Optional[Tuple[int, str, str, int]] = None
     for batch in batches:
-        already_done = False
-        for tup in done_batches:
-            if all(str(tup[n]) == str(batch[n]) for n in range(len(tup))):
-                already_done = True
-        if already_done:
+        if batch in done_batches:
             continue
         if not first_not_done:
             first_not_done = batch
             if needed in {-1, False, None}:
                 return batch
         # should we do this? next-smallest for low number of matches?
-        if not so_far or so_far < page_size:
+        if page_size > 0 and so_far < page_size:
             return batch
         expected = batch[-1] * proportion_that_matches
-        if float(so_far + expected) >= float(needed + (needed * buffer)):
+        if float(expected) >= float(needed + (needed * buffer)):
             return batch
     if not first_not_done:
         raise ValueError("Could not find batch")
@@ -442,7 +440,7 @@ async def query(
                 simultaneous=simultaneous,
             )
             depends_on = job.id if not done and job is not None else previous
-            to_use: Union[List[str], str] = []
+            to_use: List[str] | str = []
             if simultaneous:
                 depends_on_chain.append(depends_on)
                 to_use = depends_on_chain
