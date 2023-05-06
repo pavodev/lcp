@@ -257,7 +257,40 @@ class Importer:
         All processing occurs with self.max_concurrent respected
         """
         x: List[Any] = []
-        return x
+        mc = self.max_concurrent
+        name = "import"
+        current_size = 0
+        tasks: List[Coroutine] = []
+        batches = f"in batches of {mc}" if mc > 0 else "concurrently"
+        gathered: List[Any] = []
+        cs: float = 0.0
+        first: Union[str, int] = ""
+        for tup in iterable:
+            if isinstance(tup, (str, int)):
+                first = tup
+                size = 0
+            else:
+                first = tup[0]
+                size = tup[1]
+            current_size += size
+            if self.max_bytes and current_size >= self.max_bytes and tasks:
+                cs = current_size / 1e6
+                self.update_progress(
+                    f"Doing {len(tasks)} {method.__name__} tasks {batches}..."
+                    + f"({cs:.2f}MB >= {self.max_bytes / 1e9}GB)"
+                )
+                gathered += await gather(mc, *tasks, name=name)
+                tasks = []
+                current_size = 0
+            tasks.append(method(first, size, *args, **kwargs))
+
+        cs = current_size / 1e6
+        self.update_progress(
+            f"Doing {len(tasks)} remaining {method.__name__} tasks "
+            + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e9}GB)"
+        )
+        gathered += await gather(mc, *tasks, name=name)
+        return gathered
 
     async def get_token_count(self) -> Dict[str, int]:
         """

@@ -312,7 +312,8 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         try:
             existing_project = await _lama_project_create(headers, profile)
-            print(f"New project created: {project}", existing_project)
+            if existing_project.get("status", True) is not False:
+                print(f"New project created: {project}", existing_project)
         except Exception as err:
             tb = traceback.format_exc()
             msg = f"Could not create project: {project} already exists?"
@@ -325,6 +326,12 @@ async def make_schema(request: web.Request) -> web.Response:
             return web.json_response(error)
 
     corpus_folder = str(uuid4())
+    if existing_project.get("status", True) is False:
+        error = {
+            "status": "failed",
+            "message": f"Could not get project",
+        }
+        return web.json_response(error)
 
     proj_id = existing_project["id"]
 
