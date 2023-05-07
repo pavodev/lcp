@@ -22,8 +22,8 @@ async def _upload_data(**kwargs) -> bool:
     # room: Optional[str] = kwargs.get("room")
 
     # get template and understand it
-    corpus_dir = os.path.join("uploads", kwargs["project"])
-    data_path = os.path.join(corpus_dir, "_data.json")
+    corpus = os.path.join("uploads", kwargs["project"])
+    data_path = os.path.join(corpus, "_data.json")
 
     with open(data_path, "r") as fo:
         data = json.load(fo)
@@ -40,22 +40,27 @@ async def _upload_data(**kwargs) -> bool:
     create = data["prep_seg_create"]
     inserts = data["prep_seg_insert"]
     batches = data["batchnames"]
+    extra = len(constraints) + len(batches)
 
     upool = get_current_job()._upool  # type: ignore
     await upool.open()
 
-    importer = Importer(upool, template, mapping, corpus_dir, schema_name, len(batches))
+    args = (upool, template, mapping, corpus, schema_name, len(batches), extra)
+    importer = Importer(*args)
     try:
         importer.update_progress("Importing corpus...")
         await importer.import_corpus()
+        perc = int(importer.corpus_size / 100.0)
+        fake_total = importer.corpus_size + (perc * extra)
+        pro = f":progress:-1:{perc}:{fake_total} == {extra} extras"
         cons = "\n\n".join(constraints)
         importer.update_progress(f"Setting constraints...\n\n{cons}")
-        await importer.process_data(constraints, importer.run_script)
+        await importer.process_data(constraints, importer.run_script, progress=pro)
         if len(refs):
             strung = "\n".join(refs)
             importer.update_progress(f"Running:\n{strung}")
             await importer.run_script(strung)
-        await importer.prepare_segments(create, inserts, batches)
+        await importer.prepare_segments(create, inserts, batches, progress=pro)
         importer.update_progress("Adding to corpus list...")
         await importer.create_entry_maincorpus()
     except Exception as err:
@@ -66,7 +71,7 @@ async def _upload_data(**kwargs) -> bool:
             pass
         raise err
     finally:
-        shutil.rmtree(corpus_dir)  # todo: should we do this?
+        shutil.rmtree(corpus)  # todo: should we do this?
     return True
 
 

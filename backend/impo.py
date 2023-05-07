@@ -82,6 +82,7 @@ class Importer:
         project_dir: str,
         schema_name: str,
         n_batches: int,
+        num_extras: int,
     ) -> None:
         """
         Manage the import of a corpus into the DB via async psycopg connection
@@ -96,6 +97,8 @@ class Importer:
         self.n_batches = n_batches
         self.token_count: Dict[str, int] = {}
         self.mapping = mapping
+        self.num_extras = num_extras
+        self.corpus_size: int = 0
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
         self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9)
         self.max_bytes = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
@@ -237,8 +240,10 @@ class Importer:
             for f in os.listdir(path)
             if f.endswith(".csv")
         ]
-        corpus_size = sum(s[1] for s in sizes)
-        await self.process_data(sizes, self._copy_tbl, *(corpus_size,))
+        self.corpus_size = sum(s[1] for s in sizes)
+        perc = int(self.corpus_size / 50.0)
+        with_extra = self.corpus_size + (perc * self.num_extras)
+        await self.process_data(sizes, self._copy_tbl, *(with_extra,))
         self.token_count = await self.get_token_count()
 
     async def process_data(
@@ -264,7 +269,7 @@ class Importer:
         batches = f"in batches of {mc}" if mc > 0 else "concurrently"
         gathered: List[Any] = []
         cs: float = 0.0
-        first: Union[str, int] = ""
+        first: str | int = ""
         for tup in iterable:
             if isinstance(tup, (str, int)):
                 first = tup
@@ -310,7 +315,9 @@ class Importer:
         res: Dict[str, Any] = {k: int(v[0]) for k, v in zip(names, response)}
         return res
 
-    async def run_script(self, script, *args, give: bool = False):
+    async def run_script(
+        self, script, *args, give: bool = False, progress: str | None = None
+    ):
         """
         Run a simple script -- used for prepared segments
         """
@@ -321,8 +328,16 @@ class Importer:
                 if give:
                     got = await cur.fetchone()
                     return got
+                if progress:
+                    self.update_progress(progress)
 
-    async def prepare_segments(self, create, insert, batchnames):
+    async def prepare_segments(
+        self,
+        create: str,
+        insert: str,
+        batchnames: List[str],
+        progress: str | None = None,
+    ) -> None:
         """
         Run the prepared segment scripts, potentially concurrently
         """
@@ -332,8 +347,7 @@ class Importer:
         if insert:
             self.update_progress(f"Running {len(batchnames)} insert tasks:\n{insert}\n")
         inserts = [insert.format(batch=batch) for batch in batchnames]
-        args = tuple()
-        await self.process_data(inserts, self.run_script, *args)
+        await self.process_data(inserts, self.run_script, progress=progress)
 
     async def create_entry_maincorpus(self) -> None:
         """

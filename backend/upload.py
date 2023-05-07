@@ -85,22 +85,23 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         "project": project,
     }
     if progress:
-        ret["progress"] = f"{progress[0]}/{progress[1]}"
+        ret["progress"] = f"{progress[0]}/{progress[1]}/{progress[2]}"
     return web.json_response(ret)
 
 
-def _get_progress(progfile: str) -> Tuple[int, int] | None:
+def _get_progress(progfile: str) -> Tuple[int, int, str] | None:
     """
     Attempt to get progress from saved file
     """
     if not os.path.isfile(progfile):
         return None
+    msg = "Importing corpus"
     with open(progfile, "r") as fo:
         data = fo.read()
     if "\nSetting constraints..." in data:
-        return (-2, -2)
+        msg = "Indexing corpus"
     if "\nComputing prepared segments" in data:
-        return (-1, -1)
+        msg = "Optimising corpus"
     bits = [
         i.lstrip(":progress:").split()[0].split(":")
         for i in data.splitlines()
@@ -110,7 +111,7 @@ def _get_progress(progfile: str) -> Tuple[int, int] | None:
         return None
     done_bytes = sum([int(i[-2]) for i in bits])
     total = int(bits[0][-1])
-    return (done_bytes, total)
+    return (done_bytes, total, msg)
     # progress = round(done_bytes * 100.0 / total, 2)
     # return f"{progress}%"
 
