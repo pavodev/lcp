@@ -25,6 +25,7 @@ class DataNeededLater:
     batchnames: List[str] = field(default_factory=list)
     mapping: str = ""
     perms: str = ""
+    refs: List[str] = field(default_factory=list)
 
     def asdict(self) -> Dict[str, str | List[str] | Dict[Any, Any]]:
         return asdict(self)
@@ -744,9 +745,15 @@ def generate_ddl(corpus_temp: Dict[str, Any]):
     # todo: i don't think this defaultdict trick is needed, all the tables
     # must have unique names right?
     constraints: Dict[str, List[str]] = defaultdict(list)
+    refs: List[str] = []
     for table in sorted(globs.tables):
         constraints[table.name] += table.create_idxs(schema_name)
-        constraints[table.name] += table.create_constrs(schema_name)
+        cons = table.create_constrs(schema_name)
+        for c in cons:
+            if " REFERENCES " in c:
+                refs.append(c)
+            else:
+                constraints[table.name].append(c)
     formed_constraints = ["\n".join(i) for i in constraints.values()]
 
     return DataNeededLater(
@@ -757,6 +764,7 @@ def generate_ddl(corpus_temp: Dict[str, Any]):
         globs.batchnames,
         globs.mapping,
         globs.perms,
+        refs,
     ).asdict()
 
 

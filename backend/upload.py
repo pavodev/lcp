@@ -290,9 +290,9 @@ async def make_schema(request: web.Request) -> web.Response:
     # user_id = status["account"]["eduPersonId"]
     user_id = status["account"]["email"]
     home_org = status["account"]["homeOrganization"]
-    existing_project = status["profile"]
+    existing_project = status.get("profile", {})
 
-    ids = (existing_project["id"], existing_project["title"])
+    ids = (existing_project.get("id"), existing_project.get("title"))
     if project and project not in ids:
         admin = os.environ["LAMA_USER"]
         admin_org = os.getenv("LAMA_HOME_ORGANIZATION", admin.split("@")[-1])

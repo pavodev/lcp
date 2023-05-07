@@ -34,6 +34,7 @@ async def _upload_data(**kwargs) -> bool:
     mapping = data["mapping"]
     schema_name = template["schema_name"]
     constraints = data["constraints"]
+    refs = data["refs"]
     perms = data["perms"]
     constraints.append(perms)
     create = data["prep_seg_create"]
@@ -50,6 +51,10 @@ async def _upload_data(**kwargs) -> bool:
         cons = "\n\n".join(constraints)
         importer.update_progress(f"Setting constraints...\n\n{cons}")
         await importer.process_data(constraints, importer.run_script)
+        if len(refs):
+            strung = "\n".join(refs)
+            importer.update_progress(f"Running:\n{strung}")
+            await importer.run_script(strung)
         await importer.prepare_segments(create, inserts, batches)
         importer.update_progress("Adding to corpus list...")
         await importer.create_entry_maincorpus()
