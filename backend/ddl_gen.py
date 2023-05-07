@@ -351,29 +351,22 @@ class PartitionedTable(Table):
         )
 
     def _create_subtbls(self) -> List[str]:
-        tbls = []
+        tbls: List[str] = []
         cur_max: str | int = self.max_id
 
-        for i in range(1, self.num_partitions):
-            batchname = f"{self.base_name}{i}"
+        for i in range(1, self.num_partitions + 1):
+            end = "rest" if i == self.num_partitions else str(i)
+            batchname = f"{self.base_name}{end}"
             tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
             cur_min = self.half_hex(cur_max)
 
             mmax = self.hex2uuid(cur_max)
-            mmin = self.hex2uuid(cur_min)
+            mmin = self.hex2uuid(cur_min if end != "rest" else 0)
 
             defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
             tbls.append(tbl_n + defn)
 
             cur_max = cur_min
-
-        mmax = self.hex2uuid(cur_min)
-        mmin = self.hex2uuid(0)
-
-        batchname = f"{self.base_name}rest"
-        tbl_n = f"CREATE TABLE {batchname} PARTITION OF {self.name}"
-        defn = f"{self.nl}FOR VALUES FROM ('{mmin}'::uuid) TO ('{mmax}'::uuid); "
-        tbls.append(tbl_n + defn)
 
         return tbls
 
