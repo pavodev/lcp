@@ -41,6 +41,7 @@ HOST = os.getenv("SQL_HOST")
 DBNAME = os.getenv("SQL_DATABASE")
 PORT = int(os.getenv("SQL_PORT", 5432))
 VERBOSE = True if os.getenv("VERBOSE", "").lower() == "true" else False
+REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 RHOST, RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
 REDIS_HOST = RHOST.split("/")[-1].strip()
 REDIS_PORT = int(RPORT.strip())
@@ -160,8 +161,8 @@ async def create_app(*args, **kwargs) -> web.Application | None:
     cors.add(resource.add_route("GET", check_file_permissions))
 
     # we keep two redis connections, for reasons
-    app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT)
-    app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT)
+    app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
+    app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
     app["query"] = Queue(connection=app["redis"])
     # app["stats"] = Queue(connection=app["redis"])
     app["export"] = Queue(connection=app["redis"], job_timeout=-1)

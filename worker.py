@@ -12,7 +12,7 @@ from redis import Redis
 import psycopg
 
 from dotenv import load_dotenv
-from psycopg_pool import AsyncConnectionPool
+from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 from sshtunnel import SSHTunnelForwarder
 
 import asyncio
@@ -21,24 +21,38 @@ import uvloop
 
 load_dotenv(override=True)
 
-UPLOAD_USER = os.getenv("SQL_UPLOAD_USERNAME")
-QUERY_USER = os.getenv("SQL_QUERY_USERNAME")
-UPLOAD_PASSWORD = os.getenv("SQL_UPLOAD_PASSWORD")
-QUERY_PASSWORD = os.getenv("SQL_QUERY_PASSWORD")
-HOST = os.getenv("SQL_HOST")
-DBNAME = os.getenv("SQL_DATABASE")
+UPLOAD_USER = os.environ["SQL_UPLOAD_USERNAME"]
+QUERY_USER = os.environ["SQL_QUERY_USERNAME"]
+UPLOAD_PASSWORD = os.environ["SQL_UPLOAD_PASSWORD"]
+QUERY_PASSWORD = os.environ["SQL_QUERY_PASSWORD"]
+HOST = os.environ["SQL_HOST"]
+DBNAME = os.environ["SQL_DATABASE"]
+_UPLOAD_POOL = os.getenv("UPLOAD_USE_POOL", "false")
+UPLOAD_POOL = _UPLOAD_POOL.strip().lower() not in ("false", "no", "0", "")
+MAX_CONCURRENT = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
+REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
+
+QUERY_MIN_NUM_CONNS = int(os.getenv("QUERY_MIN_NUM_CONNECTIONS", 8))
+IMPORT_MIN_NUM_CONNS = int(os.getenv("IMPORT_MIN_NUM_CONNECTIONS", 8))
+IMPORT_MIN_NUM_CONNS = max(IMPORT_MIN_NUM_CONNS, MAX_CONCURRENT)
+
+QUERY_MAX_NUM_CONNS = int(os.getenv("QUERY_MAX_NUM_CONNECTIONS", 8))
+IMPORT_MAX_NUM_CONNS = int(os.getenv("IMPORT_MAX_NUM_CONNECTIONS", 8))
+IMPORT_MAX_NUM_CONNS = max(IMPORT_MAX_NUM_CONNS, MAX_CONCURRENT)
+
+POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
-rhost, rport = os.environ["REDIS_URL"].rsplit(":", 1)
-REDIS_HOST = rhost.split("/")[-1].strip()
-REDIS_PORT = int(rport.strip())
+_RHOST, _RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
+REDIS_HOST = _RHOST.split("/")[-1].strip()
+REDIS_PORT = int(_RPORT.strip())
 
 
 if os.getenv("SSH_HOST"):
     tunnel = SSHTunnelForwarder(
-        os.getenv("SSH_HOST"),
-        ssh_username=os.getenv("SSH_USER"),
+        os.environ["SSH_HOST"],
+        ssh_username=os.environ["SSH_USER"],
         ssh_password=None,
-        ssh_pkey=os.getenv("SSH_PKEY"),
+        ssh_pkey=os.environ["SSH_PKEY"],
         remote_bind_address=(HOST, PORT),
     )
     tunnel.start()
@@ -54,24 +68,30 @@ else:
     )
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
-pool = AsyncConnectionPool(
-    query_connstr, num_workers=8, min_size=8, timeout=60, open=False
-)
-upool = AsyncConnectionPool(
-    upload_connstr, num_workers=8, min_size=8, timeout=60, open=False
-)
+pool_config = {
+    "num_workers": POOL_WORKERS,
+    "max_size": QUERY_MIN_NUM_CONNS,
+    "max_size": QUERY_MAX_NUM_CONNS,
+    "timeout": 60,
+    "open": False,
+}
+pool = AsyncConnectionPool(query_connstr, name="query-connection", **pool_config)
+upload_conn_type = AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
+pool_config["min_size"] = IMPORT_MIN_NUM_CONNS if UPLOAD_POOL else 0
+pool_config["max_size"] = IMPORT_MAX_NUM_CONNS if UPLOAD_POOL else 0
+upool = upload_conn_type(upload_connstr, name="upload-connection", **pool_config)
 
-conn = asyncio.run(psycopg.AsyncConnection.connect(upload_connstr))
+# conn = asyncio.run(psycopg.AsyncConnection.connect(upload_connstr))
 
 
 class MyJob(Job):
     def __init__(self, *args, **kwargs):
         super().__init__(*args)
         self._connstr = upload_connstr
-        self._db_conn = conn
+        # self._db_conn = conn
         self._pool = pool
         self._upool = upool
-        self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT)
+        self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
         self._redis.pubsub()
 
 
