@@ -77,7 +77,9 @@ pool = AsyncConnectionPool(
     timeout=60,
     open=False,
 )
-upload_conn_type = AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
+upload_conn_type: type = (
+    AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
+)
 min_size = IMPORT_MIN_NUM_CONNS if UPLOAD_POOL else 0
 max_size = IMPORT_MAX_NUM_CONNS if UPLOAD_POOL else 0
 upool = upload_conn_type(
@@ -94,7 +96,7 @@ upool = upload_conn_type(
 
 
 class MyJob(Job):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args)
         self._connstr = upload_connstr
         # self._db_conn = conn
@@ -108,7 +110,7 @@ class MyWorker(Worker):
     job_class = MyJob
 
 
-async def go():
+async def go() -> None:
 
     with Connection():
         w = MyWorker(["default"])
