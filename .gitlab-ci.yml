@@ -59,6 +59,7 @@ test:
     - pwd
     - ls -al
     - cd /builds/LiRI/projects/uplord
+    - pip install -r requirements.txt
     - mypy run.py
     - mypy worker.py
     - python setup.py build_ext --inplace
