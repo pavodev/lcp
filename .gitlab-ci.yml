@@ -58,6 +58,7 @@ test:
     - mkdir uplord
     - pwd
     - ls -al
+    - cd /builds/LiRI/projects/uplord
     - mypy run.py
     - mypy worker.py
     - python setup.py build_ext --inplace
