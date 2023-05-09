@@ -1,6 +1,6 @@
 <template>
   <div class="query">
-    <Title :title="'Query'" />
+    <Title :title="'Query'" class="mt-4" />
     <div class="container mt-4">
       <div class="row">
         <div class="col-5">
@@ -548,7 +548,7 @@ myKWIC1 => plain
         s
     entities
         t1
-        t2
+        #t2
         t3
 
 myKWIC2 => plain

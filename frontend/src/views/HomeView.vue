@@ -1,7 +1,7 @@
 <template>
   <div class="home">
     <div class="container">
-      <div class="row">
+      <div class="row mt-4">
         <div class="col">
           <Title :title="'Welcome to LCP'" />
         </div>
@@ -122,7 +122,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="newProjectModalLabel">
-              Corpus details
+              New Project
             </h5>
             <button
               type="button"
@@ -352,7 +352,6 @@ export default {
             : -1;
         retval[project_id].corpora.push(corpus);
       });
-      console.log(retval);
       return retval;
     },
     graphData() {
