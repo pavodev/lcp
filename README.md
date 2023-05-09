@@ -119,6 +119,7 @@ Build C extension:
 
 ```bash
 mypyc run.py
+python setup.py build_ext --inplace
 ```
 
 Run:
