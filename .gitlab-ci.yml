@@ -45,21 +45,20 @@ test:
     # - apt-get -y install systemctl
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
     # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
+    - pip install -r requirements.txt
     - pwd
     - ls -al
     - ls -al abstract-query
     - sleep 5
-    - cd abstract-query && python setup.py develop && cd ..
+    - cd abstract-query && python setup.py develop
     - pip install -r requirements.txt
     - pip install coverage mypy
     # - apt-get install redis -y
     - apt-get install redis-server -y
     - redis-cli -h redis ping
-    - mkdir uplord
     - pwd
     - ls -al
     - cd /builds/LiRI/projects/uplord
-    - pip install -r requirements.txt
     - mypy run.py
     - mypy worker.py
     - python setup.py build_ext --inplace
