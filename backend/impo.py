@@ -241,7 +241,7 @@ class Importer:
             if f.endswith(".csv")
         ]
         self.corpus_size = sum(s[1] for s in sizes)
-        perc = int(self.corpus_size / 50.0)
+        perc = int(self.corpus_size / 100.0)
         with_extra = self.corpus_size + (perc * self.num_extras)
         await self.process_data(sizes, self._copy_tbl, *(with_extra,))
         self.token_count = await self.get_token_count()
