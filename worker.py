@@ -68,18 +68,27 @@ else:
     )
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
-pool_config = {
-    "num_workers": POOL_WORKERS,
-    "max_size": QUERY_MIN_NUM_CONNS,
-    "max_size": QUERY_MAX_NUM_CONNS,
-    "timeout": 60,
-    "open": False,
-}
-pool = AsyncConnectionPool(query_connstr, name="query-connection", **pool_config)
+pool = AsyncConnectionPool(
+    query_connstr,
+    name="query-connection",
+    num_workers=POOL_WORKERS,
+    min_size=QUERY_MIN_NUM_CONNS,
+    max_size=QUERY_MAX_NUM_CONNS,
+    timeout=60,
+    open=False,
+)
 upload_conn_type = AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
-pool_config["min_size"] = IMPORT_MIN_NUM_CONNS if UPLOAD_POOL else 0
-pool_config["max_size"] = IMPORT_MAX_NUM_CONNS if UPLOAD_POOL else 0
-upool = upload_conn_type(upload_connstr, name="upload-connection", **pool_config)
+min_size = IMPORT_MIN_NUM_CONNS if UPLOAD_POOL else 0
+max_size = IMPORT_MAX_NUM_CONNS if UPLOAD_POOL else 0
+upool = upload_conn_type(
+    upload_connstr,
+    name="upload-connection",
+    num_workers=POOL_WORKERS,
+    min_size=min_size,
+    max_size=max_size,
+    timeout=60,
+    open=False,
+)
 
 # conn = asyncio.run(psycopg.AsyncConnection.connect(upload_connstr))
 
