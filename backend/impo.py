@@ -125,7 +125,7 @@ class Importer:
         with open(path, "a") as fo:
             fo.write(msg.rstrip() + "\n")
 
-    async def cleanup(self):
+    async def cleanup(self) -> None:
         script = f"DROP SCHEMA IF EXISTS {self.schema} CASCADE;"
         self.update_progress(f"Running cleanup:\n{script}")
         await self.run_script(script)
