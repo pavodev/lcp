@@ -793,7 +793,6 @@ myColl3 => collocation
           // will get this message containing the new config data. plz
           // ensure that it gets added to the corpusstore properly and
           // the app is updated accordingly
-          console.log("Latest config", data["config"])
           delete data["config"]["-1"]
           // todo: no idea if this is right:
           useCorpusStore().corpora = Object.keys(data["config"]).map(corpusId => {
@@ -801,7 +800,6 @@ myColl3 => collocation
             corpus.meta["id"] = corpusId
             return corpus
           });
-          console.log('NOW', useCorpusStore().corpora)
           // we could also do this but we already have the data here...
           // useCorpusStore().fetchCorpora();
           return;

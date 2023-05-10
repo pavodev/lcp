@@ -378,7 +378,7 @@ async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
         return await coro
 
 
-async def gather(n: int, *tasks: Any, name: str | None = None) -> Iterable[Any]:
+async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -405,6 +405,6 @@ async def gather(n: int, *tasks: Any, name: str | None = None) -> Iterable[Any]:
             name = current.get_name()
             running_tasks.remove(current)
         for task in running_tasks:
-            if name and task.get_name() == name:
+            if name is not None and task.get_name() == name:
                 task.cancel()
         raise err

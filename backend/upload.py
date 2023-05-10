@@ -279,7 +279,9 @@ async def make_schema(request: web.Request) -> web.Response:
     request_data = await request.json()
 
     template = request_data["template"]
-    project = request_data.get("project")
+    projects = request_data.get("projects")
+    special = {"lcp", "vian", "all"}
+    project = next(i for i in projects if i not in special)
 
     today = datetime.today()
     later = today + timedelta(weeks=52, days=2)

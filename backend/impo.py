@@ -21,7 +21,7 @@ from typing import (
 import aiofiles
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 
-from psycopg_pool import AsyncConnectionPool
+from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
 from .utils import gather
 
@@ -76,7 +76,7 @@ class Table:
 class Importer:
     def __init__(
         self,
-        connection: AsyncConnectionPool,
+        connection: AsyncConnectionPool | AsyncNullConnectionPool,
         template: Dict[str, Any],
         mapping: Dict[str, Any],
         project_dir: str,
@@ -270,6 +270,7 @@ class Importer:
         gathered: List[Any] = []
         cs: float = 0.0
         first: str | int = ""
+        more: List[Any] = []
         for tup in iterable:
             if isinstance(tup, (str, int)):
                 first = tup
@@ -284,7 +285,9 @@ class Importer:
                     f"Doing {len(tasks)} {method.__name__} tasks {batches}..."
                     + f"({cs:.2f}MB >= {self.max_bytes / 1e9}GB)"
                 )
-                gathered += await gather(mc, *tasks, name=name)
+                more = await gather(mc, *tasks, name=name)
+                if more and kwargs.get("give"):
+                    gathered += more
                 tasks = []
                 current_size = 0
             tasks.append(method(first, size, *args, **kwargs))
@@ -294,7 +297,9 @@ class Importer:
             f"Doing {len(tasks)} remaining {method.__name__} tasks "
             + f"{batches}...({cs:.2f}MB vs. {self.max_bytes / 1e9}GB)"
         )
-        gathered += await gather(mc, *tasks, name=name)
+        more = await gather(mc, *tasks, name=name)
+        if more and kwargs.get("give"):
+            gathered += more
         return gathered
 
     async def get_token_count(self) -> Dict[str, int]:
@@ -328,7 +333,7 @@ class Importer:
                 if give:
                     got = await cur.fetchone()
                     return got
-                if progress:
+                if progress is not None:
                     self.update_progress(progress)
 
     async def prepare_segments(
