@@ -1,18 +1,18 @@
 import { defineStore } from "pinia";
 import httpApi from "@/httpApi";
-import Utils from '@/utils';
+// import Utils from '@/utils';
 
 // Get roomId from localStorage
-let roomId = localStorage.getItem("roomId");
-if (!roomId) {
-  roomId = Utils.uuidv4()
-  localStorage.setItem("roomId", roomId);
-}
+// let roomId = localStorage.getItem("roomId");
+// if (!roomId) {
+//   roomId = Utils.uuidv4()
+//   localStorage.setItem("roomId", roomId);
+// }
 
 export const useUserStore = defineStore("userData", {
   state: () => ({
     userData: null,
-    roomId: roomId,
+    roomId: null,
     projects: [],
   }),
   getters: {},
