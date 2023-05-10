@@ -1,5 +1,6 @@
-from aiohttp import web
 from json.decoder import JSONDecodeError
+
+from aiohttp import web
 
 from .utils import _lama_user_details, ensure_authorised
 
