@@ -213,9 +213,8 @@ async def push_msg(
                 print(f"Connection reset: {room}/{user_id}")
                 pass
             sent_to.add((room, conn, user_id))
-            # todo: can we add back this tiny optimisation?
-            # if session_id is None:
-            #     return
+            if session_id is None or room is None:
+                return
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:
