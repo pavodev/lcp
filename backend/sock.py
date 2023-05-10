@@ -186,22 +186,20 @@ async def _handle_query(
 
 async def push_msg(
     sockets: Dict[str | None, Set[Tuple[Any, str]]],
-    session_id: str | None,
+    session_id: str,
     msg: Dict[str, Any],
-    skip: Tuple[str | None, str | None] | None = None,
-    just: Tuple[str | None, str | None] | None = None,
+    skip: Tuple[str, str] | None = None,
+    just: Tuple[str, str] | None = None,
 ) -> None:
     """
     Send JSON websocket message
     """
     sent_to = set()
     for room, users in sockets.items():
-        if session_id and room != session_id:
-            continue
-        if not session_id and room:
+        if room != session_id:
             continue
         for conn, user_id in users:
-            if (room, conn, user_id) in sent_to:
+            if (room, user_id) in sent_to:
                 continue
             if skip and (room, user_id) == skip:
                 continue
@@ -212,9 +210,7 @@ async def push_msg(
             except ConnectionResetError:
                 print(f"Connection reset: {room}/{user_id}")
                 pass
-            sent_to.add((room, conn, user_id))
-            if session_id is None or room is None:
-                return
+            sent_to.add((room, user_id))
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:
@@ -232,14 +228,13 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     while True:
         x = await ws.receive()
         if x.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
-            raise StopAsyncIteration
-
+            return
         if x.type != WSMsgType.TEXT:
             continue
 
         payload = x.json()
         action = payload["action"]
-        session_id = payload.get("room")
+        session_id = payload["room"]
         user_id = payload["user"]
         ident: Tuple[str | None, str | None] = (session_id, user_id)
 

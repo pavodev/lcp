@@ -271,7 +271,7 @@ def _queries(
 ) -> None:
     is_store = job.kwargs.get("store")
     action = "store_query" if is_store else "fetch_queries"
-    room = str(job.kwargs["room"]) if job.kwargs["room"] else None
+    room = job.kwargs.get("room")
     jso: Dict[str, Any] = {
         "user": str(job.kwargs["user"]),
         "room": room,
