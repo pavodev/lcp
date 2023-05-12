@@ -10,8 +10,11 @@ def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int
     the total size of the corpus
     """
     batches: Dict[str, int] = {}
+    if n_batches < 2:
+        named = basename.replace("<batch>", "") + "0"
+        return {named: size}
     for i in range(1, n_batches):
-        if i + 1 == n_batches:
+        if i + 1 == n_batches and n_batches > 1:
             name = "rest"
         else:
             name = str(i)

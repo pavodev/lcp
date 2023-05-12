@@ -62,10 +62,13 @@ def _decide_batch(
     needed: int,
     hit_limit: bool | int,
     page_size: int,
+    is_vian: bool,
 ) -> Tuple[int, str, str, int]:
     """
     Find the best next batch to query
     """
+    if is_vian:
+        return batches[0]
     buffer = 0.1  # set to zero for picking smaller batches
     if not len(done_batches):
         return batches[0]
@@ -93,7 +96,7 @@ def _decide_batch(
 
 
 def _get_query_batches(
-    corpora: List[int], config: Dict[str, Dict], languages: Set[str]
+    corpora: List[int], config: Dict[str, Dict], languages: Set[str], is_vian: bool
 ) -> List[Tuple[int, str, str, int]]:
     """
     Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -205,6 +208,7 @@ async def query(
     current_batch: Optional[Tuple[int, str, str, int]] = None
     all_batches: List[Tuple[int, str, str, int]] = []
     done_batches: List[Tuple[int, str, str, int]] = []
+    is_vian: bool = False
 
     if manual is not None and isinstance(app, web.Application):
         resuming = False
@@ -255,13 +259,14 @@ async def query(
         resuming = request_data.get("resume", False)
         sentences = request_data.get("sentences", True)
         page_size = request_data.get("page_size", 10)
+        is_vian = request_data.get("appType") == "vian"
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
         total_results_requested = request_data.get("total_results_requested", 10000)
         is_simultaneous = request_data.get("simultaneous", False)
         simultaneous = str(uuid4()) if is_simultaneous else None
         base = None if not resuming else previous
-        all_batches = _get_query_batches(corpora_to_use, config, languages)
+        all_batches = _get_query_batches(corpora_to_use, config, languages, is_vian)
         needed = total_results_requested
 
     ############################################################################
@@ -319,6 +324,7 @@ async def query(
                     needed,
                     hit_limit,
                     page_size,
+                    is_vian,
                 )
 
             try:
@@ -328,6 +334,7 @@ async def query(
                     batch=current_batch[2],
                     config=app["config"][str(current_batch[0])],
                     lang=lang,
+                    vian=is_vian,
                 )
                 query_type = "JSON"
                 try:
