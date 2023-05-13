@@ -4,19 +4,17 @@
 
 First, install Python 3.11 (though anything from 3.9 onward should work).
 
-Then, install the following dependencies:
+Make sure you also have access to `abstract-query` and `lcp-upload` submodule repositories. Ask someone to grant you access if you need it.
+
+Then clone this repo and its submodules:
 
 ```bash
-git clone https://gitlab.uzh.ch/LiRI/projects/abstract-query
-cd abstract-query
-python setup.py develop
+git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/uplord.git 
+cd uplord
+pip install -r requirements.txt
+````
 
-git clone https://gitlab.uzh.ch/LiRI/projects/corpert
-cd corpert
-python setup.py develop
-```
-
-Then clone this repo and do `pip install -r requirements.txt`
+This will also install the dependencies for `abstract-query` and `lcp-upload`. If they are not available in the `uplord` directory, you should remove the first two lines from `requirements.txt` before installing.
 
 ## Things that need to be running for uplord to work
 
@@ -69,7 +67,7 @@ git pull --recurse-submodules
 
 The defaults in `.env` should work for Postgres and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
 
-Some .env values that might need adjusting for deployment:
+Some `.env` values that might need adjusting for deployment:
 
 > `QUERY_TIMEOUT`
 
