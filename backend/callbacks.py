@@ -17,7 +17,6 @@ from .utils import (
     CustomEncoder,
     Interrupted,
     _add_results,
-    _get_kwics,
     _union_results,
 )
 
@@ -34,6 +33,7 @@ def _query(
     total_before_now = job.kwargs.get("total_results_so_far")
     results_so_far = job.kwargs.get("existing_results", {})
     results_so_far = {int(k): v for k, v in results_so_far.items()}
+    meta_json = job.kwargs.get("meta_json")
 
     total_requested = (
         job.kwargs["total_results_requested"]
@@ -63,7 +63,7 @@ def _query(
         total_requested,
     )
 
-    new_res, n_results = _add_results(*aargs, kwic=False)
+    new_res, n_results = _add_results(*aargs, kwic=False, meta=meta_json)
 
     total_found = total_before_now + n_results
 
@@ -83,7 +83,6 @@ def _query(
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
     job.meta["_args"] = aargs[1:]
-    job.meta["result_sets"] = results_so_far[0]
     # job.meta["lines_sent_to_fe"] = lines_sent_to_fe
     # job.meta["all_results"] = results_so_far
 
@@ -156,7 +155,13 @@ def _sentences(
     if "total_results_requested" in kwargs:
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
-    new_res, _ = _add_results(depended.result, *aargs, kwic=True, sents=result)
+    new_res, _ = _add_results(
+        depended.result,
+        *aargs,
+        kwic=True,
+        sents=result,
+        meta=depended.kwargs.get("meta_json"),
+    )
     results_so_far = _union_results(base.meta["_sentences"], new_res)
 
     base.meta["latest_sentences"] = job.id

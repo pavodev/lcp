@@ -215,7 +215,8 @@ def _get_all_results(job: Job | str, connection: RedisConnection) -> Dict[int, A
     # out = _union_results(out, latest_sents)
 
     while True:
-        batch, _ = _add_results(job.result, 0, True, False, False, 0)
+        meta = job.kwargs.get("meta_json")
+        batch, _ = _add_results(job.result, 0, True, False, False, 0, meta=meta)
         out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:
@@ -228,17 +229,9 @@ def _get_kwics(result):
     """
     Helper to get set of kwic ids
     """
-    if isinstance(result, dict):
-        itt = result.get("result_sets", result)
-        kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
-        return set(kwics)
-    for line in result:
-        if not int(line[0]):
-            res = line[1]["result_sets"]
-            enum = enumerate(res, start=1)
-            kwics = [i for i, r in enum if r.get("type") == "plain"]
-            return set(kwics)
-    return set()
+    itt = result.get("result_sets", result)
+    kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
+    return set(kwics)
 
 
 def _add_results(
@@ -250,16 +243,24 @@ def _add_results(
     total_requested: int,
     kwic: bool = False,
     sents: List[Tuple[str | UUID, int, List[Any]]] | None = None,
+    meta: Dict[str, List[Dict[str, Any]]] | None = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?
     """
     bundle: Dict[int, Any] = {}
     counts: Dict[int, int] = defaultdict(int)
-    rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
+    if meta:
+        rs = meta["result_sets"]
+    else:
+        rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
+
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
     n_skipped: Dict[int, int] = Counter()
+
+    if meta:
+        bundle[0] = meta
 
     if sents:
         bundle[-1] = {}

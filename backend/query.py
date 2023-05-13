@@ -22,7 +22,7 @@ def _make_sents_query(
     """
     Build a query to fetch sentences (uuids to be filled in later)
     """
-    name = config["segment"]
+    name = config["segment"].strip()
     underlang = f"_{lang}" if lang else ""
     seg_name = f"prepared_{name}{underlang}"
     script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
@@ -260,6 +260,7 @@ async def query(
         sentences = request_data.get("sentences", True)
         page_size = request_data.get("page_size", 10)
         is_vian = request_data.get("appType") == "vian"
+        # is_vian = True
         user = request_data.get("user")
         languages = set([i.strip() for i in request_data.get("languages", ["en"])])
         total_results_requested = request_data.get("total_results_requested", 10000)
@@ -327,6 +328,8 @@ async def query(
                     is_vian,
                 )
 
+            meta_json: Dict[str, List[Dict[str, Any]]] | None = None
+
             try:
                 lang = _determine_language(current_batch[2])
                 kwa = dict(
@@ -352,7 +355,7 @@ async def query(
                     query_type = "DQD"
                 if not it and not manual:
                     print(f"Detected query type: {query_type}")
-                sql_query = json_to_sql(json_query, **kwa)
+                sql_query, meta_json = json_to_sql(json_query, **kwa)
                 if not it and not manual:
                     print(f"SQL query:\n\n\n{sql_query}")
             except Exception as err:
@@ -391,6 +394,7 @@ async def query(
                 page_size=page_size,
                 languages=list(languages),
                 parent=parent,
+                meta_json=meta_json,
                 simultaneous=simultaneous,
             )
 

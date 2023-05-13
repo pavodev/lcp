@@ -125,7 +125,7 @@ def _make_sent_query(
         start_at = 0
 
     seg_ids = set()
-    result_sets = job.meta["result_sets"]
+    result_sets = job.kwargs["meta_json"]
     kwics = _get_kwics(result_sets)
     counts: Dict[int, int] = Counter()
 
