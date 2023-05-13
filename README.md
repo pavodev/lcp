@@ -57,6 +57,14 @@ cd frontend
 yarn serve
 ```
 
+## Development
+
+When pulling latest code, you should also fetch the latest from the submodules. You can do it all in one command:
+
+```bash
+git pull --recurse-submodules
+```
+
 ## Configuration
 
 The defaults in `.env` should work for Postgres and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
@@ -118,7 +126,6 @@ Build C extension:
 
 
 ```bash
-mypyc run.py
 python setup.py build_ext --inplace
 ```
 
