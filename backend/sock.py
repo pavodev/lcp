@@ -2,112 +2,61 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import traceback
 
 from typing import Any, Dict, List, Set, Tuple
-
-import async_timeout
 
 from aiohttp import WSCloseCode, WSMsgType, web
 from aiohttp.http_websocket import WSMessage
 from rq.job import Job
 
-# from redis import asyncio as aioredis  # only needed if we add typing
+from redis.asyncio.client import PubSub
 
 from .query import query
 from .validate import validate
 
 
-async def handle_redis_response(channel, app, test=False):
+async def handle_redis_response(
+    channel: PubSub, app: web.Application, test: bool = False
+) -> None:
     """
     If redis publishes a message, it gets picked up here and broadcast to the
     correct websockets...
 
     This function cannot yet be handled by mypy, so leave it unannotated please
     """
-    while True:
-        try:
-            room = None
-            user = None
-            async with async_timeout.timeout(2):
-                message = await channel.get_message(ignore_subscribe_messages=True)
-                if isinstance(message, dict) and message.get("data"):
-                    payload = json.loads(message["data"])
-                    user = payload.get("user")
-                    room = payload.get("room")
-                    status = payload.get("status")
-                    action = payload.get("action")
-
-                    if status == "timeout":
-                        await push_msg(
-                            app["websockets"], room, payload, just=(room, user)
-                        )
-
-                    elif status == "failed":
-                        await push_msg(
-                            app["websockets"], room, payload, just=(room, user)
-                        )
-
-                    # interrupt was sent? -- currently not used
-                    elif status == "interrupted":
-                        payload["action"] = "interrupted"
-                        await push_msg(
-                            app["websockets"], room, payload, just=(room, user)
-                        )
-
-                    # handle configuration message
-                    elif action == "set_config":
-                        if payload.get("disabled"):
-                            for name, idx in payload["disabled"]:
-                                print(f"Corpus disabled: {name}={idx}")
-                        print(f"Config loaded: {len(payload['config'])-1} corpora")
-                        app["config"] = payload["config"]
-                        # payload["action"] = "update_config"
-                        # await push_msg(app["websockets"], None, payload)
-                        # if test:
-                        #    return
-
-                    # handle fetch/store queries message
-                    elif action in ("fetch_queries", "store_query"):
-                        await push_msg(
-                            app["websockets"],
-                            room,
-                            payload,
-                            skip=None,
-                            just=(room, user),
-                        )
-
-                    # handle uploaded data (add to config, ws message if gui mode)
-                    elif action == "uploaded":
-                        app["query_service"].get_config()
-                        # if payload.get("gui"):
-                        #    await push_msg(
-                        #        app["websockets"],
-                        #        room,
-                        #        payload,
-                        #        skip=None,
-                        #        just=None
-                        #    )
-
-                    elif action == "sentences":
-                        await push_msg(
-                            app["websockets"],
-                            room,
-                            payload,
-                            skip=None,
-                            just=(room, user),
-                        )
-
-                    # handle query progress
-                    else:
-                        await _handle_query(app, payload, user, room)
-
-                    await asyncio.sleep(0.1)
-        except (asyncio.TimeoutError, asyncio.CancelledError) as err:
-            print(f"Warning: timeout in websocket listener ({err}) :\n{message}")
-        except Exception as err:
-            to_send = {"error": str(err), "status": "failed"}
-            print(f"Error: {str(err)}\n{traceback.format_exc()}")
+    message: Dict | Any = None
+    payload: Dict | None = None
+    try:
+        async for message in channel.listen():
+            if not message:
+                continue
+            if not isinstance(message, dict):
+                continue
+            if message.get("type", "") == "subscribe":
+                continue
+            if not message.get("data"):
+                continue
+            payload = json.loads(message["data"])
+            await _handle_message(payload, channel, app, test)
+            if test:
+                return
+            await asyncio.sleep(0.1)
+    except (asyncio.TimeoutError, asyncio.CancelledError) as err:
+        print(f"Warning: timeout in websocket listener ({err})")
+    except Exception as err:
+        formed = traceback.format_exc()
+        error = f"Error: {str(err)}\n{formed}"
+        print(error)
+        to_send = {"error": str(err), "status": "failed"}
+        if isinstance(payload, dict):
+            user = payload.get("user", "")
+            room = payload.get("room", "")
+            if user:
+                to_send["user"] = user
+            if room:
+                to_send["room"] = room
             if user or room:
                 await push_msg(
                     app["websockets"],
@@ -116,6 +65,78 @@ async def handle_redis_response(channel, app, test=False):
                     skip=None,
                     just=(room, user),
                 )
+        extra = {"traceback": formed, **to_send}
+        logging.error(str(err), extra=extra)
+
+
+async def _handle_message(
+    payload: Dict[str, Any], channel: PubSub, app: web.Application, test: bool
+) -> None:
+    """
+    Build a message and send on to the right websocket(s)
+    """
+    user = payload.get("user", "")
+    room = payload.get("room", "")
+    status = payload.get("status", "")
+    action = payload.get("action", "")
+
+    if status == "timeout":
+        await push_msg(app["websockets"], room, payload, just=(room, user))
+
+    elif status == "failed":
+        await push_msg(app["websockets"], room, payload, just=(room, user))
+
+    # interrupt was sent? -- currently not used
+    elif status == "interrupted":
+        payload["action"] = "interrupted"
+        await push_msg(app["websockets"], room, payload, just=(room, user))
+
+    # handle configuration message
+    elif action == "set_config":
+        if payload.get("disabled"):
+            for name, idx in payload["disabled"]:
+                print(f"Corpus disabled: {name}={idx}")
+        print(f"Config loaded: {len(payload['config'])-1} corpora")
+        app["config"] = payload["config"]
+        # payload["action"] = "update_config"
+        # await push_msg(app["websockets"], None, payload)
+        if test:
+            return
+
+    # handle fetch/store queries message
+    elif action in ("fetch_queries", "store_query"):
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
+
+    # handle uploaded data (add to config, ws message if gui mode)
+    elif action == "uploaded":
+        app["query_service"].get_config()
+        # if payload.get("gui"):
+        #    await push_msg(
+        #        app["websockets"],
+        #        room,
+        #        payload,
+        #        skip=None,
+        #        just=None
+        #    )
+
+    elif action == "sentences":
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
+
+    # handle query progress
+    elif action == "query_result":
+        await _handle_query(app, payload, user, room)
 
 
 async def _handle_query(

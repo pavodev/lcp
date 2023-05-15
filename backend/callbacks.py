@@ -109,6 +109,7 @@ def _query(
             "result": results_so_far,
             "status": status,
             "job": job.id,
+            "action": "query_result",
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),

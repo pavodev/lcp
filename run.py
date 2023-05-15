@@ -77,11 +77,11 @@ async def _listen_to_redis_for_queries(app: web.Application) -> None:
         try:
             await handle_redis_response(p, app)
         except KeyboardInterrupt:
-            await p.unsubscribe(PUBSUB_CHANNEL)
-            return
+            pass
         except Exception as err:
             raise err
         await p.unsubscribe(PUBSUB_CHANNEL)
+        await app["aredis"].quit()
 
 
 async def on_shutdown(app: web.Application) -> None:
