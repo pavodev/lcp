@@ -188,7 +188,7 @@ def _sentences(
 
 
 def _schema(
-    job: Job, connection: RedisConnection, result: None, *args, **kwargs
+    job: Job, connection: RedisConnection, result: bool | None = None, *args, **kwargs
 ) -> None:
     """
     This callback is executed after successful creation of schema.
@@ -214,7 +214,7 @@ def _schema(
 
 
 def _upload(
-    job: Job, connection: RedisConnection, result: None, *args, **kwargs
+    job: Job, connection: RedisConnection, result: bool | None = None, *args, **kwargs
 ) -> None:
     """
     Success callback when user has uploaded a dataset

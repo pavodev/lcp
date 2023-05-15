@@ -127,7 +127,7 @@ class MyJob(Job):
 
 
 class MyWorker(Worker):
-    job_class = MyJob
+    job_class = MyJob  # type: ignore
 
 
 async def go() -> None:

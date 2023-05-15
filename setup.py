@@ -20,7 +20,11 @@ else:
     ext_modules = None
 
 with open("requirements.txt") as f:
-    REQUIRED = [i for i in f.read().splitlines() if i and not i.strip().startswith("#")]
+    REQUIRED = [
+        i
+        for i in f.read().splitlines()
+        if i and not i.strip().startswith("#") and not i.strip().startswith("-r")
+    ]
 
 
 def read(fname):

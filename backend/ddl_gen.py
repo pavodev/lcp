@@ -66,7 +66,7 @@ class DDL:
     base DDL class for DB entities
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
 
         self.perms = lambda x, y: dedent(
             f"""
@@ -165,7 +165,7 @@ class Column(DDL):
     _uniq_constr = "ADD UNIQUE ({});"
     _idx_constr = "{} ({});"
 
-    def __init__(self, name: str, typ: str, **constrs):
+    def __init__(self, name: str, typ: str, **constrs) -> None:
         super().__init__()
         self.name = name
         self.type = typ
@@ -222,7 +222,9 @@ class Column(DDL):
 
 
 class Table(DDL):
-    def __init__(self, name: str, cols: List[Column], anchorings: List | None = None):
+    def __init__(
+        self, name: str, cols: List[Column], anchorings: List | None = None
+    ) -> None:
         super().__init__()
         self.name = name.strip()
         self.header_txt = f"CREATE TABLE {self.name} ("
@@ -329,7 +331,7 @@ class PartitionedTable(Table):
         anchorings: List | None = None,
         column_part: str = "segment_id",
         num_part: int = 10,
-    ):
+    ) -> None:
         super().__init__(name, cols, anchorings)
         self.base_name = self.name
         self.name = f"{self.base_name}0"
@@ -402,7 +404,7 @@ class PartitionedTable(Table):
 
 
 class Type(DDL):
-    def __init__(self, name: str, values: List[str]):
+    def __init__(self, name: str, values: List[str]) -> None:
         super().__init__()
         self.name = name.strip()
         self.header_txt = f"CREATE TYPE {self.name} AS ENUM ("
@@ -423,7 +425,7 @@ class Type(DDL):
 
 
 class CTProcessor:
-    def __init__(self, corpus_template: Dict[str, Any], glos: Globs):
+    def __init__(self, corpus_template: Dict[str, Any], glos: Globs) -> None:
         self.corpus_temp = corpus_template
         self.schema_name = corpus_template["schema_name"]
         self.layers = self._order_ct_layers(corpus_template["layer"])
