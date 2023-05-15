@@ -19,7 +19,7 @@ def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int
         else:
             name = str(i)
         batch = basename.replace("<batch>", name)
-        size = size / 2 if name != "rest" else size
+        size = int(size / 2 if name != "rest" else size)
         batches[batch] = int(size)
     return batches
 

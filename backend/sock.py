@@ -121,8 +121,8 @@ async def handle_redis_response(channel, app, test=False):
 async def _handle_query(
     app: web.Application,
     payload: Dict[str, Any],
-    user: str | None,
-    room: str | None,
+    user: str,
+    room: str,
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -187,7 +187,7 @@ async def _handle_query(
 
 
 async def push_msg(
-    sockets: Dict[str | None, Set[Tuple[Any, str]]],
+    sockets: Dict[str, Set[Tuple[Any, str]]],
     session_id: str,
     msg: Dict[str, Any],
     skip: Tuple[str, str] | None = None,
@@ -225,20 +225,20 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     qs = request.app["query_service"]
     sockets = request.app["websockets"]
 
-    x: WSMessage | None = None
-    # async for x in ws:
+    msg: WSMessage | None = None
+    # async for msg in ws:
     while True:
-        x = await ws.receive()
-        if x.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
-            return
-        if x.type != WSMsgType.TEXT:
+        msg = await ws.receive()
+        if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+            return ws
+        if msg.type != WSMsgType.TEXT:
             continue
 
-        payload = x.json()
+        payload = msg.json()
         action = payload["action"]
         session_id = payload["room"]
         user_id = payload["user"]
-        ident: Tuple[str | None, str | None] = (session_id, user_id)
+        ident: Tuple[str, str] = (session_id, user_id)
 
         if action == "joined":
             originally = len(sockets[session_id])
@@ -249,7 +249,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
                 await push_msg(sockets, session_id, response, skip=ident)
 
         elif action == "left":
-            await ws.close(code=WSCloseCode.GOING_AWAY, message="User left")
+            await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
             try:
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
@@ -301,7 +301,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     return ws
 
 
-async def ws_cleanup(sockets: Dict[str, Set[Tuple[WebSocketResponse, str]]]):
+async def ws_cleanup(sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]]):
     """
     Periodically remove any closed websocket connections to ensure that app size
     doesn't irreversibly increase over time

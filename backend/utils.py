@@ -78,7 +78,7 @@ def logged(f: Callable, *args, **kwargs) -> Any:
     try:
         result = f(*args, **kwargs)
     except Exception as err:
-        exc = {"event": "error", "error": str(error), "tb": traceback.format_exc()}
+        exc = {"event": "error", "error": str(err), "tb": traceback.format_exc()}
         details.update(exc)
         msg = f"Errored: {f.__name__} threw {type(err).__name__} ({str(err)})"
         logging.error(msg, extra=details)

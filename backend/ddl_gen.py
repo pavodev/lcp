@@ -33,7 +33,7 @@ class DataNeededLater:
 
 class Globs:
 
-    __slots__: Tuple[str] = (
+    __slots__: List[str] = [
         "base_map",
         "layers",
         "schema",
@@ -45,7 +45,7 @@ class Globs:
         "batchnames",
         "mapping",
         "perms",
-    )
+    ]
 
     def __init__(self) -> None:
         self.base_map: Dict = {}

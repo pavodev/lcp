@@ -60,7 +60,7 @@ class SQLstats:
 
 class Table:
 
-    __slots__: Tuple[str] = ("schema", "name", "columns")
+    __slots__: List[str] = ["schema", "name", "columns"]
 
     def __init__(
         self, schema: str, name: str, columns: Iterable[str] | None = None
@@ -78,7 +78,7 @@ class Table:
 
 class Importer:
 
-    __slots__: Tuple[str] = (
+    __slots__: List[str] = [
         "sql",
         "connection",
         "template",
@@ -95,7 +95,7 @@ class Importer:
         "max_bytes",
         "upload_timeout",
         "project_dir",
-    )
+    ]
 
     def __init__(
         self,

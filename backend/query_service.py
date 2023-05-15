@@ -27,7 +27,7 @@ class QueryService:
     This magic class will handle our queries by alerting you when they are done
     """
 
-    __slots__: Tuple[str] = ("app", "timeout", "upload_timeout", "query_ttl")
+    __slots__: List[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
@@ -168,9 +168,12 @@ class QueryService:
         Cancel a running job
         """
         if isinstance(job, str):
-            job = Job.fetch(job_id, connection=self.app["redis"])
+            job_id = job
+            job = Job.fetch(job, connection=self.app["redis"])
+        else:
+            job_id = job.id
         job.cancel()
-        send_stop_job_command(self.app["redis"], job)
+        send_stop_job_command(self.app["redis"], job_id)
         if job not in self.app["canceled"]:
             self.app["canceled"].append(job)
         return job.get_status()
