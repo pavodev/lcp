@@ -62,7 +62,7 @@ test:
     - mypy run.py
     - mypy worker.py
     # building c is not ready yet, mypy bugs most likely
-    # - python setup.py build_ext --inplace
+    - python setup.py build_ext --inplace
     # unit tests will not work until db access exists
     # - coverage run -m unittest
     # - coverage report
