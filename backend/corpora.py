@@ -28,10 +28,12 @@ async def corpora(request: web.Request) -> web.Response:
         ids.add("vian")
     else:
         ids.add("lcp")
+
     for sub in user_data.get("subscription", {}).get("subscriptions", []):
         ids.add(sub["id"])
     for proj in user_data.get("publicProjects", []):
         ids.add(proj["id"])
+
     corpora = {}
     for corpus_id, conf in request.app["config"].items():
         if corpus_id == -1:

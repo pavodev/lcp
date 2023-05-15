@@ -59,6 +59,9 @@ class SQLstats:
 
 
 class Table:
+
+    __slots__: Tuple[str] = ("schema", "name", "columns")
+
     def __init__(
         self, schema: str, name: str, columns: Iterable[str] | None = None
     ) -> None:
@@ -74,6 +77,26 @@ class Table:
 
 
 class Importer:
+
+    __slots__: Tuple[str] = (
+        "sql",
+        "connection",
+        "template",
+        "name",
+        "version",
+        "schema",
+        "n_batches",
+        "token_count",
+        "mapping",
+        "num_extras",
+        "corpus_size",
+        "max_concurrent",
+        "batchsize",
+        "max_bytes",
+        "upload_timeout",
+        "project_dir",
+    )
+
     def __init__(
         self,
         connection: AsyncConnectionPool | AsyncNullConnectionPool,
@@ -97,6 +120,7 @@ class Importer:
         self.n_batches = n_batches
         self.token_count: Dict[str, int] = {}
         self.mapping = mapping
+        self.project_dir = project_dir
         self.num_extras = num_extras
         self.corpus_size: int = 0
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
@@ -107,7 +131,7 @@ class Importer:
             self.max_bytes = 0
         else:
             self.max_bytes = int(self.max_bytes * 1e9)
-        self.project_dir = project_dir
+
         if self.max_concurrent < 1:
             self.update_progress(f"Processing concurrently without limit...")
         elif self.max_concurrent > 1:

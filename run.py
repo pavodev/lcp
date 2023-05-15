@@ -3,10 +3,9 @@ from __future__ import annotations
 import os
 import sys
 
-from collections import defaultdict
+from collections import defaultdict, deque
 
 import aiohttp_cors
-import async_timeout
 import asyncio
 import uvloop
 
@@ -14,9 +13,7 @@ from aiohttp import WSCloseCode, web
 from aiohttp_catcher import Catcher, catch
 from dotenv import load_dotenv
 from redis import Redis
-from redis import Redis as redis
 from redis import asyncio as aioredis
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
 
@@ -27,27 +24,22 @@ from backend.lama_user_data import lama_user_data
 from backend.project import project_api_create, project_api_revoke, project_create
 from backend.query import query
 from backend.query_service import QueryService
-from backend.sock import handle_redis_response, sock
+from backend.sock import handle_redis_response, sock, ws_cleanup
 from backend.store import fetch_queries, store_query
 from backend.upload import make_schema, upload
-from backend.utils import handle_timeout
+from backend.utils import PUBSUB_CHANNEL, handle_timeout
 from backend.validate import validate
 from backend.video import video
 
 
 load_dotenv(override=True)
 
-HOST = os.getenv("SQL_HOST")
-DBNAME = os.getenv("SQL_DATABASE")
-PORT = int(os.getenv("SQL_PORT", 5432))
-VERBOSE = True if os.getenv("VERBOSE", "").lower() == "true" else False
-REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
-RHOST, RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
-REDIS_HOST = RHOST.split("/")[-1].strip()
-REDIS_PORT = int(RPORT.strip())
-AIO_PORT = int(os.getenv("AIO_PORT", 9090))
 
-PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
+REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
+_RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
+REDIS_HOST = _RHOST.split("/")[-1].strip()
+REDIS_PORT = int(_RPORT.strip())
+APP_PORT = int(os.getenv("AIO_PORT", 9090))
 
 
 async def _listen_to_redis_for_queries(app: web.Application) -> None:
@@ -67,30 +59,38 @@ async def on_shutdown(app: web.Application) -> None:
     Close websocket connections on app shutdown
     """
     msg = "Server shutdown"
-    for ws, uid in app["websockets"].values():
-        try:
-            await ws.close(code=WSCloseCode.GOING_AWAY, message=msg)
-        except Exception as err:
-            print(f"Issue closing websocket for {uid}: {err}")
+    for room, conns in app["websockets"].items():
+        for ws, uid in conns:
+            try:
+                await ws.close(code=WSCloseCode.GOING_AWAY, message=msg)
+            except Exception as err:
+                print(f"Issue closing websocket for {room}/{uid}: {err}")
 
 
 async def start_background_tasks(app: web.Application) -> None:
     """
     Start the thread that listens to redis pubsub
+    Start the thread that periodically removes stale websocket connections
     """
     app["redis_listener"] = asyncio.create_task(_listen_to_redis_for_queries(app))
+    app["ws_cleanup"] = asyncio.create_task(ws_cleanup(app["websockets"]))
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
     """
-    Stop the redis listener
+    Stop running background tasks: redis listener, stale ws cleaner
     """
     app["redis_listener"].cancel()
     await app["redis_listener"]
+    app["ws_cleanup"].cancel()
+    await app["ws_cleanup"]
 
 
 async def create_app(*args, **kwargs) -> web.Application | None:
-    test = kwargs.get("test")
+    """
+    Build an instance of the app. If test=True is passed, it is returned
+    before background tasks are added, to aid with unit tests
+    """
 
     catcher = Catcher()
 
@@ -110,6 +110,9 @@ async def create_app(*args, **kwargs) -> web.Application | None:
         },
     )
 
+    # all websocket connections are stored in here, as {room: {(connection, user_id,)}}
+    # when a user leaves the app, the connection should be removed. If it's not,
+    # the dict is periodically cleaned by a separate thread, to stop this from always growing
     app["websockets"] = defaultdict(set)
 
     resource = cors.add(app.router.add_resource("/corpora"))
@@ -146,12 +149,10 @@ async def create_app(*args, **kwargs) -> web.Application | None:
     resource = cors.add(app.router.add_resource("/project"))
     cors.add(resource.add_route("POST", project_create))
 
-    resource = cors.add(app.router.add_resource("/project/{project_id}/api/create"))
+    resource = cors.add(app.router.add_resource("/project/{project}/api/create"))
     cors.add(resource.add_route("POST", project_api_create))
 
-    resource = cors.add(
-        app.router.add_resource("/project/{project_id}/api/{apikey_id}/revoke")
-    )
+    resource = cors.add(app.router.add_resource("/project/{project}/api/{key}/revoke"))
     cors.add(resource.add_route("POST", project_api_revoke))
 
     resource = cors.add(app.router.add_resource("/settings"))
@@ -163,15 +164,16 @@ async def create_app(*args, **kwargs) -> web.Application | None:
     # we keep two redis connections, for reasons
     app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
     app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
+
+    # different queues for different kinds of jobs
     app["query"] = Queue(connection=app["redis"])
-    # app["stats"] = Queue(connection=app["redis"])
     app["export"] = Queue(connection=app["redis"], job_timeout=-1)
     app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
-    app["canceled"] = set()
+    app["canceled"] = deque(maxlen=99999)
 
-    if test:
+    if kwargs.get("test"):
         return app
 
     app.on_startup.append(start_background_tasks)
@@ -189,7 +191,7 @@ async def start_app() -> None:
         app = maybe_app
     runner = web.AppRunner(app)
     await runner.setup()
-    site = web.TCPSite(runner, port=AIO_PORT)
+    site = web.TCPSite(runner, port=APP_PORT)
     await site.start()
     # wait forever
     await asyncio.Event().wait()
@@ -200,6 +202,7 @@ async def start_app() -> None:
 if "_TEST" in os.environ:
     pass
 
+# this is how mypy starts the app
 elif __name__ == "run":
     asyncio.run(start_app())
 

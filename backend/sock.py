@@ -4,15 +4,15 @@ import asyncio
 import json
 import traceback
 
-from time import sleep
 from typing import Any, Dict, List, Set, Tuple
 
 import async_timeout
 
 from aiohttp import WSCloseCode, WSMsgType, web
 from aiohttp.http_websocket import WSMessage
-from redis import asyncio as aioredis
 from rq.job import Job
+
+# from redis import asyncio as aioredis  # only needed if we add typing
 
 from .query import query
 from .validate import validate
@@ -104,7 +104,7 @@ async def handle_redis_response(channel, app, test=False):
 
                     await asyncio.sleep(0.1)
         except (asyncio.TimeoutError, asyncio.CancelledError) as err:
-            print(f"Warning: timeout in websocket listener:\n{message}")
+            print(f"Warning: timeout in websocket listener ({err}) :\n{message}")
         except Exception as err:
             to_send = {"error": str(err), "status": "failed"}
             print(f"Error: {str(err)}\n{traceback.format_exc()}")
@@ -133,6 +133,8 @@ async def _handle_query(
     the_job = Job.fetch(job, connection=app["redis"])
     job_status = the_job.get_status(refresh=True)
     if job_status in ("stopped", "canceled") or job in app["canceled"]:
+        if job not in app["canceled"]:
+            app["canceled"].append(job)
         print(f"Query was stopped: {job} -- preventing update")
         return
     current_batch = payload["current_batch"]
@@ -247,6 +249,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
                 await push_msg(sockets, session_id, response, skip=ident)
 
         elif action == "left":
+            await ws.close(code=WSCloseCode.GOING_AWAY, message="User left")
             try:
                 sockets[session_id].remove((ws, user_id))
             except KeyError:
@@ -292,32 +295,33 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
             if jobs:
                 await push_msg(sockets, session_id, response, just=ident)
 
-        elif action == "populate":
-            sockets[session_id].add((ws, user_id))
-            response = {}
-            await push_msg(sockets, session_id, response, skip=ident)
-
-        elif action == "delete_query":
-            query_id = payload["query_id"]
-            qs.delete(query_id)
-            response = {"id": query_id, "status": "deleted"}
-            await push_msg(sockets, session_id, response)
-
-        elif action == "cancel_query":
-            query_id = payload["query_id"]
-            qs.cancel(query_id)
-            response = {"id": query_id, "status": "cancelled"}
-            await push_msg(sockets, session_id, response)
-
-        elif action == "query_result":
-            response = {
-                "result": payload["result"],
-                "user": user_id,
-                "room": session_id,
-            }
-            await push_msg(sockets, session_id, response)
-
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
 
     return ws
+
+
+async def ws_cleanup(sockets: Dict[str, Set[Tuple[WebSocketResponse, str]]]):
+    """
+    Periodically remove any closed websocket connections to ensure that app size
+    doesn't irreversibly increase over time
+
+    Send a message to other users about it, too
+    """
+    interval = 3600
+    while True:
+        for room, conns in sockets.items():
+            to_close = set()
+            for ws, uid in conns:
+                if ws.closed:
+                    to_close.add((ws, uid))
+            for conn in to_close:
+                print(f"Removing stale WS connection: {room}/{uid}")
+                conns.remove(conn)
+            n_users = len(conns)
+            if not n_users or not to_close:
+                continue
+            for _, user_id in to_close:
+                response = {"left": user_id, "room": room, "n_users": n_users}
+                await push_msg(sockets, room, response)
+        await asyncio.sleep(interval)

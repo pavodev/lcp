@@ -13,7 +13,7 @@ from .impo import Importer
 from .utils import Interrupted, _get_kwics
 
 
-async def _upload_data(**kwargs) -> bool:
+async def _upload_data(**kwargs) -> None:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
@@ -72,7 +72,7 @@ async def _upload_data(**kwargs) -> bool:
         raise err
     finally:
         shutil.rmtree(corpus)  # todo: should we do this?
-    return True
+    return None
 
 
 async def _create_schema(**kwargs) -> None:

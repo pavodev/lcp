@@ -374,6 +374,19 @@ def _determine_language(batch: str) -> str | None:
     return None
 
 
+def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
+    """
+    Is a query finished, or do we need to do another iteration?
+    """
+    if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
+        return "finished"
+    if tot_req in {-1, False, None}:
+        return "partial"
+    if n_results >= tot_req:
+        return "satisfied"
+    return "partial"
+
+
 async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
     async with semaphore:
         return await coro

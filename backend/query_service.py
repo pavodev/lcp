@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
@@ -26,6 +26,8 @@ class QueryService:
     """
     This magic class will handle our queries by alerting you when they are done
     """
+
+    __slots__: Tuple[str] = ("app", "timeout", "upload_timeout", "query_ttl")
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
@@ -81,24 +83,24 @@ class QueryService:
         )
 
     def fetch_queries(
-        self, user: str, room: str | None = None, queue: str = "alt", limit: int = 10
+        self, user: str, room: str, queue: str = "alt", limit: int = 10
     ) -> Job:
         """
         Get previous saved queries for this user/room
         """
+        params: Tuple[str, str] | Tuple[str] = (user,)
+        room_info: str = ""
         if room:
             room_info = " AND room = %s"
             params = (user, room)
-        else:
-            room_info = ""
-            params2 = (user,)
+
         query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC LIMIT {limit};"
         opts = {
             "user": user,
             "room": room,
             "query": query,
             "config": True,
-            "params": params if room else params2,
+            "params": params,
             "on_success": _queries,
             "on_failure": _general_failure,
         }
@@ -111,7 +113,7 @@ class QueryService:
         query_data: Dict,
         idx: int,
         user: str,
-        room: str | None = None,
+        room: str,
         queue: str = "alt",
     ) -> Job:
         """
@@ -138,7 +140,7 @@ class QueryService:
         data,
         user: str,
         project: str,
-        room=None,
+        room: str | None = None,
         queue: str = "alt",
         gui: bool = False,
     ) -> Job:
@@ -161,16 +163,17 @@ class QueryService:
             **opts,
         )
 
-    def cancel(self, job_id: str) -> str:
-        job = Job.fetch(job_id, connection=self.app["redis"])
+    def cancel(self, job: Job | str) -> str:
+        """
+        Cancel a running job
+        """
+        if isinstance(job, str):
+            job = Job.fetch(job_id, connection=self.app["redis"])
         job.cancel()
+        send_stop_job_command(self.app["redis"], job)
+        if job not in self.app["canceled"]:
+            self.app["canceled"].append(job)
         return job.get_status()
-
-    def delete(self, job_id: str) -> str:
-        job = Job.fetch(job_id, connection=self.app["redis"])
-        job.cancel()
-        job.delete()
-        return "DELETED"
 
     def create(
         self,
@@ -208,7 +211,7 @@ class QueryService:
     def cancel_running_jobs(
         self,
         user: str,
-        room: str | None,
+        room: str,
         specific_job: str | None = None,
         base: str | None = None,
     ) -> List[str]:
@@ -227,15 +230,19 @@ class QueryService:
                 continue
             if base and maybe.kwargs.get("is_sentences"):
                 continue
-            if maybe.kwargs.get("room") == room and maybe.kwargs.get("user") == user:
-                try:
-                    maybe.cancel()
-                    send_stop_job_command(self.app["redis"], job)
-                    ids.append(job)
-                except InvalidJobOperation:
-                    print(f"Already canceled: {job}")
-                except Exception as err:
-                    print("Unknown error, please debug", err, job)
+            if job in self.app["canceled"]:
+                continue
+            if maybe.kwargs.get("room") != room:
+                continue
+            if maybe.kwargs.get("user") != user:
+                continue
+            try:
+                self.cancel(maybe)
+                ids.append(job)
+            except InvalidJobOperation:
+                print(f"Already canceled: {job}")
+            except Exception as err:
+                print("Unknown error, please debug", err, job)
         return ids
 
     def get(self, job_id: str) -> Job | None:

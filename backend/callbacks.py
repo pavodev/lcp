@@ -9,7 +9,6 @@ from typing import Any, Dict, List, Tuple, Type
 from uuid import UUID
 
 from redis import Redis as RedisConnection
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.job import Job
 
 from .configure import _get_batches
@@ -17,10 +16,10 @@ from .utils import (
     CustomEncoder,
     Interrupted,
     _add_results,
+    _get_status,
     _union_results,
+    PUBSUB_CHANNEL,
 )
-
-PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
 def _query(
@@ -134,7 +133,9 @@ def _sentences(
     *args,
     **kwargs,
 ) -> None:
-
+    """
+    Create KWIC data and send via websocket
+    """
     total_requested = kwargs.get("total_results_requested")
     start_at = kwargs.get("start_at")
 
@@ -187,7 +188,7 @@ def _sentences(
 
 
 def _schema(
-    job: Job, connection: RedisConnection, result: Any, *args, **kwargs
+    job: Job, connection: RedisConnection, result: None, *args, **kwargs
 ) -> None:
     """
     This callback is executed after successful creation of schema.
@@ -212,7 +213,9 @@ def _schema(
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
-def _upload(job: Job, connection: RedisConnection, result, *args, **kwargs) -> None:
+def _upload(
+    job: Job, connection: RedisConnection, result: None, *args, **kwargs
+) -> None:
     """
     Success callback when user has uploaded a dataset
     """
@@ -274,6 +277,9 @@ def _queries(
     *args,
     **kwargs,
 ) -> None:
+    """
+    Fetch or store queries
+    """
     is_store = job.kwargs.get("store")
     action = "store_query" if is_store else "fetch_queries"
     room = job.kwargs.get("room")
@@ -359,16 +365,3 @@ def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> N
         "disabled": disabled,
     }
     job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
-
-
-def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
-    """
-    Is a query finished, or do we need to do another iteration?
-    """
-    if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
-        return "finished"
-    if tot_req in {-1, False, None}:
-        return "partial"
-    if n_results >= tot_req:
-        return "satisfied"
-    return "partial"

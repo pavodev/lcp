@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import os
-import sys
 
 from rq.connections import Connection
 from rq.job import Job
@@ -33,12 +32,12 @@ MAX_CONCURRENT = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 
 QUERY_MIN_NUM_CONNS = int(os.getenv("QUERY_MIN_NUM_CONNECTIONS", 8))
-IMPORT_MIN_NUM_CONNS = int(os.getenv("IMPORT_MIN_NUM_CONNECTIONS", 8))
-IMPORT_MIN_NUM_CONNS = max(IMPORT_MIN_NUM_CONNS, MAX_CONCURRENT)
+UPLOAD_MIN_NUM_CONNS = int(os.getenv("UPLOAD_MIN_NUM_CONNECTIONS", 8))
+UPLOAD_MIN_NUM_CONNS = max(UPLOAD_MIN_NUM_CONNS, MAX_CONCURRENT)
 
 QUERY_MAX_NUM_CONNS = int(os.getenv("QUERY_MAX_NUM_CONNECTIONS", 8))
-IMPORT_MAX_NUM_CONNS = int(os.getenv("IMPORT_MAX_NUM_CONNECTIONS", 8))
-IMPORT_MAX_NUM_CONNS = max(IMPORT_MAX_NUM_CONNS, MAX_CONCURRENT)
+UPLOAD_MAX_NUM_CONNS = int(os.getenv("UPLOAD_MAX_NUM_CONNECTIONS", 8))
+UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT)
 
 POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
@@ -77,11 +76,13 @@ pool = AsyncConnectionPool(
     timeout=60,
     open=False,
 )
+
 upload_conn_type: type = (
     AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
 )
-min_size = IMPORT_MIN_NUM_CONNS if UPLOAD_POOL else 0
-max_size = IMPORT_MAX_NUM_CONNS if UPLOAD_POOL else 0
+min_size = UPLOAD_MIN_NUM_CONNS if UPLOAD_POOL else 0
+max_size = UPLOAD_MAX_NUM_CONNS if UPLOAD_POOL else 0
+
 upool = upload_conn_type(
     upload_connstr,
     name="upload-connection",
@@ -91,8 +92,6 @@ upool = upload_conn_type(
     timeout=60,
     open=False,
 )
-
-# conn = asyncio.run(psycopg.AsyncConnection.connect(upload_connstr))
 
 
 class MyJob(Job):
@@ -118,8 +117,6 @@ async def go() -> None:
 
 
 if __name__ == "__main__":
-
-    # go() # just do it sync right now
 
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

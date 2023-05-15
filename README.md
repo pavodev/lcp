@@ -69,6 +69,14 @@ The defaults in `.env` should work for Postgres and LAMa. Default Redis is local
 
 Some `.env` values that might need adjusting for deployment:
 
+> `AIO_PORT`
+
+The port that the backend runs on in deployment. Depending on your development setup, this setting may determine the port used for development too.
+
+> `REDIS_DB_INDEX`
+
+Setting as a positive integer allows us to switch between different Redis databases based on their index. `0` is fine for development.
+
 > `QUERY_TIMEOUT`
 
 In seconds, how long can a query be running until it gets stopped?
@@ -83,15 +91,27 @@ In seconds, how long should query data stay in Redis? If a user tries to change 
 
 > `IMPORT_MAX_CONCURRENT`
 
-When importing a new corpus, how many concurrent tasks can be spawned? Set to -1 or 0 for no limit, set to 1 for no concurrency, or larger to set the concurrency limit.
+When importing a new corpus, how many concurrent tasks can be spawned? Set to `-1` or `0` for no limit, set to `1` for no concurrency, or larger to set the concurrency limit.
 
 > `IMPORT_MAX_MEMORY_GB`
 
-When processing concurrently, a lot of data can be read into memory for COPY tasks. If this amount of data is reached while building COPY tasks, we stop building tasks, execute the pending ones, and resume when they are done.
+When processing concurrently, a lot of data can be read into memory for `COPY` tasks. If this amount of data is reached while building `COPY` tasks, we stop building tasks, execute the pending ones, and resume when they are done. Remember that if `IMPORT_MAX_CONCURRENT` is not 1, the real memory usage could be multiplied by the number of concurrent tasks.
 
 > `IMPORT_MAX_COPY_GB`
 
-In GB, how much data can be read in one chunk for `COPY` tasks? Note that the limit can be exceeded by a few bytes in practice to complete an incomplete CSV line.
+In GB, how much data can be read in one chunk for `COPY` tasks? Note that the limit can be exceeded by a few bytes in practice to complete an incomplete CSV line. Remember that if `IMPORT_MAX_CONCURRENT` is not 1, the real memory usage could be multiplied by the number of concurrent tasks.
+
+> `UPLOAD_USE_POOL`
+
+If truthy, a real connection pool will be used for the uploader (as well as any other jobs requiring write access to the DB). `IMPORT_MIN_NUM_CONNECTIONS` and `IMPORT_MAX_NUM_CONNECTIONS` can then be set. If falsey, these values are ignored, as no connection pool is used for these jobs.
+
+> `(QUERY|UPLOAD)_(MIN|MAX)_NUM_CONNECTIONS`
+
+These four values control the number of connections in the connection pool. If `UPLOAD_USE_POOL` is false, these numbers are ignored for `UPLOAD`, because no pool exists.
+
+> `POOL_NUM_WORKERS`
+
+This number controls how many worker threads are spawned to perform setup/cleanup-type operations on connection pool(s). `3` is the default provided by `psycopg`.
 
 > `MAX_SIMULTANEOUS_JOBS_PER_USER`
 
@@ -134,3 +154,12 @@ python -c "import run"
 ```
 
 Still working on compiling `worker.py` with mypy...
+
+## Count lines of code
+
+```bash
+apt-get install cloc
+cloc . --exclude-dir=dist,build,node_modules,uploads,.mypy_cache,htmlcov \
+       --exclude-lang=JSON \
+       --not-match-f=dqd_parser
+```

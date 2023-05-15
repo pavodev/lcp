@@ -10,7 +10,7 @@ from collections import abc, defaultdict
 from functools import total_ordering
 from textwrap import dedent
 
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 from dataclasses import asdict, dataclass, field
 from typing import Any, Dict, List, Set, Tuple
@@ -32,6 +32,21 @@ class DataNeededLater:
 
 
 class Globs:
+
+    __slots__: Tuple[str] = (
+        "base_map",
+        "layers",
+        "schema",
+        "tables",
+        "types",
+        "num_partitions",
+        "prep_seg_create",
+        "prep_seg_insert",
+        "batchnames",
+        "mapping",
+        "perms",
+    )
+
     def __init__(self) -> None:
         self.base_map: Dict = {}
         self.layers: Dict = {}
@@ -44,22 +59,6 @@ class Globs:
         self.batchnames: List[str] = []
         self.mapping: str = ""
         self.perms: str = ""
-
-
-class reversor:
-    """
-    class from https://stackoverflow.com/a/56842689
-    used for reversing sort order
-    """
-
-    def __init__(self, obj: Any):
-        self.obj = obj
-
-    def __eq__(self, other: Any) -> bool:
-        return other.obj == self.obj
-
-    def __lt__(self, other: Any) -> bool:
-        return other.obj < self.obj
 
 
 class DDL:
