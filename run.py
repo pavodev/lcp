@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+import logging
 import os
 import sys
 
@@ -7,7 +9,6 @@ from collections import defaultdict, deque
 
 import aiohttp_cors
 import asyncio
-import logging
 
 import uvloop
 
@@ -44,6 +45,7 @@ from redis import asyncio as aioredis
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
 
+from backend import utils
 from backend.check_file_permissions import check_file_permissions
 from backend.corpora import corpora
 from backend.document import document
@@ -58,7 +60,7 @@ from backend.utils import PUBSUB_CHANNEL, handle_timeout
 from backend.validate import validate
 from backend.video import video
 
-
+C_COMPILED = not str(inspect.getfile(utils)).endswith(".py")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 _RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
@@ -129,6 +131,9 @@ async def create_app(*args, **kwargs) -> web.Application | None:
     )
 
     app = web.Application(middlewares=[catcher.middleware])
+    app["mypy"] = C_COMPILED
+    if C_COMPILED:
+        print("Running mypy/c app!")
     cors = aiohttp_cors.setup(
         app,
         defaults={

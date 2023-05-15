@@ -13,6 +13,7 @@ from rq.job import Job
 
 from redis.asyncio.client import PubSub
 
+from . import utils
 from .query import query
 from .validate import validate
 
@@ -21,34 +22,34 @@ async def handle_redis_response(
     channel: PubSub, app: web.Application, test: bool = False
 ) -> None:
     """
-    If redis publishes a message, it gets picked up here and broadcast to the
-    correct websockets...
+    If redis publishes a message, it gets picked up here in an async loop
+    and broadcast to the correct websockets.
 
-    This function cannot yet be handled by mypy, so leave it unannotated please
+    We need to know if we're running c-compiled code or not, because
+    channel.get_message() fails when compiled to c for some reason
     """
     message: Dict | Any = None
     payload: Dict | None = None
+
     try:
-        async for message in channel.listen():
-            if not message or not isinstance(message, dict):
-                continue
-            if message.get("type", "") == "subscribe":
-                continue
-            if not message.get("data"):
-                continue
-            payload = json.loads(message["data"])
-            if not payload or not isinstance(payload, dict):
-                continue
-            await _handle_message(payload, channel, app, test)
-            if test:
-                return
-            await asyncio.sleep(0.1)
+        if app.get("mypy"):
+            async for message in channel.listen():
+                await _process_message(message, channel, app)
+        else:
+            while True:
+                message = await channel.get_message(
+                    ignore_subscribe_messages=True, timeout=2.0
+                )
+                await _process_message(message, channel, app)
+
+            if test is True:
+                return None
+
     except (asyncio.TimeoutError, asyncio.CancelledError) as err:
         print(f"Warning: timeout in websocket listener ({err})")
     except Exception as err:
         formed = traceback.format_exc()
-        error = f"Error: {str(err)}\n{formed}"
-        print(error)
+        print(f"Error: {str(err)}\n{formed}")
         to_send = {"error": str(err), "status": "failed"}
         if isinstance(payload, dict):
             user = payload.get("user", "")
@@ -69,11 +70,26 @@ async def handle_redis_response(
         logging.error(str(err), extra=extra)
 
 
+async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:
+    await asyncio.sleep(0.1)
+    if not message or not isinstance(message, dict):
+        return
+    if message.get("type", "") == "subscribe":
+        return
+    if not message.get("data"):
+        return
+    payload = json.loads(message["data"])
+    if not payload or not isinstance(payload, dict):
+        return
+    await _handle_message(payload, channel, app)
+    return None
+
+
 async def _handle_message(
-    payload: Dict[str, Any], channel: PubSub, app: web.Application, test: bool
+    payload: Dict[str, Any], channel: PubSub, app: web.Application
 ) -> None:
     """
-    Build a message and send on to the right websocket(s)
+    Build a message, do any extra needed actions and send on to the right websocket(s)
     """
     user = payload.get("user", "")
     room = payload.get("room", "")
@@ -82,17 +98,20 @@ async def _handle_message(
 
     if status == "timeout":
         await push_msg(app["websockets"], room, payload, just=(room, user))
+        return None
 
-    elif status == "failed":
+    if status == "failed":
         await push_msg(app["websockets"], room, payload, just=(room, user))
+        return None
 
     # interrupt was sent? -- currently not used
-    elif status == "interrupted":
+    if status == "interrupted":
         payload["action"] = "interrupted"
         await push_msg(app["websockets"], room, payload, just=(room, user))
+        return None
 
     # handle configuration message
-    elif action == "set_config":
+    if action == "set_config":
         if payload.get("disabled"):
             for name, idx in payload["disabled"]:
                 print(f"Corpus disabled: {name}={idx}")
@@ -100,11 +119,10 @@ async def _handle_message(
         app["config"] = payload["config"]
         # payload["action"] = "update_config"
         # await push_msg(app["websockets"], None, payload)
-        if test:
-            return
+        return None
 
     # handle fetch/store queries message
-    elif action in ("fetch_queries", "store_query"):
+    if action in ("fetch_queries", "store_query"):
         await push_msg(
             app["websockets"],
             room,
@@ -112,10 +130,12 @@ async def _handle_message(
             skip=None,
             just=(room, user),
         )
+        return None
 
     # handle uploaded data (add to config, ws message if gui mode)
-    elif action == "uploaded":
+    if action == "uploaded":
         app["query_service"].get_config()
+        return None
         # if payload.get("gui"):
         #    await push_msg(
         #        app["websockets"],
@@ -125,7 +145,7 @@ async def _handle_message(
         #        just=None
         #    )
 
-    elif action == "sentences":
+    if action == "sentences":
         await push_msg(
             app["websockets"],
             room,
@@ -133,10 +153,11 @@ async def _handle_message(
             skip=None,
             just=(room, user),
         )
+        return None
 
-    # handle query progress
-    elif action == "query_result":
+    if action == "query_result":
         await _handle_query(app, payload, user, room)
+        return None
 
 
 async def _handle_query(
@@ -176,7 +197,11 @@ async def _handle_query(
         if payload["base"] is None:
             payload["base"] = job
         if "done_batches" in payload:
-            payload["done_batches"] = [tuple(x) for x in payload["done_batches"]]
+            dones = [tuple(x) for x in payload["done_batches"]]
+            current = tuple(payload["current_batch"])
+            if current not in dones:
+                dones.append(current)
+            payload["done_batches"] = dones
         if not payload.get("simultaneous"):
             await query(None, manual=payload, app=app)
         # return  # return will prevent partial results from going back to frontend
@@ -194,6 +219,7 @@ async def _handle_query(
             "n_users": n_users,
             "status": status,
             "base": payload["base"],
+            "is_vian": payload.get("is_vian", False),
             "batch_matches": payload["batch_matches"],
             "total_results_so_far": payload["total_results_so_far"],
             "percentage_done": payload["percentage_done"],
@@ -215,7 +241,7 @@ async def push_msg(
     just: Tuple[str, str] | None = None,
 ) -> None:
     """
-    Send JSON websocket message
+    Send JSON websocket message to one or more users
     """
     sent_to = set()
     for room, users in sockets.items():
