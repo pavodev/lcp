@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import logging
 import os
 
 from rq.connections import Connection
@@ -17,8 +18,28 @@ from sshtunnel import SSHTunnelForwarder
 import asyncio
 import uvloop
 
-
 load_dotenv(override=True)
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", None)
+
+if SENTRY_DSN:
+
+    import sentry_sdk
+    from sentry_sdk.integrations.rq import RqIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,
+        event_level=logging.WARNING,
+    )
+
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        integrations=[RqIntegration(), sentry_logging],
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "lcp"),
+    )
+
 
 UPLOAD_USER = os.environ["SQL_UPLOAD_USERNAME"]
 QUERY_USER = os.environ["SQL_QUERY_USERNAME"]

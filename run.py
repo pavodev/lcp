@@ -15,9 +15,9 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-LOGGER_DSN = os.getenv("LOGGER_DSN", None)
+SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
-if LOGGER_DSN:
+if SENTRY_DSN:
 
     import sentry_sdk
     from sentry_sdk.integrations.aiohttp import AioHttpIntegration
@@ -29,10 +29,10 @@ if LOGGER_DSN:
     )
 
     sentry_sdk.init(
-        dsn=LOGGER_DSN,
+        dsn=SENTRY_DSN,
         integrations=[AioHttpIntegration(), sentry_logging],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
-        environment=os.getenv("LOGGER_ENVIRONMENT", "lcp"),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "lcp"),
     )
 
 
@@ -228,7 +228,6 @@ async def start_app() -> None:
         await asyncio.Event().wait()
         return None
     except KeyboardInterrupt:
-        print("Stopped.")
         return
 
 
