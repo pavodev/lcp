@@ -188,6 +188,7 @@ async def _do_resume(
 
 
 @ensure_authorised
+@logged
 async def query(
     request: web.Request,
     manual: Optional[Dict] = None,

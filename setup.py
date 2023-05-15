@@ -7,7 +7,7 @@ from mypyc.build import mypycify
 
 MODULE_PATH = "backend"
 
-SKIPS = {"log.py", "sock.py"}
+SKIPS = {"sock.py"}
 
 # use build_ext to do mypy c compilation
 if any(a == "build_ext" for a in sys.argv):
