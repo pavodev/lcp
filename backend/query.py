@@ -14,7 +14,8 @@ from rq.job import Job
 
 from .callbacks import _query, _sentences
 from .dqd_parser import convert
-from .utils import _determine_language, _get_all_results, ensure_authorised, logged
+from .log import logged
+from .utils import _determine_language, _get_all_results, ensure_authorised
 
 
 def _make_sents_query(
