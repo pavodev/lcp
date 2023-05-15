@@ -30,15 +30,15 @@ async def handle_redis_response(
     payload: Dict | None = None
     try:
         async for message in channel.listen():
-            if not message:
-                continue
-            if not isinstance(message, dict):
+            if not message or not isinstance(message, dict):
                 continue
             if message.get("type", "") == "subscribe":
                 continue
             if not message.get("data"):
                 continue
             payload = json.loads(message["data"])
+            if not payload or not isinstance(payload, dict):
+                continue
             await _handle_message(payload, channel, app, test)
             if test:
                 return
@@ -57,10 +57,10 @@ async def handle_redis_response(
                 to_send["user"] = user
             if room:
                 to_send["room"] = room
-            if user or room:
+            if user and room:
                 await push_msg(
                     app["websockets"],
-                    None,
+                    room,
                     to_send,
                     skip=None,
                     just=(room, user),
