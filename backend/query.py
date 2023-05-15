@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 
 from uuid import uuid4
@@ -13,7 +14,7 @@ from rq.job import Job
 
 from .callbacks import _query, _sentences
 from .dqd_parser import convert
-from .utils import _determine_language, _get_all_results, ensure_authorised
+from .utils import _determine_language, _get_all_results, ensure_authorised, logged
 
 
 def _make_sents_query(
@@ -186,6 +187,7 @@ async def _do_resume(
 
 
 @ensure_authorised
+@logged
 async def query(
     request: web.Request,
     manual: Optional[Dict] = None,

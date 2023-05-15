@@ -7,11 +7,38 @@ from collections import defaultdict, deque
 
 import aiohttp_cors
 import asyncio
+import logging
+
 import uvloop
+
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
+
+LOGGER_DSN = os.getenv("LOGGER_DSN", None)
+
+if LOGGER_DSN:
+
+    import sentry_sdk
+    from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,
+        event_level=logging.WARNING,
+    )
+
+    sentry_sdk.init(
+        dsn=LOGGER_DSN,
+        integrations=[AioHttpIntegration(), sentry_logging],
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
+        environment=os.getenv("LOGGER_ENVIRONMENT", "lcp"),
+    )
+
 
 from aiohttp import WSCloseCode, web
 from aiohttp_catcher import Catcher, catch
-from dotenv import load_dotenv
+
 from redis import Redis
 from redis import asyncio as aioredis
 from rq.exceptions import NoSuchJobError
@@ -32,9 +59,6 @@ from backend.validate import validate
 from backend.video import video
 
 
-load_dotenv(override=True)
-
-
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 _RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
@@ -50,7 +74,13 @@ async def _listen_to_redis_for_queries(app: web.Application) -> None:
     pubsub = app["aredis"].pubsub()
     async with pubsub as p:
         await p.subscribe(PUBSUB_CHANNEL)
-        await handle_redis_response(p, app)
+        try:
+            await handle_redis_response(p, app)
+        except KeyboardInterrupt:
+            await p.unsubscribe(PUBSUB_CHANNEL)
+            return
+        except Exception as err:
+            raise err
         await p.unsubscribe(PUBSUB_CHANNEL)
 
 
@@ -184,18 +214,22 @@ async def create_app(*args, **kwargs) -> web.Application | None:
 
 
 async def start_app() -> None:
-    maybe_app = await create_app()
-    if not maybe_app:
+    try:
+        maybe_app = await create_app()
+        if not maybe_app:
+            return None
+        else:
+            app = maybe_app
+        runner = web.AppRunner(app)
+        await runner.setup()
+        site = web.TCPSite(runner, port=APP_PORT)
+        await site.start()
+        # wait forever
+        await asyncio.Event().wait()
         return None
-    else:
-        app = maybe_app
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, port=APP_PORT)
-    await site.start()
-    # wait forever
-    await asyncio.Event().wait()
-    return None
+    except KeyboardInterrupt:
+        print("Stopped.")
+        return
 
 
 # test mode should not start a loop
@@ -208,10 +242,13 @@ elif __name__ == "run":
 
 # development mode starts a dev server
 elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
-    if sys.version_info >= (3, 11):
-        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-            runner.run(start_app())
-    else:
-        uvloop.install()
-        asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-        asyncio.run(start_app())
+    try:
+        if sys.version_info >= (3, 11):
+            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+                runner.run(start_app())
+        else:
+            uvloop.install()
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            asyncio.run(start_app())
+    except KeyboardInterrupt:
+        print("Stopped.")

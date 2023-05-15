@@ -1,13 +1,18 @@
 from __future__ import annotations
 import aiohttp
 import asyncio
+import inspect
 import json
 import jwt
+import logging
 import os
 import re
+import traceback
 
 from collections import defaultdict, Counter
 from datetime import date, datetime
+from decorator import decorator
+
 from functools import wraps
 from typing import (
     Any,
@@ -23,7 +28,7 @@ from typing import (
     Sized,
     Set,
 )
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from aiohttp import web
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
@@ -54,6 +59,35 @@ class CustomEncoder(json.JSONEncoder):
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
         return json.JSONEncoder.default(self, obj)
+
+
+@decorator
+def logged(f: Callable, *args, **kwargs) -> Any:
+    """
+    Decorator that logs start and end of a function call...
+    """
+    stargs = [str(a) for a in args]
+    stkwargs = {str(k): str(v) for k, v in kwargs.items()}
+    details = {
+        "couplet": str(uuid4()),
+        "event": "called",
+        "args": stargs,
+        "kwargs": stkwargs,
+    }
+    logging.info(f"Called: {f.__name__}", extra=details)
+    try:
+        result = f(*args, **kwargs)
+    except Exception as err:
+        exc = {"event": "error", "error": str(error), "tb": traceback.format_exc()}
+        details.update(exc)
+        msg = f"Errored: {f.__name__} threw {type(err).__name__} ({str(err)})"
+        logging.error(msg, extra=details)
+        raise err
+    # if inspect.isawaitable(result)
+    #    result = await result
+    details.update({"event": "returned"})
+    logging.info(f"Returned: {type(result).__name__} from {f.__name__}", extra=details)
+    return result
 
 
 def ensure_authorised(func: Callable):
@@ -358,6 +392,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
         "action": "timeout",
     }
     connection = request.app["redis"]
+    logging.warning(f"RQ job timeout: {job}", extra=jso)
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
