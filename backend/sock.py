@@ -5,7 +5,7 @@ import json
 import logging
 import traceback
 
-from typing import Any, Dict, List, Set, Tuple
+from typing import Any, Dict, Set, Tuple
 
 from aiohttp import WSCloseCode, WSMsgType, web
 from aiohttp.http_websocket import WSMessage
@@ -13,14 +13,12 @@ from rq.job import Job
 
 from redis.asyncio.client import PubSub
 
-from . import utils
 from .query import query
+from .utils import push_msg
 from .validate import validate
 
 
-async def handle_redis_response(
-    channel: PubSub, app: web.Application, test: bool = False
-) -> None:
+async def handle_redis_response(channel, app, test=False):
     """
     If redis publishes a message, it gets picked up here in an async loop
     and broadcast to the correct websockets.
@@ -28,8 +26,8 @@ async def handle_redis_response(
     We need to know if we're running c-compiled code or not, because
     channel.get_message() fails when compiled to c for some reason
     """
-    message: Dict | Any = None
-    payload: Dict | None = None
+    message = None
+    payload = None
 
     try:
         if app.get("mypy"):
@@ -179,7 +177,6 @@ async def _handle_query(
             app["canceled"].append(job)
         print(f"Query was stopped: {job} -- preventing update")
         return
-    current_batch = payload["current_batch"]
     total = payload.get("total_results_requested")
     if not total or total == -1:
         total = "all"
@@ -190,7 +187,7 @@ async def _handle_query(
     )
     if (
         status == "partial"
-        and not job_status in ("stopped", "canceled")
+        and job_status not in ("stopped", "canceled")
         and job not in app["canceled"]
     ):
         payload["config"] = app["config"]
@@ -231,35 +228,6 @@ async def _handle_query(
             "simultaneous": payload.get("simultaneous", False),
         }
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
-
-
-async def push_msg(
-    sockets: Dict[str, Set[Tuple[Any, str]]],
-    session_id: str,
-    msg: Dict[str, Any],
-    skip: Tuple[str, str] | None = None,
-    just: Tuple[str, str] | None = None,
-) -> None:
-    """
-    Send JSON websocket message to one or more users
-    """
-    sent_to = set()
-    for room, users in sockets.items():
-        if room != session_id:
-            continue
-        for conn, user_id in users:
-            if (room, user_id) in sent_to:
-                continue
-            if skip and (room, user_id) == skip:
-                continue
-            if just and (room, user_id) != just:
-                continue
-            try:
-                await conn.send_json(msg)
-            except ConnectionResetError:
-                print(f"Connection reset: {room}/{user_id}")
-                pass
-            sent_to.add((room, user_id))
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:

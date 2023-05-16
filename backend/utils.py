@@ -3,30 +3,22 @@ import aiohttp
 import asyncio
 
 import json
-import jwt
 import logging
 import os
 import re
-
 
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field, asdict
 from datetime import date, datetime
 
-
-from functools import wraps
 from typing import (
     Any,
     Awaitable,
     Callable,
     Dict,
     List,
-    Iterable,
-    Reversible,
     Tuple,
-    Sequence,
     Mapping,
-    Sized,
     Set,
 )
 from uuid import UUID, uuid4
@@ -34,7 +26,6 @@ from uuid import UUID, uuid4
 from aiohttp import web
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from redis import Redis as RedisConnection
-from rq.exceptions import NoSuchJobError
 from rq.job import Job
 
 
@@ -408,7 +399,7 @@ async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
         if current is not None:
             try:
                 current.cancel()
-            except:
+            except Exception:
                 pass
             name = current.get_name()
             running_tasks.remove(current)
@@ -438,9 +429,11 @@ class QueryIteration:
     base: None | str
     sentences: bool
     is_vian: bool
+    app: web.Application
     hit_limit: bool | int = False
     resuming: bool = False
     previous: str = ""
+    done: bool = False
     request_data: Dict[str, Any] | None = None
     current_batch: Tuple[int, str, str, int] | None = None
     done_batches: List[Tuple[int, str, str, int]] = field(default_factory=list)
@@ -471,6 +464,7 @@ class QueryIteration:
             "corpora": corpora_to_use,
             "request_data": request_data,
             "user": request_data["user"],
+            "app": request.app,
             "room": request_data["room"],
             "config": request.app["config"],
             "page_size": request_data.get("page_size", 10),
@@ -528,7 +522,6 @@ class QueryIteration:
 
         job = Job.fetch(manual["job"], connection=app["redis"])
 
-        user = manual["user"]
         corp = manual["corpora"]
         if not isinstance(corp, list):
             corp = [corp]
@@ -545,6 +538,7 @@ class QueryIteration:
             "user": manual["user"],
             "room": manual["room"],
             "job": job,
+            "app": app,
             "job_id": manual["job"],
             "config": app["config"],
             "simultaneous": manual.get("simultaneous", ""),
@@ -626,16 +620,45 @@ def _get_query_batches(
     """
     out: List[Tuple[int, str, str, int]] = []
     all_languages = ["en", "de", "fr", "ca"]
+    all_langs = tuple([f"_{la}" for la in all_languages])
+    langs = tuple([f"_{la}" for la in languages])
     for corpus in corpora:
         batches = config[str(corpus)]["_batches"]
         for name, size in batches.items():
             stripped = name.rstrip("0123456789")
             if stripped.endswith("rest"):
                 stripped = stripped[:-4]
-            if not stripped.endswith(
-                tuple([f"_{l}" for l in languages])
-            ) and stripped.endswith(tuple([f"_{l}" for l in all_languages])):
+            if not stripped.endswith(langs) and stripped.endswith(all_langs):
                 continue
             schema = config[str(corpus)]["schema_path"]
             out.append((corpus, schema, name, size))
     return sorted(out, key=lambda x: x[-1])
+
+
+async def push_msg(
+    sockets: Dict[str, Set[Tuple[Any, str]]],
+    session_id: str,
+    msg: Dict[str, Any],
+    skip: Tuple[str, str] | None = None,
+    just: Tuple[str, str] | None = None,
+) -> None:
+    """
+    Send JSON websocket message to one or more users
+    """
+    sent_to = set()
+    for room, users in sockets.items():
+        if room != session_id:
+            continue
+        for conn, user_id in users:
+            if (room, user_id) in sent_to:
+                continue
+            if skip and (room, user_id) == skip:
+                continue
+            if just and (room, user_id) != just:
+                continue
+            try:
+                await conn.send_json(msg)
+            except ConnectionResetError:
+                print(f"Connection reset: {room}/{user_id}")
+                pass
+            sent_to.add((room, user_id))
