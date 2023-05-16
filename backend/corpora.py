@@ -38,6 +38,7 @@ async def corpora(request: web.Request) -> web.Response:
     for corpus_id, conf in request.app["config"].items():
         if corpus_id == -1:
             corpora[corpus_id] = conf
+            continue
         allowed = conf.get("projects", [])
         if is_vian and allowed and "vian" not in allowed and "all" not in allowed:
             continue

@@ -15,7 +15,7 @@ async def validate(
     query: str = "",
     query_name: str | None = None,
     **kwargs,
-) -> Any:
+) -> web.Response | Dict[str, Any]:
     """
     Validate user query?
     """

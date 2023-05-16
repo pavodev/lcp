@@ -132,6 +132,7 @@ async def create_app(*args, **kwargs) -> web.Application | None:
 
     app = web.Application(middlewares=[catcher.middleware])
     app["mypy"] = C_COMPILED
+    app["config"] = {}
     if C_COMPILED:
         print("Running mypy/c app!")
     cors = aiohttp_cors.setup(

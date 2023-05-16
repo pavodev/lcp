@@ -116,7 +116,7 @@ async def _handle_message(
             for name, idx in payload["disabled"]:
                 print(f"Corpus disabled: {name}={idx}")
         print(f"Config loaded: {len(payload['config'])-1} corpora")
-        app["config"] = payload["config"]
+        app["config"].update(payload["config"])
         # payload["action"] = "update_config"
         # await push_msg(app["websockets"], None, payload)
         return None

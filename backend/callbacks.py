@@ -242,7 +242,7 @@ def _general_failure(
     job: Job,
     connection: RedisConnection,
     typ: Type,
-    value: str,
+    value: Any,
     traceback: TracebackType,
     *args,
     **kwargs,
@@ -309,7 +309,7 @@ def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> N
     """
     Run by worker: make config data
     """
-    fixed: Dict[int, Dict] = {-1: {}}
+    fixed: Dict[str, Dict[str, Any]] = {"-1": {}}
     disabled: List[Tuple[str, int]] = []
     for tup in result:
         (
@@ -351,10 +351,10 @@ def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> N
         }
         corpus_template.update(rest)
 
-        fixed[int(corpus_id)] = corpus_template
+        fixed[str(corpus_id)] = corpus_template
 
     for name, conf in fixed.items():
-        if name == -1:
+        if name == "-1":
             continue
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)

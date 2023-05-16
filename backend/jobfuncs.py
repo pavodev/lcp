@@ -100,7 +100,7 @@ async def _create_schema(**kwargs) -> None:
 def _make_sent_query(
     query: str,
     associated: str | List[str],
-    current_batch: Tuple[int, str, str],
+    current_batch: Tuple[int, str, str, int],
     resuming: bool,
 ):
     """
@@ -151,7 +151,7 @@ async def _db_query(**kwargs) -> List[Tuple[Any]] | None:
     """
     query: str = kwargs["query"]
     single_result: bool = kwargs.get("single", False)
-    params: Tuple[Any] = kwargs.get("params", tuple())
+    params = kwargs.get("params", tuple())
     is_config: bool = kwargs.get("config", False)
     is_store: bool = kwargs.get("store", False)
     is_sentences: bool = kwargs.get("is_sentences", False)
