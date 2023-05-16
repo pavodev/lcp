@@ -1,5 +1,3 @@
-import os
-
 from aiohttp import web
 
 from .utils import ensure_authorised

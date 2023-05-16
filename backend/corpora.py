@@ -5,13 +5,6 @@ from aiohttp import web
 from .utils import _lama_user_details, ensure_authorised
 
 
-def _has_access(user, corpus):
-    """
-    Here we make a request to lama to find out if a user can access a corpus. or something
-    """
-    return True
-
-
 @ensure_authorised
 async def corpora(request: web.Request) -> web.Response:
     """

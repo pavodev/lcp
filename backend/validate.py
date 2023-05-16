@@ -24,7 +24,7 @@ async def validate(
     try:
         json.loads(query)
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
-    except json.JSONDecodeError as err:
+    except json.JSONDecodeError:
         try:
             json_query = convert(query)
             result = {

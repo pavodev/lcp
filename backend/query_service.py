@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import Any, Dict, List, Tuple
+from typing import Dict, List, Tuple
 
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError

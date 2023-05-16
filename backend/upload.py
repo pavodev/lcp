@@ -1,4 +1,5 @@
 from __future__ import annotations
+
 import json
 import os
 import re
@@ -6,23 +7,16 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Any, Dict, Tuple
+from typing import Dict, Tuple
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
-
-import aiohttp
 from aiohttp import web
 from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
 from .ddl_gen import generate_ddl
-from .utils import (
-    _lama_project_create,
-    _lama_user_details,
-    ensure_authorised,
-    _lama_check_api_key,
-)
+from .utils import _lama_check_api_key, _lama_project_create, ensure_authorised
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -42,7 +36,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         return web.json_response(ret)
     status = job.get_status(refresh=True)
     msg = f"""Please wait: corpus processing in progress..."""
-    project = job.kwargs["project"]
+    # project = job.kwargs["project"]
     if status == "failed":
         msg = f"Error: {str(job.latest_result().exc_string)}"
     elif status == "finished":
@@ -250,7 +244,7 @@ async def upload(request: web.Request) -> web.Response:
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
-        {whole_url}    
+        {whole_url}
     """
     return_data.update(
         {
@@ -290,7 +284,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     # user_id = status["account"]["eduPersonId"]
     user_id = status["account"]["email"]
-    home_org = status["account"]["homeOrganization"]
+    # home_org = status["account"]["homeOrganization"]
     existing_project = status.get("profile", {})
 
     ids = (existing_project.get("id"), existing_project.get("title"))

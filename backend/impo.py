@@ -1,15 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import os
-
-import sys
 
 from textwrap import dedent
 from typing import (
     Any,
-    Awaitable,
     Dict,
     Iterable,
     List,
@@ -238,7 +234,7 @@ class Importer:
         # no concurrency:
         done = 0
         async with aiofiles.open(csv_path) as fo:
-            x = await fo.readline()
+            await fo.readline()
             async with self.connection.connection(self.upload_timeout) as conn:
                 await conn.set_autocommit(True)
                 async with conn.cursor() as cur:
@@ -285,7 +281,6 @@ class Importer:
 
         All processing occurs with self.max_concurrent respected
         """
-        x: List[Any] = []
         mc = self.max_concurrent
         name = "import"
         current_size = 0

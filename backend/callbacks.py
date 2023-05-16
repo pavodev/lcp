@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 
-from collections import defaultdict
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Dict, List, Tuple, Type
@@ -39,7 +38,6 @@ def _query(
         if restart is False
         else kwargs["total_results_requested"]
     )
-    current_batch = job.kwargs["current_batch"]
     done_part = job.kwargs["done_batches"]
     # this seemed to be wrong:
     # offset = job.kwargs.get("offset", False) if restart is False else False

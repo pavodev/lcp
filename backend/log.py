@@ -2,7 +2,6 @@
 Do not add type annotations yet
 """
 
-import inspect
 import logging
 import traceback
 

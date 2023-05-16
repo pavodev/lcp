@@ -7,13 +7,11 @@ import os
 import re
 
 from collections import abc, defaultdict
-from functools import total_ordering
 from textwrap import dedent
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from dataclasses import asdict, dataclass, field
-from typing import Any, Dict, List, Set, Tuple
 
 
 @dataclass
@@ -679,8 +677,8 @@ class CTProcessor:
         mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
         self.globals.mapping = json.dumps(mapd)
 
-        corpus_name = re.sub("\W", "_", self.corpus_temp["meta"]["name"].lower())
-        corpus_version = str(int(self.corpus_temp["meta"]["version"]))
+        # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
+        # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
 
         searchpath = f"\nSET search_path TO {self.schema_name};"
 

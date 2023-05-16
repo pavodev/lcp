@@ -14,6 +14,7 @@ aiohttp-devtools>=1.0.post0
 # aiohttp speedups only
 Brotli>=1.0.9
 aiodns>=3.0.0
+yarl>=1.9.2
 pycares>=4.3.0
 # asyncio speedup
 uvloop>=0.17.0

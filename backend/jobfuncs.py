@@ -4,10 +4,10 @@ import json
 import os
 import shutil
 
-from collections import Counter, defaultdict
+from collections import Counter
 from rq.connections import get_current_connection
 from rq.job import Job, get_current_job
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 from .impo import Importer
 from .utils import Interrupted, _get_kwics
@@ -67,7 +67,7 @@ async def _upload_data(**kwargs) -> None:
         print(f"Error: {err}")
         try:
             await importer.cleanup()
-        except:
+        except Exception:
             pass
         raise err
     finally:
@@ -91,7 +91,7 @@ async def _create_schema(**kwargs) -> None:
                     await cur.execute("\n".join(drops))
                 print("Creating schema...\n", kwargs["create"])
                 await cur.execute(kwargs["create"])
-            except:
+            except Exception:
                 script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
                 await cur.execute(script)
     return None

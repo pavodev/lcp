@@ -27,7 +27,7 @@ async def check_file_permissions(request: web.Request) -> web.Response:
             msg, status = ("OK", 200)
         elif not profile_id:
             msg, status = ("Invalid query", 464)
-        elif not profile_id in profiles_id:
+        elif profile_id not in profiles_id:
             msg, status = ("No permission", 465)
     elif not user_details_lama:
         msg, status = ("Invalid user", 461)
