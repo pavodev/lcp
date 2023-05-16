@@ -429,7 +429,7 @@ class QueryIteration:
     base: None | str
     sentences: bool
     is_vian: bool
-    app: web.Application
+    app: Any  # somehow fails when we do web.Application
     hit_limit: bool | int = False
     resuming: bool = False
     previous: str = ""
