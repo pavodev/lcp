@@ -48,14 +48,13 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     """
     Resume a query, or decide that we need to query the next batch
     """
-    app = qi.app
-    prev_job = Job.fetch(qi.previous, connection=app["redis"])
+    prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
     hit_limit = prev_job.meta.get("hit_limit", 0)
     if hit_limit:
         # base = prev_job.kwargs.get("base", prev_job.id)
         _query(
             prev_job,
-            app["redis"],
+            qi.app["redis"],
             prev_job.result,
             hit_limit=hit_limit,
             total_results_requested=qi.total_results_requested,
@@ -67,11 +66,11 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
             msg = "Sent job not finished. todo: fix this"
             raise ValueError(msg)
         else:
-            sent_job = Job.fetch(associated_sents, connection=app["redis"])
+            sent_job = Job.fetch(associated_sents, connection=qi.app["redis"])
 
             _sentences(
                 sent_job,
-                app["redis"],
+                qi.app["redis"],
                 sent_job.result,
                 start_at=hit_limit,
                 total_results_requested=qi.total_results_requested,
@@ -79,14 +78,14 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
         # todo: review this
 
-        # basejob = Job.fetch(base, connection=app["redis"])
+        # basejob = Job.fetch(base, connection=qi.app["redis"])
         # res_so_far = basejob.meta.get("_sentences", {})
 
-        # sent_result = Job.fetch(base, connection=app["redis"]).result
+        # sent_result = Job.fetch(base, connection=qi.app["redis"]).result
 
         # latest_sents = basejob.meta.get("latest_sentences")
         # if latest_sents:
-        #    latest_sents = Job.fetch(latest_sents, connection=app["redis"])
+        #    latest_sents = Job.fetch(latest_sents, connection=qi.app["redis"])
 
         qi.current_batch = current_batch
         qi.previous_job = prev_job
@@ -107,7 +106,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         qi.done_batches = done_batches
         qi.total_results_so_far = so_far
         qi.needed = needed
-        ex = _get_all_results(qi.previous, connection=app["redis"])
+        ex = _get_all_results(qi.previous, connection=qi.app["redis"])
         qi.existing_results = ex
         return qi
 
