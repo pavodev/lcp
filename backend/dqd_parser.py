@@ -53,12 +53,12 @@ dqd_grammar = r"""
 
 
 class TreeIndenter(Indenter):
-    NL_type = "_NL"
-    OPEN_PAREN_types: List[str] = []  # type: ignore
-    CLOSE_PAREN_types: List[str] = []  # type: ignore
-    INDENT_type = "_INDENT"
-    DEDENT_type = "_DEDENT"
-    tab_len = 8
+    NL_type: str = "_NL"
+    INDENT_type: str = "_INDENT"
+    DEDENT_type: str = "_DEDENT"
+    tab_len: int = 8
+    OPEN_PAREN_types: List[str] = []
+    CLOSE_PAREN_types: List[str] = []
     # this fixes mypy but not sure if it breaks anything:
     always_accept: Iterable[str] = ()
 

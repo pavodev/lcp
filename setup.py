@@ -15,7 +15,7 @@ if any(a == "build_ext" for a in sys.argv):
     for i in os.listdir(MODULE_PATH):
         if i not in SKIPS and i.endswith(".py"):
             files.append(os.path.join(MODULE_PATH, i))
-    ext_modules = mypycify(files, multi_file=True, separate=False, verbose=True)
+    ext_modules = mypycify(files, multi_file=False, separate=False, verbose=True)
 else:
     ext_modules = None
 

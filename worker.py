@@ -115,7 +115,7 @@ upool = upload_conn_type(
 )
 
 
-class MyJob(Job):
+class SQLJob(Job):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args)
         self._connstr = upload_connstr
@@ -127,7 +127,9 @@ class MyJob(Job):
 
 
 class MyWorker(Worker):
-    job_class = MyJob  # type: ignore
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.job_class = SQLJob
 
 
 async def go() -> None:
@@ -137,7 +139,7 @@ async def go() -> None:
         w.work()
 
 
-if __name__ == "__main__":
+if __name__ == "__main__" or __name__ == "worker":
 
     uvloop.install()  # documentation has this and the below...
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

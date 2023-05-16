@@ -145,15 +145,22 @@ Build C extension:
 
 ```bash
 python setup.py build_ext --inplace
+# to do abstract-query too:
+# cd abstract-query; python setup.py build_ext --inplace; cd .. 
 ```
 
-Run:
+Start the app like normal:
 
 ```bash
-python -c "import run"
+python run.py
 ```
 
-Still working on compiling `worker.py` with mypy...
+To start a C-built worker:
+
+```bash
+python -c "import worker"
+````
+
 
 ## Count lines of code
 

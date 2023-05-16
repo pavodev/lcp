@@ -118,7 +118,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["ws_cleanup"]
 
 
-async def create_app(*args, **kwargs) -> web.Application | None:
+async def create_app(*args, **kwargs) -> web.Application:
     """
     Build an instance of the app. If test=True is passed, it is returned
     before background tasks are added, to aid with unit tests
@@ -221,11 +221,7 @@ async def create_app(*args, **kwargs) -> web.Application | None:
 
 async def start_app() -> None:
     try:
-        maybe_app = await create_app()
-        if not maybe_app:
-            return None
-        else:
-            app = maybe_app
+        app = await create_app()
         runner = web.AppRunner(app)
         await runner.setup()
         site = web.TCPSite(runner, port=APP_PORT)

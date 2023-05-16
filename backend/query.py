@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import traceback
 
 from uuid import uuid4
 
@@ -44,8 +45,7 @@ def _get_word_count(
 
 
 async def _do_resume(
-    app: web.Application,
-    qi: QueryIteration,
+    app: web.Application, qi: QueryIteration
 ) -> Tuple[bool, QueryIteration]:
     """
     Resume a query!
@@ -67,7 +67,6 @@ async def _do_resume(
         if not associated_sents:
             msg = "Sent job not finished. todo: fix this"
             raise ValueError(msg)
-            pass
         else:
             sent_job = Job.fetch(associated_sents, connection=app["redis"])
 
@@ -156,7 +155,7 @@ async def query(
     app: web.Application | None = None,
 ) -> web.Response:
     """
-    Generate and queue up queries
+    Generate and queue up corpus queries
 
     This endpoint can be manually triggered for queries over multiple batches. When
     that happpens, manual is a dict with the needed data and the app is passed in
@@ -171,6 +170,7 @@ async def query(
     ###########################################################################
 
     if manual is not None and isinstance(app, web.Application):
+        # 'request' comes from sock.py, it is a non-first iteration
         qi = await QueryIteration.from_manual(manual, app)
         config = manual["config"]
     else:
@@ -193,10 +193,10 @@ async def query(
     for it in range(iterations):
 
         ########################################################################
-        # handle resumed queries                                               #
+        # handle resumed queries -- figure out if we need to query new batch   #
         ########################################################################
 
-        done: bool = False
+        done = False
         if qi.resuming:
             done, qi = await _do_resume(app, qi)
 
@@ -222,17 +222,23 @@ async def query(
             )
 
             try:
-                dqd, jso, sql, meta_json = _make_query(qi, **kwa)
+                dqd, jso, sql, meta = _make_query(qi, **kwa)
             except Exception as err:
                 fail = {
                     "status": "error",
                     "type": str(type(err)),
                     "info": f"Could not create query: {str(err)}",
                 }
-                extra = {"user": qi.user, "room": qi.room, **fail}
+                extra = {
+                    "user": qi.user,
+                    "room": qi.room,
+                    "traceback": traceback.format_exc(),
+                    **fail,
+                }
                 logging.error("Query generation failed", extra=extra)
                 return web.json_response(fail)
 
+            # print query info to terminal for first batch only
             if not it and not manual:
                 query_type = "DQD" if dqd else "JSON"
                 form = json.dumps(jso, indent=4)
@@ -270,7 +276,7 @@ async def query(
                 is_vian=qi.is_vian,
                 word_count=word_count,
                 parent=parent,
-                meta_json=meta_json,
+                meta_json=meta,
                 query=sql,
             )
 
@@ -282,16 +288,12 @@ async def query(
             # simultaneous query setup for next iteration                     #
             ###################################################################
 
-            # still figuring this out a little bit
-            divv = (it + 1) % max_jobs if max_jobs else -1
-            if (
-                qi.job is not None
-                and qi.simultaneous
-                and it
-                and max_jobs
-                and max_jobs != -1
-                and not divv
-            ):
+            # still figuring this out a little bit.
+            # the idea is that if there are 3 simultaneous jobs allowed, after
+            # 3 jobs we add a depends_on to future jobs containing one of the 3.
+            # that way, job 4+ won't start until 1-3 are done...
+            divv = (it + 1) % max_jobs if max_jobs > 0 else -1
+            if qi.job and qi.simultaneous and it and max_jobs > 0 and not divv:
                 query_depends.append(qi.job_id)
 
             if qi.current_batch is not None and qi.job is not None:
@@ -307,7 +309,7 @@ async def query(
 
         if not done and qi.sentences and qi.current_batch:
 
-            sents_kwargs = dict(
+            skwargs = dict(
                 user=qi.user,
                 room=qi.room,
                 simultaneous=qi.simultaneous,
@@ -323,9 +325,7 @@ async def query(
                 to_use = depends_on_chain
             else:
                 to_use = depends_on
-            sents_job = app["query_service"].sentences(
-                depends_on=to_use, **sents_kwargs
-            )
+            sents_job = app["query_service"].sentences(depends_on=to_use, **skwargs)
             # if simultaneous:
             #    depends_on_chain.append(stats_job.id)
 
