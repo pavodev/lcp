@@ -344,7 +344,7 @@ class Importer:
 
     async def run_script(
         self, script, *args, give: bool = False, progress: str | None = None
-    ) -> None:
+    ) -> Any:
         """
         Run a simple script -- used for prepared segments
         """
