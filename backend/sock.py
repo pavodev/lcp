@@ -69,6 +69,9 @@ async def handle_redis_response(channel, app, test=False):
 
 
 async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:
+    """
+    Ensure a message contains real data and send it onward
+    """
     await asyncio.sleep(0.1)
     if not message or not isinstance(message, dict):
         return
@@ -327,16 +330,16 @@ async def ws_cleanup(sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]])
     while True:
         for room, conns in sockets.items():
             to_close = set()
-            for ws, uid in conns:
+            for ws, user in conns:
                 if ws.closed:
-                    to_close.add((ws, uid))
+                    to_close.add((ws, user))
             for conn in to_close:
-                print(f"Removing stale WS connection: {room}/{uid}")
+                print(f"Removing stale WS connection: {room}/{user}")
                 conns.remove(conn)
             n_users = len(conns)
             if not n_users or not to_close:
                 continue
-            for _, user_id in to_close:
-                response = {"left": user_id, "room": room, "n_users": n_users}
+            for _, user in to_close:
+                response = {"left": user, "room": room, "n_users": n_users}
                 await push_msg(sockets, room, response)
         await asyncio.sleep(interval)

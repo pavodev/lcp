@@ -15,8 +15,8 @@ from typing import (
 )
 
 import aiofiles
-from aiofiles.threadpool.text import AsyncTextIOWrapper
 
+from aiofiles.threadpool.text import AsyncTextIOWrapper
 from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
 from .utils import gather
@@ -127,13 +127,13 @@ class Importer:
             self.max_bytes = 0
         else:
             self.max_bytes = int(self.max_bytes * 1e9)
-
         if self.max_concurrent < 1:
             self.update_progress(f"Processing concurrently without limit...")
         elif self.max_concurrent > 1:
             self.update_progress(f"Processing concurrently * {self.max_concurrent}")
         else:
             self.update_progress("Processing without concurrency")
+        return None
 
     def update_progress(self, msg: str) -> None:
         """
@@ -144,11 +144,13 @@ class Importer:
         path = os.path.join(self.project_dir, ".progress.txt")
         with open(path, "a") as fo:
             fo.write(msg.rstrip() + "\n")
+        return None
 
     async def cleanup(self) -> None:
         script = f"DROP SCHEMA IF EXISTS {self.schema} CASCADE;"
         self.update_progress(f"Running cleanup:\n{script}")
         await self.run_script(script)
+        return None
 
     async def _get_positions(
         self, f: AsyncTextIOWrapper, size: int
@@ -177,7 +179,7 @@ class Importer:
 
     async def copy_batch(
         self, start: int, chunk: int, cop: str, path: str, fsize: int, tot: int
-    ) -> bool:
+    ) -> None:
         """
         Copy a chunk of CSV into the DB, going no larger than self.batchsize
         plus potentially the remainder of a line
@@ -188,7 +190,7 @@ class Importer:
             data = await f.read(chunk)
             tell = await f.tell()
             if not data or not data.strip():
-                return True
+                return None
         async with self.connection.connection(self.upload_timeout) as conn:
             await conn.set_autocommit(True)
             async with conn.cursor() as cur:
@@ -196,7 +198,7 @@ class Importer:
                     await copy.write(data)
                     pc = min(100, round(tell * 100 / fsize, 2))
                     self.update_progress(f":progress:{pc}%:{len(data)}:{tot} == {base}")
-        return True
+        return None
 
     async def _check_tbl_exists(self, table: Table) -> bool:
         """
@@ -212,7 +214,7 @@ class Importer:
                     return True
                 raise AttributeError(f"Error: table '{table.name}' does not exist.")
 
-    async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> bool:
+    async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:
         """
         Import csv_path to the DB, with or without concurrency
         """
@@ -229,7 +231,7 @@ class Importer:
         if self.max_concurrent != 1:
             args = (cop, csv_path, fsize, tot)
             await self.process_data(positions, self.copy_batch, *args)
-            return True
+            return None
 
         # no concurrency:
         done = 0
@@ -248,7 +250,7 @@ class Importer:
                             self.update_progress(
                                 f":progress:{perc}%{len(data)}:{tot} -- {base}"
                             )
-        return True
+        return None
 
     async def import_corpus(self) -> None:
         """
@@ -265,6 +267,7 @@ class Importer:
         with_extra = self.corpus_size + (perc * self.num_extras)
         await self.process_data(sizes, self._copy_tbl, *(with_extra,))
         self.token_count = await self.get_token_count()
+        return None
 
     async def process_data(
         self,
@@ -341,7 +344,7 @@ class Importer:
 
     async def run_script(
         self, script, *args, give: bool = False, progress: str | None = None
-    ):
+    ) -> None:
         """
         Run a simple script -- used for prepared segments
         """
@@ -354,6 +357,7 @@ class Importer:
                     return got
                 if progress is not None:
                     self.update_progress(progress)
+        return None
 
     async def prepare_segments(
         self,
@@ -372,6 +376,7 @@ class Importer:
             self.update_progress(f"Running {len(batchnames)} insert tasks:\n{insert}\n")
         inserts = [insert.format(batch=batch) for batch in batchnames]
         await self.process_data(inserts, self.run_script, progress=progress)
+        return None
 
     async def create_entry_maincorpus(self) -> None:
         """

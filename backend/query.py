@@ -7,41 +7,18 @@ import traceback
 
 from typing import Any, Dict, List, Tuple
 
-from abstract_query.create import json_to_sql
 from aiohttp import web
 from rq.job import Job
 
 from .callbacks import _query, _sentences
-from .dqd_parser import convert
 from .log import logged
-from .utils import QueryIteration, _get_all_results, ensure_authorised, push_msg
-
-
-def _get_word_count(qi: QueryIteration) -> int:
-    """
-    Sum the word counts for corpora being searched
-    """
-    corpora = qi.corpora
-    config = qi.app["config"]
-    languages = qi.languages
-
-    total = 0
-    for corpus in corpora:
-        conf = config[str(corpus)]
-        try:
-            has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
-        except (KeyError, TypeError):
-            has_partitions = False
-        if not has_partitions or not languages:
-            total += sum(conf["token_counts"].values())
-        else:
-            counts = conf["token_counts"]
-            for name, num in counts.items():
-                for lang in languages:
-                    if name.rstrip("0").endswith(lang):
-                        total += num
-                        break
-    return total
+from .utils import (
+    QueryIteration,
+    _get_all_results,
+    ensure_authorised,
+    push_msg,
+    _get_word_count,
+)
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -111,38 +88,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         return qi
 
 
-def _make_query(
-    qi: QueryIteration,
-) -> Tuple[str | None, Dict[str, Any], str, Dict[str, List[Dict[str, Any]]]]:
-    """
-    Do any necessary query conversions
-
-    Returns: the DQD/None, JSON, SQL and SQL metadata objects
-    """
-    if qi.current_batch is None:
-        raise ValueError("Batch not found")
-
-    kwa = dict(
-        schema=qi.current_batch[1],
-        batch=qi.current_batch[2],
-        config=qi.app["config"][str(qi.current_batch[0])],
-        lang=qi._determine_language(qi.current_batch[2]),
-        vian=qi.is_vian,
-    )
-    txt: str | None = None
-    try:
-        json_query = json.loads(qi.query)
-    except json.JSONDecodeError:
-        json_query = convert(qi.query)
-        txt = qi.query
-    sql_query, meta_json = json_to_sql(json_query, **kwa)
-    return txt, json_query, sql_query, meta_json
-
-
-def _get_base(
-    qi: QueryIteration,
-    first_job: Job | None,
-) -> str:
+def _get_base(qi: QueryIteration, first_job: Job | None) -> str:
     """
     Find the original base of a query
     """
@@ -161,9 +107,8 @@ def _submit_sents(
     qi: QueryIteration, first_job: Job | None, dep_chain: List[str]
 ) -> Tuple[Job, List[str]]:
     """
-    Submit a sentences job
+    Helper to submit a sentences job
     """
-    app = qi.app
     skwargs = dict(
         user=qi.user,
         room=qi.room,
@@ -180,25 +125,22 @@ def _submit_sents(
         to_use = dep_chain
     elif depends_on:
         to_use = depends_on
-    sents_job = app["query_service"].sentences(depends_on=to_use, **skwargs)
+    sents_job = qi.app["query_service"].sentences(depends_on=to_use, **skwargs)
     # if simultaneous:
     #    dep_chain.append(stats_job.id)
     return sents_job, dep_chain
 
 
 def _submit_query(
-    manual: Dict[str, Any] | None,
     qi: QueryIteration,
     word_count: int,
-    meta: Dict,
-    sql: str,
     qd: List[str],
 ) -> Job:
     """
     Helper to submit a query job
     """
     parent: str | None = None
-    if manual is not None and qi.job is not None:
+    if qi.job is not None:
         parent = qi.job_id
     elif qi.resuming:
         parent = qi.previous
@@ -222,87 +164,19 @@ def _submit_query(
         languages=list(qi.languages),
         simultaneous=qi.simultaneous,
         is_vian=qi.is_vian,
+        query=qi.sql,
+        meta_json=qi.meta,
         word_count=word_count,
         parent=parent,
-        meta_json=meta,
-        query=sql,
     )
 
     job = qi.app["query_service"].query(depends_on=qd, **query_kwargs)
     return job
 
 
-@ensure_authorised
-@logged
-async def query(
-    request: web.Request,
-    manual: Dict[str, Any] | None = None,
-    app: web.Application | None = None,
-) -> web.Response:
-    """
-    Generate and queue up corpus queries
-
-    This endpoint can be manually triggered for queries over multiple batches. When
-    that happpens, manual is a dict with the needed data and the app is passed in
-    as a kwarg.
-
-    Because data can come in either through a request or through a dict, we normalise
-    by creating a utils.QueryIteration dataclass. Use this to keep the namespace of this function
-    from growing any larger
-    """
-
-    # Turn request or manual dict into a QueryIteration object
-
-    if manual is not None and isinstance(app, web.Application):
-        # 'request' comes from sock.py, it is a non-first iteration
-        qi = await QueryIteration.from_manual(manual, app)
-    else:
-        # request is from the frontend, most likely a new query...
-        qi = await QueryIteration.from_request(request)
-
-    # prepare for query iterations (just one if not simultaneous mode)
-    iterations = len(qi.all_batches) if qi.simultaneous else 1
-    http_response: List[Dict[str, str | bool | None]] = []
-    first: Job | None = None
-    dep_chain: List[str] = []
-    depends: List[str] = []
-
-    try:
-        for it in range(iterations):
-            out = await _query_iteration(qi, it, manual, first, depends, dep_chain)
-            job, dep, jobs, dep_chain = out
-            if not it and job:
-                first = job
-            if dep:
-                depends.append(dep)
-            http_response.append(jobs)
-    except Exception as err:
-        fail = {
-            "status": "error",
-            "type": str(type(err)),
-            "info": f"Could not create query: {str(err)}",
-        }
-        extra = {
-            "user": qi.user,
-            "room": qi.room,
-            "traceback": traceback.format_exc(),
-            **fail,
-        }
-        logging.error("Query generation failed", extra=extra)
-        # double trouble:
-        await push_msg(qi.app["websockets"], qi.room, fail, just=(qi.room, qi.user))
-        return web.json_response(fail)
-
-    if qi.simultaneous:
-        return web.json_response(http_response)
-    else:
-        return web.json_response(http_response[0])
-
-
 async def _query_iteration(
     qi: QueryIteration,
     it: int,
-    manual: Dict[str, Any] | None,
     first_job: Job | None,
     query_depends: List[str],
     dep_chain: List[str],
@@ -332,19 +206,19 @@ async def _query_iteration(
         return qi.job, depend, jobs, dep_chain
 
     word_count = _get_word_count(qi)
-    qi.decide_batch()
 
-    dqd, jso, sql, meta = _make_query(qi)
+    qi.decide_batch()
+    qi.make_query()
 
     # print query info to terminal for first batch only
-    if not it and manual is None:
-        query_type = "DQD" if dqd else "JSON"
-        form = json.dumps(jso, indent=4)
+    if not it and not qi.job:
+        query_type = "DQD" if qi.dqd else "JSON"
+        form = json.dumps(qi.jso, indent=4)
         print(f"Detected query type: {query_type}")
-        print(f"DQD:\n\n{dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{sql}")
+        print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
 
     # organise and submit query to rq via query service
-    job = _submit_query(manual, qi, word_count, meta, sql, query_depends)
+    job = _submit_query(qi, word_count, query_depends)
     qi.job = job
     qi.job_id = job.id
 
@@ -377,3 +251,69 @@ async def _query_iteration(
         qi.current_batch = None
 
     return job, depend, jobs, dep_chain
+
+
+@ensure_authorised
+@logged
+async def query(
+    request: web.Request,
+    manual: Dict[str, Any] | None = None,
+    app: web.Application | None = None,
+) -> web.Response:
+    """
+    Main query endpoint: generate and queue up corpus queries
+
+    This endpoint can be manually triggered for queries over multiple batches. When
+    that happpens, manual is a dict with the needed data and the app is passed in
+    as a kwarg.
+
+    Because data can come in either through a request or through a dict, we normalise
+    by creating a utils.QueryIteration dataclass. Use this to keep the namespace of this
+    function from growing any larger...
+    """
+
+    # Turn request or manual dict into a QueryIteration object
+    if manual is not None and isinstance(app, web.Application):
+        # 'request' comes from sock.py, it is a non-first iteration
+        qi = await QueryIteration.from_manual(manual, app)
+    else:
+        # request is from the frontend, most likely a new query...
+        qi = await QueryIteration.from_request(request)
+
+    # prepare for query iterations (just one if not simultaneous mode)
+    iterations = len(qi.all_batches) if qi.simultaneous else 1
+    http_response: List[Dict[str, str | bool | None]] = []
+    first: Job | None = None
+    dep_chain: List[str] = []
+    depends: List[str] = []
+
+    try:
+        for it in range(iterations):
+            out = await _query_iteration(qi, it, first, depends, dep_chain)
+            job, dep, jobs, dep_chain = out
+            if not it and job:
+                first = job
+            if dep:
+                depends.append(dep)
+            http_response.append(jobs)
+    except Exception as err:
+        fail = {
+            "status": "error",
+            "type": str(type(err)),
+            "info": f"Could not create query: {str(err)}",
+        }
+        extra = {
+            "user": qi.user,
+            "room": qi.room,
+            "traceback": traceback.format_exc(),
+            **fail,
+        }
+        logging.error("Query generation failed", extra=extra)
+        # double trouble:
+        await push_msg(qi.app["websockets"], qi.room, fail, just=(qi.room, qi.user))
+        return web.json_response(fail)
+
+    if qi.simultaneous:
+        return web.json_response(http_response)
+    else:
+        return web.json_response(http_response[0])

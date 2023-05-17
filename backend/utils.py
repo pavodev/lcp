@@ -1,7 +1,6 @@
 from __future__ import annotations
-import aiohttp
-import asyncio
 
+import asyncio
 import json
 import logging
 import os
@@ -23,10 +22,13 @@ from typing import (
 )
 from uuid import UUID, uuid4
 
-from aiohttp import web
+from abstract_query.create import json_to_sql
+from aiohttp import web, ClientSession
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from redis import Redis as RedisConnection
 from rq.job import Job
+
+from .dqd_parser import convert
 
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
@@ -143,45 +145,49 @@ def get_user_identifier(headers: Dict[str, Any]) -> str | None:
     return None
 
 
-async def _lama_user_details(headers: Mapping[str, Any]) -> Dict:
+async def _lama_user_details(headers: Mapping[str, Any]) -> Dict[str, Any]:
     """
     todo: not tested yet, but the syntax is something like this
     """
     url = f"{os.environ['LAMA_API_URL']}/user/details"
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
             return await resp.json()
 
 
-async def _lama_project_create(headers: Mapping[str, Any], project_data: Dict) -> Dict:
+async def _lama_project_create(
+    headers: Mapping[str, Any], project_data: Dict[str, Any]
+) -> Dict[str, Any]:
     """
     todo: not tested yet, but the syntax is something like this
     """
     url = f"{os.getenv('LAMA_API_URL')}/profile"
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(url, json=project_data, headers=headers) as resp:
             return await resp.json()
 
 
-async def _lama_api_create(headers: Mapping[str, Any], project_id: str) -> Dict:
+async def _lama_api_create(
+    headers: Mapping[str, Any], project_id: str
+) -> Dict[str, Any]:
     """
     todo: not tested yet, but the syntax is something like this
     """
     url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/create"
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
             return await resp.json(content_type=None)
 
 
 async def _lama_api_revoke(
     headers: Mapping[str, Any], project_id: str, apikey_id: str
-) -> Dict:
+) -> Dict[str, Any]:
     """
     todo: not tested yet, but the syntax is something like this
     """
     url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/{apikey_id}/revoke"
     data = {"comment": "Revoked by user"}
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(
             url, headers=_extract_lama_headers(headers), json=data
         ) as resp:
@@ -189,11 +195,14 @@ async def _lama_api_revoke(
 
 
 async def _lama_check_api_key(headers) -> Dict:
+    """
+    Get details about a user via their API key
+    """
     url = f"{os.environ['LAMA_API_URL']}/profile/api/check"
     key = headers["X-API-Key"]
     secret = headers["X-API-Secret"]
     api_headers = {"X-API-Key": key, "X-API-Secret": secret}
-    async with aiohttp.ClientSession() as session:
+    async with ClientSession() as session:
         async with session.post(url, headers=api_headers) as resp:
             return await resp.json()
 
@@ -311,10 +320,7 @@ def _add_results(
     return bundle, counts[list(kwics)[0]]
 
 
-def _union_results(
-    so_far: Dict[int, Any],
-    incoming: Dict[int, Any],
-) -> Dict[int, Any]:
+def _union_results(so_far: Dict[int, Any], incoming: Dict[int, Any]) -> Dict[int, Any]:
     """
     Join two results objects
     """
@@ -354,8 +360,8 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
         "job": job,
         "action": "timeout",
     }
-    connection = request.app["redis"]
     logging.warning(f"RQ job timeout: {job}", extra=jso)
+    connection = request.app["redis"]
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -373,6 +379,9 @@ def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
 
 
 async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
+    """
+    Stop too many tasks from running at once
+    """
     async with semaphore:
         return await coro
 
@@ -384,14 +393,11 @@ async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
     """
     if n > 0:
         semaphore = asyncio.Semaphore(n)
-
-        group = asyncio.gather(
-            *([asyncio.create_task(sem_coro(semaphore, c), name=name) for c in tasks])
-        )
+        tsks = [asyncio.create_task(sem_coro(semaphore, c), name=name) for c in tasks]
     else:
-        group = asyncio.gather(*[asyncio.create_task(c) for c in tasks])
+        tsks = [asyncio.create_task(c, name=name) for c in tasks]
     try:
-        return await group
+        return await asyncio.gather(*tsks)
     except (BaseException) as err:
         print(f"Error while gathering tasks: {str(err)}. Cancelling others...")
         running_tasks = asyncio.all_tasks()
@@ -442,6 +448,37 @@ class QueryIteration:
     job: Job | None = None
     job_id: str | None = ""
     previous_job: Job | None = None
+    dqd: str = ""
+    sql: str = ""
+    jso: Dict[str, Any] = field(default_factory=dict)
+    meta: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+
+    def make_query(self) -> None:
+        """
+        Do any necessary query conversions
+
+        Produces: the DQD/None, JSON, SQL and SQL metadata objects
+        """
+        if self.current_batch is None:
+            raise ValueError("Batch not found")
+
+        kwa = dict(
+            schema=self.current_batch[1],
+            batch=self.current_batch[2],
+            config=self.app["config"][str(self.current_batch[0])],
+            lang=self._determine_language(self.current_batch[2]),
+            vian=self.is_vian,
+        )
+        try:
+            json_query = json.loads(self.query)
+        except json.JSONDecodeError:
+            json_query = convert(self.query)
+            self.dqd = self.query
+        sql_query, meta_json = json_to_sql(json_query, **kwa)
+        self.jso = json_query
+        self.sql = sql_query
+        self.meta = meta_json
+        return None
 
     @classmethod
     async def from_request(cls, request):
@@ -483,10 +520,6 @@ class QueryIteration:
             "is_vian": is_vian,
         }
         return cls(**details)
-
-    @classmethod
-    def from_dict(cls, data):
-        return cls(**data)
 
     @staticmethod
     def _determine_language(batch: str) -> str | None:
@@ -662,3 +695,26 @@ async def push_msg(
                 print(f"Connection reset: {room}/{user_id}")
                 pass
             sent_to.add((room, user_id))
+
+
+def _get_word_count(qi: QueryIteration) -> int:
+    """
+    Sum the word counts for corpora being searched
+    """
+    total = 0
+    for corpus in qi.corpora:
+        conf = qi.app["config"][str(corpus)]
+        try:
+            has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
+        except (KeyError, TypeError):
+            has_partitions = False
+        if not has_partitions or not qi.languages:
+            total += sum(conf["token_counts"].values())
+        else:
+            counts = conf["token_counts"]
+            for name, num in counts.items():
+                for lang in qi.languages:
+                    if name.rstrip("0").endswith(lang):
+                        total += num
+                        break
+    return total
