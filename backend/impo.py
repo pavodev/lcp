@@ -271,7 +271,7 @@ class Importer:
 
     async def process_data(
         self,
-        iterable: Any,  # sorry
+        iterable: Iterable,  # sorry
         method: Callable,
         *args,
         **kwargs,
@@ -339,12 +339,12 @@ class Importer:
             queries.append(query)
         response = await self.process_data(queries, self.run_script, give=True)
 
-        res: Dict[str, Any] = {k: int(v[0]) for k, v in zip(names, response)}
+        res: Dict[str, int] = {k: int(v[0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(
         self, script, *args, give: bool = False, progress: str | None = None
-    ) -> Any:
+    ) -> Iterable[int] | None:
         """
         Run a simple script -- used for prepared segments
         """

@@ -297,6 +297,7 @@ async def query(
                 depends.append(dep)
             http_response.append(jobs)
     except Exception as err:
+        tb = traceback.format_exc()
         fail = {
             "status": "error",
             "type": str(type(err)),
@@ -305,11 +306,13 @@ async def query(
         extra = {
             "user": qi.user,
             "room": qi.room,
-            "traceback": traceback.format_exc(),
+            "traceback": tb,
             **fail,
         }
-        logging.error("Query generation failed", extra=extra)
-        # double trouble:
+        msg = f"Error: {err} ({qi.user}/{qi.room})"
+        # alert everyone possible about this problem:
+        print(f"{msg}:\n\n{tb}")
+        logging.error(msg, extra=extra)
         await push_msg(qi.app["websockets"], qi.room, fail, just=(qi.room, qi.user))
         return web.json_response(fail)
 

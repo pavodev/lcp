@@ -43,8 +43,10 @@ async def handle_redis_response(channel, app, test=False):
             if test is True:
                 return None
 
-    except (asyncio.TimeoutError, asyncio.CancelledError) as err:
+    except asyncio.TimeoutError as err:
         print(f"Warning: timeout in websocket listener ({err})")
+    except asyncio.CancelledError:
+        print("Canceled redis handler")
     except Exception as err:
         formed = traceback.format_exc()
         print(f"Error: {str(err)}\n{formed}")
