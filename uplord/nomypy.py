@@ -6,13 +6,15 @@ from typing import Any
 
 from aiohttp import web
 
-# from redis.asyncio.client import PubSub
+from redis.asyncio.client import PubSub
 
 from .sock import _process_message
 from .utils import PUBSUB_CHANNEL
 
 
-async def handle_redis_response(channel: Any, app: Any, test: bool = False) -> None:
+async def handle_redis_response(
+    channel: PubSub, app: web.Application, test: bool = False
+) -> None:
     """
     If redis publishes a message, it gets picked up here in an async loop
     and broadcast to the correct websockets.
@@ -49,7 +51,7 @@ async def handle_redis_response(channel: Any, app: Any, test: bool = False) -> N
         logging.error(str(err), extra=extra)
 
 
-async def listen_to_redis(app: Any) -> None:
+async def listen_to_redis(app: web.Application) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender
