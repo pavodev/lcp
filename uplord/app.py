@@ -50,7 +50,7 @@ from .check_file_permissions import check_file_permissions
 from .corpora import corpora
 from .document import document
 from .lama_user_data import lama_user_data
-from .nomypy import _listen_to_redis_for_queries
+from .nomypy import listen_to_redis
 from .project import project_api_create, project_api_revoke, project_create
 from .query import query
 from .query_service import QueryService
@@ -69,7 +69,7 @@ REDIS_PORT = int(_RPORT.strip())
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 
 
-async def on_shutdown(app: web.Application) -> None:
+async def on_shutdown(app):
     """
     Close websocket connections on app shutdown
     """
@@ -90,16 +90,17 @@ async def on_shutdown(app: web.Application) -> None:
                 print(f"Issue closing websocket for {room}/{uid}: {err}")
 
 
-async def start_background_tasks(app: web.Application) -> None:
+async def start_background_tasks(app):
     """
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    app["redis_listener"] = asyncio.create_task(_listen_to_redis_for_queries(app))
+    listener = asyncio.create_task(listen_to_redis(app))
+    app["redis_listener"] = listener
     app["ws_cleanup"] = asyncio.create_task(ws_cleanup(app["websockets"]))
 
 
-async def cleanup_background_tasks(app: web.Application) -> None:
+async def cleanup_background_tasks(app):
     """
     Stop running background tasks: redis listener, stale ws cleaner
     """
@@ -109,7 +110,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["ws_cleanup"]
 
 
-async def create_app(*args, **kwargs) -> web.Application:
+async def create_app(*args, **kwargs):
     """
     Build an instance of the app. If test=True is passed, it is returned
     before background tasks are added, to aid with unit tests
@@ -210,7 +211,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     return app
 
 
-async def start_app() -> None:
+async def start_app():
     try:
         app = await create_app()
         runner = web.AppRunner(app)
@@ -224,39 +225,29 @@ async def start_app() -> None:
         return
 
 
-def start() -> None:
+def start():
     """
     Alternative starter
     """
     if "_TEST" in os.environ:
-        pass
+        return
 
-    # this is how mypy starts the app
-    elif __name__.endswith("app"):
-        asyncio.run(start_app())
-
-    # development mode starts a dev server
-    elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
-        try:
-            if sys.version_info >= (3, 11):
-                with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                    runner.run(start_app())
-            else:
-                uvloop.install()
-                asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-                asyncio.run(start_app())
-        except KeyboardInterrupt:
-            print("Stopped.")
+    try:
+        if sys.version_info >= (3, 11):
+            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+                runner.run(start_app())
+        else:
+            uvloop.install()
+            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+            asyncio.run(start_app())
+    except KeyboardInterrupt:
+        print("Application stopped.")
 
 
 # test mode should not start a loop
 if "_TEST" in os.environ:
     pass
 
-# this is how mypy starts the app
-elif __name__ == "app" or __name__ == "uplord.app":
-    start()
-
 # development mode starts a dev server
-elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
+elif __name__ == "__main__":
     start()

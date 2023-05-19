@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
-import traceback
 
 from typing import Any, Dict, Set, Tuple
 
@@ -16,58 +14,6 @@ from redis.asyncio.client import PubSub
 from .query import query
 from .utils import push_msg
 from .validate import validate
-
-
-async def handle_redis_response(channel, app, test=False):
-    """
-    If redis publishes a message, it gets picked up here in an async loop
-    and broadcast to the correct websockets.
-
-    We need to know if we're running c-compiled code or not, because
-    channel.get_message() fails when compiled to c for some reason
-    """
-    message = None
-    payload = None
-
-    try:
-        if app.get("mypy"):
-            async for message in channel.listen():
-                await _process_message(message, channel, app)
-        else:
-            while True:
-                message = await channel.get_message(
-                    ignore_subscribe_messages=True, timeout=2.0
-                )
-                await _process_message(message, channel, app)
-
-            if test is True:
-                return None
-
-    except asyncio.TimeoutError as err:
-        print(f"Warning: timeout in websocket listener ({err})")
-    except asyncio.CancelledError:
-        print("Canceled redis handler")
-    except Exception as err:
-        formed = traceback.format_exc()
-        print(f"Error: {str(err)}\n{formed}")
-        to_send = {"error": str(err), "status": "failed"}
-        if isinstance(payload, dict):
-            user = payload.get("user", "")
-            room = payload.get("room", "")
-            if user:
-                to_send["user"] = user
-            if room:
-                to_send["room"] = room
-            if user and room:
-                await push_msg(
-                    app["websockets"],
-                    room,
-                    to_send,
-                    skip=None,
-                    just=(room, user),
-                )
-        extra = {"traceback": formed, **to_send}
-        logging.error(str(err), extra=extra)
 
 
 async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:

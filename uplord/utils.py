@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import sys
 
 from collections import defaultdict, Counter
 from dataclasses import dataclass, field, asdict
@@ -32,6 +33,12 @@ from .dqd_parser import convert
 
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
+
+
+if sys.version_info <= (3, 9):
+    QI_KWARGS = dict()
+else:
+    QI_KWARGS = dict(kw_only=True, slots=True)
 
 
 class Interrupted(Exception):
@@ -415,7 +422,7 @@ async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
         raise err
 
 
-@dataclass(kw_only=True, slots=True)
+@dataclass(**QI_KWARGS)
 class QueryIteration:
     """
     Model an iteration of a query, with all its associated settings
