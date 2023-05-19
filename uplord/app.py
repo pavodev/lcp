@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import logging
 import os
 import sys
@@ -60,7 +59,8 @@ from .utils import handle_timeout
 from .validate import validate
 from .video import video
 
-C_COMPILED = not str(inspect.getfile(handle_timeout)).endswith(".py")
+C_COMPILED = str(handle_timeout.__class__.__module__) == "builtins"
+
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 _RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
