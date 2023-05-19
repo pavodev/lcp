@@ -252,3 +252,16 @@ def to_dict(tree: Any) -> Any:
 def convert(dqd_query: str) -> Dict[str, Any]:
     data = parser.parse(dqd_query)
     return to_dict(data)
+
+
+if __name__ == "__main__":
+    import json
+    import os
+    import sys
+
+    if os.path.isfile(sys.argv[-1]):
+        with open(sys.argv[-1], "r") as fo:
+            dqd = fo.read()
+    else:
+        dqd = sys.argv[-1]
+    print(json.dumps(convert(dqd), indent=4))

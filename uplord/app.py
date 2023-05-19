@@ -45,20 +45,21 @@ from redis import asyncio as aioredis
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
 
-from backend import utils
-from backend.check_file_permissions import check_file_permissions
-from backend.corpora import corpora
-from backend.document import document
-from backend.lama_user_data import lama_user_data
-from backend.project import project_api_create, project_api_revoke, project_create
-from backend.query import query
-from backend.query_service import QueryService
-from backend.sock import handle_redis_response, sock, ws_cleanup
-from backend.store import fetch_queries, store_query
-from backend.upload import make_schema, upload
-from backend.utils import PUBSUB_CHANNEL, handle_timeout
-from backend.validate import validate
-from backend.video import video
+from . import utils
+from .check_file_permissions import check_file_permissions
+from .corpora import corpora
+from .document import document
+from .lama_user_data import lama_user_data
+from .nomypy import _listen_to_redis_for_queries
+from .project import project_api_create, project_api_revoke, project_create
+from .query import query
+from .query_service import QueryService
+from .sock import sock, ws_cleanup
+from .store import fetch_queries, store_query
+from .upload import make_schema, upload
+from .utils import handle_timeout
+from .validate import validate
+from .video import video
 
 C_COMPILED = not str(inspect.getfile(utils)).endswith(".py")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
@@ -68,28 +69,18 @@ REDIS_PORT = int(_RPORT.strip())
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 
 
-async def _listen_to_redis_for_queries(app: web.Application) -> None:
-    """
-    Using our async redis connection instance, listen for events coming from redis
-    and delegate to the sender
-    """
-    pubsub = app["aredis"].pubsub()
-    async with pubsub as p:
-        await p.subscribe(PUBSUB_CHANNEL)
-        try:
-            await handle_redis_response(p, app)
-        except KeyboardInterrupt:
-            pass
-        except Exception as err:
-            raise err
-        await p.unsubscribe(PUBSUB_CHANNEL)
-        await app["aredis"].quit()
-
-
 async def on_shutdown(app: web.Application) -> None:
     """
     Close websocket connections on app shutdown
     """
+    try:
+        await app["aredis"].quit()
+    except Exception:
+        pass
+    try:
+        await app["redis"].quit()
+    except Exception:
+        pass
     msg = "Server shutdown"
     for room, conns in app["websockets"].items():
         for ws, uid in conns:
@@ -132,9 +123,9 @@ async def create_app(*args, **kwargs) -> web.Application:
 
     app = web.Application(middlewares=[catcher.middleware])
     app["mypy"] = C_COMPILED
-    app["config"] = {}
     if C_COMPILED:
         print("Running mypy/c app!")
+    app["config"] = {}
     cors = aiohttp_cors.setup(
         app,
         defaults={
@@ -152,7 +143,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     app["websockets"] = defaultdict(set)
 
     resource = cors.add(app.router.add_resource("/corpora"))
-    cors.add(resource.add_route("GET", corpora))
+    # cors.add(resource.add_route("GET", corpora))
     cors.add(resource.add_route("POST", corpora))
 
     resource = cors.add(app.router.add_resource("/query"))
@@ -233,23 +224,39 @@ async def start_app() -> None:
         return
 
 
+def start() -> None:
+    """
+    Alternative starter
+    """
+    if "_TEST" in os.environ:
+        pass
+
+    # this is how mypy starts the app
+    elif __name__.endswith("app"):
+        asyncio.run(start_app())
+
+    # development mode starts a dev server
+    elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
+        try:
+            if sys.version_info >= (3, 11):
+                with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+                    runner.run(start_app())
+            else:
+                uvloop.install()
+                asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+                asyncio.run(start_app())
+        except KeyboardInterrupt:
+            print("Stopped.")
+
+
 # test mode should not start a loop
 if "_TEST" in os.environ:
     pass
 
 # this is how mypy starts the app
-elif __name__ == "run":
-    asyncio.run(start_app())
+elif __name__ == "app" or __name__ == "uplord.app":
+    start()
 
 # development mode starts a dev server
 elif __name__ == "__main__" or sys.argv[0].endswith("adev"):
-    try:
-        if sys.version_info >= (3, 11):
-            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                runner.run(start_app())
-        else:
-            uvloop.install()
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            asyncio.run(start_app())
-    except KeyboardInterrupt:
-        print("Stopped.")
+    start()

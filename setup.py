@@ -3,39 +3,48 @@ import sys
 
 from setuptools import setup
 
-from mypyc.build import mypycify
+from typing import Set
 
-MODULE_PATH = "backend"
 
-SKIPS = set()
+PACKAGE_DIR = "uplord"
+BASEPATH = os.path.dirname(__file__)
+MODULE_PATH = os.path.join(BASEPATH, PACKAGE_DIR)
+
+SKIPS: Set[str] = {"__main__.py", "nomypy.py"}
 
 # use build_ext to do mypy c compilation
 if any(a == "build_ext" for a in sys.argv):
-    files = ["run.py", "worker.py"]
+    from mypyc.build import mypycify
+
+    files = []
     for i in os.listdir(MODULE_PATH):
         if i not in SKIPS and i.endswith(".py"):
             files.append(os.path.join(MODULE_PATH, i))
-    ext_modules = mypycify(files, multi_file=False, separate=False, verbose=True)
+    ext_modules = mypycify(files, multi_file=False, verbose=True, separate=False)
 else:
-    ext_modules = None
+    ext_modules = []
 
 with open("requirements.txt") as f:
     REQUIRED = [
-        i
+        i.split(" #")[0].strip()
         for i in f.read().splitlines()
-        if i and not i.strip().startswith("#") and not i.strip().startswith("-r")
+        if i
+        and not i.strip().startswith("#")
+        and not i.strip().startswith("-r")
+        and "git+" not in i
     ]
+    REQUIRED.append("backports.zoneinfo")
 
 
 def read(fname):
     """
     Helper to read README
     """
-    return open(os.path.join(os.path.dirname(__file__), fname)).read().strip()
+    return open(os.path.join(BASEPATH, fname)).read().strip()
 
 
-setup(
-    name="uplord",
+kwargs = dict(
+    name=PACKAGE_DIR,
     version="0.0.1",
     description="corpus linguistics app",
     long_description=read("README.md"),
@@ -44,13 +53,21 @@ setup(
     author="Danny McDonald",
     include_package_data=True,
     zip_safe=False,
-    packages=[MODULE_PATH],
+    packages=[PACKAGE_DIR],
     package_data={
-        MODULE_PATH: ["backend/py.typed"],
+        PACKAGE_DIR: ["uplord/py.typed"],
     },
     author_email="mcddjx@gmail.com",
     license="MIT",
     keywords=["corpus", "linguistics"],
+    dependency_links=[
+        "http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1"
+        # "git+https://github.com/morganwahl/zoneinfo.git#egg=zoneinfo-0.2.1"
+    ],
     install_requires=REQUIRED,
-    ext_modules=ext_modules,
 )
+
+if ext_modules:
+    kwargs["ext_modules"] = ext_modules
+
+setup(**kwargs)
