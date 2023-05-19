@@ -15,44 +15,46 @@ git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/uplord.git
 cd uplord
 ````
 
-This will also install the dependencies for `abstract-query` and `lcp-upload`. If they are not available in the `uplord` directory, you should remove the first two lines from `requirements.txt` before installing.
+This will also clone the `abstract-query` and `lcp-upload` submodules. If they are not available in the `uplord` directory, you should remove the first two lines from `requirements.txt` before installing.
 
 ## Things that need to be running for uplord to work
 
-* backend
-* frontend
+* The backend (`./uplord`)
+* The frontend (`./frontend`)
 * LAMa
 * Postgres
 * Redis
-* RQ worker
+* at least one RQ worker
 
-To install, first prepare `abstract-query` if need be:
+To install backend (and `abstract-query`, which is also required):
+
+```bash
+pip install -e abstract-query -e .
+```
+
+To build optional `c` extensions:
 
 ```bash
 cd abstract-query
-pip install -e . -r requirements.txt
-# python setup.py build_ext --inplace  # optional, build as c extension
+python setup.py build_ext --inplace
 cd ..
+python setup.py build_ext --inplace
+
 ```
 
-For `uplord` itself:
+To start backend for development, first edit `.env` so that it contains the correct config.
 
-```bash
-pip install -e . -r requirements.txt
-# python setup.py build_ext --inplace  # optional, build as c extension
-```
-
-To start backend for development:
-
-```bash
-python -m uplord
-```
-
-In another session, start as many RQ workers as you want. To start one:
+Then, start as many RQ workers as you want. To start one:
 
 ```bash
 python -m uplord worker
 ````
+
+In another session, start the app with:
+
+```bash
+python -m uplord
+```
 
 For the LAMa connection to work, you might need to do:
 
@@ -76,10 +78,10 @@ When pulling latest code, you should also fetch the latest from the submodules. 
 git pull --recurse-submodules
 ```
 
-Start app:
+You might also want to configure `git` to push changes to submodules when you push to `uplord`:
 
 ```bash
-gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.app:create_app --worker-class aiohttp.GunicornWebWorker
+git config --global push.recurseSubmodules "on-demand"
 ```
 
 ## Configuration
@@ -149,37 +151,13 @@ coverage run -m unittest
 coverage html
 ```
 
-## mypy
+## Deployment
 
-Check app for type problems:
+Edit `.env` as necessary. Start as many workers as necessary. Then, to start app:
 
 ```bash
-# pip install mypy
-mypy run.py
-mypy worker.py
+gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.app:create_app --worker-class aiohttp.GunicornWebWorker
 ```
-
-Build C extension:
-
-
-```bash
-python setup.py build_ext --inplace
-# to do abstract-query too:
-# cd abstract-query; python setup.py build_ext --inplace; cd .. 
-```
-
-Start the app like normal:
-
-```bash
-python run.py
-```
-
-To start a C-built worker:
-
-```bash
-python -c "import worker"
-````
-
 
 ## Count lines of code
 

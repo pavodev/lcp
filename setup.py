@@ -33,7 +33,9 @@ with open("requirements.txt") as f:
         and not i.strip().startswith("-r")
         and "git+" not in i
     ]
-    REQUIRED.append("backports.zoneinfo")
+    REQUIRED.append(
+        "backports.zoneinfo @ http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1"
+    )
 
 
 def read(fname):
@@ -60,10 +62,6 @@ kwargs = dict(
     author_email="mcddjx@gmail.com",
     license="MIT",
     keywords=["corpus", "linguistics"],
-    dependency_links=[
-        "http://github.com/morganwahl/zoneinfo"
-        # "git+https://github.com/morganwahl/zoneinfo.git#egg=zoneinfo-0.2.1"
-    ],
     install_requires=REQUIRED,
 )
 
