@@ -61,7 +61,7 @@ kwargs = dict(
     license="MIT",
     keywords=["corpus", "linguistics"],
     dependency_links=[
-        "http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1"
+        "http://github.com/morganwahl/zoneinfo"
         # "git+https://github.com/morganwahl/zoneinfo.git#egg=zoneinfo-0.2.1"
     ],
     install_requires=REQUIRED,

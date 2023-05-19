@@ -1,4 +1,4 @@
-git+https://github.com/morganwahl/zoneinfo@0.2.1#egg=backports.zoneinfo
+git+https://github.com/morganwahl/zoneinfo
 -r abstract-query/requirements.txt
 -r lcp-upload/requirements.txt
 psycopg2-binary>=2.9.6

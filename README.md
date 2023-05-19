@@ -6,12 +6,13 @@ First, install Python 3.11 (though anything from 3.9 onward should work).
 
 Make sure you also have access to `abstract-query` and `lcp-upload` submodule repositories. Ask someone to grant you access if you need it.
 
+## Setup
+
 Then clone this repo and its submodules:
 
 ```bash
 git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/uplord.git 
 cd uplord
-pip install -r requirements.txt
 ````
 
 This will also install the dependencies for `abstract-query` and `lcp-upload`. If they are not available in the `uplord` directory, you should remove the first two lines from `requirements.txt` before installing.
@@ -25,20 +26,32 @@ This will also install the dependencies for `abstract-query` and `lcp-upload`. I
 * Redis
 * RQ worker
 
-To start backend:
+To install, first prepare `abstract-query` if need be:
 
 ```bash
-# optional:
-# pip install mypy && mypyc run.py
-python run.py
-# or
-python -m aiohttp.web -H localhost -P 9090 run:create_app
+cd abstract-query
+pip install -e . -r requirements.txt
+# python setup.py build_ext --inplace  # optional, build as c extension
+cd ..
+```
+
+For `uplord` itself:
+
+```bash
+pip install -e . -r requirements.txt
+# python setup.py build_ext --inplace  # optional, build as c extension
+```
+
+To start backend for development:
+
+```bash
+python -m uplord
 ```
 
 In another session, start as many RQ workers as you want. To start one:
 
 ```bash
-python worker.py
+python -m uplord worker
 ````
 
 For the LAMa connection to work, you might need to do:
@@ -61,6 +74,12 @@ When pulling latest code, you should also fetch the latest from the submodules. 
 
 ```bash
 git pull --recurse-submodules
+```
+
+Start app:
+
+```bash
+gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.app:create_app --worker-class aiohttp.GunicornWebWorker
 ```
 
 ## Configuration
