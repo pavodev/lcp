@@ -42,7 +42,7 @@ from aiohttp_catcher import Catcher, catch
 
 from redis import Redis
 from redis import asyncio as aioredis
-from rq.exceptions import NoSuchJobError
+from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 
 from .check_file_permissions import check_file_permissions
@@ -120,7 +120,9 @@ async def create_app(*args, **kwargs):
     catcher = Catcher()
 
     await catcher.add_scenario(
-        catch(NoSuchJobError).with_status_code(200).and_call(handle_timeout)
+        catch(NoSuchJobError, AbandonedJobError)
+        .with_status_code(200)
+        .and_call(handle_timeout)
     )
 
     app = web.Application(middlewares=[catcher.middleware])
