@@ -40,7 +40,7 @@ class QueryService:
         self,
         queue: str = "query",
         **kwargs,
-    ) -> SQLJob:
+    ) -> SQLJob | Job:
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -57,7 +57,7 @@ class QueryService:
         self,
         queue: str = "query",
         **kwargs,
-    ) -> SQLJob:
+    ) -> SQLJob | Job:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
         return self.app[queue].enqueue(
@@ -70,7 +70,7 @@ class QueryService:
             kwargs=kwargs,
         )
 
-    def get_config(self, queue: str = "alt", **kwargs) -> SQLJob:
+    def get_config(self, queue: str = "alt", **kwargs) -> SQLJob | Job:
         """
         Get initial app configuration JSON
         """
@@ -85,7 +85,7 @@ class QueryService:
 
     def fetch_queries(
         self, user: str, room: str, queue: str = "alt", limit: int = 10
-    ) -> SQLJob:
+    ) -> SQLJob | Job:
         """
         Get previous saved queries for this user/room
         """
@@ -144,7 +144,7 @@ class QueryService:
         room: str | None = None,
         queue: str = "alt",
         gui: bool = False,
-    ) -> SQLJob:
+    ) -> SQLJob | Job:
         """
         Upload a new corpus to the system
         """
