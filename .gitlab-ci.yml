@@ -59,8 +59,7 @@ test:
     - pwd
     - ls -al
     - cd /builds/LiRI/projects/uplord
-    - mypy run.py
-    - mypy worker.py
+    - mypy uplord/app.py
     # building c is not ready yet, mypy bugs most likely
     - python setup.py build_ext --inplace
     # unit tests will not work until db access exists
