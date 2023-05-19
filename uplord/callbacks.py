@@ -19,10 +19,11 @@ from .utils import (
     _union_results,
     PUBSUB_CHANNEL,
 )
+from .worker import SQLJob
 
 
 def _query(
-    job: Job, connection: RedisConnection, result: List[Tuple], *args, **kwargs
+    job: SQLJob, connection: RedisConnection, result: List[Tuple], *args, **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -120,13 +121,13 @@ def _query(
         }
     )
 
-    redis = job._redis if restart is False else connection  # type: ignore
+    red = job._redis if restart is False else connection  # type: ignore
 
-    redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _sentences(
-    job: Job,
+    job: SQLJob,
     connection: RedisConnection,
     result: List[Tuple[str | UUID, int, List[Any]]],
     *args,
@@ -179,15 +180,16 @@ def _sentences(
         "base": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
-    if hasattr(job, "_redis"):
-        red = job._redis  # type: ignore
-    else:
-        red = connection
+    red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _schema(
-    job: Job, connection: RedisConnection, result: bool | None = None, *args, **kwargs
+    job: SQLJob,
+    connection: RedisConnection,
+    result: bool | None = None,
+    *args,
+    **kwargs,
 ) -> None:
     """
     This callback is executed after successful creation of schema.
@@ -209,11 +211,16 @@ def _schema(
     if result:
         jso["error"] = result
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _upload(
-    job: Job, connection: RedisConnection, result: bool | None = None, *args, **kwargs
+    job: SQLJob,
+    connection: RedisConnection,
+    result: bool | None = None,
+    *args,
+    **kwargs,
 ) -> None:
     """
     Success callback when user has uploaded a dataset
@@ -233,11 +240,13 @@ def _upload(
     if result:
         jso["error"] = result
 
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _general_failure(
-    job: Job,
+    job: SQLJob,
     connection: RedisConnection,
     typ: Type,
     value: Any,
@@ -266,11 +275,13 @@ def _general_failure(
     if "No such job" in jso["value"]:
         jso["status"] = "timeout"
         jso["action"] = "timeout"
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
 def _queries(
-    job: Job,
+    job: SQLJob,
     connection: RedisConnection,
     result: List[Tuple[str, Dict, str, str | None, datetime]] | None,
     *args,
@@ -300,10 +311,11 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
-    job._redis.publish(PUBSUB_CHANNEL, made)  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, made)  # type: ignore
 
 
-def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> None:
+def _config(job: SQLJob, connection: RedisConnection, result, *args, **kwargs) -> None:
     """
     Run by worker: make config data
     """
@@ -363,4 +375,5 @@ def _config(job: Job, connection: RedisConnection, result, *args, **kwargs) -> N
         "action": "set_config",
         "disabled": disabled,
     }
-    job._redis.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
