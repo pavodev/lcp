@@ -65,5 +65,11 @@ async def listen_to_redis(app: web.Application) -> None:
         except Exception as err:
             raise err
         await channel.unsubscribe(PUBSUB_CHANNEL)
-        await app["aredis"].quit()
-        await app["redis"].quit()
+        try:
+            await app["aredis"].quit()
+        except Exception:
+            pass
+        try:
+            await app["redis"].quit()
+        except Exception:
+            pass
