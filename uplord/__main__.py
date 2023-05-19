@@ -1,11 +1,8 @@
 """
 Interface for interacting with uplord server
 """
-
-import asyncio
 import sys
 
-import uvloop
 
 command = next(i for i in reversed(sys.argv) if not i.startswith("-"))
 
