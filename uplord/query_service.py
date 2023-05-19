@@ -18,6 +18,7 @@ from .callbacks import (
     _upload,
     _schema,
 )
+from .worker import SQLJob
 
 from .jobfuncs import _db_query, _upload_data, _create_schema
 
@@ -39,7 +40,7 @@ class QueryService:
         self,
         queue: str = "query",
         **kwargs,
-    ) -> Job:
+    ) -> SQLJob:
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -56,7 +57,7 @@ class QueryService:
         self,
         queue: str = "query",
         **kwargs,
-    ) -> Job:
+    ) -> SQLJob:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
         return self.app[queue].enqueue(
@@ -69,7 +70,7 @@ class QueryService:
             kwargs=kwargs,
         )
 
-    def get_config(self, queue: str = "alt", **kwargs) -> Job:
+    def get_config(self, queue: str = "alt", **kwargs) -> SQLJob:
         """
         Get initial app configuration JSON
         """
@@ -84,7 +85,7 @@ class QueryService:
 
     def fetch_queries(
         self, user: str, room: str, queue: str = "alt", limit: int = 10
-    ) -> Job:
+    ) -> SQLJob:
         """
         Get previous saved queries for this user/room
         """
@@ -143,7 +144,7 @@ class QueryService:
         room: str | None = None,
         queue: str = "alt",
         gui: bool = False,
-    ) -> Job:
+    ) -> SQLJob:
         """
         Upload a new corpus to the system
         """
@@ -163,7 +164,7 @@ class QueryService:
             **opts,
         )
 
-    def cancel(self, job: Job | str) -> str:
+    def cancel(self, job: SQLJob | Job | str) -> str:
         """
         Cancel a running job
         """
@@ -248,7 +249,7 @@ class QueryService:
                 print("Unknown error, please debug", err, job)
         return ids
 
-    def get(self, job_id: str) -> Job | None:
+    def get(self, job_id: str) -> Job | SQLJob | None:
         try:
             job = Job.fetch(job_id, connection=self.app["redis"])
             return job

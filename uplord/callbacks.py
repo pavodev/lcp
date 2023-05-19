@@ -23,7 +23,7 @@ from .worker import SQLJob
 
 
 def _query(
-    job: SQLJob, connection: RedisConnection, result: List[Tuple], *args, **kwargs
+    job: SQLJob | Job, connection: RedisConnection, result: List[Tuple], *args, **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -127,7 +127,7 @@ def _query(
 
 
 def _sentences(
-    job: SQLJob,
+    job: SQLJob | Job,
     connection: RedisConnection,
     result: List[Tuple[str | UUID, int, List[Any]]],
     *args,
@@ -185,7 +185,7 @@ def _sentences(
 
 
 def _schema(
-    job: SQLJob,
+    job: SQLJob | Job,
     connection: RedisConnection,
     result: bool | None = None,
     *args,
@@ -216,7 +216,7 @@ def _schema(
 
 
 def _upload(
-    job: SQLJob,
+    job: SQLJob | Job,
     connection: RedisConnection,
     result: bool | None = None,
     *args,
@@ -246,7 +246,7 @@ def _upload(
 
 
 def _general_failure(
-    job: SQLJob,
+    job: SQLJob | Job,
     connection: RedisConnection,
     typ: Type,
     value: Any,
@@ -281,7 +281,7 @@ def _general_failure(
 
 
 def _queries(
-    job: SQLJob,
+    job: SQLJob | Job,
     connection: RedisConnection,
     result: List[Tuple[str, Dict, str, str | None, datetime]] | None,
     *args,
@@ -315,7 +315,9 @@ def _queries(
     red.publish(PUBSUB_CHANNEL, made)  # type: ignore
 
 
-def _config(job: SQLJob, connection: RedisConnection, result, *args, **kwargs) -> None:
+def _config(
+    job: SQLJob | Job, connection: RedisConnection, result, *args, **kwargs
+) -> None:
     """
     Run by worker: make config data
     """
