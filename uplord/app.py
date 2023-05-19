@@ -45,7 +45,6 @@ from redis import asyncio as aioredis
 from rq.exceptions import NoSuchJobError
 from rq.queue import Queue
 
-from . import utils
 from .check_file_permissions import check_file_permissions
 from .corpora import corpora
 from .document import document
@@ -61,7 +60,7 @@ from .utils import handle_timeout
 from .validate import validate
 from .video import video
 
-C_COMPILED = not str(inspect.getfile(utils)).endswith(".py")
+C_COMPILED = not str(inspect.getfile(handle_timeout)).endswith(".py")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 _RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
