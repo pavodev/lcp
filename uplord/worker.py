@@ -1,25 +1,20 @@
 #!/usr/bin/env python3
 
 import asyncio
-import inspect
 import logging
 import os
 import sys
 
-import psycopg  # leave this here even though unused
 import uvloop
 
+from dotenv import load_dotenv
+from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
+from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
 from rq.worker import Worker
 
-from redis import Redis
-
-from dotenv import load_dotenv
-from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 from sshtunnel import SSHTunnelForwarder
-
-from . import utils
 
 load_dotenv(override=True)
 
@@ -68,11 +63,6 @@ PORT = int(os.getenv("SQL_PORT", 25432))
 _RHOST, _RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
 REDIS_PORT = int(_RPORT.strip())
-C_COMPILED = not str(inspect.getfile(utils)).endswith(".py")
-
-
-if C_COMPILED:
-    print("Running mypy/c worker!")
 
 if os.getenv("SSH_HOST"):
     tunnel = SSHTunnelForwarder(
