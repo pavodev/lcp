@@ -23,7 +23,7 @@ from .worker import SQLJob
 
 
 def _query(
-    job: SQLJob | Job, connection: RedisConnection, result: List[Tuple], *args, **kwargs
+    job: SQLJob | Job, connection: RedisConnection, result: List[Tuple], **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -64,9 +64,7 @@ def _query(
     new_res, n_results = _add_results(*aargs, kwic=False, meta=meta_json)
 
     total_found = total_before_now + n_results
-
     limited = not unlimited and total_found > job.kwargs["needed"]
-
     results_so_far = _union_results(results_so_far, new_res)
     limit = False if n_results < total_requested else total_found - total_requested
 
@@ -122,7 +120,6 @@ def _query(
     )
 
     red = job._redis if restart is False else connection  # type: ignore
-
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -130,7 +127,6 @@ def _sentences(
     job: SQLJob | Job,
     connection: RedisConnection,
     result: List[Tuple[str | UUID, int, List[Any]]],
-    *args,
     **kwargs,
 ) -> None:
     """
@@ -180,7 +176,7 @@ def _sentences(
         "base": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
-    red = job._redis if hasattr(job, "_redis") else connection
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -188,8 +184,6 @@ def _schema(
     job: SQLJob | Job,
     connection: RedisConnection,
     result: bool | None = None,
-    *args,
-    **kwargs,
 ) -> None:
     """
     This callback is executed after successful creation of schema.
@@ -211,7 +205,7 @@ def _schema(
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
@@ -219,8 +213,6 @@ def _upload(
     job: SQLJob | Job,
     connection: RedisConnection,
     result: bool | None = None,
-    *args,
-    **kwargs,
 ) -> None:
     """
     Success callback when user has uploaded a dataset
@@ -231,17 +223,16 @@ def _upload(
         return
     jso = {
         "user": user,
+        "room": room,
         "status": "success" if not result else "error",
-        "project": job.kwargs["project"],
+        "project": job.args[0],
         "action": "uploaded",
         "gui": job.kwargs.get("gui", False),
-        "room": room,
     }
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection
-
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
@@ -249,10 +240,8 @@ def _general_failure(
     job: SQLJob | Job,
     connection: RedisConnection,
     typ: Type,
-    value: Any,
+    value: BaseException,
     traceback: TracebackType,
-    *args,
-    **kwargs,
 ) -> None:
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
@@ -268,7 +257,6 @@ def _general_failure(
             "value": str(value),
             "traceback": str(traceback),
             "job": job.id,
-            **kwargs,
             **job.kwargs,
         }
     # this is just for consistency with the other timeout messages
@@ -276,7 +264,7 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    red = job._redis if hasattr(job, "_redis") else connection
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
 
 
@@ -284,8 +272,6 @@ def _queries(
     job: SQLJob | Job,
     connection: RedisConnection,
     result: List[Tuple[str, Dict, str, str | None, datetime]] | None,
-    *args,
-    **kwargs,
 ) -> None:
     """
     Fetch or store queries
@@ -311,17 +297,15 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
-    red = job._redis if hasattr(job, "_redis") else connection
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, made)  # type: ignore
 
 
-def _config(
-    job: SQLJob | Job, connection: RedisConnection, result, *args, **kwargs
-) -> None:
+def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) -> None:
     """
     Run by worker: make config data
     """
-    fixed: Dict[str, Dict[str, Any]] = {"-1": {}}
+    fixed: Dict[str, Dict[str, int | str | bool | Dict[str, Any]]] = {"-1": {}}
     disabled: List[Tuple[str, int]] = []
     for tup in result:
         (
@@ -377,5 +361,5 @@ def _config(
         "action": "set_config",
         "disabled": disabled,
     }
-    red = job._redis if hasattr(job, "_redis") else connection
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore

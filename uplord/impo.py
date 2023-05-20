@@ -55,9 +55,6 @@ class SQLstats:
 
 
 class Table:
-
-    __slots__: List[str] = ["schema", "name", "columns"]
-
     def __init__(
         self, schema: str, name: str, columns: Iterable[str] | None = None
     ) -> None:
@@ -73,26 +70,6 @@ class Table:
 
 
 class Importer:
-
-    __slots__: List[str] = [
-        "sql",
-        "connection",
-        "template",
-        "name",
-        "version",
-        "schema",
-        "n_batches",
-        "token_count",
-        "mapping",
-        "num_extras",
-        "corpus_size",
-        "max_concurrent",
-        "batchsize",
-        "max_bytes",
-        "upload_timeout",
-        "project_dir",
-    ]
-
     def __init__(
         self,
         connection: AsyncConnectionPool | AsyncNullConnectionPool,

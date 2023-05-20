@@ -38,6 +38,6 @@ async def store_query(request: web.Request) -> web.Response:
     )
     qs = request.app["query_service"]
     idx = uuid4()
-    job = qs.store_query(to_store, idx, user=user, room=room)
+    job = qs.store_query(to_store, idx, user, room)
     jobs = {"status": "started", "job": job.id, "query_id": str(idx)}
     return web.json_response(jobs)

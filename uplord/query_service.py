@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
@@ -28,7 +28,7 @@ class QueryService:
     This magic class will handle our queries by alerting you when they are done
     """
 
-    __slots__: List[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
+    # __slots__: List[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
 
     def __init__(self, app, *args, **kwargs):
         self.app = app
@@ -38,28 +38,35 @@ class QueryService:
 
     def query(
         self,
+        query: str,
+        params: Tuple = tuple(),
         queue: str = "query",
         **kwargs,
     ) -> SQLJob | Job:
         """
         Here we send the query to RQ and therefore to redis
         """
+        args = (query, params)
         return self.app[queue].enqueue(
             _db_query,
             on_success=_query,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
+            args=args,
             kwargs=kwargs,
         )
 
     def sentences(
         self,
+        query: str,
+        params: Tuple,
         queue: str = "query",
         **kwargs,
     ) -> SQLJob | Job:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
+        args = (query, params)
         return self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
@@ -67,20 +74,25 @@ class QueryService:
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             depends_on=depends_on,
+            args=args,
             kwargs=kwargs,
         )
 
-    def get_config(self, queue: str = "alt", **kwargs) -> SQLJob | Job:
+    def get_config(self) -> SQLJob | Job:
         """
         Get initial app configuration JSON
         """
-        opts = {
-            "query": "SELECT * FROM main.corpus;",
-            "config": True,
-            "on_success": _config,
-        }
-        return self.app[queue].enqueue(
-            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+        query = "SELECT * FROM main.corpus;"
+        args = (query,)
+        opts = {"config": True}
+        return self.app["alt"].enqueue(
+            _db_query,
+            on_success=_config,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=args,
+            kwargs=opts,
         )
 
     def fetch_queries(
@@ -95,23 +107,29 @@ class QueryService:
             room_info = " AND room = %s"
             params = (user, room)
 
-        query = f"SELECT * FROM lcp_user.queries WHERE username = %s {room_info} ORDER BY created_at DESC LIMIT {limit};"
+        query = f"""SELECT * FROM lcp_user.queries 
+                    WHERE username = %s {room_info}
+                    ORDER BY created_at DESC LIMIT {limit};
+                """
+        args = (query, params)
         opts = {
             "user": user,
             "room": room,
-            "query": query,
             "config": True,
-            "params": params,
-            "on_success": _queries,
-            "on_failure": _general_failure,
         }
         return self.app[queue].enqueue(
-            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _db_query,
+            on_success=_queries,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=args,
+            kwargs=opts,
         )
 
     def store_query(
         self,
-        query_data: Dict,
+        query_data: Dict[str, Any],
         idx: int,
         user: str,
         room: str,
@@ -121,24 +139,27 @@ class QueryService:
         Add a saved query to the db
         """
         db_query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
-        opts = {
+        kwargs = {
             "user": user,
             "room": room,
-            "query": db_query,
             "store": True,
             "config": True,
             "query_id": idx,
-            "params": (idx, json.dumps(query_data), user, room),
-            "on_success": _queries,
-            "on_failure": _general_failure,
         }
+        params = (idx, json.dumps(query_data), user, room)
+        args = (db_query, params)
         return self.app[queue].enqueue(
-            _db_query, result_ttl=self.query_ttl, job_timeout=self.timeout, **opts
+            _db_query,
+            result_ttl=self.query_ttl,
+            on_success=_queries,
+            on_failure=_general_failure,
+            job_timeout=self.timeout,
+            args=args,
+            kwargs=kwargs,
         )
 
     def upload(
         self,
-        data,
         user: str,
         project: str,
         room: str | None = None,
@@ -148,20 +169,47 @@ class QueryService:
         """
         Upload a new corpus to the system
         """
-        opts = {
-            "on_success": _upload,
-            "on_failure": _general_failure,
-            "paths": data,
-            "user": user,
-            "project": project,
-            "gui": gui,
-            "room": room,
-        }
+        kwargs = {"gui": gui}
+        args = (project, user, room)
         return self.app[queue].enqueue(
             _upload_data,
+            on_success=_upload,
+            on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
-            **opts,
+            args=args,
+            kwargs=kwargs,
+        )
+
+    def create(
+        self,
+        create: str,
+        project: str,
+        path: str,
+        schema_name: str,
+        user: str | None,
+        room: str | None,
+        project_name: str,
+        queue: str = "alt",
+        drops: List[str] | None = None,
+        gui: bool = False,
+    ):
+        kwargs = {
+            "project": project,
+            "user": user,
+            "room": room,
+            "path": path,
+            "project_name": project_name,
+            "gui": gui,
+        }
+        return self.app[queue].enqueue(
+            _create_schema,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            on_success=_schema,
+            on_failure=_general_failure,
+            args=(create, schema_name, drops),
+            kwargs=kwargs,
         )
 
     def cancel(self, job: SQLJob | Job | str) -> str:
@@ -178,39 +226,6 @@ class QueryService:
         if job not in self.app["canceled"]:
             self.app["canceled"].append(job)
         return job.get_status()
-
-    def create(
-        self,
-        create: str,
-        project: str,
-        path: str,
-        schema_name: str,
-        user: str | None,
-        room: str | None,
-        project_name: str,
-        queue: str = "alt",
-        drops: List[str] | None = None,
-        gui: bool = False,
-    ):
-        opts = {
-            "on_success": _schema,
-            "on_failure": _general_failure,
-            "create": create,
-            "project": project,
-            "user": user,
-            "room": room,
-            "path": path,
-            "project_name": project_name,
-            "drops": drops,
-            "schema_name": schema_name,
-            "gui": gui,
-        }
-        return self.app[queue].enqueue(
-            _create_schema,
-            result_ttl=self.query_ttl,
-            job_timeout=self.timeout,
-            **opts,
-        )
 
     def cancel_running_jobs(
         self,

@@ -30,21 +30,6 @@ class DataNeededLater:
 
 
 class Globs:
-
-    __slots__: List[str] = [
-        "base_map",
-        "layers",
-        "schema",
-        "tables",
-        "types",
-        "num_partitions",
-        "prep_seg_create",
-        "prep_seg_insert",
-        "batchnames",
-        "mapping",
-        "perms",
-    ]
-
     def __init__(self) -> None:
         self.base_map: Dict = {}
         self.layers: Dict = {}

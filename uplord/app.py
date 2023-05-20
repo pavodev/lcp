@@ -6,10 +6,10 @@ import os
 import sys
 
 from collections import defaultdict, deque
+from typing import Dict, Set, Tuple
 
 import aiohttp_cors
 import asyncio
-
 import uvloop
 
 from dotenv import load_dotenv
@@ -49,20 +49,19 @@ from .check_file_permissions import check_file_permissions
 from .corpora import corpora
 from .document import document
 from .lama_user_data import lama_user_data
-from .nomypy import listen_to_redis
 from .project import project_api_create, project_api_revoke, project_create
 from .query import query
 from .query_service import QueryService
-from .sock import sock, ws_cleanup
+from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .upload import make_schema, upload
-from .utils import handle_timeout
+from .utils import ParserClass, handle_timeout
 from .validate import validate
 from .video import video
 
 
-LOADER = importlib.import_module(handle_timeout.__module__).__loader__
-C_COMPILED = "SourceFileLoader" not in str(LOADER)
+_LOADER = importlib.import_module(handle_timeout.__module__).__loader__
+C_COMPILED = "SourceFileLoader" not in str(_LOADER)
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 _RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
 REDIS_HOST = _RHOST.split("/")[-1].strip()
@@ -144,7 +143,9 @@ async def create_app(*args, **kwargs):
     # all websocket connections are stored in here, as {room: {(connection, user_id,)}}
     # when a user leaves the app, the connection should be removed. If it's not,
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
-    app["websockets"] = defaultdict(set)
+    app["websockets"]: Dict[str, Set[Tuple[web.WebSocketResponse, str]]] = defaultdict(
+        set
+    )
 
     resource = cors.add(app.router.add_resource("/corpora"))
     # cors.add(resource.add_route("GET", corpora))
@@ -193,8 +194,9 @@ async def create_app(*args, **kwargs):
     cors.add(resource.add_route("GET", check_file_permissions))
 
     # we keep two redis connections, for reasons
-    app["aredis"] = aioredis.Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
-    app["redis"] = Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
+    redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_INDEX}"
+    app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
+    app["redis"] = Redis.from_url(redis_url)
 
     # different queues for different kinds of jobs
     app["query"] = Queue(connection=app["redis"])

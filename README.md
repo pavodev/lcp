@@ -156,7 +156,7 @@ coverage html
 Edit `.env` as necessary. Start as many workers as necessary. Then, to start app:
 
 ```bash
-gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.app:create_app --worker-class aiohttp.GunicornWebWorker
+gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.deploy:create_app --worker-class aiohttp.GunicornWebWorker
 ```
 
 ## Count lines of code

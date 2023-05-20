@@ -7,26 +7,33 @@ import os
 import re
 import sys
 
-from collections import defaultdict, Counter
-from dataclasses import dataclass, field, asdict
+from collections import Counter, defaultdict
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    List,
-    Tuple,
-    Mapping,
-    Set,
-)
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Set, Tuple, final
 from uuid import UUID, uuid4
 
 from abstract_query.create import json_to_sql
-from aiohttp import web, ClientSession
-from rq.command import PUBSUB_CHANNEL_TEMPLATE
+
+try:
+    from aiohttp import web, ClientSession
+except ImportError:
+    from aiohttp import web
+    from aiohttp.client import ClientSession
 from redis import Redis as RedisConnection
+
+from redis.asyncio.connection import BaseParser
+
+del BaseParser.__slots__  # type: ignore
+from redis.asyncio.connection import HiredisParser, PythonParser
+
+del HiredisParser.__slots__  # type: ignore
+del PythonParser.__slots__  # type: ignore
+
+from redis.utils import HIREDIS_AVAILABLE
+from rq.command import PUBSUB_CHANNEL_TEMPLATE
+from rq.connections import get_current_connection
 from rq.job import Job
 
 from .dqd_parser import convert
@@ -725,3 +732,80 @@ def _get_word_count(qi: QueryIteration) -> int:
                         total += num
                         break
     return total
+
+
+def _make_sent_query(
+    query: str,
+    associated: str | List[str],
+    current_batch: Tuple[int, str, str, int],
+    resuming: bool,
+) -> str:
+    """
+    Helper to format the query to retrieve sentences: add sent ids
+    """
+    conn = get_current_connection()
+    if isinstance(associated, list):
+        associated = associated[-1]
+    if associated is None:
+        return ""
+    job = Job.fetch(associated, connection=conn)
+    hit_limit = job.meta.get("hit_limit")
+    if job.get_status(refresh=True) in ("stopped", "canceled"):
+        raise Interrupted()
+    if job.result is None:
+        raise Interrupted()
+    if not job.result:
+        return ""
+    prev_results = job.result
+    # so we don't double count on resuming
+    if resuming:
+        start_at = job.meta.get("start_at", 0)
+    else:
+        start_at = 0
+
+    seg_ids = set()
+    result_sets = job.kwargs["meta_json"]
+    kwics = _get_kwics(result_sets)
+    counts: Dict[int, int] = Counter()
+
+    for res in prev_results:
+        key = int(res[0])
+        rest = res[1]
+        if key in kwics:
+            counts[key] += 1
+            if start_at and counts[key] < start_at:
+                continue
+            elif hit_limit is not False and counts[key] > hit_limit:
+                continue
+            seg_ids.add(str(rest[0]))
+
+    form = ", ".join(sorted(seg_ids))
+
+    return query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
+
+
+@final
+class WorkingParser(HiredisParser):
+    def __init__(self, *args, **kwargs) -> None:
+        return super().__init__(*args, **kwargs)
+
+    def on_connect(self, *args, **kwargs) -> None:
+        return super().on_connect(*args, **kwargs)
+
+    def on_disconnect(self, *args, **kwargs) -> None:
+        return super().on_disconnect(*args, **kwargs)
+
+    async def read_from_socket(self) -> Any:
+        return await super().read_from_socket()
+
+    async def can_read_destructive(self, *args, **kwargs) -> bool:
+        return False
+
+
+@final
+class WorkingPythonParser(PythonParser):
+    async def can_read_destructive(self, *args, **kwargs) -> bool:
+        return False
+
+
+ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser

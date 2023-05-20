@@ -2,10 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import traceback
 
 from typing import Any, Dict, Set, Tuple
 
-from aiohttp import WSCloseCode, WSMsgType, web
+try:
+    from aiohttp import WSCloseCode, WSMsgType, web
+except ImportError:
+    from aiohttp import web
+    from aiohttp.http import WSCloseCode, WSMsgType
+
 from aiohttp.http_websocket import WSMessage
 from rq.job import Job
 
@@ -16,10 +23,10 @@ from .utils import push_msg
 from .validate import validate
 
 
+from .utils import PUBSUB_CHANNEL
+
+
 async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:
-    """
-    Ensure a message contains real data and send it onward
-    """
     await asyncio.sleep(0.1)
     if not message or not isinstance(message, dict):
         return
@@ -32,6 +39,69 @@ async def _process_message(message: Any, channel: PubSub, app: web.Application) 
         return
     await _handle_message(payload, channel, app)
     return None
+
+
+async def handle_redis_response(
+    channel: PubSub, app: web.Application, test: bool = False
+) -> None:
+    """
+    If redis publishes a message, it gets picked up here in an async loop
+    and broadcast to the correct websockets.
+
+    We need to know if we're running c-compiled code or not, because
+    channel.get_message() fails when compiled to c for some reason
+    """
+    message: Any = None
+
+    try:
+        if app.get("mypy", False) is True:
+            async for message in channel.listen():
+                await _process_message(message, channel, app)
+                if message and test is True:
+                    return None
+        else:
+            while True:
+                message = await channel.get_message(
+                    ignore_subscribe_messages=True, timeout=2.0
+                )
+                await _process_message(message, channel, app)
+                if message and test is True:
+                    return None
+
+    except asyncio.TimeoutError as err:
+        print(f"Warning: timeout in websocket listener ({err})")
+    except asyncio.CancelledError as err:
+        tb = traceback.format_exc()
+        print(f"Canceled redis handler: {err}\n\n{tb}")
+    except Exception as err:
+        formed = traceback.format_exc()
+        print(f"Error: {str(err)}\n{formed}")
+        extra = {"error": str(err), "status": "failed", "traceback": formed}
+        logging.error(str(err), extra=extra)
+
+
+async def listen_to_redis(app: web.Application) -> None:
+    """
+    Using our async redis connection instance, listen for events coming from redis
+    and delegate to the sender
+    """
+    async with app["aredis"].pubsub() as channel:
+        await channel.subscribe(PUBSUB_CHANNEL)
+        try:
+            await handle_redis_response(channel, app, test=False)
+        except KeyboardInterrupt:
+            pass
+        except Exception as err:
+            raise err
+        await channel.unsubscribe(PUBSUB_CHANNEL)
+        try:
+            await app["aredis"].quit()
+        except Exception:
+            pass
+        try:
+            app["redis"].quit()
+        except Exception:
+            pass
 
 
 async def _handle_message(

@@ -109,15 +109,6 @@ def _submit_sents(
     """
     Helper to submit a sentences job
     """
-    skwargs = dict(
-        user=qi.user,
-        room=qi.room,
-        simultaneous=qi.simultaneous,
-        current_batch=qi.current_batch,
-        query=qi.sents_query(),
-        base=_get_base(qi, first_job),
-        resuming=qi.done,
-    )
     depends_on = qi.job_id if not qi.done and qi.job is not None else qi.previous
     to_use: List[str] | str = []
     if qi.simultaneous and depends_on:
@@ -125,7 +116,16 @@ def _submit_sents(
         to_use = dep_chain
     elif depends_on:
         to_use = depends_on
-    sents_job = qi.app["query_service"].sentences(depends_on=to_use, **skwargs)
+    kwargs = dict(
+        user=qi.user,
+        room=qi.room,
+        simultaneous=qi.simultaneous,
+        current_batch=qi.current_batch,
+        base=_get_base(qi, first_job),
+        resuming=qi.done,
+    )
+    qs = qi.app["query_service"]
+    sents_job = qs.sentences(qi.sents_query(), tuple(), depends_on=to_use, **kwargs)
     # if simultaneous:
     #    dep_chain.append(stats_job.id)
     return sents_job, dep_chain
@@ -164,13 +164,12 @@ def _submit_query(
         languages=list(qi.languages),
         simultaneous=qi.simultaneous,
         is_vian=qi.is_vian,
-        query=qi.sql,
         meta_json=qi.meta,
         word_count=word_count,
         parent=parent,
     )
 
-    job = qi.app["query_service"].query(depends_on=qd, **query_kwargs)
+    job = qi.app["query_service"].query(qi.sql, depends_on=qd, **query_kwargs)
     return job
 
 

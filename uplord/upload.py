@@ -58,7 +58,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     """
     qs = request.app["query_service"]
     job = qs.get(job_id)
-    project = job.kwargs["project"]
+    project = job.args[0]
     progfile = os.path.join("uploads", project, ".progress.txt")
     progress = _get_progress(progfile)
 
@@ -67,7 +67,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
         return web.json_response(ret)
     status = job.get_status(refresh=True)
     msg = f"""Please wait: corpus processing in progress..."""
-    project = job.kwargs["project"]
+
     if status == "failed":
         msg = f"Error: {str(job.latest_result().exc_string)}"
     elif status == "finished":
@@ -237,10 +237,10 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(room=room, gui=gui_mode)
+    kwa = dict(gui=gui_mode)
     path = os.path.join("uploads", cpath)
     print(f"Uploading data to database: {cpath}")
-    job = qs.upload(path, username, cpath, **kwa)
+    job = qs.upload(username, cpath, room, **kwa)
     short_url = str(url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job.id}"
     info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:

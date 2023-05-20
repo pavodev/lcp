@@ -1,0 +1,60 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "uplord"
+authors = [
+    {name = "Danny McDonald", email = "daniel.mcdonald@uzh.ch"},
+]
+description = "Linguistics web app"
+readme = "README.md"
+requires-python = ">=3.10"
+keywords = ["corpus", "linguistics", "nlp"]
+license = {text = "MIT"}
+classifiers = [
+    "Framework :: aiohttp",
+    "Programming Language :: Python :: 3",
+]
+dependencies = [
+    "backports.zoneinfo @ git+https://github.com/morganwahl/zoneinfo",
+    "psycopg2-binary >= 2.9.6",
+    "pyjwt >= 2.7.0",
+    "aiohttp==3.8.4",
+    "aiohttp-cors >= 0.7.0",
+    "aiohttp-catcher >= 0.3.2",
+    "python-dotenv >= 1.0.0",
+    "bcrypt >= 4.0.1",
+    "psycopg >= 3.0.15",
+    "psycopg-binary >= 3.1.9",
+    "psycopg_pool >= 3.1.7",
+    "sshtunnel >= 0.4.0",
+    "aiohttp-devtools >= 1.0.post0",
+    "Brotli >= 1.0.9",
+    "aiodns >= 3.0.0",
+    "yarl >= 1.9.2",
+    "pycares >= 4.3.0",
+    "uvloop >= 0.17.0",
+    "redis >= 4.5.5",
+    "asyncpg >= 0.27.0",
+    "rq >= 1.14.1",
+    "types-redis >= 4.5.5.2",
+    "lark >= 1.1.5",
+    "py7zr >= 0.20.5",
+    "gunicorn >= 20.1.0",
+    "aiofiles >= 23.1.0",
+    "types-aiofiles >= 23.1.0.2",
+    "types-psycopg2 >= 2.9.21.10",
+    "types-decorator >= 5.1.8.3",
+    "aiocontextvars >= 0.2.2",
+    "urllib3==1.26.15",
+    "sentry_sdk >= 1.23.1",
+    "setuptools >= 67.7.2",
+    "mypy >= 1.3.0",
+    "types-psutil >= 5.9.5.12"
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+pdf = ["ReportLab>=1.2", "RXP"]
+rest = ["docutils>=0.3", "pack ==1.1, ==1.3"]
