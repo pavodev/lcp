@@ -118,6 +118,7 @@ def _get_progress(progfile: str) -> Tuple[int, int, str, str] | None:
         return None
     done_bytes = sum([int(i[-2]) for i in bits])
     total = int(bits[-1][-1])
+    done_bytes = min(done_bytes, total)
     return (done_bytes, total, msg, unit)
 
 

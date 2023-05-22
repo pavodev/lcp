@@ -188,18 +188,26 @@ class Importer:
             async with conn.cursor() as cur:
                 async with cur.copy(cop) as copy:
                     await copy.write(data)
+                    sz = len(bytes(data, "utf-8"))  # + data.count("\n")
                     pc = min(100, round(tell * 100 / fsize, 2))
-                    prog = f":progress:{pc}%:{len(data)}:{tot} -- {base}"
+                    prog = f":progress:{pc}%:{sz}:{tot} -- {base}"
                     self.update_progress(prog)
         return None
 
     async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:
         """
         Import csv_path to the DB, with or without concurrency
+
+        Note that we need to add the newline count to the byte
+        size of the file in order to have it match sys.getsize.
+        But if we do that, then progress bar quickly shows 100%.
+        So leave it as it is and it shows 98% or so for a while.
         """
         base = os.path.basename(csv_path)
         f = await aiofiles.open(csv_path)
         headers = await f.readline()
+        headlen = len(bytes(headers, "utf-8"))
+        self.update_progress(f":progress:-1%:{headlen}:{tot} -- {base}")
         positions = await self._get_positions(f, fsize)
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
@@ -211,14 +219,12 @@ class Importer:
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent != 1:
-            args = (cop, f, fsize, tot)
+            args = (cop, f, fsize - headlen, tot)
             await self.process_data(positions, self.copy_batch, *args)
             await f.close()
             return None
 
         # no concurrency:
-        done = 0
-
         async with self.connection.connection(self.upload_timeout) as conn:
             async with conn.cursor() as cur:
                 async with cur.copy(cop) as copy:
@@ -226,11 +232,10 @@ class Importer:
                         await f.seek(start)
                         data = await f.read(chunk)
                         await copy.write(data)
-                        done += chunk
-                        perc = round(done * 100 / tot, 2)
-                        self.update_progress(
-                            f":progress:{perc}%:{len(data)}:{tot} -- {base}"
-                        )
+                        sz = len(bytes(data, "utf-8"))  # + data.count("\n") - 2
+                        headlen += sz
+                        perc = round(headlen * 100 / tot, 2)
+                        self.update_progress(f":progress:{perc}%:{sz}:{tot} -- {base}")
         await f.close()
         return None
 
@@ -390,8 +395,8 @@ class Importer:
         """
         await self.import_corpus()
         pro = f":progress:-1:1:{self.num_extras} -- {self.num_extras} extras"
-        cons = "\n\n".join(self.constraints)
-        self.update_progress(f"Setting constraints...\n\n{cons}")
+        cons = "\n".join(self.constraints)
+        self.update_progress(f"Setting constraints...\n{cons}")
         await self.process_data(self.constraints, self.run_script, progress=pro)
         if len(self.refs):
             strung = "\n".join(self.refs)
