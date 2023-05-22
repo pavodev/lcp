@@ -184,6 +184,35 @@ A float value `1.0` or smaller, dictating the proportion of logs that get sent t
 
 Currently not used; in theory if there are free resources we could allow a user to query multiple batches simultaneously. If we end up allowing simultaneous mode, this value can be used to limit how many jobs (i.e. queries over batches) can be run at once.
 
+## Command line interface
+
+Once `uplord` is installed you can run a variety of commands via `python -m uplord`
+
+Start backend:
+
+```bash
+python -m uplord
+```
+
+Start worker:
+
+```bash
+python -m uplord worker
+```
+
+Convert DQD to JSON:
+
+```bash
+python -m uplord dqd file.dqd
+```
+
+Convert corpus tempate to DDL:
+
+```bash
+python -m uplord ddl file.json --tabwidth 4
+```
+
+
 ## Testing
 
 Once you have started a worker, our modest backend tests can be run with:

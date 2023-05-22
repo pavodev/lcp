@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import json
+import os
+import sys
+
+from typing import Any, Dict, Iterable, List
+
 from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token
-
-from typing import Any, Dict, Iterable, List
 
 
 dqd_grammar = r"""
@@ -254,14 +258,14 @@ def convert(dqd_query: str) -> Dict[str, Any]:
     return to_dict(data)
 
 
-if __name__ == "__main__":
-    import json
-    import os
-    import sys
-
+def cmdline():
     if os.path.isfile(sys.argv[-1]):
         with open(sys.argv[-1], "r") as fo:
             dqd = fo.read()
     else:
         dqd = sys.argv[-1]
     print(json.dumps(convert(dqd), indent=4))
+
+
+if __name__ == "__main__":
+    cmdline()

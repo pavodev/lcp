@@ -63,7 +63,7 @@ from .video import video
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
 C_COMPILED = "SourceFileLoader" not in str(_LOADER)
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
-REDIS_URL = os.getenv("REDIS_URL", "http://localhost:6379")
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 
 

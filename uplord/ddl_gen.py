@@ -752,6 +752,9 @@ def generate_ddl(
 def main() -> None:
     parser = argparse.ArgumentParser(description="Generate Postgres DDL from CT.")
     parser.add_argument(
+        "cmd", type=str, help="The command being run (ignore this)"  # nargs="+",
+    )
+    parser.add_argument(
         "ct_file", type=str, help="the corpus corpus_temp file (json)"  # nargs="+",
     )
     parser.add_argument(
@@ -763,9 +766,10 @@ def main() -> None:
     with open(args.ct_file) as f:
         corpus_temp = json.load(f)
 
-    a, b = generate_ddl(corpus_temp)
+    data = generate_ddl(corpus_temp)
 
-    print(a + b)
+    print(json.dumps(data, indent=4))
+
     return
     # need to comment out the below for mypy
     """
