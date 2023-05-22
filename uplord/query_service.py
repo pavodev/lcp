@@ -72,10 +72,11 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
-        if len(queries) >= self.remembered_queries:
+        if self.remembered_queries > 0 and len(queries) >= self.remembered_queries:
             first = list(queries)[0]
             queries.pop(first)
-        queries[hashed] = job.id
+        if self.remembered_queries:
+            queries[hashed] = job.id
         return job
 
     def document(
@@ -136,10 +137,11 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
-        if len(sents) >= self.remembered_queries:
+        if self.remembered_queries > 0 and len(sents) >= self.remembered_queries:
             first = list(sents)[0]
             sents.pop(first)
-        sents[hashed] = job.id
+        if self.remembered_queries:
+            sents[hashed] = job.id
         return job
 
     def get_config(self) -> SQLJob | Job:

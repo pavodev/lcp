@@ -116,13 +116,13 @@ mypy uplord
 
 ## Configuration
 
-The defaults in `.env` should work for PostgreSQL and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
+The defaults in `.env` should work for PostgreSQL and LAMa. Default Redis is local, so you should have a Redis instance running as per the URL specified in `.env`.
 
 Some `.env` values that might need adjusting for deployment:
 
 > `AIO_PORT`
 
-The port that the backend runs on in deployment. Depending on your development setup, this setting may determine the port used for development too.
+The port that the backend runs on.
 
 > `REDIS_DB_INDEX`
 
@@ -142,7 +142,11 @@ In seconds, how long should query data stay in Redis? If a user tries to change 
 
 > `MAX_REMEMBERED_QUERIES`
 
-We keep a `dict` of `{query_hash: job_id}`, with `MAX_REMEMBERED_QUERIES` as the max size of the `dict`. When a user runs a query/sentences job, we compare the hashes to see if the query is already done, and then look it up in Redis. If the data is still there, we return it quickly.
+We keep a `dict` of `{query_hash: job_id}`, with `MAX_REMEMBERED_QUERIES` as the max size of the `dict`. When a user prepares to submit a query/sentences job, we compare the hashes to see if the query/sentence query is already done, and then look it up in Redis. If the data is still there, we return it quickly. Because we hash the query, this object doesn't take up much memory space, so a large value is fine here, but the setting prevents the app from growing in size over time. Set to `-1` for no limit.
+
+> `SQL_(QUERY|UPLOAD)_(USERNAME|PASSWORD)`
+
+The app uses two SQL connections. The `QUERY` connection should not have write access. The `UPLOAD` connection should. Note that storing queries also requires write access.
 
 > `IMPORT_MAX_CONCURRENT`
 
@@ -150,7 +154,7 @@ When importing a new corpus, how many concurrent tasks can be spawned? Set to `-
 
 > `IMPORT_MAX_MEMORY_GB`
 
-When processing concurrently, a lot of data can be read into memory for `COPY` tasks. If this amount of data is reached while building `COPY` tasks, we stop building tasks, execute the pending ones, and resume when they are done. Remember that if `IMPORT_MAX_CONCURRENT` is not 1, the real memory usage could be multiplied by the number of concurrent tasks.
+When processing concurrently, a lot of data can be read into memory for `COPY` tasks. If this amount of data is reached while building `COPY` tasks, we stop building tasks, execute the pending ones, and resume when they are done. Remember that if `IMPORT_MAX_CONCURRENT` is not `1`, the real memory usage could be multiplied by the number of concurrent tasks.
 
 > `IMPORT_MAX_COPY_GB`
 
@@ -158,7 +162,7 @@ In GB, how much data can be read in one chunk for `COPY` tasks? Note that the li
 
 > `UPLOAD_USE_POOL`
 
-If truthy, a real connection pool will be used for the uploader (as well as any other jobs requiring write access to the DB). `IMPORT_MIN_NUM_CONNECTIONS` and `IMPORT_MAX_NUM_CONNECTIONS` can then be set. If falsey, these values are ignored, as no connection pool is used for these jobs.
+If truthy, a real connection pool will be used for the uploader (as well as any other jobs requiring write access to the DB). `IMPORT_MIN_NUM_CONNECTIONS` and `IMPORT_MAX_NUM_CONNECTIONS` will only be respected if this is switched on. If falsey, these values are ignored, as no connection pool is used for write jobs.
 
 > `(QUERY|UPLOAD)_(MIN|MAX)_NUM_CONNECTIONS`
 
@@ -167,6 +171,14 @@ These four values control the number of connections in the connection pools. If 
 > `POOL_NUM_WORKERS`
 
 This number controls how many worker threads are spawned to perform setup/cleanup-type operations on connection pool(s). `3` is the default provided by `psycopg`.
+
+> `SENTRY_DSN`
+
+If set, exception logs are sent to Sentry. You probably want to leave it unset for development.
+
+> `SENTRY_TRACES_SAMPLE_RATE`
+
+A float value `1.0` or smaller, dictating the proportion of logs that get sent to sentry. Maybe we need to reduce this if one day our app is super popular, but `1.0` is fine for now.
 
 > `MAX_SIMULTANEOUS_JOBS_PER_USER`
 
