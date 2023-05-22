@@ -25,7 +25,7 @@ This will also clone the `abstract-query` and `lcp-upload` submodules. If they a
 * PostgreSQL (local or remote)
 * Redis (local or remote)
 * At least one RQ worker
-
+￼
 `.env` defaults point to a local Redis, so install and run Redis or reconfigure to our deployed instance.
 
 To install backend (and `abstract-query`, which is also required):
@@ -42,7 +42,7 @@ python setup.py build_ext --inplace
 cd ..
 python setup.py build_ext --inplace
 ```
-
+￼
 To start backend for development, first edit `.env` so that it contains the correct config.
 
 Then, start as many RQ workers as you want. To start one:
@@ -77,14 +77,14 @@ sudo apt install npm
 npm install --global yarn
 ```
 
-Then, if you haven't before, build the frontend:
+Then, if you haven't before, install the frontend:
 
 ```bash
 cd frontend
 yarn install
 ```
 
-Then you can start the frontend:
+Then you can start it with:
 
 ```bash
 # in uplord/frontend:
@@ -110,7 +110,6 @@ git config --global push.recurseSubmodules "on-demand"
 ### Type checking
 
 To check that typing is correct (do before commit/push/c-extension building):
-
 ```bash
 mypy uplord
 ```
@@ -159,7 +158,7 @@ If truthy, a real connection pool will be used for the uploader (as well as any 
 
 > `(QUERY|UPLOAD)_(MIN|MAX)_NUM_CONNECTIONS`
 
-These four values control the number of connections in the connection pool. If `UPLOAD_USE_POOL` is false, these numbers are ignored for `UPLOAD`, because no pool exists.
+These four values control the number of connections in the connection pools. If `UPLOAD_USE_POOL` is `false`, these numbers are ignored for `UPLOAD`, because no pool exists.
 
 > `POOL_NUM_WORKERS`
 
