@@ -246,9 +246,7 @@ class Importer:
             if f.endswith(".csv")
         ]
         self.corpus_size = sum(s[1] for s in sizes)
-        perc = int(self.corpus_size / 100.0)
-        with_extra = self.corpus_size + (perc * self.num_extras)
-        await self.process_data(sizes, self._copy_tbl, *(with_extra,))
+        await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
         self.token_count = await self.get_token_count()
         return None
 
@@ -391,9 +389,7 @@ class Importer:
         Run the entire import pipeline: add data, set indices, grant rights
         """
         await self.import_corpus()
-        perc = int(self.corpus_size / 100.0)
-        total = self.corpus_size + (perc * self.num_extras)
-        pro = f":progress:-1:{perc}:{total} -- {self.num_extras} extras"
+        pro = f":progress:-1:1:{self.num_extras} -- {self.num_extras} extras"
         cons = "\n\n".join(self.constraints)
         self.update_progress(f"Setting constraints...\n\n{cons}")
         await self.process_data(self.constraints, self.run_script, progress=pro)
