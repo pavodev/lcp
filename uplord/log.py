@@ -6,16 +6,17 @@ import logging
 import traceback
 
 from functools import wraps
+from typing import Any, Callable
 from uuid import uuid4
 
 
-def logged(f):
+def logged(f: Callable) -> Callable:
     """
     Decorator that logs start and end of function call
     """
 
     @wraps(f)
-    def wrapper(*args, **kwargs):
+    def wrapper(*args, **kwargs) -> Any:
         stargs = [str(a) for a in args]
         stkwargs = {str(k): str(v) for k, v in kwargs.items()}
         uu = str(uuid4())

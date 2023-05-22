@@ -3,26 +3,29 @@ from __future__ import annotations
 import json
 import os
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Tuple, final
 
+from aiohttp import web
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
 
 from .callbacks import (
     _config,
+    _document,
     _general_failure,
     _queries,
     _query,
+    _schema,
     _sentences,
     _upload,
-    _schema,
 )
-from .worker import SQLJob
 
 from .jobfuncs import _db_query, _upload_data, _create_schema
+from .worker import SQLJob
 
 
+@final
 class QueryService:
     """
     This magic class will handle our queries by alerting you when they are done
@@ -30,7 +33,7 @@ class QueryService:
 
     # __slots__: List[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
 
-    def __init__(self, app, *args, **kwargs):
+    def __init__(self, app: web.Application) -> None:
         self.app = app
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
@@ -46,14 +49,35 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        args = (query, params)
         return self.app[queue].enqueue(
             _db_query,
             on_success=_query,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
-            args=args,
+            args=(query, params),
+            kwargs=kwargs,
+        )
+
+    def document(
+        self,
+        schema: str,
+        corpus: int,
+        doc_id: int,
+        user: str,
+        room: str | None,
+        queue: str = "query",
+    ) -> SQLJob | Job:
+        query = f"SELECT {schema}.doc_export(%s);"
+        params = (doc_id,)
+        kwargs = {"document": True, "corpus": corpus, "user": user, "room": room}
+        return self.app[queue].enqueue(
+            _db_query,
+            on_success=_document,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query, params),
             kwargs=kwargs,
         )
 
@@ -66,7 +90,6 @@ class QueryService:
     ) -> SQLJob | Job:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
-        args = (query, params)
         return self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
@@ -74,7 +97,7 @@ class QueryService:
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             depends_on=depends_on,
-            args=args,
+            args=(query, params),
             kwargs=kwargs,
         )
 
@@ -83,7 +106,6 @@ class QueryService:
         Get initial app configuration JSON
         """
         query = "SELECT * FROM main.corpus;"
-        args = (query,)
         opts = {"config": True}
         return self.app["alt"].enqueue(
             _db_query,
@@ -91,7 +113,7 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
-            args=args,
+            args=(query,),
             kwargs=opts,
         )
 
@@ -134,11 +156,11 @@ class QueryService:
         user: str,
         room: str,
         queue: str = "alt",
-    ) -> Job:
+    ) -> SQLJob | Job:
         """
         Add a saved query to the db
         """
-        db_query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
+        query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
         kwargs = {
             "user": user,
             "room": room,
@@ -147,14 +169,13 @@ class QueryService:
             "query_id": idx,
         }
         params = (idx, json.dumps(query_data), user, room)
-        args = (db_query, params)
         return self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
             on_success=_queries,
             on_failure=_general_failure,
             job_timeout=self.timeout,
-            args=args,
+            args=(query, params),
             kwargs=kwargs,
         )
 
@@ -170,14 +191,13 @@ class QueryService:
         Upload a new corpus to the system
         """
         kwargs = {"gui": gui}
-        args = (project, user, room)
         return self.app[queue].enqueue(
             _upload_data,
             on_success=_upload,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
-            args=args,
+            args=(project, user, room),
             kwargs=kwargs,
         )
 
@@ -193,7 +213,7 @@ class QueryService:
         queue: str = "alt",
         drops: List[str] | None = None,
         gui: bool = False,
-    ):
+    ) -> SQLJob | Job:
         kwargs = {
             "project": project,
             "user": user,

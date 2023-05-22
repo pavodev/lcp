@@ -21,7 +21,7 @@ class DataNeededLater:
     prep_seg_create: str = ""
     prep_seg_insert: str = ""
     batchnames: List[str] = field(default_factory=list)
-    mapping: str = ""
+    mapping: Dict[str, int] = field(default_factory=dict)
     perms: str = ""
     refs: List[str] = field(default_factory=list)
 
@@ -31,16 +31,16 @@ class DataNeededLater:
 
 class Globs:
     def __init__(self) -> None:
-        self.base_map: Dict = {}
-        self.layers: Dict = {}
-        self.schema: List = []
-        self.tables: List = []
-        self.types: List = []
+        self.base_map: Dict[str, Any] = {}
+        self.layers: Dict[str, Dict] = {}
+        self.schema: List[str] = []
+        self.tables: List[Table] = []
+        self.types: List[Type] = []
         self.num_partitions: int = 0
         self.prep_seg_create: str = ""
         self.prep_seg_insert: str = ""
         self.batchnames: List[str] = []
-        self.mapping: str = ""
+        self.mapping: Dict[str, Any] = {}
         self.perms: str = ""
 
 
@@ -121,7 +121,7 @@ class DDL:
         raise NotImplementedError
 
     @staticmethod
-    def fmt(string: str, quote: bool = True, comma: bool = False):
+    def fmt(string: str, quote: bool = True, comma: bool = False) -> str:
         if quote:
             string = "'" + string + "'"
         if comma:
@@ -129,7 +129,7 @@ class DDL:
         else:
             return string
 
-    def inlined(self, args: List[str]):
+    def inlined(self, args: List[str]) -> str:
         """
         method returning indented lines with comma at end for printing
         """
@@ -156,7 +156,7 @@ class Column(DDL):
         self.tabwidth = 8
         # self.analyse_constr(constr)
 
-    def ret_tabulate(self, maxi: int):
+    def ret_tabulate(self, maxi: int) -> str:
         """
         method for tabulating DDL rows.
 
@@ -206,7 +206,7 @@ class Column(DDL):
 
 class Table(DDL):
     def __init__(
-        self, name: str, cols: List[Column], anchorings: List | None = None
+        self, name: str, cols: List[Column], anchorings: List[str] | None = None
     ) -> None:
         super().__init__()
         self.name = name.strip()
@@ -311,7 +311,7 @@ class PartitionedTable(Table):
         self,
         name: str,
         cols: List[Column],
-        anchorings: List | None = None,
+        anchorings: List[str] | None = None,
         column_part: str = "segment_id",
         num_part: int = 10,
     ) -> None:
@@ -416,7 +416,9 @@ class CTProcessor:
         self.ddl = DDL()
 
     @staticmethod
-    def _order_ct_layers(layers: Dict[Any, Any]) -> Dict[Any, Any]:
+    def _order_ct_layers(
+        layers: Dict[str, Dict[str, Any]]
+    ) -> Dict[str, Dict[str, Any]]:
         # check if all layers referred to do exist
         referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
         exists = set(layers)
@@ -450,7 +452,7 @@ class CTProcessor:
     @staticmethod
     def _process_attributes(
         attr_structure: abc.ItemsView,
-        tables: List[Any],
+        tables: List[Table],
         table_cols: List[Column],
         types: List[Type],
     ) -> Tuple[List[Table], List[Column]]:
@@ -495,7 +497,7 @@ class CTProcessor:
 
         return tables, table_cols
 
-    def _process_unitspan(self, entity: Dict) -> None:
+    def _process_unitspan(self, entity: Dict[str, Dict[str, Any]]) -> None:
         l_name, l_params = list(entity.items())[0]
         tables: List[Table] = []
         table_cols: List[Column] = []
@@ -549,7 +551,7 @@ class CTProcessor:
         self.globals.tables += tables
         self.globals.types += types
 
-    def _process_relation(self, entity: Dict) -> None:
+    def _process_relation(self, entity: Dict[str, Dict[str, Any]]) -> None:
         # TODO: create FK constraints
         l_name, l_params = list(entity.items())[0]
         table_name = l_name.lower()
@@ -580,9 +582,9 @@ class CTProcessor:
         self.globals.tables += tables
         self.globals.types += types
 
-    def _get_relation_col(self, rel_structure: Dict) -> Column:
+    def _get_relation_col(self, rel_structure: Dict[str, str]) -> Column:
         name = rel_structure["name"]
-        table_name = self.globals.layers[rel_structure.get("entity")]["table_name"]
+        table_name = self.globals.layers[rel_structure["entity"]]["table_name"]
         table = next(x for x in self.globals.tables if x.name == table_name)
         fk_col = f"{rel_structure['entity'].lower()}_id"
         typ = next(x for x in table.cols if x.name == fk_col).type
@@ -660,7 +662,7 @@ class CTProcessor:
             "columnHeaders"
         ] = rel_cols_names
         mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
-        self.globals.mapping = json.dumps(mapd)
+        self.globals.mapping = mapd
 
         # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
         # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
@@ -703,7 +705,9 @@ class CTProcessor:
             self.globals.batchnames.append(batch)
 
 
-def generate_ddl(corpus_temp: Dict[str, Any]):
+def generate_ddl(
+    corpus_temp: Dict[str, Any]
+) -> Dict[str, str | List[str] | Dict[str, int]]:
     globs = Globs()
     globs.base_map = corpus_temp["firstClass"]
 

@@ -2,7 +2,7 @@
 
 > uplord monorepository
 
-First, install Python 3.11 (though anything from 3.9 onward should work).
+First, install Python 3.11 (though anything from 3.9 onward should work) or setup a Python 3.11 virtual environment.
 
 Make sure you also have access to `abstract-query` and `lcp-upload` submodule repositories. Ask someone to grant you access if you need it.
 
@@ -21,10 +21,12 @@ This will also clone the `abstract-query` and `lcp-upload` submodules. If they a
 
 * The backend (`./uplord`)
 * The frontend (`./frontend`)
-* LAMa
-* Postgres
-* Redis
-* at least one RQ worker
+* LAMa (local or remote)
+* PostgreSQL (local or remote)
+* Redis (local or remote)
+* At least one RQ worker
+
+`.env` defaults point to a local Redis, so install and run Redis or reconfigure to our deployed instance.
 
 To install backend (and `abstract-query`, which is also required):
 
@@ -32,14 +34,13 @@ To install backend (and `abstract-query`, which is also required):
 pip install -e abstract-query -e .
 ```
 
-To build optional `c` extensions:
+To build optional `c` extensions for both repos:
 
 ```bash
 cd abstract-query
 python setup.py build_ext --inplace
 cd ..
 python setup.py build_ext --inplace
-
 ```
 
 To start backend for development, first edit `.env` so that it contains the correct config.
@@ -47,7 +48,10 @@ To start backend for development, first edit `.env` so that it contains the corr
 Then, start as many RQ workers as you want. To start one:
 
 ```bash
+# uses c code if available, otherwise py:
 python -m uplord worker
+# to only use .py:
+# python uplord/worker.py
 ````
 
 In another session, start the app with:
@@ -56,19 +60,38 @@ In another session, start the app with:
 python -m uplord
 ```
 
+It will use C extension modules if they are available, or else straight Python.
+
 For the LAMa connection to work, you might need to do:
 
 ```bash
 ssh -L 18080:192.168.1.57:8080 berlit.liri
 ```
 
-Start frontend:
+For the frontend, you need to install `Node.js`, `npm` and `yarn`. For Ubuntu, that would be something like:
+
+```bash
+sudo apt update
+sudo apt install nodejs
+sudo apt install npm
+npm install --global yarn
+```
+
+Then, if you haven't before, build the frontend:
 
 ```bash
 cd frontend
-# yarn build
+yarn install
+```
+
+Then you can start the frontend:
+
+```bash
+# in uplord/frontend:
 yarn serve
 ```
+
+The app will be available at `http://localhost:8080`.
 
 ## Development
 
@@ -84,9 +107,17 @@ You might also want to configure `git` to push changes to submodules when you pu
 git config --global push.recurseSubmodules "on-demand"
 ```
 
+### Type checking
+
+To check that typing is correct (do before commit/push/c-extension building):
+
+```bash
+mypy uplord
+```
+
 ## Configuration
 
-The defaults in `.env` should work for Postgres and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
+The defaults in `.env` should work for PostgreSQL and LAMa. Default Redis is local, so you should have a Redis instance running as per host and port specified in `.env`.
 
 Some `.env` values that might need adjusting for deployment:
 
@@ -153,13 +184,17 @@ coverage html
 
 ## Deployment
 
-Edit `.env` as necessary. Start as many workers as necessary. Then, to start app:
+1. Pull latest code
+2. Edit `.env` as necessary
+3. Build c extensions if you want (see above)
+4. Start as many workers as necessary
+5. Start app:
 
 ```bash
-gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.deploy:create_app --worker-class aiohttp.GunicornWebWorker
+gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.deploy:create_app --worker-class aiohttp.GunicornUVLoopWebWorker
 ```
 
-## Count lines of code
+## Count lines of code 😉
 
 ```bash
 apt-get install cloc

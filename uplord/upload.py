@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import traceback
@@ -308,16 +309,16 @@ async def make_schema(request: web.Request) -> web.Response:
         try:
             existing_project = await _lama_project_create(headers, profile)
             if existing_project.get("status", True) is not False:
-                print(f"New project created: {project}", existing_project)
+                msg = f"New project created: {project}"
+                print(msg, existing_project)
+                logging.info(msg, extra=existing_project)
         except Exception as err:
             tb = traceback.format_exc()
             msg = f"Could not create project: {project} already exists?"
             print(msg)
-            error = {
-                "status": "failed",
-                "message": f"{msg} -- {err}",
-                "traceback": tb,
-            }
+            error = {"traceback": tb, "status": "failed"}
+            logging.error(msg, extra=error)
+            error["message"] = f"{msg} -- {err}"
             return web.json_response(error)
 
     corpus_folder = str(uuid4())
@@ -345,6 +346,11 @@ async def make_schema(request: web.Request) -> web.Response:
         and i["meta"]["version"] == corpus_version
     ]
     drops = [f"DROP SCHEMA IF EXISTS {i} CASCADE;" for i in set(sames)]
+
+    # todo: is this the right approach?
+    cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
+    delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version = {cv};"
+    drops.append(delete)
 
     template["project"] = proj_id
     template["schema_name"] = schema_name

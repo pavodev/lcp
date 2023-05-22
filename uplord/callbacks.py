@@ -17,6 +17,7 @@ from .utils import (
     _add_results,
     _get_status,
     _union_results,
+    _row_to_value,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
@@ -180,6 +181,33 @@ def _sentences(
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
+def _document(
+    job: SQLJob | Job,
+    connection: RedisConnection,
+    result: List[Dict[str, Any]] | Dict[str, Any],
+) -> None:
+    """
+    When a user requests a document, we give it to them via websocket
+    """
+    user = job.kwargs["user"]
+    room = job.kwargs["room"]
+    if not room:
+        return
+    if isinstance(result, list) and len(result) == 1:
+        result = result[0]
+    jso = {
+        "document": result,
+        "action": "document",
+        "user": user,
+        "room": room,
+        "corpus": job.kwargs["corpus"],
+        "doc_id": job.args[-1][0],
+    }
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
+
+
 def _schema(
     job: SQLJob | Job,
     connection: RedisConnection,
@@ -212,22 +240,31 @@ def _schema(
 def _upload(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: bool | None = None,
+    result: Tuple = tuple(),
 ) -> None:
     """
     Success callback when user has uploaded a dataset
     """
-    user = job.kwargs.get("user")
-    room = job.kwargs.get("room")
-    if not room:
+    project: str = job.args[0]
+    user: str = job.args[1]
+    room: str | None = job.args[2]
+    user_data: Dict[str, Any] = job.kwargs["user_data"]
+    is_vian: bool = job.kwargs["is_vian"]
+    gui: bool = job.kwargs["gui"]
+
+    if not room or not result:
         return
     jso = {
         "user": user,
         "room": room,
+        "id": result[0],
+        "user_data": user_data,
+        "is_vian": is_vian,
+        "entry": _row_to_value(result, project=project),
         "status": "success" if not result else "error",
-        "project": job.args[0],
+        "project": project,
         "action": "uploaded",
-        "gui": job.kwargs.get("gui", False),
+        "gui": gui,
     }
     if result:
         jso["error"] = result
@@ -248,7 +285,7 @@ def _general_failure(
     """
     print("Failure of some kind:", job, traceback, typ, value)
     if isinstance(typ, Interrupted) or typ == Interrupted:
-        # jso = {"status": "interrupted", "job": job.id, **kwargs, **job.kwargs}
+        # jso = {"status": "interrupted", "action": "interrupted", "job": job.id, **kwargs, **job.kwargs}
         return  # do we need to send this?
     else:
         jso = {
@@ -308,46 +345,10 @@ def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) 
     fixed: Dict[str, Dict[str, int | str | bool | Dict[str, Any]]] = {"-1": {}}
     disabled: List[Tuple[str, int]] = []
     for tup in result:
-        (
-            corpus_id,
-            name,
-            current_version,
-            version_history,
-            description,
-            corpus_template,
-            schema_path,
-            token_counts,
-            mapping,
-            enabled,
-        ) = tup
-        ver = str(current_version)
-        if not enabled:
-            print(f"Corpus disabled: {name}={corpus_id}")
-            disabled.append((name, corpus_id))
-            continue
-
-        schema_path = schema_path.replace("<version>", ver)
-        if not schema_path.endswith(ver):
-            schema_path = f"{schema_path}{ver}"
-        cols = corpus_template["layer"]
-        cols = cols[corpus_template["firstClass"]["token"]]["attributes"]
-        rest = {
-            "shortname": name,
-            "corpus_id": int(corpus_id),
-            "current_version": int(ver) if ver.isnumeric() else ver,
-            "version_history": version_history,
-            "description": description,
-            "schema_path": schema_path,
-            "token_counts": token_counts,
-            "mapping": mapping,
-            "segment": corpus_template["firstClass"]["segment"],
-            "token": corpus_template["firstClass"]["token"],
-            "document": corpus_template["firstClass"]["document"],
-            "column_names": cols,
-        }
-        corpus_template.update(rest)
-
-        fixed[str(corpus_id)] = corpus_template
+        made = _row_to_value(tup)
+        if not made["enabled"]:
+            disabled.append((made["name"], made["corpus_id"]))
+        fixed[str(made["corpus_id"])] = made
 
     for name, conf in fixed.items():
         if name == "-1":

@@ -1,5 +1,7 @@
 from aiohttp import web
 
+from typing import Any, Dict
+
 from .utils import ensure_authorised
 
 
@@ -10,17 +12,15 @@ async def document(request: web.Request) -> web.Response:
 
     The job's callback will send the document to the user/room via websocket
     """
-    doc_id = request.match_info["doc_id"]
-    request_data = await request.json()
-    room = request_data.get("room")
-    user = request_data.get("user")
-    corpora = request_data["corpora"]
+    doc_id: int = int(request.match_info["doc_id"])
+    request_data: Dict[str, Any] = await request.json()
+    room: str | None = request_data.get("room")
+    user = request_data.get("user", "")
+    corpora: Any = request_data["corpora"]
     if not isinstance(corpora, (list, tuple, set)):
         corpora = [corpora]
-    corpus = list(corpora)[0]
-    schema = request.app["config"][int(corpus)]["schema_path"]
-    sql_query = f"SELECT {schema}.doc_export(%s);"
-    kwargs = dict(query=sql_query, user=user, room=room, single=True, params=(doc_id,))
-    job = request.app["query_service"].submit(kwargs=kwargs)
-    jobs = {"status": "started", "job": job.id}
-    return web.json_response(jobs)
+    corpus: str | int = list(corpora)[0]
+    schema = request.app["config"][str(corpus)]["schema_path"]
+    job = request.app["query_service"].document(schema, int(corpus), doc_id, user, room)
+    info: Dict[str, str] = {"status": "started", "job": job.id}
+    return web.json_response(info)

@@ -12,6 +12,13 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Set, Tuple, final
+
+Self: Any = Any
+try:
+    from typing import Self
+except Exception:
+    pass
+
 from uuid import UUID, uuid4
 
 from abstract_query.create import json_to_sql
@@ -69,7 +76,7 @@ class CustomEncoder(json.JSONEncoder):
         return json.JSONEncoder.default(self, obj)
 
 
-def ensure_authorised(func: Callable):
+def ensure_authorised(func: Callable) -> Callable:
     """
     auth decorator, still wip
     """
@@ -208,7 +215,7 @@ async def _lama_api_revoke(
             return await resp.json(content_type=None)
 
 
-async def _lama_check_api_key(headers) -> Dict:
+async def _lama_check_api_key(headers) -> Dict[str, Any]:
     """
     Get details about a user via their API key
     """
@@ -245,7 +252,7 @@ def _get_all_results(job: Job | str, connection: RedisConnection) -> Dict[int, A
     return out
 
 
-def _get_kwics(result):
+def _get_kwics(result: Dict) -> Set[int]:
     """
     Helper to get set of kwic ids
     """
@@ -377,6 +384,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     logging.warning(f"RQ job timeout: {job}", extra=jso)
     connection = request.app["redis"]
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
@@ -400,7 +408,7 @@ async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
         return await coro
 
 
-async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
+async def gather(n: int, tasks: List[Any], name: str | None = None) -> List[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -412,7 +420,7 @@ async def gather(n: int, *tasks: Any, name: str | None = None) -> List[Any]:
         tsks = [asyncio.create_task(c, name=name) for c in tasks]
     try:
         return await asyncio.gather(*tsks)
-    except (BaseException) as err:
+    except BaseException as err:
         print(f"Error while gathering tasks: {str(err)}. Cancelling others...")
         running_tasks = asyncio.all_tasks()
         current = asyncio.current_task()
@@ -495,7 +503,7 @@ class QueryIteration:
         return None
 
     @classmethod
-    async def from_request(cls, request):
+    async def from_request(cls, request: web.Request) -> Self:
         request_data = await request.json()
         corp = request_data["corpora"]
         if not isinstance(corp, list):
@@ -565,7 +573,7 @@ class QueryIteration:
         return script + end
 
     @classmethod
-    async def from_manual(cls, manual, app):
+    async def from_manual(cls, manual: Dict[str, Any], app: web.Application) -> Self:
 
         job = Job.fetch(manual["job"], connection=app["redis"])
 

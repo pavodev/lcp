@@ -13,7 +13,7 @@ MODULE_PATH = os.path.join(BASEPATH, PACKAGE_DIR)
 SKIPS: Set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
 
 # use build_ext to do mypy c compilation
-if any(a == "build_ext" for a in sys.argv):
+if "build_ext" in sys.argv:
     from mypyc.build import mypycify
 
     files = []

@@ -1,3 +1,5 @@
+from typing import Set
+
 from aiohttp import web
 from yarl import URL
 
@@ -9,8 +11,8 @@ async def check_file_permissions(request: web.Request) -> web.Response:
     Returns if user has access to file
     """
     msg, status = ("Error", 460)
-    profiles_id = set()
-    uri = request.headers.get("X-Request-Uri")
+    profiles_id: Set[str] = set()
+    uri: str = request.headers.get("X-Request-Uri", "")
 
     user_details_lama = await _lama_user_details(request.headers)
     for subscription in user_details_lama["subscription"]["subscriptions"]:

@@ -60,9 +60,7 @@ UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT)
 
 POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
-_RHOST, _RPORT = os.environ["REDIS_URL"].rsplit(":", 1)
-REDIS_HOST = _RHOST.split("/")[-1].strip()
-REDIS_PORT = int(_RPORT.strip())
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 if os.getenv("SSH_HOST"):
     tunnel = SSHTunnelForwarder(
@@ -119,12 +117,12 @@ class SQLJob(Job):
         # self._db_conn = conn
         self._pool = pool
         self._upool = upool
-        self._redis = Redis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB_INDEX)
+        self._redis = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
         self._redis.pubsub()
 
 
 class MyWorker(Worker):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.job_class = SQLJob
 

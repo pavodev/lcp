@@ -112,21 +112,25 @@ async def _handle_message(
     """
     user = payload.get("user", "")
     room = payload.get("room", "")
-    status = payload.get("status", "")
     action = payload.get("action", "")
+    simples = (
+        "fetch_queries",
+        "store_query",
+        "document",
+        "sentences",
+        "failed",
+        "timeout",
+        "interrupted",  # not currently used, maybe when rooms have multiple users
+    )
 
-    if status == "timeout":
-        await push_msg(app["websockets"], room, payload, just=(room, user))
-        return None
-
-    if status == "failed":
-        await push_msg(app["websockets"], room, payload, just=(room, user))
-        return None
-
-    # interrupt was sent? -- currently not used
-    if status == "interrupted":
-        payload["action"] = "interrupted"
-        await push_msg(app["websockets"], room, payload, just=(room, user))
+    if action in simples:
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
         return None
 
     # handle configuration message
@@ -138,17 +142,6 @@ async def _handle_message(
         app["config"].update(payload["config"])
         # payload["action"] = "update_config"
         # await push_msg(app["websockets"], None, payload)
-        return None
-
-    # handle fetch/store queries message
-    if action in ("fetch_queries", "store_query"):
-        await push_msg(
-            app["websockets"],
-            room,
-            payload,
-            skip=None,
-            just=(room, user),
-        )
         return None
 
     # handle uploaded data (add to config, ws message if gui mode)
@@ -163,17 +156,6 @@ async def _handle_message(
         #        skip=None,
         #        just=None
         #    )
-
-    if action == "sentences":
-        await push_msg(
-            app["websockets"],
-            room,
-            payload,
-            skip=None,
-            just=(room, user),
-        )
-        return None
-
     if action == "query_result":
         await _handle_query(app, payload, user, room)
         return None

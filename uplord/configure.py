@@ -28,8 +28,8 @@ def _get_batches(config: Dict[str, Any]) -> Dict[str, int]:
     """
     Get a dict of batch_name: size for a given corpus
     """
-    batches = {}
-    counts = config["token_counts"]
+    batches: Dict[str, int] = {}
+    counts: Dict[str, int] = config["token_counts"]
     try:
         mapping = config["mapping"]["layer"][config["token"]]
     except (KeyError, TypeError):

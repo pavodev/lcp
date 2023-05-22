@@ -33,7 +33,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[AioHttpIntegration(), sentry_logging],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
-        environment=os.getenv("SENTRY_ENVIRONMENT", "lcp"),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "uplord"),
     )
 
 
@@ -63,13 +63,11 @@ from .video import video
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
 C_COMPILED = "SourceFileLoader" not in str(_LOADER)
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
-_RHOST, _RPORT = os.getenv("REDIS_URL", "http://localhost:6379").rsplit(":", 1)
-REDIS_HOST = _RHOST.split("/")[-1].strip()
-REDIS_PORT = int(_RPORT.strip())
+REDIS_URL = os.getenv("REDIS_URL", "http://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 
 
-async def on_shutdown(app):
+async def on_shutdown(app: web.Application) -> None:
     """
     Close websocket connections on app shutdown
     """
@@ -90,7 +88,7 @@ async def on_shutdown(app):
                 print(f"Issue closing websocket for {room}/{uid}: {err}")
 
 
-async def start_background_tasks(app):
+async def start_background_tasks(app: web.Application) -> None:
     """
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
@@ -100,7 +98,7 @@ async def start_background_tasks(app):
     app["ws_cleanup"] = asyncio.create_task(ws_cleanup(app["websockets"]))
 
 
-async def cleanup_background_tasks(app):
+async def cleanup_background_tasks(app: web.Application) -> None:
     """
     Stop running background tasks: redis listener, stale ws cleaner
     """
@@ -110,7 +108,7 @@ async def cleanup_background_tasks(app):
     await app["ws_cleanup"]
 
 
-async def create_app(*args, **kwargs):
+async def create_app(*args, **kwargs) -> web.Application:
     """
     Build an instance of the app. If test=True is passed, it is returned
     before background tasks are added, to aid with unit tests
@@ -143,9 +141,8 @@ async def create_app(*args, **kwargs):
     # all websocket connections are stored in here, as {room: {(connection, user_id,)}}
     # when a user leaves the app, the connection should be removed. If it's not,
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
-    app["websockets"]: Dict[str, Set[Tuple[web.WebSocketResponse, str]]] = defaultdict(
-        set
-    )
+    ws: Dict[str, Set[Tuple[web.WebSocketResponse, str]]] = defaultdict(set)
+    app["websockets"] = ws
 
     resource = cors.add(app.router.add_resource("/corpora"))
     # cors.add(resource.add_route("GET", corpora))
@@ -194,7 +191,7 @@ async def create_app(*args, **kwargs):
     cors.add(resource.add_route("GET", check_file_permissions))
 
     # we keep two redis connections, for reasons
-    redis_url = f"redis://{REDIS_HOST}:{REDIS_PORT}/{REDIS_DB_INDEX}"
+    redis_url = f"{REDIS_URL}/{REDIS_DB_INDEX}"
     app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
     app["redis"] = Redis.from_url(redis_url)
 
@@ -216,7 +213,7 @@ async def create_app(*args, **kwargs):
     return app
 
 
-async def start_app():
+async def start_app() -> None:
     try:
         app = await create_app()
         runner = web.AppRunner(app)
@@ -227,10 +224,13 @@ async def start_app():
         await asyncio.Event().wait()
         return None
     except KeyboardInterrupt:
-        return
+        return None
+    except (asyncio.exceptions.CancelledError, OSError) as err:
+        print(f"Port in use? : {err}")
+        return None
 
 
-def start():
+def start() -> None:
     """
     Alternative starter
     """
@@ -247,6 +247,9 @@ def start():
             asyncio.run(start_app())
     except KeyboardInterrupt:
         print("Application stopped.")
+    except (BaseException, OSError) as err:
+        print(f"Port in use? : {err}")
+    return None
 
 
 # test mode should not start a loop

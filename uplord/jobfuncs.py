@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import shutil
+import traceback
 
-from typing import Any, List, Tuple
+from typing import Any, Dict, List, Tuple
 
 from rq.job import get_current_job
 
@@ -16,54 +18,29 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> N
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    # user and room are not really used yet...
-    # user: Optional[str] = kwargs["user"]
-    # room: Optional[str] = kwargs.get("room")
-
-    # get template and understand it
     corpus = os.path.join("uploads", project)
     data_path = os.path.join(corpus, "_data.json")
 
     with open(data_path, "r") as fo:
-        data = json.load(fo)
+        data: Dict[str, Any] = json.load(fo)
 
-    template = data["template"]
-    if "project" not in template:
-        template["project"] = project
-    mapping = data["mapping"]
-    schema_name = template["schema_name"]
-    constraints = data["constraints"]
-    refs = data["refs"]
-    perms = data["perms"]
-    constraints.append(perms)
-    create = data["prep_seg_create"]
-    inserts = data["prep_seg_insert"]
-    batches = data["batchnames"]
-    extra = len(constraints) + len(batches)
+    data["constraints"].append(data["perms"])
+    if "project" not in data["template"]:
+        data["template"]["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
     await upool.open()
-
-    args = (upool, template, mapping, corpus, schema_name, len(batches), extra)
-    importer = Importer(*args)
+    importer = Importer(upool, data, corpus)
+    extra = {"user": user, "room": room, "project": project}
     try:
-        importer.update_progress("Importing corpus...")
-        await importer.import_corpus()
-        perc = int(importer.corpus_size / 100.0)
-        fake_total = importer.corpus_size + (perc * extra)
-        pro = f":progress:-1:{perc}:{fake_total} == {extra} extras"
-        cons = "\n\n".join(constraints)
-        importer.update_progress(f"Setting constraints...\n\n{cons}")
-        await importer.process_data(constraints, importer.run_script, progress=pro)
-        if len(refs):
-            strung = "\n".join(refs)
-            importer.update_progress(f"Running:\n{strung}")
-            await importer.run_script(strung)
-        await importer.prepare_segments(create, inserts, batches, progress=pro)
-        importer.update_progress("Adding to corpus list...")
-        await importer.create_entry_maincorpus()
+        msg = f"Starting corpus import for {user}: {project}"
+        logging.info(msg, extra=extra)
+        await importer.pipeline()
     except Exception as err:
-        print(f"Error: {err}")
+        tb = traceback.format_exc()
+        msg = f"Error during import/upload: {err}"
+        extra["traceback"] = tb
+        logging.error(msg, extra=extra)
         try:
             await importer.cleanup()
         except Exception:
@@ -75,7 +52,12 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> N
 
 
 async def _create_schema(
-    create: str, schema_name: str, drops: List[str] | None, **kwargs
+    create: str,
+    schema_name: str,
+    drops: List[str] | None,
+    user: str = "",
+    room: str | None = None,
+    **kwargs,
 ) -> None:
     """
     To be run by rq worker, create schema
@@ -87,11 +69,26 @@ async def _create_schema(
         async with conn.cursor() as cur:
             try:
                 if drops:
+                    extra = {
+                        "user": user,
+                        "room": room,
+                        "drops": drops,
+                    }
+                    msg = f"Attempting schema drop (create) * {len(drops)-1}"
+                    print("Dropping/deleting:", "\n".join(drops))
+                    logging.info(msg, extra=extra)
                     await cur.execute("\n".join(drops))
                 print("Creating schema...\n", create)
                 await cur.execute(create)
             except Exception:
                 script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
+                extra = {
+                    "user": user,
+                    "room": room,
+                    "schema": schema_name,
+                }
+                msg = f"Attempting schema drop (create): {schema_name}"
+                logging.info(msg, extra=extra)
                 await cur.execute(script)
     return None
 
@@ -101,13 +98,13 @@ async def _db_query(
     params: Tuple = tuple(),
     config: bool = False,
     store: bool = False,
-    single: bool = False,
+    document: bool = False,
     is_sentences: bool = False,
     resuming: bool = False,
     depends_on: str | List[str] = "",
     current_batch: Tuple[int, str, str, int] | None = None,
     **kwargs,
-) -> List[Tuple[Any]] | None:
+) -> List[Tuple | Dict[str, Any]] | Dict[str, Any] | None:
     """
     The function queued by RQ, which executes our DB query
     """
@@ -130,9 +127,8 @@ async def _db_query(
             if config or is_sentences:
                 result = await cur.fetchall()
                 return result
-            if single:
+            if document:
                 result = await cur.fetchone()
-                result = result[0]
+                return result[0]
             else:
-                result = await cur.fetchall()
-            return result
+                return await cur.fetchall()
