@@ -215,9 +215,7 @@ async def _lama_check_api_key(headers: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _get_all_results(
-    job: Job | SQLJob | str,
-    connection: RedisConnection,
-    total_requested: None | int = None,
+    job: Job | SQLJob | str, connection: RedisConnection
 ) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
@@ -230,13 +228,10 @@ def _get_all_results(
     # latest = Job.fetch(base.meta["latest_sentences"], connection=connection)
     # latest_sents = base.meta["_sentences"]
     # out = _union_results(out, latest_sents)
-    tot = 0 if total_requested is None else total_requested
 
     while True:
         meta = job.kwargs.get("meta_json")
-        batch, n = _add_results(job.result, 0, True, False, False, tot, meta=meta)
-        if total_requested is not None:
-            tot -= n
+        batch, _ = _add_results(job.result, 0, True, False, False, 0, meta=meta)
         out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:
@@ -483,7 +478,10 @@ async def push_msg(
 
 
 def _filter_corpora(
-    config: Dict[str, Dict[str, Any]], is_vian: bool, user_data: Dict[str, Any] | None
+    config: Dict[str, Dict[str, Any]],
+    is_vian: bool,
+    user_data: Dict[str, Any] | None,
+    get_all: bool = False,
 ) -> Dict[str, Dict[str, Any]]:
 
     ids: Set[str] = set()
@@ -500,14 +498,21 @@ def _filter_corpora(
             corpora[idx] = conf
             continue
         allowed = conf.get("projects", [])
+        if get_all:
+            corpora[idx] = conf
+            continue
         if "all" in allowed:
             corpora[idx] = conf
+            continue
         if is_vian and "vian" in allowed:
             corpora[idx] = conf
+            continue
         if not is_vian and "lcp" in allowed:
             corpora[idx] = conf
+            continue
         if not allowed or any(i in ids for i in allowed):
             corpora[idx] = conf
+            continue
     return corpora
 
 
@@ -633,3 +638,20 @@ class WorkingPythonParser(PythonParser):
 
 
 ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser
+
+
+async def corpora(app_type: str = "all") -> Dict[str, Any]:
+    """
+    Helper to quickly show corpora in app
+    """
+    from dotenv import load_dotenv
+
+    load_dotenv(override=True)
+
+    headers: Dict[str, Any] = {}
+    jso = {"appType": app_type, "all": True}
+
+    url = f"http://localhost:{os.environ['AIO_PORT']}/corpora"
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers, json=jso) as resp:
+            return await resp.json()

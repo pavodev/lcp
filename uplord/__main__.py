@@ -1,15 +1,15 @@
 """
 Interface for interacting with uplord server
+
+Not compiled to c!
 """
+import asyncio
+import json
 import sys
 
-COMMANDS = {"start", "uplord", "worker", "dqd", "ddl"}
+COMMANDS = {"start", "uplord", "worker", "dqd", "ddl", "corpora"}
 
-command = next(
-    i for i in reversed(sys.argv) if i in COMMANDS or i.endswith("__main__.py")
-)
-if command.endswith("__main__.py"):
-    command = "uplord"
+command = next((i for i in reversed(sys.argv) if i in COMMANDS), "uplord")
 
 if command == "uplord" or command == "start":
     from .app import start
@@ -33,6 +33,14 @@ elif command == "ddl":
     from .ddl_gen import main
 
     main()
+
+elif command == "corpora":
+    from .utils import corpora
+
+    types = {"lcp", "vian", "all"}
+    app_type = next((x for x in reversed(sys.argv) if x in types), "all")
+    res = asyncio.run(corpora(app_type))
+    print(json.dumps(res, indent=4))
 
 else:
     print(f"Command not understood: {command}")
