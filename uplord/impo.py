@@ -178,7 +178,7 @@ class Importer:
         Copy a chunk of CSV into the DB, going no larger than self.batchsize
         plus potentially the remainder of a line
         """
-        base = os.path.basename(f.name)
+        base = os.path.basename(str(f.name))
         await f.seek(start)
         data = await f.read(chunk)
         tell = await f.tell()
