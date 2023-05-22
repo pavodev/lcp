@@ -145,6 +145,7 @@ def _submit_sents(
         current_batch=qi.current_batch,
         base=_get_base(qi, first_job),
         resuming=qi.done,
+        total_results_requested=qi.total_results_requested,
     )
     qs = qi.app["query_service"]
     sents_job = qs.sentences(qi.sents_query(), tuple(), depends_on=to_use, **kwargs)
@@ -249,7 +250,7 @@ async def _query_iteration(
         depend = qi.job_id
 
     if qi.current_batch is not None and qi.job is not None:
-        schema_table = ":".join(qi.current_batch[1:3])
+        schema_table = ".".join(qi.current_batch[1:3])
         print(f"\nNow querying: {schema_table} ... {qi.job_id}")
 
     if qi.simultaneous and not it:

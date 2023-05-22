@@ -120,7 +120,7 @@ def _query(
         }
     )
 
-    red = job._redis if restart is False else connection  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -133,6 +133,7 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
+    already_done: bool = kwargs.get("already_done", False)
     total_requested = kwargs.get("total_results_requested")
     start_at = kwargs.get("start_at")
 
@@ -153,17 +154,26 @@ def _sentences(
     if "total_results_requested" in kwargs:
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
-    new_res, _ = _add_results(
-        depended.result,
-        *aargs,
-        kwic=True,
-        sents=result,
-        meta=depended.kwargs.get("meta_json"),
-    )
-    results_so_far = _union_results(base.meta["_sentences"], new_res)
+    already = base.meta.get("already", [])
 
-    base.meta["latest_sentences"] = job.id
-    base.meta["_sentences"] = results_so_far
+    if job.id not in already:
+        already.append(job.id)
+        base.meta["already"] = already
+        base.save_meta()
+        new_res, _ = _add_results(
+            depended.result,
+            *aargs,
+            kwic=True,
+            sents=result,
+            meta=depended.kwargs.get("meta_json"),
+        )
+        results_so_far = _union_results(base.meta["_sentences"], new_res)
+    else:
+        results_so_far = base.meta["_sentences"]
+
+    if not already_done:
+        base.meta["latest_sentences"] = job.id
+        base.meta["_sentences"] = results_so_far
 
     base.save_meta()
 

@@ -6,7 +6,7 @@ import os
 import sys
 
 from collections import defaultdict, deque
-from typing import Dict, Set, Tuple
+from typing import Any, Dict, Set, Tuple
 
 import aiohttp_cors
 import asyncio
@@ -143,6 +143,16 @@ async def create_app(*args, **kwargs) -> web.Application:
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
     ws: Dict[str, Set[Tuple[web.WebSocketResponse, str]]] = defaultdict(set)
     app["websockets"] = ws
+
+    # here we can remember things, most likely queries, by a hash of their query string
+    # and their params. the value is the job id. if the job id is found, we can return
+    # the result without redoing the query.
+    memory: Dict[str, Dict[int, str]] = {}
+    app["memory"] = memory
+    queries: Dict[int, str] = {}
+    app["memory"]["queries"] = queries
+    sentences: Dict[int, str] = {}
+    app["memory"]["sentences"] = sentences
 
     resource = cors.add(app.router.add_resource("/corpora"))
     # cors.add(resource.add_route("GET", corpora))

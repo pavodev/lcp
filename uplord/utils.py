@@ -215,7 +215,9 @@ async def _lama_check_api_key(headers: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def _get_all_results(
-    job: Job | SQLJob | str, connection: RedisConnection
+    job: Job | SQLJob | str,
+    connection: RedisConnection,
+    total_requested: None | int = None,
 ) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
@@ -228,10 +230,13 @@ def _get_all_results(
     # latest = Job.fetch(base.meta["latest_sentences"], connection=connection)
     # latest_sents = base.meta["_sentences"]
     # out = _union_results(out, latest_sents)
+    tot = 0 if total_requested is None else total_requested
 
     while True:
         meta = job.kwargs.get("meta_json")
-        batch, _ = _add_results(job.result, 0, True, False, False, 0, meta=meta)
+        batch, n = _add_results(job.result, 0, True, False, False, tot, meta=meta)
+        if total_requested is not None:
+            tot -= n
         out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:

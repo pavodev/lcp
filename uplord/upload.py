@@ -78,15 +78,19 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     if status == "failed":
         msg = f"Error: {str(job.latest_result().exc_string)}"
     elif status == "finished":
-        msg = f"""Upload is complete. You should be able to see your corpus in the web app."""
+        msg = f"""
+        Upload is complete. You should be able to see your
+        corpus in the web app. You may need to grant permission to
+        other users if you want to allow them to access it.
+        """
     ret = {
         "job": job.id,
         "status": status,
-        "info": msg,
+        "info": " ".join(msg.split()),
         "project": project,
     }
     if progress:
-        ret["progress"] = f"{progress[0]}/{progress[1]}/{progress[2]}/{progress[3]}"
+        ret["progress"] = "/".join(str(x) for x in progress)
     return web.json_response(ret)
 
 
@@ -179,70 +183,68 @@ async def upload(request: web.Request) -> web.Response:
     project_name = job.kwargs["project_name"]
     cpath = job.kwargs["path"]
 
-    username = request.rel_url.query.get("user_id", "")
-    room = request.rel_url.query.get("room", None)
+    # username = request.rel_url.query.get("user_id", "")
+    # room = request.rel_url.query.get("room", None)
 
     if not project_id:
         return web.json_response({"status": "failed"})
 
     data = await request.multipart()
-    size = 0
     has_file = False
     async for bit in data:
-        if isinstance(bit.filename, str):
-            if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
-                continue
-            ext = os.path.splitext(bit.filename)[-1]
-            # filename = str(project) + ext
-            path = os.path.join("uploads", cpath, bit.filename)
-            with open(path, "ba") as f:
-                while True:
-                    chunk = await bit.read_chunk()
-                    if not chunk:
-                        break
-                    size += len(chunk)
-                    f.write(chunk)
-            ziptar = [
-                (".zip", is_zipfile, ZipFile, "namelist"),
-                (".tar", is_tarfile, TarFile, "getnames"),
-                (".tar.gz", is_tarfile, TarFile, "getnames"),
-                (".tar.xz", is_tarfile, TarFile, "getnames"),
-                (".7z", is_7zfile, SevenZipFile, "getnames"),
-            ]
-            for ext, check, opener, method in ziptar:
-                if path.endswith(ext) and check(path):
-                    print(f"Extracting {ext} file: {path}")
-                    with opener(path, "r") as compressed:
-                        for f in getattr(compressed, method)():
-                            if not str(f).endswith(VALID_EXTENSIONS):
-                                continue
-                            just_f = os.path.join(
-                                "uploads", cpath, os.path.basename(str(f))
-                            )
-                            dest = os.path.join("uploads", cpath)
-                            print(f"Uncompressing {f} to {dest}")
-                            if ext != ".7z":
-                                compressed.extract(f, dest)
-                            else:
-                                compressed.extract(dest, [f])
-                            try:
-                                os.rename(os.path.join(dest, str(f)), just_f)
-                            except Exception as err:
-                                print(f"Warning: {err}")
-                                pass
-                            print("Extracted", dest, f)
-                    print(f"Extracting {ext} done!")
-                    os.remove(path)  # todo: should we do this now?
-                    print(f"Deleted: {path}")
-                elif path.endswith(ext) and not check(path):
-                    print(f"Something wrong with {path}. Ignoring...")
-                    size = 0
-                    os.remove(path)
-                    fp = os.path.basename(path)
-                    ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
-                    return web.json_response(ret)
-            if size:
+        if not isinstance(bit.filename, str):
+            continue
+
+        if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
+            continue
+        ext = os.path.splitext(bit.filename)[-1]
+        # filename = str(project) + ext
+        path = os.path.join("uploads", cpath, bit.filename)
+        with open(path, "ba") as f:
+            while True:
+                chunk = await bit.read_chunk()
+                if not chunk:
+                    break
+                f.write(chunk)
                 has_file = True
+        ziptar = [
+            (".zip", is_zipfile, ZipFile, "namelist"),
+            (".tar", is_tarfile, TarFile, "getnames"),
+            (".tar.gz", is_tarfile, TarFile, "getnames"),
+            (".tar.xz", is_tarfile, TarFile, "getnames"),
+            (".7z", is_7zfile, SevenZipFile, "getnames"),
+        ]
+        for ext, check, opener, method in ziptar:
+            if path.endswith(ext) and check(path):
+                print(f"Extracting {ext} file: {path}")
+                with opener(path, "r") as compressed:
+                    for f in getattr(compressed, method)():
+                        if not str(f).endswith(VALID_EXTENSIONS):
+                            continue
+                        just_f = os.path.join(
+                            "uploads", cpath, os.path.basename(str(f))
+                        )
+                        dest = os.path.join("uploads", cpath)
+                        print(f"Uncompressing {f} to {dest}")
+                        if ext != ".7z":
+                            compressed.extract(f, dest)
+                        else:
+                            compressed.extract(dest, [f])
+                        try:
+                            os.rename(os.path.join(dest, str(f)), just_f)
+                        except Exception as err:
+                            print(f"Warning: {err}")
+                            pass
+                        print("Extracted", dest, f)
+                print(f"Extracting {ext} done!")
+                os.remove(path)  # todo: should we do this now?
+                print(f"Deleted: {path}")
+            elif path.endswith(ext) and not check(path):
+                print(f"Something wrong with {path}. Ignoring...")
+                os.remove(path)
+                fp = os.path.basename(path)
+                ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
+                return web.json_response(ret)
 
     _ensure_word0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
@@ -259,19 +261,18 @@ async def upload(request: web.Request) -> web.Response:
     print(f"Uploading data to database: {cpath}")
     job = qs.upload(username, cpath, room, **kwa)
     short_url = str(url).split("?", 1)[0]
-    whole_url = f"{short_url}?job={job.id}"
-    info = f"""Data upload has begun ({size} bytes). If you want to check the status, POST to:
-        {whole_url}
+    suggest_url = f"{short_url}?job={job.id}"
+    info = f"""Data upload has begun. If you want to check the status, POST to:
+        {suggest_url}
     """
     return_data.update(
         {
             "status": "started",
             "job": job.id,
-            "size": size,
             "project": str(project_id),
             "project_name": project_name,
             "info": info,
-            "target": whole_url,
+            "target": suggest_url,
         }
     )
 
@@ -290,6 +291,7 @@ async def make_schema(request: web.Request) -> web.Response:
     request_data = await request.json()
 
     template = request_data["template"]
+    room = request_data.get("room", None)
     projects = request_data.get("projects")
     special = {"lcp", "vian", "all"}
     project = next(i for i in projects if i not in special)
@@ -351,7 +353,13 @@ async def make_schema(request: web.Request) -> web.Response:
     corpus_version = template["meta"]["version"]
     corpus_name = re.sub(r"\W", "_", template["meta"]["name"].lower())
     corpus_name = re.sub(r"_+", "_", corpus_name)
-    schema_name = f"{corpus_name}__{corpus_folder.split('-', 2)[1]}"
+    # below we add a random suffix to the corpus name.
+    # suffix of the name has 1/65536 chance of collision,
+    # which is on the borderline of being too high in prod.
+    # becomes 1/4.3b chance if we use [0] instead of [1]
+    # but the schema name gets noticeably uglier, so ...
+    prefix = corpus_folder.split("-", 2)[1]
+    schema_name = f"{corpus_name}__{prefix}"
 
     sames = [
         i["schema_name"]
@@ -389,7 +397,7 @@ async def make_schema(request: web.Request) -> web.Response:
         path=corpus_path,
         schema_name=schema_name,
         user=user_id,
-        room=None,
+        room=room,
         drops=drops,
         project_name=existing_project["title"],
     )

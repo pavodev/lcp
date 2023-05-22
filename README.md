@@ -140,6 +140,10 @@ In seconds, how long can an upload job be running until it gets stopped (should 
 
 In seconds, how long should query data stay in Redis? If a user tries to change pages on a query older than this, the query needs to be rerun from the start. It should work, but the UX is much worse than fetching from Redis.
 
+> `MAX_REMEMBERED_QUERIES`
+
+We keep a `dict` of `{query_hash: job_id}`, with `MAX_REMEMBERED_QUERIES` as the max size of the `dict`. When a user runs a query/sentences job, we compare the hashes to see if the query is already done, and then look it up in Redis. If the data is still there, we return it quickly.
+
 > `IMPORT_MAX_CONCURRENT`
 
 When importing a new corpus, how many concurrent tasks can be spawned? Set to `-1` or `0` for no limit, set to `1` for no concurrency, or larger to set the concurrency limit.

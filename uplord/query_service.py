@@ -38,6 +38,7 @@ class QueryService:
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
+        self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
     def query(
         self,
@@ -49,7 +50,20 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        return self.app[queue].enqueue(
+        hashed = hash((query, params))
+        queries = self.app["memory"]["queries"]
+        exists = queries.get(hashed)
+        if exists:
+            try:
+                job = Job.fetch(exists, connection=self.app["redis"])
+                if job.get_status() == "finished":
+                    print("Query found in redis memory. Retrieving...")
+                    _query(job, self.app["redis"], job.result)
+                    return job
+            except NoSuchJobError:
+                queries.pop(hashed)
+
+        job = self.app[queue].enqueue(
             _db_query,
             on_success=_query,
             on_failure=_general_failure,
@@ -58,6 +72,11 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
+        if len(queries) >= self.remembered_queries:
+            first = list(queries)[0]
+            queries.pop(first)
+        queries[hashed] = job.id
+        return job
 
     def document(
         self,
@@ -91,7 +110,23 @@ class QueryService:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
 
-        return self.app[queue].enqueue(
+        hashed = hash((query, params))
+        sents = self.app["memory"]["sentences"]
+        exists = sents.get(hashed)
+        if exists:
+            try:
+                job = Job.fetch(exists, connection=self.app["redis"])
+                if job.get_status() == "finished":
+                    print("Sentences found in redis memory. Retrieving...")
+                    kwa = {
+                        "total_results_requested": kwargs["total_results_requested"],
+                    }
+                    _sentences(job, self.app["redis"], job.result, **kwa)
+                    return job
+            except NoSuchJobError:
+                sents.pop(hashed)
+
+        job = self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
             on_failure=_general_failure,
@@ -101,6 +136,11 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
+        if len(sents) >= self.remembered_queries:
+            first = list(sents)[0]
+            sents.pop(first)
+        sents[hashed] = job.id
+        return job
 
     def get_config(self) -> SQLJob | Job:
         """
@@ -231,7 +271,8 @@ class QueryService:
         }
         return self.app[queue].enqueue(
             _create_schema,
-            result_ttl=self.query_ttl,
+            # schema job remembered for one day?
+            result_ttl=60 * 60 * 24,
             job_timeout=self.timeout,
             on_success=_schema,
             on_failure=_general_failure,
