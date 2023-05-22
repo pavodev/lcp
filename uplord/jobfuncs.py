@@ -14,7 +14,7 @@ from .impo import Importer
 from .utils import _make_sent_query
 
 
-async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> None:
+async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> Tuple:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
@@ -32,10 +32,11 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> N
     await upool.open()
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
+    row: Tuple = tuple()
     try:
         msg = f"Starting corpus import for {user}: {project}"
         logging.info(msg, extra=extra)
-        await importer.pipeline()
+        row = await importer.pipeline()
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Error during import/upload: {err}"
@@ -48,7 +49,7 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> N
         raise err
     finally:
         shutil.rmtree(corpus)  # todo: should we do this?
-    return None
+    return row
 
 
 async def _create_schema(

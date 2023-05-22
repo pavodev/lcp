@@ -90,6 +90,7 @@ class QueryService:
     ) -> SQLJob | Job:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
+
         return self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
@@ -186,11 +187,17 @@ class QueryService:
         room: str | None = None,
         queue: str = "alt",
         gui: bool = False,
+        user_data: Dict[str, Any] | None = None,
+        is_vian: bool = False,
     ) -> SQLJob | Job:
         """
         Upload a new corpus to the system
         """
-        kwargs = {"gui": gui}
+        kwargs = {
+            "gui": gui,
+            "user_data": user_data,
+            "is_vian": is_vian,
+        }
         return self.app[queue].enqueue(
             _upload_data,
             on_success=_upload,

@@ -5,23 +5,14 @@ import json
 import logging
 import os
 import re
-import sys
 
 from collections import Counter, defaultdict
-from dataclasses import asdict, dataclass, field
+
 from datetime import date, datetime
 
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Set, Tuple, final
 
-Self: Any = Any
-try:
-    from typing import Self
-except Exception:
-    pass
-
-from uuid import UUID, uuid4
-
-from abstract_query.create import json_to_sql
+from uuid import UUID
 
 try:
     from aiohttp import web, ClientSession
@@ -30,6 +21,7 @@ except ImportError:
     from aiohttp.client import ClientSession
 from redis import Redis as RedisConnection
 
+# here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis.asyncio.connection import BaseParser
 
 del BaseParser.__slots__  # type: ignore
@@ -43,16 +35,10 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.job import Job
 
-from .dqd_parser import convert
 
+from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
-
-
-if sys.version_info <= (3, 9):
-    QI_KWARGS = dict()
-else:
-    QI_KWARGS = dict(kw_only=True, slots=True)
 
 
 class Interrupted(Exception):
@@ -68,7 +54,7 @@ class CustomEncoder(json.JSONEncoder):
     UUID and time to string
     """
 
-    def default(self, obj: Any):
+    def default(self, obj: Any) -> None | str | int | float | bool | Dict | List:
         if isinstance(obj, UUID):
             return obj.hex
         elif isinstance(obj, (datetime, date)):
@@ -177,12 +163,12 @@ async def _lama_user_details(headers: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 async def _lama_project_create(
-    headers: Mapping[str, Any], project_data: Dict[str, Any]
+    headers: Mapping[str, Any], project_data: Dict[str, str]
 ) -> Dict[str, Any]:
     """
     todo: not tested yet, but the syntax is something like this
     """
-    url = f"{os.getenv('LAMA_API_URL')}/profile"
+    url = f"{os.environ['LAMA_API_URL']}/profile"
     async with ClientSession() as session:
         async with session.post(url, json=project_data, headers=headers) as resp:
             return await resp.json()
@@ -194,7 +180,7 @@ async def _lama_api_create(
     """
     todo: not tested yet, but the syntax is something like this
     """
-    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/create"
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/create"
     async with ClientSession() as session:
         async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
             return await resp.json(content_type=None)
@@ -206,7 +192,7 @@ async def _lama_api_revoke(
     """
     todo: not tested yet, but the syntax is something like this
     """
-    url = f"{os.getenv('LAMA_API_URL')}/profile/{project_id}/api/{apikey_id}/revoke"
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/{apikey_id}/revoke"
     data = {"comment": "Revoked by user"}
     async with ClientSession() as session:
         async with session.post(
@@ -215,7 +201,7 @@ async def _lama_api_revoke(
             return await resp.json(content_type=None)
 
 
-async def _lama_check_api_key(headers) -> Dict[str, Any]:
+async def _lama_check_api_key(headers: Mapping[str, Any]) -> Dict[str, Any]:
     """
     Get details about a user via their API key
     """
@@ -228,7 +214,9 @@ async def _lama_check_api_key(headers) -> Dict[str, Any]:
             return await resp.json()
 
 
-def _get_all_results(job: Job | str, connection: RedisConnection) -> Dict[int, Any]:
+def _get_all_results(
+    job: Job | SQLJob | str, connection: RedisConnection
+) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
@@ -437,236 +425,6 @@ async def gather(n: int, tasks: List[Any], name: str | None = None) -> List[Any]
         raise err
 
 
-@dataclass(**QI_KWARGS)
-class QueryIteration:
-    """
-    Model an iteration of a query, with all its associated settings
-    """
-
-    config: Dict[str, Dict[str, Any]]
-    user: str
-    room: str | None
-    query: str
-    corpora: List[int]
-    all_batches: List[Tuple[int, str, str, int]]
-    total_results_requested: int
-    needed: int
-    page_size: int
-    languages: Set[str]
-    simultaneous: str
-    base: None | str
-    sentences: bool
-    is_vian: bool
-    app: Any  # somehow fails when we do web.Application
-    hit_limit: bool | int = False
-    resuming: bool = False
-    previous: str = ""
-    done: bool = False
-    request_data: Dict[str, Any] | None = None
-    current_batch: Tuple[int, str, str, int] | None = None
-    done_batches: List[Tuple[int, str, str, int]] = field(default_factory=list)
-    total_results_so_far: int = 0
-    existing_results: Dict[int, Any] = field(default_factory=dict)
-    job: Job | None = None
-    job_id: str | None = ""
-    previous_job: Job | None = None
-    dqd: str = ""
-    sql: str = ""
-    jso: Dict[str, Any] = field(default_factory=dict)
-    meta: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
-
-    def make_query(self) -> None:
-        """
-        Do any necessary query conversions
-
-        Produces: the DQD/None, JSON, SQL and SQL metadata objects
-        """
-        if self.current_batch is None:
-            raise ValueError("Batch not found")
-
-        kwa = dict(
-            schema=self.current_batch[1],
-            batch=self.current_batch[2],
-            config=self.app["config"][str(self.current_batch[0])],
-            lang=self._determine_language(self.current_batch[2]),
-            vian=self.is_vian,
-        )
-        try:
-            json_query = json.loads(self.query)
-        except json.JSONDecodeError:
-            json_query = convert(self.query)
-            self.dqd = self.query
-        sql_query, meta_json = json_to_sql(json_query, **kwa)
-        self.jso = json_query
-        self.sql = sql_query
-        self.meta = meta_json
-        return None
-
-    @classmethod
-    async def from_request(cls, request: web.Request) -> Self:
-        request_data = await request.json()
-        corp = request_data["corpora"]
-        if not isinstance(corp, list):
-            corp = [corp]
-        corpora_to_use = [int(i) for i in corp]
-        langs = [i.strip() for i in request_data.get("languages", ["en"])]
-        languages = set(langs)
-        total_requested = request_data.get("total_results_requested", 1000)
-        previous = request_data.get("previous", "")
-        base = None if not request_data.get("resume") else previous
-        is_vian = request_data.get("appType") == "vian"
-        sim = request_data.get("simultaneous", False)
-        all_batches = _get_query_batches(
-            corpora_to_use, request.app["config"], languages, is_vian
-        )
-        details = {
-            "corpora": corpora_to_use,
-            "request_data": request_data,
-            "user": request_data["user"],
-            "app": request.app,
-            "room": request_data["room"],
-            "config": request.app["config"],
-            "page_size": request_data.get("page_size", 10),
-            "all_batches": all_batches,
-            "sentences": request_data.get("sentences", True),
-            "languages": set(langs),
-            "query": request_data["query"],
-            "resuming": request_data.get("resume", False),
-            "existing_results": {},
-            "total_results_requested": total_requested,
-            "needed": total_requested,
-            "total_results_so_far": 0,
-            "simultaneous": str(uuid4()) if sim else "",
-            "previous": previous,
-            "base": base,
-            "is_vian": is_vian,
-        }
-        return cls(**details)
-
-    @staticmethod
-    def _determine_language(batch: str) -> str | None:
-        """
-        Helper to find language from batch
-        """
-        batch = batch.rstrip("0123456789")
-        if batch.endswith("rest"):
-            batch = batch[:-4]
-        for lan in ["de", "en", "fr", "ca"]:
-            if batch.endswith(f"_{lan}"):
-                return lan
-        return None
-
-    def sents_query(self) -> str:
-        """
-        Build a query to fetch sentences (uuids to be filled in later)
-        """
-        if not self.current_batch:
-            raise ValueError("Need batch")
-        schema = self.current_batch[1]
-        lang = self._determine_language(self.current_batch[2])
-        config = self.config[str(self.current_batch[0])]
-        name = config["segment"].strip()
-        underlang = f"_{lang}" if lang else ""
-        seg_name = f"prepared_{name}{underlang}"
-        script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
-        end = f"WHERE {name}" + "_id = ANY('{{ {allowed} }}');"
-        return script + end
-
-    @classmethod
-    async def from_manual(cls, manual: Dict[str, Any], app: web.Application) -> Self:
-
-        job = Job.fetch(manual["job"], connection=app["redis"])
-
-        corp = manual["corpora"]
-        if not isinstance(corp, list):
-            corp = [corp]
-        corpora_to_use = [int(i) for i in corp]
-
-        tot_req = manual["total_results_requested"]
-        tot_so_far = manual["total_results_so_far"]
-        falsey = {False, None, -1}
-        needed = tot_req - tot_so_far if tot_req not in falsey else -1
-
-        details = {
-            "corpora": corpora_to_use,
-            "existing_results": manual["result"],
-            "user": manual["user"],
-            "room": manual["room"],
-            "job": job,
-            "app": app,
-            "job_id": manual["job"],
-            "config": app["config"],
-            "simultaneous": manual.get("simultaneous", ""),
-            "needed": needed,
-            "previous": manual.get("previous", ""),  # comment out?
-            "page_size": job.kwargs.get("page_size", 20),
-            "total_results_requested": tot_req,
-            "base": manual["base"],
-            "query": job.kwargs["original_query"],
-            "sentences": manual.get("sentences", True),
-            "hit_limit": manual.get("hit_limit", False),
-            "current_batch": None,
-            "all_batches": [tuple(x) for x in manual["all_batches"]],
-            "total_results_so_far": tot_so_far,
-            "languages": set([i.strip() for i in manual.get("languages", [])]),
-            "done_batches": [tuple(x) for x in manual["done_batches"]],
-            "is_vian": manual.get("is_vian", False),
-        }
-        return cls(**details)
-
-    def as_dict(self) -> Dict[str, str | List[str] | Dict[Any, Any]]:
-        return asdict(self)
-
-    def decide_batch(self) -> None:
-        """
-        Find the best next batch to query
-        """
-        if self.current_batch is not None:
-            return
-
-        buffer = 0.1  # set to zero for picking smaller batches
-
-        so_far = self.total_results_so_far
-        if self.is_vian:
-            self.current_batch = self.all_batches[0]
-            return None
-
-        if not len(self.done_batches):
-            self.current_batch = self.all_batches[0]
-            return None
-
-        if self.hit_limit != 0:  # do not change to 'if hit limit!'
-            self.current_batch = self.done_batches[-1]
-            return None
-
-        total_words_processed_so_far = sum([x[-1] for x in self.done_batches])
-        proportion_that_matches = so_far / total_words_processed_so_far
-        first_not_done: Tuple[int, str, str, int] | None = None
-
-        for batch in self.all_batches:
-            if batch in self.done_batches:
-                continue
-            if not first_not_done:
-                first_not_done = batch
-                if self.needed in {-1, False, None}:
-                    self.current_batch = batch
-                    return None
-
-            # todo: should we do this? next-smallest for low number of matches?
-            if self.page_size > 0 and so_far < min(self.page_size, 25):
-                self.current_batch = batch
-                return None
-            expected = batch[-1] * proportion_that_matches
-            if float(expected) >= float(self.needed + (self.needed * buffer)):
-                self.current_batch = batch
-                return None
-
-        if not first_not_done:
-            raise ValueError("Could not find batch")
-        self.current_batch = first_not_done
-        return None
-
-
 def _get_query_batches(
     corpora: List[int], config: Dict[str, Dict], languages: Set[str], is_vian: bool
 ) -> List[Tuple[int, str, str, int]]:
@@ -702,7 +460,7 @@ async def push_msg(
     """
     sent_to = set()
     for room, users in sockets.items():
-        if room != session_id:
+        if session_id and room != session_id:
             continue
         for conn, user_id in users:
             if (room, user_id) in sent_to:
@@ -719,27 +477,81 @@ async def push_msg(
             sent_to.add((room, user_id))
 
 
-def _get_word_count(qi: QueryIteration) -> int:
-    """
-    Sum the word counts for corpora being searched
-    """
-    total = 0
-    for corpus in qi.corpora:
-        conf = qi.app["config"][str(corpus)]
-        try:
-            has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
-        except (KeyError, TypeError):
-            has_partitions = False
-        if not has_partitions or not qi.languages:
-            total += sum(conf["token_counts"].values())
-        else:
-            counts = conf["token_counts"]
-            for name, num in counts.items():
-                for lang in qi.languages:
-                    if name.rstrip("0").endswith(lang):
-                        total += num
-                        break
-    return total
+def _filter_corpora(
+    config: Dict[str, Dict[str, Any]], is_vian: bool, user_data: Dict[str, Any] | None
+) -> Dict[str, Dict[str, Any]]:
+    ids = {"all"}
+    if is_vian:
+        ids.add("vian")
+    else:
+        ids.add("lcp")
+
+    if isinstance(user_data, dict):
+        for sub in user_data.get("subscription", {}).get("subscriptions", []):
+            ids.add(sub["id"])
+        for proj in user_data.get("publicProjects", []):
+            ids.add(proj["id"])
+
+    corpora = {}
+    for corpus_id, conf in config.items():
+        if corpus_id == -1:
+            corpora[corpus_id] = conf
+            continue
+        allowed = conf.get("projects", [])
+        if is_vian and allowed and "vian" not in allowed and "all" not in allowed:
+            continue
+        elif not is_vian and allowed and "lcp" not in allowed and "all" not in allowed:
+            continue
+        if not allowed or any(i in ids for i in allowed):
+            corpora[corpus_id] = conf
+    return corpora
+
+
+def _row_to_value(tup: Tuple, project: str | None = None) -> Dict[str, Any]:
+    (
+        corpus_id,
+        name,
+        current_version,
+        version_history,
+        description,
+        corpus_template,
+        schema_path,
+        token_counts,
+        mapping,
+        enabled,
+    ) = tup
+    ver = str(current_version)
+    if not enabled:
+        print(f"Corpus disabled: {name}={corpus_id}")
+        # disabled.append((name, corpus_id))
+        # continue
+
+    schema_path = schema_path.replace("<version>", ver)
+    if not schema_path.endswith(ver):
+        schema_path = f"{schema_path}{ver}"
+    cols = corpus_template["layer"]
+    cols = cols[corpus_template["firstClass"]["token"]]["attributes"]
+    rest = {
+        "shortname": name,
+        "corpus_id": int(corpus_id),
+        "current_version": int(ver) if ver.isnumeric() else ver,
+        "version_history": version_history,
+        "description": description,
+        "schema_path": schema_path,
+        "token_counts": token_counts,
+        "mapping": mapping,
+        "enabled": enabled,
+        "segment": corpus_template["firstClass"]["segment"],
+        "token": corpus_template["firstClass"]["token"],
+        "document": corpus_template["firstClass"]["document"],
+        "column_names": cols,
+    }
+    corpus_template.update(rest)
+    if "projects" not in corpus_template:
+        corpus_template["projects"] = ["all"]
+    if project and project not in corpus_template["projects"]:
+        corpus_template["projects"].append(project)
+    return corpus_template
 
 
 def _make_sent_query(

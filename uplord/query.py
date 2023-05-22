@@ -12,13 +12,35 @@ from rq.job import Job
 
 from .callbacks import _query, _sentences
 from .log import logged
+from .qi import QueryIteration
 from .utils import (
-    QueryIteration,
     _get_all_results,
     ensure_authorised,
     push_msg,
-    _get_word_count,
 )
+
+
+def _get_word_count(qi: QueryIteration) -> int:
+    """
+    Sum the word counts for corpora being searched
+    """
+    total = 0
+    for corpus in qi.corpora:
+        conf = qi.app["config"][str(corpus)]
+        try:
+            has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
+        except (KeyError, TypeError):
+            has_partitions = False
+        if not has_partitions or not qi.languages:
+            total += sum(conf["token_counts"].values())
+        else:
+            counts = conf["token_counts"]
+            for name, num in counts.items():
+                for lang in qi.languages:
+                    if name.rstrip("0").endswith(lang):
+                        total += num
+                        break
+    return total
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:

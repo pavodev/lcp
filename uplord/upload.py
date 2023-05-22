@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import json
-import logging
+
+# import logging
 import os
 import re
 import traceback
@@ -17,7 +18,12 @@ from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
 from .ddl_gen import generate_ddl
-from .utils import _lama_check_api_key, _lama_project_create, ensure_authorised
+from .utils import (
+    _lama_check_api_key,
+    _lama_project_create,
+    ensure_authorised,
+    _lama_user_details,
+)
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -154,7 +160,10 @@ async def upload(request: web.Request) -> web.Response:
     if checking:
         return await _status_check(request, job_id)
 
+    user_data = await _lama_user_details(request.headers)
+
     gui_mode = request.rel_url.query.get("gui", False)
+    is_vian = request.rel_url.query.get("vian", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
     project_id = job.kwargs["project"]
@@ -238,7 +247,7 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(gui=gui_mode)
+    kwa = dict(gui=gui_mode, user_data=user_data, is_vian=is_vian)
     path = os.path.join("uploads", cpath)
     print(f"Uploading data to database: {cpath}")
     job = qs.upload(username, cpath, room, **kwa)
@@ -311,13 +320,13 @@ async def make_schema(request: web.Request) -> web.Response:
             if existing_project.get("status", True) is not False:
                 msg = f"New project created: {project}"
                 print(msg, existing_project)
-                logging.info(msg, extra=existing_project)
+                # logging.info(msg, extra=existing_project)
         except Exception as err:
             tb = traceback.format_exc()
             msg = f"Could not create project: {project} already exists?"
             print(msg)
             error = {"traceback": tb, "status": "failed"}
-            logging.error(msg, extra=error)
+            # logging.error(msg, extra=error)
             error["message"] = f"{msg} -- {err}"
             return web.json_response(error)
 
@@ -352,7 +361,7 @@ async def make_schema(request: web.Request) -> web.Response:
     delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version = {cv};"
     drops.append(delete)
 
-    template["project"] = proj_id
+    template["projects"] = [proj_id]
     template["schema_name"] = schema_name
 
     pieces = generate_ddl(template)

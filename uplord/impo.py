@@ -45,7 +45,9 @@ class SQLstats:
             f"""
             INSERT
               INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-            VALUES (%s, %s, %s, %s, %s, %s, true);"""
+            VALUES (%s, %s, %s, %s, %s, %s, true)
+            RETURNING *;
+            """
         )
 
         self.token_count = lambda x, y: dedent(
@@ -202,8 +204,8 @@ class Importer:
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
-        exists: bool = await self.run_script(script, give=True)  # type: ignore
-        if exists is False:
+        exists: Tuple[bool] = await self.run_script(script, give=True)  # type: ignore
+        if exists[0] is False:
             await f.close()
             raise ValueError(f"Table not found: {self.schema}.{tab}")
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
@@ -322,7 +324,7 @@ class Importer:
             queries.append(query)
         response = await self.process_data(queries, self.run_script, give=True)
 
-        res: Dict[str, int] = {k: int(v) for k, v in zip(names, response)}
+        res: Dict[str, int] = {k: int(v[0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(
@@ -333,7 +335,7 @@ class Importer:
         progress: str | None = None,
         # todo: params could get a more general type if it is used for anything else:
         params: Tuple[str, int | float | str, str, str, str, str] | None = None,
-    ) -> bool | int | None:
+    ) -> None | Tuple:
         """
         Run a simple script, and return the result if give
 
@@ -346,8 +348,8 @@ class Importer:
                     self.update_progress(progress)
                 if not give:
                     return None
-                res: List[Tuple[int | bool]] = await cur.fetchall()
-                return res[0][0]
+                res: List[Tuple] = await cur.fetchall()
+                return res[0]
         return None
 
     async def prepare_segments(
@@ -365,7 +367,7 @@ class Importer:
         await self.process_data(inserts, self.run_script, progress=progress)
         return None
 
-    async def create_entry_maincorpus(self) -> None:
+    async def create_entry_maincorpus(self) -> Tuple:
         """
         Add a row to main.corpus with metadata about the imported corpus
         """
@@ -378,10 +380,13 @@ class Importer:
             json.dumps(self.token_count),
             json.dumps(self.mapping),
         )
-        await self.run_script(self.sql.main_corp, params=params)
-        return None
 
-    async def pipeline(self) -> None:
+        row = await self.run_script(self.sql.main_corp, give=True, params=params)
+        if not isinstance(row, tuple):
+            raise ValueError("unexpected result")
+        return row
+
+    async def pipeline(self) -> Tuple:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
@@ -397,5 +402,4 @@ class Importer:
             self.update_progress(f"Running:\n{strung}")
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
-        await self.create_entry_maincorpus()
-        return None
+        return await self.create_entry_maincorpus()

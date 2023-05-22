@@ -23,7 +23,7 @@ from .utils import push_msg
 from .validate import validate
 
 
-from .utils import PUBSUB_CHANNEL
+from .utils import PUBSUB_CHANNEL, _filter_corpora
 
 
 async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:
@@ -140,22 +140,19 @@ async def _handle_message(
                 print(f"Corpus disabled: {name}={idx}")
         print(f"Config loaded: {len(payload['config'])-1} corpora")
         app["config"].update(payload["config"])
-        # payload["action"] = "update_config"
-        # await push_msg(app["websockets"], None, payload)
+        payload["action"] = "update_config"
+        await push_msg(app["websockets"], "", payload)
         return None
 
     # handle uploaded data (add to config, ws message if gui mode)
     if action == "uploaded":
-        app["query_service"].get_config()
-        return None
-        # if payload.get("gui"):
-        #    await push_msg(
-        #        app["websockets"],
-        #        room,
-        #        payload,
-        #        skip=None,
-        #        just=None
-        #    )
+        vian = payload["is_vian"]
+        app["config"][str(payload["id"])] = payload["entry"]
+        if payload.get("gui"):
+            filt = _filter_corpora(app["config"], vian, payload["user_data"])
+            payload["config"] = filt
+            await push_msg(app["websockets"], "", payload)
+
     if action == "query_result":
         await _handle_query(app, payload, user, room)
         return None
@@ -319,7 +316,9 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     return ws
 
 
-async def ws_cleanup(sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]]):
+async def ws_cleanup(
+    sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]]
+) -> None:
     """
     Periodically remove any closed websocket connections to ensure that app size
     doesn't irreversibly increase over time
@@ -343,3 +342,4 @@ async def ws_cleanup(sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]])
                 response = {"left": user, "room": room, "n_users": n_users}
                 await push_msg(sockets, room, response)
         await asyncio.sleep(interval)
+    return None
