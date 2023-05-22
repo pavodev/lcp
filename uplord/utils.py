@@ -480,30 +480,29 @@ async def push_msg(
 def _filter_corpora(
     config: Dict[str, Dict[str, Any]], is_vian: bool, user_data: Dict[str, Any] | None
 ) -> Dict[str, Dict[str, Any]]:
-    ids = {"all"}
-    if is_vian:
-        ids.add("vian")
-    else:
-        ids.add("lcp")
 
+    ids: Set[str] = set()
     if isinstance(user_data, dict):
         for sub in user_data.get("subscription", {}).get("subscriptions", []):
             ids.add(sub["id"])
-        for proj in user_data.get("publicProjects", []):
+        for proj in user_data.get("publicProfiles", []):
             ids.add(proj["id"])
 
     corpora = {}
     for corpus_id, conf in config.items():
-        if corpus_id == -1:
-            corpora[corpus_id] = conf
+        idx = str(corpus_id)
+        if idx == "-1":
+            corpora[idx] = conf
             continue
         allowed = conf.get("projects", [])
-        if is_vian and allowed and "vian" not in allowed and "all" not in allowed:
-            continue
-        elif not is_vian and allowed and "lcp" not in allowed and "all" not in allowed:
-            continue
+        if "all" in allowed:
+            corpora[idx] = conf
+        if is_vian and "vian" in allowed:
+            corpora[idx] = conf
+        if not is_vian and "lcp" in allowed:
+            corpora[idx] = conf
         if not allowed or any(i in ids for i in allowed):
-            corpora[corpus_id] = conf
+            corpora[idx] = conf
     return corpora
 
 
