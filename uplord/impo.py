@@ -5,15 +5,7 @@ import json
 import os
 
 from textwrap import dedent
-from typing import (
-    Any,
-    Dict,
-    Sequence,
-    List,
-    Callable,
-    Tuple,
-    Coroutine,
-)
+from typing import Any, Callable, Coroutine, Dict, List, Sequence, Tuple
 
 import aiofiles
 
@@ -24,7 +16,7 @@ from .utils import gather
 
 
 class SQLstats:
-    def __init__(self):
+    def __init__(self) -> None:
         self.check_tbl = lambda x, y: dedent(
             f"""
             SELECT EXISTS (
@@ -82,7 +74,8 @@ class Importer:
         """
         Manage the import of a corpus into the DB via async psycopg connection
         """
-        self.sql = SQLstats()
+        _loader = importlib.import_module(self.__module__).__loader__
+        self.sql: SQLstats = SQLstats()
         self.connection = connection
         self.template: Dict[str, Any] = data["template"]
         self.template["uploaded"] = True
@@ -101,21 +94,11 @@ class Importer:
         self.project_dir: str = project_dir
         self.corpus_size: int = 0
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
-        _loader = importlib.import_module(self.__module__).__loader__
         self.mypy = "SourceFileLoader" not in str(_loader)
         self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9)
-        self.max_bytes = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
+        self.max_gb = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
+        self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
-        if self.max_bytes == -1:
-            self.max_bytes = 0
-        else:
-            self.max_bytes = int(self.max_bytes * 1e9)
-        if self.max_concurrent < 1:
-            self.update_progress(f"Processing concurrently without limit...")
-        elif self.max_concurrent > 1:
-            self.update_progress(f"Processing concurrently * {self.max_concurrent}")
-        else:
-            self.update_progress("Processing without concurrency")
         return None
 
     def update_progress(self, msg: str) -> None:
@@ -212,8 +195,8 @@ class Importer:
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
-        exists: Tuple[bool] = await self.run_script(script, give=True)  # type: ignore
-        if exists[0] is False:
+        exists: List[Tuple] = await self.run_script(script, give=True)  # type: ignore
+        if exists[0][0] is False:
             await f.close()
             raise ValueError(f"Table not found: {self.schema}.{tab}")
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
@@ -252,13 +235,12 @@ class Importer:
         ]
         self.corpus_size = sum(s[1] for s in sizes)
         await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
-        self.token_count = await self.get_token_count()
         return None
 
     async def process_data(
         self,
         iterable: Sequence[str | Tuple[str | int, int]],
-        method: Callable,
+        method: Callable[..., Coroutine],
         *args,
         **kwargs,
     ) -> List:
@@ -282,7 +264,6 @@ class Importer:
         give: bool = kwargs.get("give", False)
         mname = method.__name__
         progs = "Doing {} {} tasks {}...({}MB vs {}GB)"
-        gb = self.max_bytes / 1e9
         for tup in iterable:
             if isinstance(tup, (str, int)):
                 first = tup
@@ -293,7 +274,7 @@ class Importer:
             too_big = self.max_bytes and current_size >= self.max_bytes and len(tasks)
             if too_big:
                 cs = current_size / 1e6
-                msg = progs.format(len(tasks), mname, batches, f"{cs:.2f}", gb)
+                msg = progs.format(len(tasks), mname, batches, f"{cs:.2f}", self.max_gb)
                 self.update_progress(msg)
                 more = await gather(mc, tasks, name=name)
                 if len(more) and give is True:
@@ -305,7 +286,7 @@ class Importer:
         if tasks:
             cs = current_size / 1e6
             rem = f"remaining {mname}"
-            msg = progs.format(len(tasks), rem, batches, f"{cs:.2f}", gb)
+            msg = progs.format(len(tasks), rem, batches, f"{cs:.2f}", self.max_gb)
             self.update_progress(msg)
             more = await gather(mc, tasks, name=name)
             if len(more) and give is True:
@@ -327,7 +308,7 @@ class Importer:
             queries.append(query)
         response = await self.process_data(queries, self.run_script, give=True)
 
-        res: Dict[str, int] = {k: int(v[0]) for k, v in zip(names, response)}
+        res: Dict[str, int] = {k: int(v[0][0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(
@@ -338,7 +319,7 @@ class Importer:
         progress: str | None = None,
         # todo: params could get a more general type if it is used for anything else:
         params: Tuple[str, int | float | str, str, str, str, str] | None = None,
-    ) -> None | Tuple:
+    ) -> List[Tuple] | None:
         """
         Run a simple script, and return the result if give
 
@@ -352,7 +333,7 @@ class Importer:
                 if not give:
                     return None
                 res: List[Tuple] = await cur.fetchall()
-                return res[0]
+                return res
         return None
 
     async def prepare_segments(
@@ -383,17 +364,35 @@ class Importer:
             json.dumps(self.token_count),
             json.dumps(self.mapping),
         )
+        rows = await self.run_script(self.sql.main_corp, give=True, params=params)
+        if not rows:
+            raise ValueError(f"Unexpected result: {rows}")
+        return rows[0]
 
-        row = await self.run_script(self.sql.main_corp, give=True, params=params)
-        if not isinstance(row, tuple):
-            raise ValueError("unexpected result")
-        return row
+    async def drop_similar(self) -> None:
+        """
+        Drop schemas from DB if they are the same as this one, minus the uuid
+
+        This is dangerous and needs to be updated with logic checkin
+        """
+        start = self.schema[:-4]
+        query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{start}';"
+        results: List[Tuple] | None = await self.run_script(query, give=True)
+        if not results:
+            return None
+        base = "DROP SCHEMA {schema} CASCADE;"
+        scripts = [base.format(schema=s[0]) for s in results if s[0] != self.schema]
+        # actually do the drops (in parallel):
+        await self.process_data(scripts, self.run_script)
+        return None
 
     async def pipeline(self) -> Tuple:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
+        # await self.drop_similar()
         await self.import_corpus()
+        self.token_count = await self.get_token_count()
         pro = f":progress:-1:1:{self.num_extras} -- {self.num_extras} extras"
         cons = "\n".join(self.constraints)
         self.update_progress(f"Setting constraints...\n{cons}")

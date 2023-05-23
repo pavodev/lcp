@@ -8,6 +8,8 @@ import traceback
 
 from typing import Any, Dict, List, Tuple
 
+import psycopg
+
 from rq.job import get_current_job
 
 from .impo import Importer
@@ -125,11 +127,16 @@ async def _db_query(
             result = await cur.execute(query, params)
             if store:
                 return None
-            if config or is_sentences:
-                result = await cur.fetchall()
-                return result
-            if document:
-                result = await cur.fetchone()
-                return result[0]
-            else:
-                return await cur.fetchall()
+            try:
+                if config or is_sentences:
+                    result = await cur.fetchall()
+                    return result
+                if document:
+                    result = await cur.fetchone()
+                    return result[0]
+                else:
+                    return await cur.fetchall()
+            except psycopg.ProgrammingError as err:
+                tb = traceback.format_exc()
+                print("Warning: psycopg error, no results?", err, tb)
+                return []

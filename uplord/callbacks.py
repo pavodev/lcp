@@ -133,7 +133,6 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
-    already_done: bool = kwargs.get("already_done", False)
     total_requested = kwargs.get("total_results_requested")
     start_at = kwargs.get("start_at")
 
@@ -159,7 +158,6 @@ def _sentences(
     if job.id not in already:
         already.append(job.id)
         base.meta["already"] = already
-        base.save_meta()
         new_res, _ = _add_results(
             depended.result,
             *aargs,
@@ -171,7 +169,7 @@ def _sentences(
     else:
         results_so_far = base.meta["_sentences"]
 
-    if not already_done:
+    if job.id not in already:
         base.meta["latest_sentences"] = job.id
         base.meta["_sentences"] = results_so_far
 
