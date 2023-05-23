@@ -329,7 +329,7 @@ async def make_schema(request: web.Request) -> web.Response:
             if existing_project.get("status", True) is not False:
                 proj = json.dumps(existing_project, indent=4)
                 msg = f"New project created:\n{proj}"
-                print(msg, existing_project)
+                print(msg)
                 # logging.info(msg, extra=existing_project)
         except Exception as err:
             tb = traceback.format_exc()

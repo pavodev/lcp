@@ -147,11 +147,11 @@ class Importer:
         positions: List[Tuple[int, int]] = []
 
         while True:
-            bat = int(self.batchsize)
+            bat = int(self.batchsize - 200)
             if start_at >= size:
                 break
             await f.seek(start_at)
-            lines = await f.read(self.batchsize)
+            lines = await f.read(self.batchsize - 200)
             if not lines or not lines.strip():
                 break
             if not lines.endswith("\n"):
