@@ -175,6 +175,7 @@ class Importer:
         plus potentially the remainder of a line
         """
         base = os.path.basename(csv_path)
+        sz: int = 0
         async with aiofiles.open(csv_path, "r") as f:
             await f.seek(start)
             data = await f.read(chunk)
@@ -185,8 +186,8 @@ class Importer:
                     async with cur.copy(cop) as copy:
                         await copy.write(data)
                         sz = len(bytes(data, "utf-8"))  # + data.count("\n")
-                        prog = f":progress:{sz}:{tot}:{base}:"
-                        self.update_progress(prog)
+        prog = f":progress:{sz}:{tot}:{base}:"
+        self.update_progress(prog)
         return None
 
     async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:

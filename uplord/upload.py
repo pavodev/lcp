@@ -108,7 +108,7 @@ def _get_progress(progfile: str) -> Tuple[int, int, str, str] | None:
     if "\nSetting constraints..." in data:
         msg = "Indexing corpus"
         unit = "task"
-        extra = " extras"
+        extra = ":extras:"
     if "\nComputing prepared segments" in data:
         msg = "Optimising corpus"
         unit = "task"
