@@ -16,7 +16,7 @@ from .utils import MAINCORPUS_TYPE, gather
 
 # what run_script can return
 SCRIPT_RETURN_TYPE = (
-    List[Tuple[int]]
+    List[List[Tuple[int]]]
     | List[Tuple[str]]
     | List[Tuple[bool]]
     | List[MAINCORPUS_TYPE]
@@ -320,8 +320,8 @@ class Importer:
             query = self.sql.token_count(self.schema, formed)
             queries.append(query)
         task = self.process_data(queries, self.run_script, give=True)
-        response = cast(List[Tuple[int]], await task)
-        res: Dict[str, int] = {k: int(v[0]) for k, v in zip(names, response)}
+        response = cast(List[List[Tuple[int]]], await task)
+        res: Dict[str, int] = {k: int(v[0][0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(

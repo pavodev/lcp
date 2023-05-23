@@ -327,7 +327,8 @@ async def make_schema(request: web.Request) -> web.Response:
         try:
             existing_project = await _lama_project_create(headers, profile)
             if existing_project.get("status", True) is not False:
-                msg = f"New project created: {project}"
+                proj = "\n".join(f"\n{k}: {v}" for k, v in project.items())
+                msg = f"New project created:\n{proj}"
                 print(msg, existing_project)
                 # logging.info(msg, extra=existing_project)
         except Exception as err:
