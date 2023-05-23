@@ -187,7 +187,7 @@ class Importer:
                         sz = len(bytes(data, "utf-8"))  # + data.count("\n")
                         prog = f":progress:{sz}:{tot}:{base}:"
                         self.update_progress(prog)
-            return None
+        return None
 
     async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:
         """
@@ -202,15 +202,14 @@ class Importer:
         async with aiofiles.open(csv_path) as f:
             headers = await f.readline()
             headlen = len(bytes(headers, "utf-8"))
+            positions = await self._get_positions(f, fsize)
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
-        positions = await self._get_positions(f, fsize)
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
         exists = cast(List[Tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
-            await f.close()
             raise ValueError(f"Table not found: {self.schema}.{tab}")
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
