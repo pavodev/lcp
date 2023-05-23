@@ -177,7 +177,6 @@ class Importer:
         base = os.path.basename(str(f.name))
         await f.seek(start)
         data = await f.read(chunk)
-        tell = await f.tell()
         if not data or not data.strip():
             return None
         async with self.connection.connection(self.upload_timeout) as conn:
@@ -185,8 +184,7 @@ class Importer:
                 async with cur.copy(cop) as copy:
                     await copy.write(data)
                     sz = len(bytes(data, "utf-8"))  # + data.count("\n")
-                    pc = min(100, round(tell * 100 / fsize, 2))
-                    prog = f":progress:{pc}%:{sz}:{tot} -- {base}"
+                    prog = f":progress:{sz}:{tot}:{base}:"
                     self.update_progress(prog)
         return None
 
@@ -203,7 +201,7 @@ class Importer:
         f = await aiofiles.open(csv_path)
         headers = await f.readline()
         headlen = len(bytes(headers, "utf-8"))
-        self.update_progress(f":progress:-1%:{headlen}:{tot} -- {base}")
+        self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         positions = await self._get_positions(f, fsize)
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
@@ -230,8 +228,7 @@ class Importer:
                         await copy.write(data)
                         sz = len(bytes(data, "utf-8"))  # + data.count("\n") - 2
                         headlen += sz
-                        perc = round(headlen * 100 / tot, 2)
-                        self.update_progress(f":progress:{perc}%:{sz}:{tot} -- {base}")
+                        self.update_progress(f":progress:{sz}:{tot}:{base}:")
         await f.close()
         return None
 
@@ -405,7 +402,7 @@ class Importer:
         # await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
-        pro = f":progress:-1:1:{self.num_extras} -- {self.num_extras} extras"
+        pro = f":progress:1:{self.num_extras}:extras:"
         cons = "\n".join(self.constraints)
         self.update_progress(f"Setting constraints...\n{cons}")
         await self.process_data(self.constraints, self.run_script, progress=pro)

@@ -102,7 +102,7 @@ def _get_progress(progfile: str) -> Tuple[int, int, str, str] | None:
         return None
     msg = "Importing corpus"
     unit = "byte"
-    extra = ":"
+    extra = ":progress:"
     with open(progfile, "r") as fo:
         data = fo.read()
     if "\nSetting constraints..." in data:
@@ -112,16 +112,16 @@ def _get_progress(progfile: str) -> Tuple[int, int, str, str] | None:
     if "\nComputing prepared segments" in data:
         msg = "Optimising corpus"
         unit = "task"
-        extra = " extras"
+        extra = ":extras:"
     bits = [
-        i.lstrip(":progress:").split()[0].split(":")
+        i.strip(":").strip().split(":")
         for i in data.splitlines()
-        if i.startswith(":progress") and extra in i
+        if i.startswith(":progress:") and extra in i
     ]
     if not bits:
         return None
-    done_bytes = sum([int(i[-2]) for i in bits])
-    total = int(bits[-1][-1])
+    done_bytes = sum([int(i[1]) for i in bits])
+    total = int(bits[-1][2])
     done_bytes = min(done_bytes, total)
     return (done_bytes, total, msg, unit)
 
