@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
 
 from datetime import datetime
 from types import TracebackType
@@ -280,6 +282,52 @@ def _upload(
 
     red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+
+
+def _upload_failure(
+    job: SQLJob | Job,
+    connection: RedisConnection,
+    typ: Type,
+    value: BaseException,
+    traceback: TracebackType,
+) -> None:
+    """
+    Cleanup on upload fail, and maybe send ws message
+    """
+    print(f"Upload failure: {typ} : {value}: {traceback}")
+
+    project: str
+    user: str
+    room: str | None
+
+    if "project_name" in job.kwargs:  # it came from create schema job
+        project = job.kwargs["project"]
+        user = job.kwargs["user"]
+        room = job.kwargs["room"]
+    else:  # it came from upload job
+        project = job.args[0]
+        user = job.args[1]
+        room = job.args[2]
+
+    path = os.path.join("uploads", project)
+    if os.path.isdir(path):
+        shutil.rmtree(path)
+        print(f"Deleted: {path}")
+
+    if user and room:
+        jso = {
+            "user": user,
+            "room": room,
+            "project": project,
+            "action": "upload_fail",
+            "status": "failed",
+            "job": job.id,
+            "kind": str(typ),
+            "value": str(value),
+        }
+        red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
+        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    return None
 
 
 def _general_failure(

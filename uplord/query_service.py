@@ -14,6 +14,7 @@ from .callbacks import (
     _config,
     _document,
     _general_failure,
+    _upload_failure,
     _queries,
     _query,
     _schema,
@@ -243,7 +244,7 @@ class QueryService:
         return self.app[queue].enqueue(
             _upload_data,
             on_success=_upload,
-            on_failure=_general_failure,
+            on_failure=_upload_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
             args=(project, user, room),
@@ -277,7 +278,7 @@ class QueryService:
             result_ttl=60 * 60 * 24,
             job_timeout=self.timeout,
             on_success=_schema,
-            on_failure=_general_failure,
+            on_failure=_upload_failure,
             args=(create, schema_name, drops),
             kwargs=kwargs,
         )
