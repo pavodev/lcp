@@ -147,11 +147,11 @@ class Importer:
         positions: List[Tuple[int, int]] = []
 
         while True:
-            bat = int(self.batchsize - 200)
+            bat = int(self.batchsize)
             if start_at >= size:
                 break
             await f.seek(start_at)
-            lines = await f.read(self.batchsize - 200)
+            lines = await f.read(self.batchsize)
             if not lines or not lines.strip():
                 break
             if not lines.endswith("\n"):
@@ -166,7 +166,7 @@ class Importer:
         start: int,
         chunk: int,
         cop: str,
-        f: AsyncTextIOWrapper,
+        csv_path: str,
         fsize: int,
         tot: int,
     ) -> None:
@@ -174,19 +174,20 @@ class Importer:
         Copy a chunk of CSV into the DB, going no larger than self.batchsize
         plus potentially the remainder of a line
         """
-        base = os.path.basename(str(f.name))
-        await f.seek(start)
-        data = await f.read(chunk)
-        if not data or not data.strip():
+        base = os.path.basename(csv_path)
+        async with aiofiles.open(csv_path, "r") as f:
+            await f.seek(start)
+            data = await f.read(chunk)
+            if not data or not data.strip():
+                return None
+            async with self.connection.connection(self.upload_timeout) as conn:
+                async with conn.cursor() as cur:
+                    async with cur.copy(cop) as copy:
+                        await copy.write(data)
+                        sz = len(bytes(data, "utf-8"))  # + data.count("\n")
+                        prog = f":progress:{sz}:{tot}:{base}:"
+                        self.update_progress(prog)
             return None
-        async with self.connection.connection(self.upload_timeout) as conn:
-            async with conn.cursor() as cur:
-                async with cur.copy(cop) as copy:
-                    await copy.write(data)
-                    sz = len(bytes(data, "utf-8"))  # + data.count("\n")
-                    prog = f":progress:{sz}:{tot}:{base}:"
-                    self.update_progress(prog)
-        return None
 
     async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:
         """
@@ -198,9 +199,10 @@ class Importer:
         So leave it as it is and it shows 98% or so for a while.
         """
         base = os.path.basename(csv_path)
-        f = await aiofiles.open(csv_path)
-        headers = await f.readline()
-        headlen = len(bytes(headers, "utf-8"))
+        async with aiofiles.open(csv_path) as f:
+            headers = await f.readline()
+            headlen = len(bytes(headers, "utf-8"))
+
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         positions = await self._get_positions(f, fsize)
         tab = base.split(".")[0]
@@ -213,23 +215,22 @@ class Importer:
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent != 1:
-            args = (cop, f, fsize - headlen, tot)
+            args = (cop, csv_path, fsize - headlen, tot)
             await self.process_data(positions, self.copy_batch, *args)
-            await f.close()
             return None
 
         # no concurrency:
-        async with self.connection.connection(self.upload_timeout) as conn:
-            async with conn.cursor() as cur:
-                async with cur.copy(cop) as copy:
-                    for start, chunk in positions:
-                        await f.seek(start)
-                        data = await f.read(chunk)
-                        await copy.write(data)
-                        sz = len(bytes(data, "utf-8"))  # + data.count("\n") - 2
-                        headlen += sz
-                        self.update_progress(f":progress:{sz}:{tot}:{base}:")
-        await f.close()
+        async with aiofiles.open(csv_path) as f:
+            async with self.connection.connection(self.upload_timeout) as conn:
+                async with conn.cursor() as cur:
+                    async with cur.copy(cop) as copy:
+                        for start, chunk in positions:
+                            await f.seek(start)
+                            data = await f.read(chunk)
+                            await copy.write(data)
+                            sz = len(bytes(data, "utf-8"))  # + data.count("\n") - 2
+                            headlen += sz
+                            self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None
 
     async def import_corpus(self) -> None:

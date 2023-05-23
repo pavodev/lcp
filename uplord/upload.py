@@ -216,16 +216,15 @@ async def upload(request: web.Request) -> web.Response:
         ]
         for ext, check, opener, method in ziptar:
             if path.endswith(ext) and check(path):
-                print(f"Extracting {ext} file: {path}")
+                print(f"Extracting {ext} file: {bit.filename}")
                 with opener(path, "r") as compressed:
                     for f in getattr(compressed, method)():
+                        basef = os.path.basename(str(f))
                         if not str(f).endswith(VALID_EXTENSIONS):
                             continue
-                        just_f = os.path.join(
-                            "uploads", cpath, os.path.basename(str(f))
-                        )
+                        just_f = os.path.join("uploads", cpath, basef)
                         dest = os.path.join("uploads", cpath)
-                        print(f"Uncompressing {f} to {dest}")
+                        print(f"Uncompressing {basef}")
                         if ext != ".7z":
                             compressed.extract(f, dest)
                         else:
@@ -235,7 +234,7 @@ async def upload(request: web.Request) -> web.Response:
                         except Exception as err:
                             print(f"Warning: {err}")
                             pass
-                        print("Extracted", dest, f)
+                        print(f"Extracted: {basef}")
                 print(f"Extracting {ext} done!")
                 os.remove(path)  # todo: should we do this now?
                 print(f"Deleted: {path}")
