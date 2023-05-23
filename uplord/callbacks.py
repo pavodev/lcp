@@ -18,6 +18,7 @@ from .utils import (
     _get_status,
     _union_results,
     _row_to_value,
+    MAINCORPUS_TYPE,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
@@ -248,7 +249,7 @@ def _schema(
 def _upload(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: Tuple = tuple(),
+    result: MAINCORPUS_TYPE,
 ) -> None:
     """
     Success callback when user has uploaded a dataset

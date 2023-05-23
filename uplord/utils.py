@@ -41,6 +41,21 @@ from .worker import SQLJob
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
 
+# an entry in main.corpus
+MAINCORPUS_TYPE = Tuple[
+    int,
+    str,
+    str | int | float,
+    Any,
+    str | None,
+    Dict[str, Any],
+    str,
+    Dict[str, int],
+    Dict[str, Any],
+    bool,
+]
+
+
 class Interrupted(Exception):
     """
     Used when a user interrupts a query from frontend
@@ -516,7 +531,10 @@ def _filter_corpora(
     return corpora
 
 
-def _row_to_value(tup: Tuple, project: str | None = None) -> Dict[str, Any]:
+def _row_to_value(
+    tup: MAINCORPUS_TYPE,
+    project: str | None = None,
+) -> Dict[str, Any]:
     (
         corpus_id,
         name,

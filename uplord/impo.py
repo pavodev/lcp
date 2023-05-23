@@ -5,14 +5,27 @@ import json
 import os
 
 from textwrap import dedent
-from typing import Any, Callable, Coroutine, Dict, List, Sequence, Tuple
+from typing import Any, Callable, Coroutine, Dict, List, Sequence, Tuple, cast
 
 import aiofiles
 
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
-from .utils import gather
+from .utils import MAINCORPUS_TYPE, gather
+
+# what run_script can return
+SCRIPT_RETURN_TYPE = (
+    List[Tuple[int]]
+    | List[Tuple[str]]
+    | List[Tuple[bool]]
+    | List[MAINCORPUS_TYPE]
+    | None
+)
+
+# the args needed to add an entry to main.corpus
+# keep synced with SQLstats.main_corp
+PARAMS_TYPE = Tuple[str, int | float | str, str, str, str, str]
 
 
 class SQLstats:
@@ -195,7 +208,7 @@ class Importer:
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
-        exists: List[Tuple] = await self.run_script(script, give=True)  # type: ignore
+        exists = cast(List[Tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
             await f.close()
             raise ValueError(f"Table not found: {self.schema}.{tab}")
@@ -243,7 +256,7 @@ class Importer:
         method: Callable[..., Coroutine],
         *args,
         **kwargs,
-    ) -> List:
+    ) -> List[SCRIPT_RETURN_TYPE]:
         """
         Do the execution of copy_batch or copy_table (method) from iterable data
 
@@ -306,9 +319,9 @@ class Importer:
             names.append(formed)
             query = self.sql.token_count(self.schema, formed)
             queries.append(query)
-        response = await self.process_data(queries, self.run_script, give=True)
-
-        res: Dict[str, int] = {k: int(v[0][0]) for k, v in zip(names, response)}
+        task = self.process_data(queries, self.run_script, give=True)
+        response = cast(List[Tuple[int]], await task)
+        res: Dict[str, int] = {k: int(v[0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(
@@ -318,8 +331,8 @@ class Importer:
         give: bool = False,
         progress: str | None = None,
         # todo: params could get a more general type if it is used for anything else:
-        params: Tuple[str, int | float | str, str, str, str, str] | None = None,
-    ) -> List[Tuple] | None:
+        params: PARAMS_TYPE | None = None,
+    ) -> SCRIPT_RETURN_TYPE:
         """
         Run a simple script, and return the result if give
 
@@ -332,7 +345,7 @@ class Importer:
                     self.update_progress(progress)
                 if not give:
                     return None
-                res: List[Tuple] = await cur.fetchall()
+                res: SCRIPT_RETURN_TYPE = await cur.fetchall()
                 return res
         return None
 
@@ -351,7 +364,7 @@ class Importer:
         await self.process_data(inserts, self.run_script, progress=progress)
         return None
 
-    async def create_entry_maincorpus(self) -> Tuple:
+    async def create_entry_maincorpus(self) -> MAINCORPUS_TYPE:
         """
         Add a row to main.corpus with metadata about the imported corpus
         """
@@ -364,9 +377,8 @@ class Importer:
             json.dumps(self.token_count),
             json.dumps(self.mapping),
         )
-        rows = await self.run_script(self.sql.main_corp, give=True, params=params)
-        if not rows:
-            raise ValueError(f"Unexpected result: {rows}")
+        task = self.run_script(self.sql.main_corp, give=True, params=params)
+        rows = cast(List[MAINCORPUS_TYPE], await task)
         return rows[0]
 
     async def drop_similar(self) -> None:
@@ -377,7 +389,7 @@ class Importer:
         """
         start = self.schema[:-4]
         query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{start}';"
-        results: List[Tuple] | None = await self.run_script(query, give=True)
+        results = cast(List[Tuple[str]], await self.run_script(query, give=True))
         if not results:
             return None
         base = "DROP SCHEMA {schema} CASCADE;"
@@ -386,7 +398,7 @@ class Importer:
         await self.process_data(scripts, self.run_script)
         return None
 
-    async def pipeline(self) -> Tuple:
+    async def pipeline(self) -> MAINCORPUS_TYPE:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
@@ -402,4 +414,4 @@ class Importer:
             self.update_progress(f"Running:\n{strung}")
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
-        return await self.create_entry_maincorpus()
+        return cast(MAINCORPUS_TYPE, await self.create_entry_maincorpus())
