@@ -50,8 +50,8 @@ MAINCORPUS_TYPE = Tuple[
     str | None,
     Dict[str, Any],
     str,
-    Dict[str, int],
-    Dict[str, Any],
+    Dict[str, int] | None,  # todo: remove none when tangram fixed
+    Dict[str, Any] | None,  # todo: remove none when tangram fixed
     bool,
 ]
 

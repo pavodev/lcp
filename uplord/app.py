@@ -76,7 +76,7 @@ async def on_shutdown(app: web.Application) -> None:
     except Exception:
         pass
     try:
-        await app["redis"].quit()
+        app["redis"].quit()
     except Exception:
         pass
     msg = "Server shutdown"
