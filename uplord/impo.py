@@ -185,7 +185,7 @@ class Importer:
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
                         await copy.write(data)
-                        sz = len(bytes(data, "utf-8"))  # + data.count("\n")
+                        sz = len(bytes(data, "utf-8"))
         prog = f":progress:{sz}:{tot}:{base}:"
         self.update_progress(prog)
         return None
@@ -194,13 +194,12 @@ class Importer:
         """
         Import csv_path to the DB, with or without concurrency
 
-        Note that we need to add the newline count to the byte
-        size of the file in order to have it match sys.getsize.
-        But if we do that, then progress bar quickly shows 100%.
-        So leave it as it is and it shows 98% or so for a while.
+        Note that we need to add the newline flag to open in order
+        to get the correct number of bytes in the file. but then
+        progress will show 100% instead of 98% which is worse UX.
         """
         base = os.path.basename(csv_path)
-        async with aiofiles.open(csv_path) as f:
+        async with aiofiles.open(csv_path) as f:  # newline=""" # to get true size
             headers = await f.readline()
             headlen = len(bytes(headers, "utf-8"))
             positions = await self._get_positions(f, fsize)
@@ -220,7 +219,7 @@ class Importer:
             return None
 
         # no concurrency:
-        async with aiofiles.open(csv_path) as f:
+        async with aiofiles.open(csv_path) as f:  # newline=""" # to get true size?
             async with self.connection.connection(self.upload_timeout) as conn:
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
@@ -228,7 +227,7 @@ class Importer:
                             await f.seek(start)
                             data = await f.read(chunk)
                             await copy.write(data)
-                            sz = len(bytes(data, "utf-8"))  # + data.count("\n") - 2
+                            sz = len(bytes(data, "utf-8"))
                             headlen += sz
                             self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None
@@ -400,7 +399,7 @@ class Importer:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
-        # await self.drop_similar()
+        await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"
