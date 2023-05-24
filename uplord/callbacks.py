@@ -290,7 +290,7 @@ def _upload_failure(
     connection: RedisConnection,
     typ: Type,
     value: BaseException,
-    trace: TracebackType,
+    trace: Any,
 ) -> None:
     """
     Cleanup on upload fail, and maybe send ws message
@@ -315,6 +315,13 @@ def _upload_failure(
         shutil.rmtree(path)
         print(f"Deleted: {path}")
 
+    form_error: str = str(trace)
+
+    try:
+        form_error = "".join(traceback.format_tb(trace))
+    except Exception as err:
+        print(f"cannot format object: {trace} / {err}")
+
     if user and room:
         jso = {
             "user": user,
@@ -323,7 +330,7 @@ def _upload_failure(
             "action": "upload_fail",
             "status": "failed",
             "job": job.id,
-            "traceback": "".join(traceback.format_tb(trace)),
+            "traceback": form_error,
             "kind": str(typ),
             "value": str(value),
         }
@@ -342,6 +349,12 @@ def _general_failure(
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
+    form_error: str = str(trace)
+    try:
+        form_error = "".join(traceback.format_tb(trace))
+    except Exception as err:
+        print(f"cannot format object: {trace} / {err}")
+
     print("Failure of some kind:", job, trace, typ, value)
     if isinstance(typ, Interrupted) or typ == Interrupted:
         # jso = {"status": "interrupted", "action": "interrupted", "job": job.id, **kwargs, **job.kwargs}
@@ -351,7 +364,7 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
-            "traceback": "".join(traceback.format_tb(trace)),
+            "traceback": form_error,
             "job": job.id,
             **job.kwargs,
         }
