@@ -6,7 +6,6 @@ import shutil
 import traceback
 
 from datetime import datetime
-from types import TracebackType
 from typing import Any, Dict, List, Tuple, Type
 from uuid import UUID
 
@@ -290,7 +289,7 @@ def _upload_failure(
     connection: RedisConnection,
     typ: Type,
     value: BaseException,
-    trace: TracebackType,
+    trace: traceback.StackSummary,
 ) -> None:
     """
     Cleanup on upload fail, and maybe send ws message
@@ -323,7 +322,7 @@ def _upload_failure(
             "action": "upload_fail",
             "status": "failed",
             "job": job.id,
-            "traceback": traceback.format_tb(trace),
+            "traceback": "".join(trace.format()),
             "kind": str(typ),
             "value": str(value),
         }
@@ -337,12 +336,12 @@ def _general_failure(
     connection: RedisConnection,
     typ: Type,
     value: BaseException,
-    trace: TracebackType,
+    trace: traceback.StackSummary,
 ) -> None:
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
-    print("Failure of some kind:", job, traceback, typ, value)
+    print("Failure of some kind:", job, trace, typ, value)
     if isinstance(typ, Interrupted) or typ == Interrupted:
         # jso = {"status": "interrupted", "action": "interrupted", "job": job.id, **kwargs, **job.kwargs}
         return  # do we need to send this?
@@ -351,7 +350,7 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
-            "traceback": traceback.format_tb(trace),
+            "traceback": "".join(trace.format()),
             "job": job.id,
             **job.kwargs,
         }
