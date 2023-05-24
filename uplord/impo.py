@@ -199,10 +199,10 @@ class Importer:
         progress will show 100% instead of 98% which is worse UX.
         """
         base = os.path.basename(csv_path)
-        async with aiofiles.open(csv_path) as f:  # newline=""" # to get true size
-            headers = await f.readline()
+        async with aiofiles.open(csv_path) as fop:  # newline=""" # to get true size
+            headers = await fop.readline()
             headlen = len(bytes(headers, "utf-8"))
-            positions = await self._get_positions(f, fsize)
+            positions = await self._get_positions(fop, fsize)
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
