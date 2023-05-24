@@ -6,6 +6,7 @@ import shutil
 import traceback
 
 from datetime import datetime
+from types import TracebackType
 from typing import Any, Dict, List, Tuple, Type
 from uuid import UUID
 
@@ -289,7 +290,7 @@ def _upload_failure(
     connection: RedisConnection,
     typ: Type,
     value: BaseException,
-    trace: traceback.StackSummary,
+    trace: TracebackType,
 ) -> None:
     """
     Cleanup on upload fail, and maybe send ws message
@@ -322,7 +323,7 @@ def _upload_failure(
             "action": "upload_fail",
             "status": "failed",
             "job": job.id,
-            "traceback": "".join(trace.format()),
+            "traceback": "".join(traceback.format_tb(trace)),
             "kind": str(typ),
             "value": str(value),
         }
@@ -336,7 +337,7 @@ def _general_failure(
     connection: RedisConnection,
     typ: Type,
     value: BaseException,
-    trace: traceback.StackSummary,
+    trace: TracebackType,
 ) -> None:
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
@@ -350,7 +351,7 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
-            "traceback": "".join(trace.format()),
+            "traceback": "".join(traceback.format_tb(trace)),
             "job": job.id,
             **job.kwargs,
         }
