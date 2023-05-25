@@ -251,8 +251,16 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
         payload = msg.json()
         action = payload["action"]
-        session_id = payload["room"]
-        user_id = payload["user"]
+        possible_session: str | None = payload["room"]
+        if possible_session is None:
+            print("No room: something wrong")
+            continue
+        session_id: str = possible_session
+        possible_user: str | None = payload["user"]
+        if possible_user is None:
+            print("User not logged in! Nothing to do")
+            continue
+        user_id: str = possible_user
         ident: Tuple[str, str] = (session_id, user_id)
 
         if action == "joined":

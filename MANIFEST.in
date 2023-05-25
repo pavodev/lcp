@@ -1,2 +1,2 @@
 include py.typed
-include backend/py.typed
+include uplord/py.typed

@@ -1,5 +1,16 @@
 [build-system]
-requires = ["setuptools", "setuptools-scm"]
+requires = [
+    "setuptools",
+    "mypy",
+    "types-redis",
+    "types-aiofiles",
+    "types-psycopg2",
+    "python-dotenv",
+    "yarl",
+    "psycopg_pool",
+    "uvloop",
+    "lark"
+]
 build-backend = "setuptools.build_meta"
 
 [project]
