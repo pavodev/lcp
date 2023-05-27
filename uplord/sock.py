@@ -135,10 +135,7 @@ async def _handle_message(
 
     # handle configuration message
     if action == "set_config":
-        if payload.get("disabled"):
-            for name, idx in payload["disabled"]:
-                print(f"Corpus disabled: {name}={idx}")
-        print(f"Config loaded: {len(payload['config'])-1} corpora")
+        print(f"Config loaded: {len(payload['config'])} corpora")
         app["config"].update(payload["config"])
         payload["action"] = "update_config"
         await push_msg(app["websockets"], "", payload)

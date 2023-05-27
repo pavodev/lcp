@@ -38,6 +38,7 @@ if SENTRY_DSN:
 
 
 from aiohttp import WSCloseCode, web
+from aiohttp.client_exceptions import ClientConnectorError
 from aiohttp_catcher import Catcher, catch
 
 from redis import Redis
@@ -55,7 +56,7 @@ from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .upload import make_schema, upload
-from .utils import ParserClass, WEBSOCKETS_TYPE, handle_timeout
+from .utils import ParserClass, WEBSOCKETS_TYPE, handle_lama_error, handle_timeout
 from .validate import validate
 from .video import video
 
@@ -121,6 +122,15 @@ async def create_app(*args, **kwargs) -> web.Application:
         catch(NoSuchJobError, AbandonedJobError)
         .with_status_code(200)
         .and_call(handle_timeout)
+    )
+    await catcher.add_scenario(
+        catch(ClientConnectorError)
+        .with_status_code(401)
+        .and_stringify()
+        .with_additional_fields(
+            {"message": "Could not connect to LAMa. Probably not user's fault..."}
+        )
+        .and_call(handle_lama_error)
     )
 
     app = web.Application(middlewares=[catcher.middleware])

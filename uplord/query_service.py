@@ -149,7 +149,7 @@ class QueryService:
         """
         Get initial app configuration JSON
         """
-        query = "SELECT * FROM main.corpus;"
+        query = "SELECT * FROM main.corpus WHERE enabled = true;"
         opts = {"config": True}
         return self.app["alt"].enqueue(
             _db_query,

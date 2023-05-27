@@ -184,7 +184,7 @@ class QueryIteration:
         underlang = f"_{lang}" if lang else ""
         seg_name = f"prepared_{name}{underlang}"
         script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
-        end = f"WHERE {name}" + "_id = ANY('{{ {allowed} }}');"
+        end = f"WHERE {name}" + "_id = ANY(%s);"
         return script + end
 
     @classmethod

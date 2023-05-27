@@ -111,7 +111,8 @@ async def _db_query(
     """
 
     if is_sentences and current_batch:
-        query = _make_sent_query(query, depends_on, current_batch, resuming)
+        query, ids = _make_sent_query(query, depends_on, current_batch, resuming)
+        params = tuple(list(params) + [ids])
 
     name = "_upool" if store else "_pool"
     # this open call should be made before any other db calls in the app just in case

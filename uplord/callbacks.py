@@ -415,11 +415,8 @@ def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) 
     Run by worker: make config data
     """
     fixed: Dict[str, CorpusConfig] = {}
-    disabled: List[Tuple[str, int]] = []
     for tup in result:
         made = _row_to_value(tup)
-        if not made["enabled"]:
-            disabled.append((made["meta"]["name"], made["corpus_id"]))
         fixed[str(made["corpus_id"])] = made
 
     for name, conf in fixed.items():
@@ -430,7 +427,6 @@ def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) 
         "config": fixed,
         "_is_config": True,
         "action": "set_config",
-        "disabled": disabled,
     }
     red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore

@@ -407,7 +407,10 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
     """
-    request_data = await request.json()
+    try:
+        request_data = await request.json()
+    except json.decoder.JSONDecodeError:
+        return None
     user = request_data["user"]
     room = request_data["room"]
     job = str(exc).split("rq:job:")[-1]
@@ -423,6 +426,31 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     connection = request.app["redis"]
     connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
+
+
+async def handle_lama_error(exc: Exception, request: web.Request) -> None:
+    """
+    If we get a connectionerror when trying to reach lama...
+    """
+    request_data: Dict[str, Any]
+    try:
+        request_data = await request.json()
+    except json.decoder.JSONDecodeError:
+        request_data = {}
+    user: str = request_data.get("user", "")
+    room: str | None = request_data.get("room", None)
+    if user:
+        jso = {
+            "user": user,
+            "room": room,
+            "error": str(exc),
+            "status": "unregistered",
+            "action": "unregistered",
+        }
+        logging.warning(f"Unregistered user/no lama: {user}/{room}", extra=jso)
+        connection = request.app["redis"]
+        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+        return None
 
 
 def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
@@ -606,7 +634,7 @@ def _make_sent_query(
     associated: str | List[str],
     current_batch: BATCH_TYPE,
     resuming: bool,
-) -> str:
+) -> Tuple[str, List[str]]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
@@ -622,7 +650,7 @@ def _make_sent_query(
     if job.result is None:
         raise Interrupted()
     if not job.result:
-        return ""
+        return "", []
     prev_results = job.result
     # so we don't double count on resuming
     if resuming:
@@ -647,8 +675,9 @@ def _make_sent_query(
             seg_ids.add(str(rest[0]))
 
     form = ", ".join(sorted(seg_ids))
+    query = query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
 
-    return query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
+    return query, list(sorted(seg_ids))
 
 
 @final
