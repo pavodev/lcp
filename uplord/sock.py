@@ -5,7 +5,7 @@ import json
 import logging
 import traceback
 
-from typing import Any, Dict, Set, Tuple
+from typing import Any, Dict, Mapping, Tuple
 
 try:
     from aiohttp import WSCloseCode, WSMsgType, web
@@ -23,7 +23,7 @@ from .utils import push_msg
 from .validate import validate
 
 
-from .utils import PUBSUB_CHANNEL, _filter_corpora
+from .utils import JSON_TYPE, PUBSUB_CHANNEL, WEBSOCKETS_TYPE, _filter_corpora
 
 
 async def _process_message(message: Any, channel: PubSub, app: web.Application) -> None:
@@ -262,6 +262,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
             continue
         user_id: str = possible_user
         ident: Tuple[str, str] = (session_id, user_id)
+        response: Mapping[str, JSON_TYPE]
 
         if action == "joined":
             originally = len(sockets[session_id])
@@ -324,9 +325,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     return ws
 
 
-async def ws_cleanup(
-    sockets: Dict[str, Set[Tuple[web.WebSocketResponse, str]]]
-) -> None:
+async def ws_cleanup(sockets: WEBSOCKETS_TYPE) -> None:
     """
     Periodically remove any closed websocket connections to ensure that app size
     doesn't irreversibly increase over time
@@ -347,7 +346,11 @@ async def ws_cleanup(
             if not n_users or not to_close:
                 continue
             for _, user in to_close:
-                response = {"left": user, "room": room, "n_users": n_users}
+                response: Mapping[str, str | None | int] = {
+                    "left": user,
+                    "room": room,
+                    "n_users": n_users,
+                }
                 await push_msg(sockets, room, response)
         await asyncio.sleep(interval)
     return None

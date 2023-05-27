@@ -6,7 +6,7 @@ import os
 import sys
 
 from collections import defaultdict, deque
-from typing import Any, Dict, Set, Tuple
+from typing import Deque, Dict
 
 import aiohttp_cors
 import asyncio
@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-SENTRY_DSN = os.getenv("SENTRY_DSN", None)
+SENTRY_DSN: str | None = os.getenv("SENTRY_DSN", None)
 
 if SENTRY_DSN:
 
@@ -55,7 +55,7 @@ from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .upload import make_schema, upload
-from .utils import ParserClass, handle_timeout
+from .utils import ParserClass, WEBSOCKETS_TYPE, handle_timeout
 from .validate import validate
 from .video import video
 
@@ -93,9 +93,10 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    listener = asyncio.create_task(listen_to_redis(app))
+    listener: asyncio.Task = asyncio.create_task(listen_to_redis(app))
     app["redis_listener"] = listener
-    app["ws_cleanup"] = asyncio.create_task(ws_cleanup(app["websockets"]))
+    cleanup: asyncio.Task = asyncio.create_task(ws_cleanup(app["websockets"]))
+    app["ws_cleanup"] = cleanup
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -114,7 +115,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     before background tasks are added, to aid with unit tests
     """
 
-    catcher = Catcher()
+    catcher: Catcher = Catcher()
 
     await catcher.add_scenario(
         catch(NoSuchJobError, AbandonedJobError)
@@ -141,7 +142,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     # all websocket connections are stored in here, as {room: {(connection, user_id,)}}
     # when a user leaves the app, the connection should be removed. If it's not,
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
-    ws: Dict[str, Set[Tuple[web.WebSocketResponse, str]]] = defaultdict(set)
+    ws: WEBSOCKETS_TYPE = defaultdict(set)
     app["websockets"] = ws
 
     # here we can remember things, most likely queries, by a hash of their query string
@@ -211,7 +212,8 @@ async def create_app(*args, **kwargs) -> web.Application:
     app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
-    app["canceled"] = deque(maxlen=99999)
+    canceled: Deque[str] = deque(maxlen=99999)
+    app["canceled"] = canceled
 
     if kwargs.get("test"):
         return app

@@ -62,6 +62,7 @@ POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
+tunnel: SSHTunnelForwarder | None
 if os.getenv("SSH_HOST"):
     tunnel = SSHTunnelForwarder(
         os.environ["SSH_HOST"],
@@ -74,6 +75,7 @@ if os.getenv("SSH_HOST"):
 else:
     tunnel = None
 
+
 if tunnel:
     upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
@@ -83,7 +85,7 @@ else:
     )
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
-pool = AsyncConnectionPool(
+pool: AsyncConnectionPool = AsyncConnectionPool(
     query_connstr,
     name="query-connection",
     num_workers=POOL_WORKERS,
@@ -99,7 +101,7 @@ upload_conn_type: type = (
 min_size = UPLOAD_MIN_NUM_CONNS if UPLOAD_POOL else 0
 max_size = UPLOAD_MAX_NUM_CONNS if UPLOAD_POOL else 0
 
-upool = upload_conn_type(
+upool: AsyncConnectionPool | AsyncNullConnectionPool = upload_conn_type(
     upload_connstr,
     name="upload-connection",
     num_workers=POOL_WORKERS,
@@ -117,7 +119,7 @@ class SQLJob(Job):
         # self._db_conn = conn
         self._pool = pool
         self._upool = upool
-        self._redis = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
+        self._redis: Redis = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
         self._redis.pubsub()
 
 

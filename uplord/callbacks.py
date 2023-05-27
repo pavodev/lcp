@@ -7,13 +7,13 @@ import traceback
 
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Dict, List, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type, Sequence
 from uuid import UUID
 
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .configure import _get_batches
+from .configure import _get_batches, CorpusConfig
 from .utils import (
     CustomEncoder,
     Interrupted,
@@ -131,7 +131,7 @@ def _query(
 def _sentences(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: List[Tuple[str | UUID, int, List[Any]]],
+    result: List[Tuple[str | UUID | int, int, List[Sequence[Any]]]],
     **kwargs,
 ) -> None:
     """
@@ -414,17 +414,15 @@ def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) 
     """
     Run by worker: make config data
     """
-    fixed: Dict[str, Dict[str, int | str | bool | Dict[str, Any]]] = {"-1": {}}
+    fixed: Dict[str, CorpusConfig] = {}
     disabled: List[Tuple[str, int]] = []
     for tup in result:
         made = _row_to_value(tup)
         if not made["enabled"]:
-            disabled.append((made["name"], made["corpus_id"]))
+            disabled.append((made["meta"]["name"], made["corpus_id"]))
         fixed[str(made["corpus_id"])] = made
 
     for name, conf in fixed.items():
-        if name == "-1":
-            continue
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 

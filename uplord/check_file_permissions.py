@@ -1,4 +1,4 @@
-from typing import Set
+from typing import Any, Dict, List, Set, cast
 
 from aiohttp import web
 from yarl import URL
@@ -15,11 +15,14 @@ async def check_file_permissions(request: web.Request) -> web.Response:
     uri: str = request.headers.get("X-Request-Uri", "")
 
     user_details_lama = await _lama_user_details(request.headers)
-    for subscription in user_details_lama["subscription"]["subscriptions"]:
+    sub = cast(Dict[str, Any], user_details_lama["subscription"])
+    subs = cast(List[Dict[str, Any]], sub["subscriptions"])
+    for subscription in subs:
         for profile in subscription["profiles"]:
             profiles_id.add(profile["id"])
 
-    for public_profile in user_details_lama.get("publicProfiles", []):
+    profiles = cast(List[Dict[str, Any]], user_details_lama.get("publicProfiles", []))
+    for public_profile in profiles:
         profiles_id.add(public_profile["id"])
 
     profile_id: str = ""

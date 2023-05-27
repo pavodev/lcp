@@ -9,7 +9,7 @@ import re
 from collections import abc, defaultdict
 from textwrap import dedent
 
-from typing import Any, Dict, List, Tuple
+from typing import Any, DefaultDict, Dict, List, Tuple
 
 from dataclasses import asdict, dataclass, field
 
@@ -725,7 +725,7 @@ def generate_ddl(
 
     # todo: i don't think this defaultdict trick is needed, all the tables
     # must have unique names right?
-    constraints: Dict[str, List[str]] = defaultdict(list)
+    constraints: DefaultDict[str, List[str]] = defaultdict(list)
     refs: List[str] = []
     for table in sorted(globs.tables):
         constraints[table.name] += table.create_idxs(schema_name)

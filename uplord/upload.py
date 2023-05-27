@@ -9,7 +9,7 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any, cast
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -23,6 +23,7 @@ from .utils import (
     _lama_project_create,
     ensure_authorised,
     _lama_user_details,
+    SQLJob,
 )
 
 
@@ -37,7 +38,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     short_url = str(request.url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job_id}"
     qs = request.app["query_service"]
-    job = qs.get(job_id)
+    job: Job | SQLJob | None = qs.get(job_id)
     if not job:
         ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
@@ -45,7 +46,10 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     msg = f"""Please wait: corpus processing in progress..."""
     # project = job.kwargs["project"]
     if status == "failed":
-        msg = f"Error: {str(job.latest_result().exc_string)}"
+        res = job.latest_result()
+        msg = "Error"
+        if res:
+            msg += f": {res.exc_string}"
     elif status == "finished":
         msg = f"""Template validated successfully"""
     ret = {
@@ -298,12 +302,25 @@ async def make_schema(request: web.Request) -> web.Response:
     today = datetime.today()
     later = today + timedelta(weeks=52, days=2)
 
-    status = await _lama_check_api_key(request.headers)
+    try:
+        key = request.headers.get("X-API-Key")
+        assert isinstance(key, str), "Missing API key"
+        secret = request.headers.get("X-API-Secret")
+        assert isinstance(secret, str), "Missing API key secret"
+        status = await _lama_check_api_key(request.headers)
+    except Exception as err:
+        tb = traceback.format_exc()
+        msg = f"Could not verify user: bad crendentials?"
+        print(msg)
+        error = {"traceback": tb, "status": "failed"}
+        # logging.error(msg, extra=error)
+        error["message"] = f"{msg} -- {err}"
+        return web.json_response(error)
 
     # user_id = status["account"]["eduPersonId"]
-    user_id = status["account"]["email"]
+    user_id = cast(Dict[str, Dict], status["account"])["email"]
     # home_org = status["account"]["homeOrganization"]
-    existing_project = status.get("profile", {})
+    existing_project = cast(Dict[str, Any], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
     if project and project not in ids:

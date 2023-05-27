@@ -105,7 +105,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         qi.done_batches = done_batches
         qi.total_results_so_far = so_far
         qi.needed = needed
-        ex = _get_all_results(qi.previous, connection=qi.app["redis"])
+        ex = _get_all_results(qi)
         qi.existing_results = ex
         return qi
 

@@ -15,13 +15,15 @@ except Exception:
     pass
 
 from .dqd_parser import convert
-from .utils import _get_query_batches
 from .worker import SQLJob
 
 if sys.version_info <= (3, 9):
     QI_KWARGS = dict()
 else:
     QI_KWARGS = dict(kw_only=True, slots=True)
+
+
+BATCH_TYPE = Tuple[int, str, str, int]
 
 
 @dataclass(**QI_KWARGS)
@@ -35,7 +37,7 @@ class QueryIteration:
     room: str | None
     query: str
     corpora: List[int]
-    all_batches: List[Tuple[int, str, str, int]]
+    all_batches: List[BATCH_TYPE]
     total_results_requested: int
     needed: int
     page_size: int
@@ -50,8 +52,8 @@ class QueryIteration:
     previous: str = ""
     done: bool = False
     request_data: Dict[str, Any] | None = None
-    current_batch: Tuple[int, str, str, int] | None = None
-    done_batches: List[Tuple[int, str, str, int]] = field(default_factory=list)
+    current_batch: BATCH_TYPE | None = None
+    done_batches: List[BATCH_TYPE] = field(default_factory=list)
     total_results_so_far: int = 0
     existing_results: Dict[int, Any] = field(default_factory=dict)
     job: Job | SQLJob | None = None
@@ -89,6 +91,31 @@ class QueryIteration:
         self.meta = meta_json
         return None
 
+    @staticmethod
+    def _get_query_batches(
+        corpora: List[int], config: Dict[str, Dict], languages: Set[str], is_vian: bool
+    ) -> List[BATCH_TYPE]:
+        """
+        Get a list of tuples in the format of (corpus, batch, size) to be queried
+
+        todo: make this not static
+        """
+        out: List[BATCH_TYPE] = []
+        all_languages = ["en", "de", "fr", "ca"]
+        all_langs = tuple([f"_{la}" for la in all_languages])
+        langs = tuple([f"_{la}" for la in languages])
+        for corpus in corpora:
+            batches = config[str(corpus)]["_batches"]
+            for name, size in batches.items():
+                stripped = name.rstrip("0123456789")
+                if stripped.endswith("rest"):
+                    stripped = stripped[:-4]
+                if not stripped.endswith(langs) and stripped.endswith(all_langs):
+                    continue
+                schema = config[str(corpus)]["schema_path"]
+                out.append((corpus, schema, name, size))
+        return sorted(out, key=lambda x: x[-1])
+
     @classmethod
     async def from_request(cls, request: web.Request) -> Self:
         request_data = await request.json()
@@ -102,9 +129,9 @@ class QueryIteration:
         previous = request_data.get("previous", "")
         base = None if not request_data.get("resume") else previous
         is_vian = request_data.get("appType") == "vian"
-        is_vian = True  # todo: remove
+        is_vian = False  # todo: remove
         sim = request_data.get("simultaneous", False)
-        all_batches = _get_query_batches(
+        all_batches = cls._get_query_batches(
             corpora_to_use, request.app["config"], languages, is_vian
         )
         details = {
@@ -229,7 +256,7 @@ class QueryIteration:
 
         total_words_processed_so_far = sum([x[-1] for x in self.done_batches])
         proportion_that_matches = so_far / total_words_processed_so_far
-        first_not_done: Tuple[int, str, str, int] | None = None
+        first_not_done: BATCH_TYPE | None = None
 
         for batch in self.all_batches:
             if batch in self.done_batches:

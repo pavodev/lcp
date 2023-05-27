@@ -10,7 +10,22 @@ from collections import Counter, defaultdict
 
 from datetime import date, datetime
 
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Set, Tuple, final
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    cast,
+    List,
+    Mapping,
+    Set,
+    Coroutine,
+    Tuple,
+    final,
+    Sequence,
+    DefaultDict,
+    Counter as CounterType,
+)
 
 from uuid import UUID
 
@@ -35,11 +50,17 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.job import Job
 
-
+from .configure import CorpusTemplate, CorpusConfig
+from .qi import QueryIteration, BATCH_TYPE
 from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
+
+# tuple is in json type because we use it for batches
+JSON_TYPE = List | Dict | Tuple | str | int | float | bool | None
+
+JSON_DICT_TYPE = Dict[str, JSON_TYPE]
 
 # an entry in main.corpus
 MAINCORPUS_TYPE = Tuple[
@@ -48,12 +69,16 @@ MAINCORPUS_TYPE = Tuple[
     str | int | float,
     Any,
     str | None,
-    Dict[str, Any],
+    Dict[str, JSON_TYPE],
     str,
     Dict[str, int] | None,  # todo: remove none when tangram fixed
-    Dict[str, Any] | None,  # todo: remove none when tangram fixed
+    Dict[str, JSON_TYPE] | None,  # todo: remove none when tangram fixed
     bool,
 ]
+
+WEBSOCKETS_TYPE = DefaultDict[str, Set[Tuple[web.WebSocketResponse, str]]]
+
+CONFIG_TYPE = Dict[str, Dict[str, JSON_TYPE]]
 
 
 class Interrupted(Exception):
@@ -147,14 +172,14 @@ def _check_email(email: str) -> bool:
     return bool(re.fullmatch(regex, email))
 
 
-def get_user_identifier(headers: Dict[str, Any]) -> str | None:
+def get_user_identifier(headers: Dict[str, str | None]) -> str | None:
     """
     Get best possible identifier
     """
-    persistent_id = headers.get("X-Persistent-Id")
-    persistent_name = headers.get("X-Principal-Name")
-    edu_person_unique_id = headers.get("X-Edu-Person-Unique-Id")
-    mail = headers.get("X-Mail")
+    persistent_id: str | None = headers.get("X-Persistent-Id")
+    persistent_name: str | None = headers.get("X-Principal-Name")
+    edu_person_unique_id: str | None = headers.get("X-Edu-Person-Unique-Id")
+    mail: str | None = headers.get("X-Mail")
 
     if persistent_id and bool(re.match("(.*)!(.*)!(.*)", persistent_id)):
         return persistent_id
@@ -167,7 +192,7 @@ def get_user_identifier(headers: Dict[str, Any]) -> str | None:
     return None
 
 
-async def _lama_user_details(headers: Mapping[str, Any]) -> Dict[str, Any]:
+async def _lama_user_details(headers: Mapping[str, JSON_TYPE]) -> Dict[str, JSON_TYPE]:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -178,8 +203,8 @@ async def _lama_user_details(headers: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 async def _lama_project_create(
-    headers: Mapping[str, Any], project_data: Dict[str, str]
-) -> Dict[str, Any]:
+    headers: Mapping[str, JSON_TYPE], project_data: Dict[str, str]
+) -> Dict[str, JSON_TYPE]:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -190,8 +215,8 @@ async def _lama_project_create(
 
 
 async def _lama_api_create(
-    headers: Mapping[str, Any], project_id: str
-) -> Dict[str, Any]:
+    headers: Mapping[str, JSON_TYPE], project_id: str
+) -> Dict[str, JSON_TYPE]:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -202,8 +227,8 @@ async def _lama_api_create(
 
 
 async def _lama_api_revoke(
-    headers: Mapping[str, Any], project_id: str, apikey_id: str
-) -> Dict[str, Any]:
+    headers: Mapping[str, JSON_TYPE], project_id: str, apikey_id: str
+) -> Dict[str, JSON_TYPE]:
     """
     todo: not tested yet, but the syntax is something like this
     """
@@ -216,7 +241,7 @@ async def _lama_api_revoke(
             return await resp.json(content_type=None)
 
 
-async def _lama_check_api_key(headers: Mapping[str, Any]) -> Dict[str, Any]:
+async def _lama_check_api_key(headers: Mapping[str, JSON_TYPE]) -> Dict[str, JSON_TYPE]:
     """
     Get details about a user via their API key
     """
@@ -229,12 +254,12 @@ async def _lama_check_api_key(headers: Mapping[str, Any]) -> Dict[str, Any]:
             return await resp.json()
 
 
-def _get_all_results(
-    job: Job | SQLJob | str, connection: RedisConnection
-) -> Dict[int, Any]:
+def _get_all_results(qi: QueryIteration) -> Dict[int, Any]:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
+    job: Job | SQLJob | str = qi.previous
+    connection: RedisConnection = qi.app["redis"]
     out: Dict[int, Any] = {}
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
@@ -246,7 +271,9 @@ def _get_all_results(
 
     while True:
         meta = job.kwargs.get("meta_json")
-        batch, _ = _add_results(job.result, 0, True, False, False, 0, meta=meta)
+        batch, _ = _add_results(
+            job.result, 0, True, False, False, 0, meta=meta, is_vian=qi.is_vian
+        )
         out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:
@@ -272,14 +299,15 @@ def _add_results(
     restart: bool | int,
     total_requested: int,
     kwic: bool = False,
-    sents: List[Tuple[str | UUID, int, List[Any]]] | None = None,
-    meta: Dict[str, List[Dict[str, Any]]] | None = None,
+    is_vian: bool = False,
+    sents: List[Tuple[str | UUID | int, int, List[Sequence[Any]]]] | None = None,
+    meta: Dict[str, List[Dict[str, JSON_TYPE]]] | None = None,
 ) -> Tuple[Dict[int, Any], int]:
     """
     todo: check limits here?
     """
     bundle: Dict[int, Any] = {}
-    counts: Dict[int, int] = defaultdict(int)
+    counts: DefaultDict[int, int] = defaultdict(int)
     if meta:
         rs = meta["result_sets"]
     else:
@@ -287,7 +315,7 @@ def _add_results(
 
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
-    n_skipped: Dict[int, int] = Counter()
+    n_skipped: CounterType[int] = Counter()
 
     if meta:
         bundle[0] = meta
@@ -299,7 +327,7 @@ def _add_results(
 
     for x, line in enumerate(result):
         key = int(line[0])
-        rest = line[1]
+        rest: List[Any] = line[1]
         if not key:
             bundle[key] = rest
             continue
@@ -332,6 +360,13 @@ def _add_results(
             continue
         if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
             continue
+        if is_vian is True:
+            tok_ids = rest[1:-4]
+            seg_id = rest[0]
+            extras = rest[-4:]
+            rest = [seg_id, tok_ids, extras]
+        else:
+            rest = [rest[0], rest[1:]]
         bundle[key].append(rest)
         counts[key] += 1
 
@@ -411,7 +446,7 @@ async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
         return await coro
 
 
-async def gather(n: int, tasks: List[Any], name: str | None = None) -> List[Any]:
+async def gather(n: int, tasks: List[Coroutine], name: str | None = None) -> List[Any]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -440,33 +475,10 @@ async def gather(n: int, tasks: List[Any], name: str | None = None) -> List[Any]
         raise err
 
 
-def _get_query_batches(
-    corpora: List[int], config: Dict[str, Dict], languages: Set[str], is_vian: bool
-) -> List[Tuple[int, str, str, int]]:
-    """
-    Get a list of tuples in the format of (corpus, batch, size) to be queried
-    """
-    out: List[Tuple[int, str, str, int]] = []
-    all_languages = ["en", "de", "fr", "ca"]
-    all_langs = tuple([f"_{la}" for la in all_languages])
-    langs = tuple([f"_{la}" for la in languages])
-    for corpus in corpora:
-        batches = config[str(corpus)]["_batches"]
-        for name, size in batches.items():
-            stripped = name.rstrip("0123456789")
-            if stripped.endswith("rest"):
-                stripped = stripped[:-4]
-            if not stripped.endswith(langs) and stripped.endswith(all_langs):
-                continue
-            schema = config[str(corpus)]["schema_path"]
-            out.append((corpus, schema, name, size))
-    return sorted(out, key=lambda x: x[-1])
-
-
 async def push_msg(
-    sockets: Dict[str, Set[Tuple[Any, str]]],
+    sockets: WEBSOCKETS_TYPE,
     session_id: str,
-    msg: Dict[str, Any],
+    msg: Mapping[str, JSON_TYPE],
     skip: Tuple[str, str] | None = None,
     just: Tuple[str, str] | None = None,
 ) -> None:
@@ -493,11 +505,11 @@ async def push_msg(
 
 
 def _filter_corpora(
-    config: Dict[str, Dict[str, Any]],
+    config: CONFIG_TYPE,
     is_vian: bool,
     user_data: Dict[str, Any] | None,
     get_all: bool = False,
-) -> Dict[str, Dict[str, Any]]:
+) -> CONFIG_TYPE:
 
     ids: Set[str] = set()
     if isinstance(user_data, dict):
@@ -506,13 +518,13 @@ def _filter_corpora(
         for proj in user_data.get("publicProfiles", []):
             ids.add(proj["id"])
 
-    corpora = {}
+    corpora: Dict[str, Dict[str, JSON_TYPE]] = {}
     for corpus_id, conf in config.items():
         idx = str(corpus_id)
         if idx == "-1":
             corpora[idx] = conf
             continue
-        allowed = conf.get("projects", [])
+        allowed: List[str] = cast(List[str], conf.get("projects", []))
         if get_all:
             corpora[idx] = conf
             continue
@@ -534,20 +546,21 @@ def _filter_corpora(
 def _row_to_value(
     tup: MAINCORPUS_TYPE,
     project: str | None = None,
-) -> Dict[str, Any]:
+) -> CorpusConfig:
     (
         corpus_id,
         name,
         current_version,
         version_history,
         description,
-        corpus_template,
+        template,
         schema_path,
         token_counts,
         mapping,
         enabled,
     ) = tup
     ver = str(current_version)
+    corpus_template = cast(CorpusTemplate, template)
     if not enabled:
         print(f"Corpus disabled: {name}={corpus_id}")
         # disabled.append((name, corpus_id))
@@ -556,8 +569,18 @@ def _row_to_value(
     schema_path = schema_path.replace("<version>", ver)
     if not schema_path.endswith(ver):
         schema_path = f"{schema_path}{ver}"
-    cols = corpus_template["layer"]
-    cols = cols[corpus_template["firstClass"]["token"]]["attributes"]
+    layer = corpus_template["layer"]
+    fc = corpus_template["firstClass"]
+    tok = fc["token"]
+    cols = layer[tok]["attributes"]
+
+    projects: List[str] = corpus_template.get("projects", [])
+    if not projects:
+        projects = ["all"]
+    if project and project not in projects:
+        projects.append(project)
+    corpus_template["projects"] = projects
+
     rest = {
         "shortname": name,
         "corpus_id": int(corpus_id),
@@ -568,23 +591,20 @@ def _row_to_value(
         "token_counts": token_counts,
         "mapping": mapping,
         "enabled": enabled,
-        "segment": corpus_template["firstClass"]["segment"],
-        "token": corpus_template["firstClass"]["token"],
-        "document": corpus_template["firstClass"]["document"],
+        "segment": fc["segment"],
+        "token": fc["token"],
+        "document": fc["document"],
         "column_names": cols,
     }
-    corpus_template.update(rest)
-    if "projects" not in corpus_template:
-        corpus_template["projects"] = ["all"]
-    if project and project not in corpus_template["projects"]:
-        corpus_template["projects"].append(project)
-    return corpus_template
+
+    together = {**corpus_template, **rest}
+    return cast(CorpusConfig, together)
 
 
 def _make_sent_query(
     query: str,
     associated: str | List[str],
-    current_batch: Tuple[int, str, str, int],
+    current_batch: BATCH_TYPE,
     resuming: bool,
 ) -> str:
     """
@@ -613,7 +633,7 @@ def _make_sent_query(
     seg_ids = set()
     result_sets = job.kwargs["meta_json"]
     kwics = _get_kwics(result_sets)
-    counts: Dict[int, int] = Counter()
+    counts: CounterType[int] = Counter()
 
     for res in prev_results:
         key = int(res[0])

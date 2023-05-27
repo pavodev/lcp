@@ -13,6 +13,7 @@ import psycopg
 from rq.job import get_current_job
 
 from .impo import Importer
+from .qi import BATCH_TYPE
 from .utils import _make_sent_query
 
 
@@ -42,13 +43,10 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> T
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Error during import/upload: {err}"
+        print(msg, tb)
         extra["traceback"] = tb
         logging.error(msg, extra=extra)
-        try:
-            await importer.cleanup()
-        except Exception:
-            pass
-        raise err
+        await importer.cleanup()
     finally:
         shutil.rmtree(corpus)  # todo: should we do this?
     return row
@@ -105,7 +103,7 @@ async def _db_query(
     is_sentences: bool = False,
     resuming: bool = False,
     depends_on: str | List[str] = "",
-    current_batch: Tuple[int, str, str, int] | None = None,
+    current_batch: BATCH_TYPE | None = None,
     **kwargs,
 ) -> List[Tuple | Dict[str, Any]] | Dict[str, Any] | None:
     """

@@ -1,4 +1,65 @@
-from typing import Any, Dict
+from typing import Any, Dict, List, NotRequired, TypedDict
+
+
+class Meta(TypedDict, total=False):
+    date: str
+    name: str
+    author: str
+    version: int | str | float
+    website: NotRequired[str]
+    corpusDescription: NotRequired[str | None]
+
+
+class Attribute(TypedDict, total=False):
+    type: str
+    nullable: bool
+    isGlobal: NotRequired[bool]
+    name: NotRequired[str]
+
+
+class Layer(TypedDict, total=False):
+    abstract: bool
+    contains: NotRequired[str]
+    layerType: str
+    attributes: Dict[str, Attribute | Dict[str, Attribute]]
+    anchoring: NotRequired[Dict[str, bool]]
+    values: NotRequired[List[str]]
+    partOf: NotRequired[str]
+
+
+class FirstClass(TypedDict, total=False):
+    segment: str
+    token: str
+    document: str
+
+
+class Partitions(TypedDict, total=False):
+    values: List[str]
+
+
+class CorpusTemplate(TypedDict, total=False):
+    meta: Meta
+    layer: Dict[str, Layer]
+    firstClass: FirstClass
+    partitions: NotRequired[Partitions]
+    projects: NotRequired[List[str]]
+
+
+class CorpusConfig(CorpusTemplate, total=False):
+    shortname: NotRequired[str]
+    corpus_id: int
+    current_version: int | str | float
+    version_history: str | None
+    description: str | None
+    schema_path: str
+    token_counts: Dict[str, int]
+    mapping: Dict[str, Any]
+    enabled: bool
+    segment: str
+    token: str
+    document: str
+    column_names: List[str]
+    _batches: NotRequired[Dict[str, int]]
 
 
 def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int]:
@@ -24,7 +85,7 @@ def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int
     return batches
 
 
-def _get_batches(config: Dict[str, Any]) -> Dict[str, int]:
+def _get_batches(config: CorpusConfig) -> Dict[str, int]:
     """
     Get a dict of batch_name: size for a given corpus
     """
