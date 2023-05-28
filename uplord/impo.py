@@ -4,28 +4,18 @@ import importlib
 import json
 import os
 
+from collections.abc import Callable, Coroutine, Sequence
 from textwrap import dedent
-from typing import Any, Callable, Coroutine, Dict, List, Sequence, Tuple, cast
+from typing import Any, cast
 
 import aiofiles
 
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
-from .utils import MAINCORPUS_TYPE, gather
-
-# what run_script can return
-SCRIPT_RETURN_TYPE = (
-    List[List[Tuple[int]]]
-    | List[Tuple[str]]
-    | List[Tuple[bool]]
-    | List[MAINCORPUS_TYPE]
-    | None
-)
-
-# the args needed to add an entry to main.corpus
-# keep synced with SQLstats.main_corp
-PARAMS_TYPE = Tuple[str, int | float | str, str, str, str, str]
+from .configure import CorpusTemplate
+from .typed import JSONObject, MainCorpus, Params, RunScript
+from .utils import gather
 
 
 class SQLstats:
@@ -64,7 +54,7 @@ class SQLstats:
 
 class Table:
     def __init__(
-        self, schema: str, name: str, columns: List[str] | None = None
+        self, schema: str, name: str, columns: list[str] | None = None
     ) -> None:
         self.schema = schema
         self.name = name
@@ -81,7 +71,7 @@ class Importer:
     def __init__(
         self,
         connection: AsyncConnectionPool | AsyncNullConnectionPool,
-        data: Dict[str, Any],
+        data: JSONObject,
         project_dir: str,
     ) -> None:
         """
@@ -90,20 +80,20 @@ class Importer:
         _loader = importlib.import_module(self.__module__).__loader__
         self.sql: SQLstats = SQLstats()
         self.connection = connection
-        self.template: Dict[str, Any] = data["template"]
+        self.template = cast(CorpusTemplate, data["template"])
         self.template["uploaded"] = True
-        self.name: str = self.template["meta"]["name"]
-        self.version: int | str | float = self.template["meta"]["version"]
-        self.schema: str = self.template["schema_name"]
-        self.batches: List[str] = data["batchnames"]
-        self.insert: str = data["prep_seg_insert"]
-        self.constraints: List[str] = data["constraints"]
-        self.create: str = data["prep_seg_create"]
-        self.refs: List[str] = data["refs"]
+        self.name: str = cast(dict, self.template["meta"])["name"]
+        self.version: int | str | float = cast(dict, self.template["meta"])["version"]
+        self.schema = cast(str, self.template["schema_name"])
+        self.batches = cast(list[str], data["batchnames"])
+        self.insert = cast(str, data["prep_seg_insert"])
+        self.constraints = cast(list[str], data["constraints"])
+        self.create = cast(str, data["prep_seg_create"])
+        self.refs = cast(list[str], data["refs"])
         self.n_batches = len(self.batches)
         self.num_extras = self.n_batches + len(self.constraints)
-        self.token_count: Dict[str, int] = {}
-        self.mapping: Dict[str, Any] = data["mapping"]
+        self.token_count: dict[str, int] = {}
+        self.mapping = cast(JSONObject, data["mapping"])
         self.project_dir: str = project_dir
         self.corpus_size: int = 0
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
@@ -136,7 +126,7 @@ class Importer:
 
     async def _get_positions(
         self, f: AsyncTextIOWrapper, size: int
-    ) -> List[Tuple[int, int]]:
+    ) -> list[tuple[int, int]]:
         """
         Get the locations in an open aiofile to seek and read to
 
@@ -144,7 +134,7 @@ class Importer:
         """
         start_at = await f.tell()
         to_go = size - start_at
-        positions: List[Tuple[int, int]] = []
+        positions: list[tuple[int, int]] = []
 
         while True:
             bat = int(self.batchsize)
@@ -208,7 +198,7 @@ class Importer:
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
-        exists = cast(List[Tuple[bool]], await self.run_script(script, give=True))
+        exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
             raise ValueError(f"Table not found: {self.schema}.{tab}")
         cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
@@ -249,11 +239,11 @@ class Importer:
 
     async def process_data(
         self,
-        iterable: Sequence[str | Tuple[str | int, int]],
+        iterable: Sequence[str | tuple[str | int, int]],
         method: Callable[..., Coroutine],
         *args,
         **kwargs,
-    ) -> List[SCRIPT_RETURN_TYPE]:
+    ) -> list[RunScript]:
         """
         Do the execution of copy_batch or copy_table (method) from iterable data
 
@@ -265,12 +255,12 @@ class Importer:
         mc = self.max_concurrent
         name = "import"
         current_size = 0
-        tasks: List[Coroutine] = []
+        tasks: list[Coroutine] = []
         batches = f"in batches of {mc}" if mc > 0 else "concurrently"
-        gathered: List[Any] = []
+        gathered: list[Any] = []
         cs: float | int = 0.0
         first: str | int = ""
-        more: List = []
+        more: list = []
         give: bool = kwargs.get("give", False)
         mname = method.__name__
         progs = "Doing {} {} tasks {}...({}MB vs {}GB)"
@@ -303,22 +293,23 @@ class Importer:
                 gathered += more
         return gathered
 
-    async def get_token_count(self) -> Dict[str, int]:
+    async def get_token_count(self) -> dict[str, int]:
         """
         count inserted words/tokens in DB and return
         TODO: not working for parallel
         """
-        token = self.template["firstClass"]["token"]
-        names: List[str] = []
-        queries: List[str] = []
+        fc = cast(dict[str, str], self.template["firstClass"])
+        token = fc["token"]
+        names: list[str] = []
+        queries: list[str] = []
         for i in range(self.n_batches + 1):
             formed = f"{token}{i}" if i < self.n_batches else f"{token}rest"
             names.append(formed)
             query = self.sql.token_count(self.schema, formed)
             queries.append(query)
         task = self.process_data(queries, self.run_script, give=True)
-        response = cast(List[List[Tuple[int]]], await task)
-        res: Dict[str, int] = {k: int(v[0][0]) for k, v in zip(names, response)}
+        response = cast(list[list[tuple[int]]], await task)
+        res: dict[str, int] = {k: int(v[0][0]) for k, v in zip(names, response)}
         return res
 
     async def run_script(
@@ -328,8 +319,8 @@ class Importer:
         give: bool = False,
         progress: str | None = None,
         # todo: params could get a more general type if it is used for anything else:
-        params: PARAMS_TYPE | None = None,
-    ) -> SCRIPT_RETURN_TYPE:
+        params: Params | None = None,
+    ) -> RunScript:
         """
         Run a simple script, and return the result if give
 
@@ -342,7 +333,7 @@ class Importer:
                     self.update_progress(progress)
                 if not give:
                     return None
-                res: SCRIPT_RETURN_TYPE = await cur.fetchall()
+                res: RunScript = await cur.fetchall()
                 return res
         return None
 
@@ -361,7 +352,7 @@ class Importer:
         await self.process_data(inserts, self.run_script, progress=progress)
         return None
 
-    async def create_entry_maincorpus(self) -> MAINCORPUS_TYPE:
+    async def create_entry_maincorpus(self) -> MainCorpus:
         """
         Add a row to main.corpus with metadata about the imported corpus
         """
@@ -375,7 +366,7 @@ class Importer:
             json.dumps(self.mapping),
         )
         task = self.run_script(self.sql.main_corp, give=True, params=params)
-        rows = cast(List[MAINCORPUS_TYPE], await task)
+        rows = cast(list[MainCorpus], await task)
         return rows[0]
 
     async def drop_similar(self) -> None:
@@ -386,7 +377,7 @@ class Importer:
         """
         start = self.schema[:-4]
         query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{start}';"
-        results = cast(List[Tuple[str]], await self.run_script(query, give=True))
+        results = cast(list[tuple[str]], await self.run_script(query, give=True))
         if not results:
             return None
         base = "DROP SCHEMA {schema} CASCADE;"
@@ -395,7 +386,7 @@ class Importer:
         await self.process_data(scripts, self.run_script)
         return None
 
-    async def pipeline(self) -> MAINCORPUS_TYPE:
+    async def pipeline(self) -> MainCorpus:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
@@ -411,4 +402,4 @@ class Importer:
             self.update_progress(f"Running:\n{strung}")
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
-        return cast(MAINCORPUS_TYPE, await self.create_entry_maincorpus())
+        return cast(MainCorpus, await self.create_entry_maincorpus())

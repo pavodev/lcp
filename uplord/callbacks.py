@@ -5,15 +5,14 @@ import os
 import shutil
 import traceback
 
-from datetime import datetime
 from types import TracebackType
-from typing import Any, Dict, List, Tuple, Type, Sequence
-from uuid import UUID
+from typing import Any
 
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .configure import _get_batches, CorpusConfig
+from .configure import _get_batches
+from .typed import MainCorpus, JSONObject, UserQuery, Sentence, Config
 from .utils import (
     CustomEncoder,
     Interrupted,
@@ -21,14 +20,13 @@ from .utils import (
     _get_status,
     _union_results,
     _row_to_value,
-    MAINCORPUS_TYPE,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
 
 
 def _query(
-    job: SQLJob | Job, connection: RedisConnection, result: List[Tuple], **kwargs
+    job: SQLJob | Job, connection: RedisConnection, result: list[tuple], **kwargs
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -54,8 +52,7 @@ def _query(
     else:
         needed = total_requested - total_before_now
 
-    choices = {-1, False, None}
-    unlimited = needed in choices or job.kwargs.get("simultaneous", False) or False
+    unlimited = needed == -1 or job.kwargs.get("simultaneous", False) or False
 
     aargs = (
         result,
@@ -131,7 +128,7 @@ def _query(
 def _sentences(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: List[Tuple[str | UUID | int, int, List[Sequence[Any]]]],
+    result: list[Sentence],
     **kwargs,
 ) -> None:
     """
@@ -153,7 +150,7 @@ def _sentences(
         depended.meta["associated"] = job.id
     depended.save_meta()
 
-    aargs: Tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
+    aargs: tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
@@ -196,7 +193,7 @@ def _sentences(
 def _document(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: List[Dict[str, Any]] | Dict[str, Any],
+    result: list[JSONObject] | JSONObject,
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
@@ -252,7 +249,7 @@ def _schema(
 def _upload(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: MAINCORPUS_TYPE,
+    result: MainCorpus,
 ) -> None:
     """
     Success callback when user has uploaded a dataset
@@ -260,7 +257,7 @@ def _upload(
     project: str = job.args[0]
     user: str = job.args[1]
     room: str | None = job.args[2]
-    user_data: Dict[str, Any] = job.kwargs["user_data"]
+    user_data: JSONObject = job.kwargs["user_data"]
     is_vian: bool = job.kwargs["is_vian"]
     gui: bool = job.kwargs["gui"]
 
@@ -288,7 +285,7 @@ def _upload(
 def _upload_failure(
     job: SQLJob | Job,
     connection: RedisConnection,
-    typ: Type,
+    typ: type,
     value: BaseException,
     trace: Any,
 ) -> None:
@@ -342,7 +339,7 @@ def _upload_failure(
 def _general_failure(
     job: SQLJob | Job,
     connection: RedisConnection,
-    typ: Type,
+    typ: type,
     value: BaseException,
     trace: TracebackType,
 ) -> None:
@@ -380,15 +377,15 @@ def _general_failure(
 def _queries(
     job: SQLJob | Job,
     connection: RedisConnection,
-    result: List[Tuple[str, Dict, str, str | None, datetime]] | None,
+    result: list[UserQuery] | None,
 ) -> None:
     """
     Fetch or store queries
     """
-    is_store = job.kwargs.get("store")
+    is_store: bool = job.kwargs.get("store", False)
     action = "store_query" if is_store else "fetch_queries"
-    room = job.kwargs.get("room")
-    jso: Dict[str, Any] = {
+    room: str | None = job.kwargs.get("room")
+    jso: dict[str, Any] = {
         "user": str(job.kwargs["user"]),
         "room": room,
         "status": "success",
@@ -400,9 +397,9 @@ def _queries(
         jso.pop("queries")
     elif result:
         cols = ["idx", "query", "username", "room", "created_at"]
-        queries: List[Dict[str, Any]] = []
+        queries: list[dict[str, Any]] = []
         for x in result:
-            dct: Dict[str, Any] = dict(zip(cols, x))
+            dct: dict[str, Any] = dict(zip(cols, x))
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
@@ -410,11 +407,13 @@ def _queries(
     red.publish(PUBSUB_CHANNEL, made)  # type: ignore
 
 
-def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) -> None:
+def _config(
+    job: SQLJob | Job, connection: RedisConnection, result=list[MainCorpus]
+) -> None:
     """
     Run by worker: make config data
     """
-    fixed: Dict[str, CorpusConfig] = {}
+    fixed: Config = {}
     for tup in result:
         made = _row_to_value(tup)
         fixed[str(made["corpus_id"])] = made
@@ -423,7 +422,7 @@ def _config(job: SQLJob | Job, connection: RedisConnection, result=List[Tuple]) 
         if "_batches" not in conf:
             conf["_batches"] = _get_batches(conf)
 
-    jso = {
+    jso: dict[str, str | bool | Config] = {
         "config": fixed,
         "_is_config": True,
         "action": "set_config",

@@ -9,7 +9,7 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Dict, Tuple, Any, cast
+from typing import Any, cast
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -98,7 +98,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     return web.json_response(ret)
 
 
-def _get_progress(progfile: str) -> Tuple[int, int, str, str] | None:
+def _get_progress(progfile: str) -> tuple[int, int, str, str] | None:
     """
     Attempt to get progress from saved file
     """
@@ -252,7 +252,7 @@ async def upload(request: web.Request) -> web.Response:
     _ensure_word0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
 
-    return_data: Dict[str, str | int] = {}
+    return_data: dict[str, str | int] = {}
     if not has_file:
         msg = "No file sent?"
         return_data.update({"status": "failed", "info": msg})
@@ -318,9 +318,9 @@ async def make_schema(request: web.Request) -> web.Response:
         return web.json_response(error)
 
     # user_id = status["account"]["eduPersonId"]
-    user_id = cast(Dict[str, Dict], status["account"])["email"]
+    user_id = cast(dict[str, dict], status["account"])["email"]
     # home_org = status["account"]["homeOrganization"]
-    existing_project = cast(Dict[str, Any], status.get("profile", {}))
+    existing_project = cast(dict[str, Any], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
     if project and project not in ids:

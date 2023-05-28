@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import json
 
-from typing import Any, Dict
-
 from aiohttp import web
 
 from .dqd_parser import convert
+from .typed import JSONObject
 
 
 async def validate(
@@ -15,12 +14,12 @@ async def validate(
     query: str = "",
     query_name: str | None = None,
     **kwargs,
-) -> web.Response | Dict[str, Any]:
+) -> web.Response | JSONObject:
     """
     Validate user query?
     """
     is_websocket: bool = kwargs.get("_ws", False)
-    result: Dict[str, Any] = {}
+    result: JSONObject = {}
     try:
         json.loads(query)
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}

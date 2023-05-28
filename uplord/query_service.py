@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import Any, Dict, List, Tuple, final
+from typing import final
 
 from aiohttp import web
 from rq.command import send_stop_job_command
@@ -21,8 +21,8 @@ from .callbacks import (
     _sentences,
     _upload,
 )
-
 from .jobfuncs import _db_query, _upload_data, _create_schema
+from .typed import JSONObject
 from .worker import SQLJob
 
 
@@ -32,7 +32,7 @@ class QueryService:
     This magic class will handle our queries by alerting you when they are done
     """
 
-    # __slots__: List[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
+    # __slots__: list[str] = ["app", "timeout", "upload_timeout", "query_ttl"]
 
     def __init__(self, app: web.Application) -> None:
         self.app = app
@@ -44,7 +44,7 @@ class QueryService:
     def query(
         self,
         query: str,
-        params: Tuple = tuple(),
+        params: tuple = tuple(),
         queue: str = "query",
         **kwargs,
     ) -> SQLJob | Job:
@@ -105,7 +105,7 @@ class QueryService:
     def sentences(
         self,
         query: str,
-        params: Tuple,
+        params: tuple,
         queue: str = "query",
         **kwargs,
     ) -> SQLJob | Job:
@@ -167,7 +167,7 @@ class QueryService:
         """
         Get previous saved queries for this user/room
         """
-        params: Tuple[str, str] | Tuple[str] = (user,)
+        params: tuple[str, str] | tuple[str] = (user,)
         room_info: str = ""
         if room:
             room_info = " AND room = %s"
@@ -195,7 +195,7 @@ class QueryService:
 
     def store_query(
         self,
-        query_data: Dict[str, Any],
+        query_data: JSONObject,
         idx: int,
         user: str,
         room: str,
@@ -230,7 +230,7 @@ class QueryService:
         room: str | None = None,
         queue: str = "alt",
         gui: bool = False,
-        user_data: Dict[str, Any] | None = None,
+        user_data: JSONObject | None = None,
         is_vian: bool = False,
     ) -> SQLJob | Job:
         """
@@ -261,7 +261,7 @@ class QueryService:
         room: str | None,
         project_name: str,
         queue: str = "alt",
-        drops: List[str] | None = None,
+        drops: list[str] | None = None,
         gui: bool = False,
     ) -> SQLJob | Job:
         kwargs = {
@@ -304,7 +304,7 @@ class QueryService:
         room: str,
         specific_job: str | None = None,
         base: str | None = None,
-    ) -> List[str]:
+    ) -> list[str]:
         if specific_job:
             rel_jobs = [str(specific_job)]
         else:
@@ -322,9 +322,9 @@ class QueryService:
                 continue
             if job in self.app["canceled"]:
                 continue
-            if maybe.kwargs.get("room") != room:
+            if room and maybe.kwargs.get("room") != room:
                 continue
-            if maybe.kwargs.get("user") != user:
+            if user and maybe.kwargs.get("user") != user:
                 continue
             try:
                 self.cancel(maybe)

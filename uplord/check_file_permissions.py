@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Set, cast
+from typing import Any, cast
 
 from aiohttp import web
 from yarl import URL
@@ -11,17 +11,17 @@ async def check_file_permissions(request: web.Request) -> web.Response:
     Returns if user has access to file
     """
     msg, status = ("Error", 460)
-    profiles_id: Set[str] = set()
+    profiles_id: set[str] = set()
     uri: str = request.headers.get("X-Request-Uri", "")
 
     user_details_lama = await _lama_user_details(request.headers)
-    sub = cast(Dict[str, Any], user_details_lama["subscription"])
-    subs = cast(List[Dict[str, Any]], sub["subscriptions"])
+    sub = cast(dict[str, Any], user_details_lama["subscription"])
+    subs = cast(list[dict[str, Any]], sub["subscriptions"])
     for subscription in subs:
         for profile in subscription["profiles"]:
             profiles_id.add(profile["id"])
 
-    profiles = cast(List[Dict[str, Any]], user_details_lama.get("publicProfiles", []))
+    profiles = cast(list[dict[str, Any]], user_details_lama.get("publicProfiles", []))
     for public_profile in profiles:
         profiles_id.add(public_profile["id"])
 

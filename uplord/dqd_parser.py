@@ -4,7 +4,8 @@ import json
 import os
 import sys
 
-from typing import Any, Dict, Iterable, List
+from collections.abc import Iterable
+from typing import Any, ClassVar
 
 from lark import Lark
 from lark.indenter import Indenter
@@ -61,8 +62,8 @@ class TreeIndenter(Indenter):
     INDENT_type: str = "_INDENT"
     DEDENT_type: str = "_DEDENT"
     tab_len: int = 8
-    OPEN_PAREN_types: List[str] = []
-    CLOSE_PAREN_types: List[str] = []
+    OPEN_PAREN_types: ClassVar[list[str]] = []
+    CLOSE_PAREN_types: ClassVar[list[str]] = []
     # this fixes mypy but not sure if it breaks anything:
     always_accept: Iterable[str] = ()
 
@@ -70,7 +71,7 @@ class TreeIndenter(Indenter):
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
-def merge_constraints(constraints: List) -> Dict[str, Any]:
+def merge_constraints(constraints: list) -> dict[str, Any]:
     retval = {}
     if len(constraints) == 1 and len(constraints[0]) > 1:
         retval = {"constraints": {**constraints[0]}}
@@ -93,7 +94,7 @@ def merge_constraints(constraints: List) -> Dict[str, Any]:
     return retval
 
 
-def merge_filter(filters: List) -> Dict[str, Any] | str:
+def merge_filter(filters: list) -> dict[str, Any] | str:
     if len(filters) == 1:
         return filters[0]
     elif len(filters) > 1:
@@ -253,7 +254,7 @@ def to_dict(tree: Any) -> Any:
         return {name: children}
 
 
-def convert(dqd_query: str) -> Dict[str, Any]:
+def convert(dqd_query: str) -> dict[str, Any]:
     data = parser.parse(dqd_query)
     return to_dict(data)
 

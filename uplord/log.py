@@ -5,18 +5,21 @@ Do not add type annotations yet
 import logging
 import traceback
 
+from collections.abc import Callable
 from functools import wraps
-from typing import Any, Callable
+from typing import TypeVar
 from uuid import uuid4
 
+R = TypeVar("R")
 
-def logged(f: Callable) -> Callable:
+
+def logged(f: Callable[..., R]) -> Callable[..., R]:
     """
     Decorator that logs start and end of function call
     """
 
     @wraps(f)
-    def wrapper(*args, **kwargs) -> Any:
+    def wrapper(*args, **kwargs) -> R:
         stargs = [str(a) for a in args]
         stkwargs = {str(k): str(v) for k, v in kwargs.items()}
         uu = str(uuid4())

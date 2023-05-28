@@ -1,3 +1,4 @@
+pip>=23.1.2
 git+https://github.com/morganwahl/zoneinfo
 -r abstract-query/requirements.txt
 -r lcp-upload/requirements.txt
@@ -32,6 +33,7 @@ types-aiofiles>=23.1.0.2
 types-psycopg2>=2.9.21.10
 types-decorator>=5.1.8.3
 aiocontextvars>=0.2.2
+typing_extensions>=4.5.0
 # below here just needed to make setup.py work
 urllib3==1.26.15
 sentry_sdk>=1.23.1

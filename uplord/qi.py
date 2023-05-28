@@ -1,20 +1,25 @@
 import json
 import sys
 
-from abstract_query.create import json_to_sql
-from aiohttp import web
-from dataclasses import asdict, dataclass, field
-from rq.job import Job
-from typing import Any, Dict, List, Set, Tuple
+from collections.abc import Sequence
+from dataclasses import dataclass, field
+from typing import Any, TypeVar, cast
 from uuid import uuid4
 
-Self: Any = Any
-try:
-    from typing import Self
-except Exception:
-    pass
+from abstract_query.create import json_to_sql
+from aiohttp import web
+from rq.job import Job
 
+# wish there was a nicer way to do this...delete once we are sure of 3.11+
+Self: Any
+if sys.version_info < (3, 11):
+    Self = TypeVar("Self", bound="QueryIteration")
+else:
+    from typing import Self
+
+from .configure import CorpusConfig
 from .dqd_parser import convert
+from .typed import Batch, JSONObject, Query
 from .worker import SQLJob
 
 if sys.version_info <= (3, 9):
@@ -23,25 +28,22 @@ else:
     QI_KWARGS = dict(kw_only=True, slots=True)
 
 
-BATCH_TYPE = Tuple[int, str, str, int]
-
-
 @dataclass(**QI_KWARGS)
 class QueryIteration:
     """
     Model an iteration of a query, with all its associated settings
     """
 
-    config: Dict[str, Dict[str, Any]]
+    config: dict[str, JSONObject]
     user: str
     room: str | None
     query: str
-    corpora: List[int]
-    all_batches: List[BATCH_TYPE]
+    corpora: list[int]
+    all_batches: list[Batch]
     total_results_requested: int
     needed: int
     page_size: int
-    languages: Set[str]
+    languages: set[str]
     simultaneous: str
     base: None | str
     sentences: bool
@@ -51,18 +53,18 @@ class QueryIteration:
     resuming: bool = False
     previous: str = ""
     done: bool = False
-    request_data: Dict[str, Any] | None = None
-    current_batch: BATCH_TYPE | None = None
-    done_batches: List[BATCH_TYPE] = field(default_factory=list)
+    request_data: JSONObject | None = None
+    current_batch: Batch | None = None
+    done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
-    existing_results: Dict[int, Any] = field(default_factory=dict)
+    existing_results: dict[int, Any] = field(default_factory=dict)
     job: Job | SQLJob | None = None
     job_id: str | None = ""
     previous_job: Job | SQLJob | None = None
     dqd: str = ""
     sql: str = ""
-    jso: Dict[str, Any] = field(default_factory=dict)
-    meta: Dict[str, List[Dict[str, Any]]] = field(default_factory=dict)
+    jso: Query = field(default_factory=dict)
+    meta: dict[str, list[JSONObject]] = field(default_factory=dict)
 
     def make_query(self) -> None:
         """
@@ -93,14 +95,17 @@ class QueryIteration:
 
     @staticmethod
     def _get_query_batches(
-        corpora: List[int], config: Dict[str, Dict], languages: Set[str], is_vian: bool
-    ) -> List[BATCH_TYPE]:
+        corpora: list[int],
+        config: dict[str, CorpusConfig],
+        languages: set[str],
+        is_vian: bool,
+    ) -> list[Batch]:
         """
         Get a list of tuples in the format of (corpus, batch, size) to be queried
 
         todo: make this not static
         """
-        out: List[BATCH_TYPE] = []
+        out: list[Batch] = []
         all_languages = ["en", "de", "fr", "ca"]
         all_langs = tuple([f"_{la}" for la in all_languages])
         langs = tuple([f"_{la}" for la in languages])
@@ -117,7 +122,12 @@ class QueryIteration:
         return sorted(out, key=lambda x: x[-1])
 
     @classmethod
-    async def from_request(cls, request: web.Request) -> Self:
+    async def from_request(cls: type[Self], request: web.Request) -> Self:
+        """
+        The first time we encounter the data, it's an aiohttp request
+
+        Normalise it into this dataclass.
+        """
         request_data = await request.json()
         corp = request_data["corpora"]
         if not isinstance(corp, list):
@@ -173,14 +183,15 @@ class QueryIteration:
 
     def sents_query(self) -> str:
         """
-        Build a query to fetch sentences (uuids to be filled in later)
+        Build a query to fetch sentences (uuids to be filled in as params)
         """
         if not self.current_batch:
             raise ValueError("Need batch")
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
         config = self.config[str(self.current_batch[0])]
-        name = config["segment"].strip()
+        seg = cast(str, config["segment"])
+        name = seg.strip()
         underlang = f"_{lang}" if lang else ""
         seg_name = f"prepared_{name}{underlang}"
         script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
@@ -188,19 +199,30 @@ class QueryIteration:
         return script + end
 
     @classmethod
-    async def from_manual(cls, manual: Dict[str, Any], app: web.Application) -> Self:
+    async def from_manual(
+        cls: type[Self], manual: JSONObject, app: web.Application
+    ) -> Self:
+        """
+        For subsequent queries (i.e. over non-initial batches), there is no request;
+        the request handler is manually called with JSON data instead of a request object.
 
-        job = Job.fetch(manual["job"], connection=app["redis"])
+        The non-serialisable app is passed in separately.
+        """
+        job_id = cast(str, manual["job"])
+        job = Job.fetch(job_id, connection=app["redis"])
 
-        corp = manual["corpora"]
-        if not isinstance(corp, list):
-            corp = [corp]
-        corpora_to_use = [int(i) for i in corp]
+        done_batches = [tuple(i) for i in cast(list, manual["done_batches"])]
+        cur = cast(Sequence, manual["current_batch"])
+        current: Batch = (cur[0], cur[1], cur[2], cur[3])
+        if current not in done_batches:
+            done_batches.append(current)
+        all_batches = [tuple(i) for i in cast(list, manual["all_batches"])]
 
-        tot_req = manual["total_results_requested"]
-        tot_so_far = manual["total_results_so_far"]
-        falsey = {False, None, -1}
-        needed = tot_req - tot_so_far if tot_req not in falsey else -1
+        corpora_to_use = cast(list[int], manual["corpora"])
+
+        tot_req = cast(int, manual["total_results_requested"])
+        tot_so_far = cast(int, manual["total_results_so_far"])
+        needed = tot_req - tot_so_far if tot_req > 0 else -1
 
         details = {
             "corpora": corpora_to_use,
@@ -221,23 +243,20 @@ class QueryIteration:
             "sentences": manual.get("sentences", True),
             "hit_limit": manual.get("hit_limit", False),
             "current_batch": None,
-            "all_batches": [tuple(x) for x in manual["all_batches"]],
+            "all_batches": all_batches,
             "total_results_so_far": tot_so_far,
-            "languages": set([i.strip() for i in manual.get("languages", [])]),
-            "done_batches": [tuple(x) for x in manual["done_batches"]],
+            "languages": set(cast(list[str], manual["languages"])),
+            "done_batches": done_batches,
             "is_vian": manual.get("is_vian", False),
         }
         return cls(**details)
-
-    def as_dict(self) -> Dict[str, str | List[str] | Dict[Any, Any]]:
-        return asdict(self)
 
     def decide_batch(self) -> None:
         """
         Find the best next batch to query
         """
         if self.current_batch is not None:
-            return
+            return None
 
         buffer = 0.1  # set to zero for picking smaller batches
 
@@ -254,16 +273,17 @@ class QueryIteration:
             self.current_batch = self.done_batches[-1]
             return None
 
-        total_words_processed_so_far = sum([x[-1] for x in self.done_batches])
+        # set here ensures we don't double count, even though it should not happen
+        total_words_processed_so_far = sum([x[-1] for x in set(self.done_batches)])
         proportion_that_matches = so_far / total_words_processed_so_far
-        first_not_done: BATCH_TYPE | None = None
+        first_not_done: Batch | None = None
 
         for batch in self.all_batches:
             if batch in self.done_batches:
                 continue
             if not first_not_done:
                 first_not_done = batch
-                if self.needed in {-1, False, None}:
+                if self.needed == -1:
                     self.current_batch = batch
                     return None
 

@@ -6,18 +6,19 @@ import os
 import shutil
 import traceback
 
-from typing import Any, Dict, List, Tuple
+from typing import cast
 
 import psycopg
 
 from rq.job import get_current_job
 
+from .configure import CorpusTemplate
 from .impo import Importer
-from .qi import BATCH_TYPE
+from .typed import Batch, JSONObject
 from .utils import _make_sent_query
 
 
-async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> Tuple:
+async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> tuple:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
@@ -25,17 +26,22 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> T
     data_path = os.path.join(corpus, "_data.json")
 
     with open(data_path, "r") as fo:
-        data: Dict[str, Any] = json.load(fo)
+        data: JSONObject = json.load(fo)
 
-    data["constraints"].append(data["perms"])
-    if "project" not in data["template"]:
-        data["template"]["project"] = project
+    constraints = cast(list[str], data["constraints"])
+    perms = cast(str, data["perms"])
+    constraints.append(perms)
+
+    template = cast(CorpusTemplate, data["template"])
+
+    if "project" not in template:
+        cast(dict, template)["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
     await upool.open()
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
-    row: Tuple = tuple()
+    row: tuple = tuple()
     try:
         msg = f"Starting corpus import for {user}: {project}"
         logging.info(msg, extra=extra)
@@ -55,7 +61,7 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> T
 async def _create_schema(
     create: str,
     schema_name: str,
-    drops: List[str] | None,
+    drops: list[str] | None,
     user: str = "",
     room: str | None = None,
     **kwargs,
@@ -96,16 +102,16 @@ async def _create_schema(
 
 async def _db_query(
     query: str,
-    params: Tuple = tuple(),
+    params: tuple = tuple(),
     config: bool = False,
     store: bool = False,
     document: bool = False,
     is_sentences: bool = False,
     resuming: bool = False,
-    depends_on: str | List[str] = "",
-    current_batch: BATCH_TYPE | None = None,
+    depends_on: str | list[str] = "",
+    current_batch: Batch | None = None,
     **kwargs,
-) -> List[Tuple | Dict[str, Any]] | Dict[str, Any] | None:
+) -> list[tuple | JSONObject] | JSONObject | None:
     """
     The function queued by RQ, which executes our DB query
     """

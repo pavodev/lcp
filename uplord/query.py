@@ -5,7 +5,9 @@ import logging
 import os
 import traceback
 
-from typing import Any, Dict, List, Tuple
+from collections.abc import Sequence
+
+from typing import cast
 
 from aiohttp import web
 from rq.job import Job
@@ -13,6 +15,7 @@ from rq.job import Job
 from .callbacks import _query, _sentences
 from .log import logged
 from .qi import QueryIteration
+from .typed import JSONObject, Batch
 from .utils import (
     _get_all_results,
     ensure_authorised,
@@ -91,17 +94,17 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         qi.done = True
         return qi
     else:
-        all_batches = prev_job.kwargs["all_batches"]
-        done_batches = prev_job.kwargs["done_batches"]
+        # all_batches = prev_job.kwargs["all_batches"]
+        dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
+        done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
         so_far = prev_job.meta["total_results"]
-        needed = (
-            qi.total_results_requested - so_far
-            if qi.total_results_requested not in {-1, False, None}
-            else -1
-        )
-        previous_batch = prev_job.kwargs["current_batch"]
-        done_batches.append(previous_batch)
-        qi.all_batches = all_batches
+        tot_req = qi.total_results_requested
+        needed = tot_req - so_far if tot_req != -1 else -1
+        prev = cast(Sequence, prev_job.kwargs["current_batch"])
+        previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
+        if previous_batch not in done_batches:
+            done_batches.append(previous_batch)
+        # qi.all_batches = all_batches
         qi.done_batches = done_batches
         qi.total_results_so_far = so_far
         qi.needed = needed
@@ -126,13 +129,13 @@ def _get_base(qi: QueryIteration, first_job: Job | None) -> str:
 
 
 def _submit_sents(
-    qi: QueryIteration, first_job: Job | None, dep_chain: List[str]
-) -> Tuple[Job, List[str]]:
+    qi: QueryIteration, first_job: Job | None, dep_chain: list[str]
+) -> tuple[Job, list[str]]:
     """
     Helper to submit a sentences job
     """
     depends_on = qi.job_id if not qi.done and qi.job is not None else qi.previous
-    to_use: List[str] | str = []
+    to_use: list[str] | str = []
     if qi.simultaneous and depends_on:
         dep_chain.append(depends_on)
         to_use = dep_chain
@@ -157,7 +160,7 @@ def _submit_sents(
 def _submit_query(
     qi: QueryIteration,
     word_count: int,
-    qd: List[str],
+    qd: list[str],
 ) -> Job:
     """
     Helper to submit a query job
@@ -200,9 +203,9 @@ async def _query_iteration(
     qi: QueryIteration,
     it: int,
     first_job: Job | None,
-    query_depends: List[str],
-    dep_chain: List[str],
-) -> Tuple[Job | None, str | None, Dict[str, str | bool | None], List[str]]:
+    query_depends: list[str],
+    dep_chain: list[str],
+) -> tuple[Job | None, str | None, dict[str, str | bool | None], list[str]]:
     """
     Oversee the querying of a single batch
     """
@@ -213,7 +216,7 @@ async def _query_iteration(
     if qi.resuming:
         qi = await _do_resume(qi)
 
-    jobs: Dict[str, str | bool | None] = {}
+    jobs: dict[str, str | bool | None] = {}
 
     if qi.done:
         jobs = {
@@ -279,7 +282,7 @@ async def _query_iteration(
 @logged
 async def query(
     request: web.Request,
-    manual: Dict[str, Any] | None = None,
+    manual: JSONObject | None = None,
     app: web.Application | None = None,
 ) -> web.Response:
     """
@@ -304,10 +307,10 @@ async def query(
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
-    http_response: List[Dict[str, str | bool | None]] = []
+    http_response: list[dict[str, str | bool | None]] = []
     first: Job | None = None
-    dep_chain: List[str] = []
-    depends: List[str] = []
+    dep_chain: list[str] = []
+    depends: list[str] = []
 
     try:
         for it in range(iterations):
@@ -320,7 +323,7 @@ async def query(
             http_response.append(jobs)
     except Exception as err:
         tb = traceback.format_exc()
-        fail = {
+        fail: JSONObject = {
             "status": "error",
             "type": str(type(err)),
             "info": f"Could not create query: {str(err)}",

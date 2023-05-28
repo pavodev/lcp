@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 
 class Meta(TypedDict, total=False):
@@ -21,9 +21,9 @@ class Layer(TypedDict, total=False):
     abstract: bool
     contains: NotRequired[str]
     layerType: str
-    attributes: Dict[str, Attribute | Dict[str, Attribute]]
-    anchoring: NotRequired[Dict[str, bool]]
-    values: NotRequired[List[str]]
+    attributes: dict[str, Attribute | dict[str, Attribute]]
+    anchoring: NotRequired[dict[str, bool]]
+    values: NotRequired[list[str]]
     partOf: NotRequired[str]
 
 
@@ -34,15 +34,17 @@ class FirstClass(TypedDict, total=False):
 
 
 class Partitions(TypedDict, total=False):
-    values: List[str]
+    values: list[str]
 
 
 class CorpusTemplate(TypedDict, total=False):
     meta: Meta
-    layer: Dict[str, Layer]
+    layer: dict[str, Layer]
     firstClass: FirstClass
     partitions: NotRequired[Partitions]
-    projects: NotRequired[List[str]]
+    projects: NotRequired[list[str]]
+    uploaded: NotRequired[bool]
+    schema_name: NotRequired[str]
 
 
 class CorpusConfig(CorpusTemplate, total=False):
@@ -52,17 +54,17 @@ class CorpusConfig(CorpusTemplate, total=False):
     version_history: str | None
     description: str | None
     schema_path: str
-    token_counts: Dict[str, int]
-    mapping: Dict[str, Any]
+    token_counts: dict[str, int]
+    mapping: dict[str, Any]
     enabled: bool
     segment: str
     token: str
     document: str
-    column_names: List[str]
-    _batches: NotRequired[Dict[str, int]]
+    column_names: list[str]
+    _batches: NotRequired[dict[str, int]]
 
 
-def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int]:
+def _generate_batches(n_batches: int, basename: str, size: int) -> dict[str, int]:
     """
     We can create batchnames if we know three things:
 
@@ -70,7 +72,7 @@ def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int
     the prefix of the table name
     the total size of the corpus
     """
-    batches: Dict[str, int] = {}
+    batches: dict[str, int] = {}
     if n_batches < 2:
         named = basename.replace("<batch>", "") + "0"
         return {named: size}
@@ -85,12 +87,12 @@ def _generate_batches(n_batches: int, basename: str, size: int) -> Dict[str, int
     return batches
 
 
-def _get_batches(config: CorpusConfig) -> Dict[str, int]:
+def _get_batches(config: CorpusConfig) -> dict[str, int]:
     """
     Get a dict of batch_name: size for a given corpus
     """
-    batches: Dict[str, int] = {}
-    counts: Dict[str, int] = config["token_counts"]
+    batches: dict[str, int] = {}
+    counts: dict[str, int] = config["token_counts"]
     try:
         mapping = config["mapping"]["layer"][config["token"]]
     except (KeyError, TypeError):

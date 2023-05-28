@@ -6,7 +6,6 @@ import os
 import sys
 
 from collections import defaultdict, deque
-from typing import Deque, Dict
 
 import aiohttp_cors
 import asyncio
@@ -47,6 +46,7 @@ from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 
 from .check_file_permissions import check_file_permissions
+from .configure import CorpusConfig
 from .corpora import corpora
 from .document import document
 from .lama_user_data import lama_user_data
@@ -55,8 +55,9 @@ from .query import query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
+from .typed import Websockets
 from .upload import make_schema, upload
-from .utils import ParserClass, WEBSOCKETS_TYPE, handle_lama_error, handle_timeout
+from .utils import ParserClass, handle_lama_error, handle_timeout
 from .validate import validate
 from .video import video
 
@@ -137,7 +138,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     app["mypy"] = C_COMPILED
     if C_COMPILED:
         print("Running mypy/c app!")
-    app["config"] = {}
+
     cors = aiohttp_cors.setup(
         app,
         defaults={
@@ -152,17 +153,25 @@ async def create_app(*args, **kwargs) -> web.Application:
     # all websocket connections are stored in here, as {room: {(connection, user_id,)}}
     # when a user leaves the app, the connection should be removed. If it's not,
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
-    ws: WEBSOCKETS_TYPE = defaultdict(set)
+    ws: Websockets = defaultdict(set)
     app["websockets"] = ws
+
+    # here we store corpus_id: config
+    conf: dict[str, CorpusConfig] = {}
+    app["config"] = conf
 
     # here we can remember things, most likely queries, by a hash of their query string
     # and their params. the value is the job id. if the job id is found, we can return
     # the result without redoing the query.
-    memory: Dict[str, Dict[int, str]] = {}
+    memory: dict[str, dict[int, str]] = {}
     app["memory"] = memory
-    queries: Dict[int, str] = {}
+
+    # mapping query hash to job id
+    queries: dict[int, str] = {}
     app["memory"]["queries"] = queries
-    sentences: Dict[int, str] = {}
+
+    # mapping sent job hash to job id
+    sentences: dict[int, str] = {}
     app["memory"]["sentences"] = sentences
 
     resource = cors.add(app.router.add_resource("/corpora"))
@@ -222,15 +231,15 @@ async def create_app(*args, **kwargs) -> web.Application:
     app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
     app["query_service"].get_config()
-    canceled: Deque[str] = deque(maxlen=99999)
+    canceled: deque[str] = deque(maxlen=99999)
     app["canceled"] = canceled
 
     if kwargs.get("test"):
         return app
 
-    app.on_startup.append(start_background_tasks)
-    app.on_cleanup.append(cleanup_background_tasks)
-    app.on_shutdown.append(on_shutdown)
+    app.on_startup.append(start_background_tasks)  # type: ignore
+    app.on_cleanup.append(cleanup_background_tasks)  # type: ignore
+    app.on_shutdown.append(on_shutdown)  # type: ignore
 
     return app
 

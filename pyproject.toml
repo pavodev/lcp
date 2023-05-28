@@ -8,6 +8,9 @@ requires = [
     "python-dotenv",
     "yarl",
     "psycopg_pool",
+    "async_timeout",
+    "brotli",
+    "aiodns",
     "uvloop",
     "lark"
 ]

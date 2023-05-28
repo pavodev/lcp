@@ -1,3 +1,7 @@
+"""
+Fetch a dict of corpora available for a given user and app
+"""
+
 from json.decoder import JSONDecodeError
 
 from aiohttp import web
