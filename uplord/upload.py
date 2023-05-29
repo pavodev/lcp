@@ -318,7 +318,8 @@ async def make_schema(request: web.Request) -> web.Response:
         return web.json_response(error)
 
     # user_id = status["account"]["eduPersonId"]
-    user_id = cast(dict[str, dict], status["account"])["email"]
+    user_acc = cast(dict[str, dict | str], status["account"])
+    user_id: str = cast(str, user_acc["email"])
     # home_org = status["account"]["homeOrganization"]
     existing_project = cast(dict[str, Any], status.get("profile", {}))
 

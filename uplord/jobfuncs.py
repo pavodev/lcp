@@ -14,11 +14,13 @@ from rq.job import get_current_job
 
 from .configure import CorpusTemplate
 from .impo import Importer
-from .typed import Batch, JSONObject
+from .typed import Batch, JSONObject, MainCorpus
 from .utils import _make_sent_query
 
 
-async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> tuple:
+async def _upload_data(
+    project: str, user: str, room: str | None, **kwargs
+) -> MainCorpus | None:
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
@@ -34,14 +36,14 @@ async def _upload_data(project: str, user: str, room: str | None, **kwargs) -> t
 
     template = cast(CorpusTemplate, data["template"])
 
-    if "project" not in template:
-        cast(dict, template)["project"] = project
+    if not template.get("project"):
+        template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
     await upool.open()
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
-    row: tuple = tuple()
+    row: MainCorpus | None = None
     try:
         msg = f"Starting corpus import for {user}: {project}"
         logging.info(msg, extra=extra)

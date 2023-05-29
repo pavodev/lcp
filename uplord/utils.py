@@ -448,7 +448,7 @@ async def gather(n: int, tasks: list[Coroutine], name: str | None = None) -> lis
     try:
         return await asyncio.gather(*tsks)
     except BaseException as err:
-        print(f"Error while gathering tasks: {str(err)}. Cancelling others...")
+        print(f"Error while gathering tasks: {str(err)[:1000]}. Cancelling others...")
         running_tasks = asyncio.all_tasks()
         current = asyncio.current_task()
         if current is not None:

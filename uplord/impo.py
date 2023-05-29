@@ -10,6 +10,7 @@ from typing import Any, cast
 
 import aiofiles
 
+from aiofiles.threadpool.binary import AsyncBufferedReader
 from aiofiles.threadpool.text import AsyncTextIOWrapper
 from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
@@ -125,7 +126,7 @@ class Importer:
         return None
 
     async def _get_positions(
-        self, f: AsyncTextIOWrapper, size: int
+        self, f: AsyncBufferedReader, size: int
     ) -> list[tuple[int, int]]:
         """
         Get the locations in an open aiofile to seek and read to
@@ -144,9 +145,9 @@ class Importer:
             lines = await f.read(self.batchsize)
             if not lines or not lines.strip():
                 break
-            if not lines.endswith("\n"):
+            if not lines.endswith(b"\n"):
                 rest = await f.readline()
-                bat += len(bytes(rest, "utf-8"))
+                bat += len(rest)
             positions.append((start_at, min(bat, to_go)))
             start_at = await f.tell()
         return positions
@@ -175,7 +176,7 @@ class Importer:
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
                         await copy.write(data)
-                        sz = len(bytes(data, "utf-8"))
+                        sz = len(data)
         prog = f":progress:{sz}:{tot}:{base}:"
         self.update_progress(prog)
         return None
@@ -189,14 +190,14 @@ class Importer:
         progress will show 100% instead of 98% which is worse UX.
         """
         base = os.path.basename(csv_path)
-        async with aiofiles.open(csv_path) as fop:  # newline=""" # to get true size
+        async with aiofiles.open(csv_path, "rb") as fop:
             headers = await fop.readline()
-            headlen = len(bytes(headers, "utf-8"))
+            headlen = len(headers)
             positions = await self._get_positions(fop, fsize)
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        table = Table(self.schema, tab, headers.split("\t"))
+        table = Table(self.schema, tab, headers.decode("utf-8").split("\t"))
         script = self.sql.check_tbl(table.schema, table.name)
         exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
@@ -209,7 +210,7 @@ class Importer:
             return None
 
         # no concurrency:
-        async with aiofiles.open(csv_path) as f:  # newline=""" # to get true size?
+        async with aiofiles.open(csv_path, "rb") as f:
             async with self.connection.connection(self.upload_timeout) as conn:
                 async with conn.cursor() as cur:
                     async with cur.copy(cop) as copy:
@@ -217,7 +218,7 @@ class Importer:
                             await f.seek(start)
                             data = await f.read(chunk)
                             await copy.write(data)
-                            sz = len(bytes(data, "utf-8"))
+                            sz = len(data)
                             headlen += sz
                             self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None

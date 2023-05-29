@@ -43,6 +43,7 @@ class CorpusTemplate(TypedDict, total=False):
     firstClass: FirstClass
     partitions: NotRequired[Partitions]
     projects: NotRequired[list[str]]
+    project: NotRequired[str]
     uploaded: NotRequired[bool]
     schema_name: NotRequired[str]
 
