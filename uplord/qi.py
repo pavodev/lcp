@@ -139,7 +139,7 @@ class QueryIteration:
         previous = request_data.get("previous", "")
         base = None if not request_data.get("resume") else previous
         is_vian = request_data.get("appType") == "vian"
-        is_vian = False  # todo: remove
+        is_vian = True  # todo: remove
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
             corpora_to_use, request.app["config"], languages, is_vian
