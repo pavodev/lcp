@@ -40,7 +40,7 @@ async def _upload_data(
         template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
-    await upool.open()  # type: ignore
+    await upool.open()
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
@@ -125,11 +125,11 @@ async def _db_query(
 
     name = "_upool" if store else "_pool"
 
-    await getattr(get_current_job(), name).open()  # type:ignore
+    await getattr(get_current_job(), name).open()
 
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
 
-    async with getattr(get_current_job(), name).connection(timeout) as conn:  # type: ignore
+    async with getattr(get_current_job(), name).connection(timeout) as conn:
         if store:
             await conn.set_autocommit(True)
         async with conn.cursor() as cur:

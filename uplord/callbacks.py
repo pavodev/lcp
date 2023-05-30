@@ -121,7 +121,7 @@ def _query(
         }
     )
 
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -186,7 +186,7 @@ def _sentences(
         "base": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
@@ -212,7 +212,7 @@ def _document(
         "corpus": job.kwargs["corpus"],
         "doc_id": job.args[-1][0],
     }
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
@@ -242,8 +242,8 @@ def _schema(
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _upload(
@@ -278,8 +278,8 @@ def _upload(
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _upload_failure(
@@ -331,8 +331,8 @@ def _upload_failure(
             "kind": str(typ),
             "value": str(value),
         }
-        red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+        red = job._redis if hasattr(job, "_redis") else connection
+        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -370,8 +370,8 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
 def _queries(
@@ -403,8 +403,8 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-    red.publish(PUBSUB_CHANNEL, made)  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, made)
 
 
 def _config(
@@ -427,5 +427,5 @@ def _config(
         "_is_config": True,
         "action": "set_config",
     }
-    red = job._redis if hasattr(job, "_redis") else connection  # type: ignore
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))  # type: ignore
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

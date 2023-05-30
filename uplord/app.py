@@ -237,9 +237,9 @@ async def create_app(*args, **kwargs) -> web.Application:
     if kwargs.get("test"):
         return app
 
-    app.on_startup.append(start_background_tasks)  # type: ignore
-    app.on_cleanup.append(cleanup_background_tasks)  # type: ignore
-    app.on_shutdown.append(on_shutdown)  # type: ignore
+    app.on_startup.append(start_background_tasks)
+    app.on_cleanup.append(cleanup_background_tasks)
+    app.on_shutdown.append(on_shutdown)
 
     return app
 
