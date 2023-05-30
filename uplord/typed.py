@@ -63,3 +63,9 @@ Headers: TypeAlias = Mapping[str, JSON]
 UserQuery: TypeAlias = tuple[str, dict, str, str | None, datetime]
 
 RedisMessage: TypeAlias = dict[str, str | bytes | None] | None
+
+Results: TypeAlias = dict[
+    int, list | dict[str, list[JSONObject]] | dict[str, tuple[int, list]]
+]
+
+QueryMeta: TypeAlias = dict[str, list[JSONObject]]

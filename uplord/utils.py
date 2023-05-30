@@ -38,7 +38,17 @@ from rq.job import Job
 
 from .configure import CorpusConfig, CorpusTemplate
 from .qi import QueryIteration
-from .typed import Batch, Config, Headers, JSON, JSONObject, MainCorpus, Websockets
+from .typed import (
+    Batch,
+    Config,
+    Headers,
+    JSON,
+    JSONObject,
+    MainCorpus,
+    QueryMeta,
+    Results,
+    Websockets,
+)
 from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
@@ -215,13 +225,13 @@ async def _lama_check_api_key(headers: Headers) -> JSONObject:
             return await resp.json()
 
 
-def _get_all_results(qi: QueryIteration) -> dict[int, Any]:
+def _get_all_results(qi: QueryIteration) -> Results:
     """
     Get results from all parents -- reconstruct results from just latest batch
     """
     job: Job | SQLJob | str = qi.previous
     connection: RedisConnection = qi.app["redis"]
-    out: dict[int, Any] = {}
+    out: Results = {}
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
 
@@ -262,12 +272,14 @@ def _add_results(
     kwic: bool = False,
     is_vian: bool = False,
     sents: list[tuple[str | UUID | int, int, list[Sequence[Any]]]] | None = None,
-    meta: dict[str, list[JSONObject]] | None = None,
-) -> tuple[dict[int, Any], int]:
+    meta: QueryMeta | None = None,
+) -> tuple[Results, int]:
     """
     todo: check limits here?
     """
-    bundle: dict[int, Any] = {}
+    met: QueryMeta = {}
+    sen: dict[str, tuple[int, list]] = {}
+    bundle: Results = {0: met, -1: sen}
     counts: defaultdict[int, int] = defaultdict(int)
     if meta:
         rs = meta["result_sets"]
@@ -282,9 +294,9 @@ def _add_results(
         bundle[0] = meta
 
     if sents:
-        bundle[-1] = {}
         for sent in sents:
-            bundle[-1][str(sent[0])] = [sent[1], sent[2]]
+            add_to = cast(dict, bundle[-1])
+            add_to[str(sent[0])] = [sent[1], sent[2]]
 
     for x, line in enumerate(result):
         key = int(line[0])
@@ -308,7 +320,9 @@ def _add_results(
             if key not in bundle:
                 bundle[key] = [rest]
             else:
-                bundle[key].append(rest)
+                rest = cast(list, rest)
+                bit = cast(list, bundle[key])
+                bit.append(rest)
             counts[key] += 1
             continue
 
@@ -328,19 +342,21 @@ def _add_results(
             rest = [seg_id, tok_ids, extras]
         else:
             rest = [rest[0], rest[1:]]
-        bundle[key].append(rest)
+        rest = cast(list, rest)
+        bit = cast(list, bundle[key])
+        bit.append(rest)
         counts[key] += 1
 
     for k in kwics:
         if k not in bundle:
             continue
         if len(bundle[k]) > total_requested:
-            bundle[k] = bundle[k][:total_requested]
+            bundle[k] = cast(list, bundle[k])[:total_requested]
 
     return bundle, counts[list(kwics)[0]]
 
 
-def _union_results(so_far: dict[int, Any], incoming: dict[int, Any]) -> dict[int, Any]:
+def _union_results(so_far: Results, incoming: Results) -> Results:
     """
     Join two results objects
     """
@@ -356,11 +372,15 @@ def _union_results(so_far: dict[int, Any], incoming: dict[int, Any]) -> dict[int
                 so_far[k] = v
                 continue
             else:
-                so_far[k].update(v)
+                v = cast(dict, v)
+                thus = cast(dict, so_far[k])
+                thus.update(v)
         elif k not in so_far:
             so_far[k] = []
-        if isinstance(so_far[k], list):
-            so_far[k] += v
+        if isinstance(so_far[k], list) and isinstance(v, list):
+            lst = cast(list, so_far[k])
+            lst += v
+            so_far[k] = lst
     return so_far
 
 

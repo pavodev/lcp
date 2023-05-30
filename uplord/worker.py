@@ -85,6 +85,7 @@ else:
     )
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
+
 pool: AsyncConnectionPool = AsyncConnectionPool(
     query_connstr,
     name="query-connection",
@@ -125,8 +126,8 @@ class SQLJob(Job):
 
 class MyWorker(Worker):
     def __init__(self, *args, **kwargs) -> None:
+        kwargs["job_class"] = SQLJob
         super().__init__(*args, **kwargs)
-        self.job_class = SQLJob
 
 
 async def work() -> None:

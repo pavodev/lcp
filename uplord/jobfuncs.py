@@ -14,7 +14,7 @@ from rq.job import get_current_job
 
 from .configure import CorpusTemplate
 from .impo import Importer
-from .typed import Batch, JSONObject, MainCorpus
+from .typed import Batch, JSONObject, MainCorpus, Sentence, UserQuery
 from .utils import _make_sent_query
 
 
@@ -40,7 +40,6 @@ async def _upload_data(
         template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
-    await upool.open()
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
@@ -113,25 +112,29 @@ async def _db_query(
     depends_on: str | list[str] = "",
     current_batch: Batch | None = None,
     **kwargs,
-) -> list[tuple | JSONObject] | JSONObject | None:
+) -> list[tuple] | list[JSONObject] | JSONObject | list[MainCorpus] | list[
+    UserQuery
+] | list[Sentence] | None:
     """
     The function queued by RQ, which executes our DB query
     """
-
     if is_sentences and current_batch:
         query, ids = _make_sent_query(query, depends_on, current_batch, resuming)
         params = tuple(list(params) + [ids])
 
+    # this should only happen once, when starting the app
+    if config:
+        await get_current_job()._pool.open()  # type:ignore
+        await get_current_job()._upool.open()  # type:ignore
+
     name = "_upool" if store else "_pool"
-    # this open call should be made before any other db calls in the app just in case
-    await getattr(get_current_job(), name).open()  # type: ignore
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
 
     async with getattr(get_current_job(), name).connection(timeout) as conn:  # type: ignore
         if store:
             await conn.set_autocommit(True)
         async with conn.cursor() as cur:
-            result = await cur.execute(query, params)
+            await cur.execute(query, params)
             if store:
                 return None
             try:
@@ -146,4 +149,5 @@ async def _db_query(
             except psycopg.ProgrammingError as err:
                 tb = traceback.format_exc()
                 print("Warning: psycopg error, no results?", err, tb)
-                return []
+                out: list[tuple] = []
+                return out

@@ -9,7 +9,7 @@ import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import Any, cast
+from typing import cast
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
@@ -18,6 +18,7 @@ from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
 from .ddl_gen import generate_ddl
+from .typed import Headers, JSON
 from .utils import (
     _lama_check_api_key,
     _lama_project_create,
@@ -321,13 +322,13 @@ async def make_schema(request: web.Request) -> web.Response:
     user_acc = cast(dict[str, dict | str], status["account"])
     user_id: str = cast(str, user_acc["email"])
     # home_org = status["account"]["homeOrganization"]
-    existing_project = cast(dict[str, Any], status.get("profile", {}))
+    existing_project = cast(dict[str, JSON], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
     if project and project not in ids:
         admin = os.environ["LAMA_USER"]
         admin_org = os.getenv("LAMA_HOME_ORGANIZATION", admin.split("@")[-1])
-        headers = {
+        headers: Headers = {
             "X-API-Key": os.environ["LAMA_API_KEY"],
             "X-Remote-User": admin,
             "X-Schac-Home-Organization": admin_org,
@@ -335,7 +336,7 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        profile = {
+        profile: dict[str, str] = {
             "title": project,
             "unit": "LiRI",
             "startDate": start,
@@ -365,7 +366,7 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         return web.json_response(error)
 
-    proj_id = existing_project["id"]
+    proj_id = cast(str, existing_project["id"])
 
     corpus_name = template["meta"]["name"]
     corpus_version = template["meta"]["version"]

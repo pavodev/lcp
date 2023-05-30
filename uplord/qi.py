@@ -19,7 +19,7 @@ else:
 
 from .configure import CorpusConfig
 from .dqd_parser import convert
-from .typed import Batch, JSONObject, Query
+from .typed import Batch, JSONObject, Query, Results
 from .worker import SQLJob
 
 if sys.version_info <= (3, 9):
@@ -57,7 +57,7 @@ class QueryIteration:
     current_batch: Batch | None = None
     done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
-    existing_results: dict[int, Any] = field(default_factory=dict)
+    existing_results: Results = field(default_factory=dict)
     job: Job | SQLJob | None = None
     job_id: str | None = ""
     previous_job: Job | SQLJob | None = None

@@ -408,7 +408,7 @@ def _queries(
 
 
 def _config(
-    job: SQLJob | Job, connection: RedisConnection, result=list[MainCorpus]
+    job: SQLJob | Job, connection: RedisConnection, result: list[MainCorpus]
 ) -> None:
     """
     Run by worker: make config data
