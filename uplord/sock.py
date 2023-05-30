@@ -5,7 +5,6 @@ import json
 import logging
 import traceback
 
-from collections.abc import Sequence
 from typing import cast
 
 try:
@@ -230,7 +229,7 @@ async def _handle_query(
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
 
 
-async def _ait(self) -> WSMessage:
+async def _ait(self: WSMessage) -> WSMessage:
     """
     Just a hack to fix aiohttp websocket response
     """
@@ -297,7 +296,6 @@ async def _handle_sock(
             await push_msg(sockets, session_id, response, skip=ident)
 
     elif action == "left":
-        print("SENT LEFT")
         await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
         try:
             sockets[session_id].remove((ws, user_id))
