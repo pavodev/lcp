@@ -40,6 +40,7 @@ async def _upload_data(
         template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
+    await upool.open()  # type: ignore
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
@@ -122,12 +123,10 @@ async def _db_query(
         query, ids = _make_sent_query(query, depends_on, current_batch, resuming)
         params = tuple(list(params) + [ids])
 
-    # this should only happen once, when starting the app
-    if config:
-        await get_current_job()._pool.open()  # type:ignore
-        await get_current_job()._upool.open()  # type:ignore
-
     name = "_upool" if store else "_pool"
+
+    await getattr(get_current_job(), name).open()  # type:ignore
+
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
 
     async with getattr(get_current_job(), name).connection(timeout) as conn:  # type: ignore
