@@ -3,15 +3,17 @@ import sys
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeVar, cast
+from typing import TypeVar, cast
 from uuid import uuid4
 
 from abstract_query.create import json_to_sql
 from aiohttp import web
+
+# we need the below to avoid a mypy keyerror in the type annotation:
+from aiohttp.web import Application
 from rq.job import Job
 
 # wish there was a nicer way to do this...delete once we are sure of 3.11+
-Self: Any
 if sys.version_info < (3, 11):
     Self = TypeVar("Self", bound="QueryIteration")
 else:
@@ -48,7 +50,7 @@ class QueryIteration:
     base: None | str
     sentences: bool
     is_vian: bool
-    app: Any  # somehow fails when we do web.Application
+    app: Application
     hit_limit: bool | int = False
     resuming: bool = False
     previous: str = ""
@@ -122,7 +124,7 @@ class QueryIteration:
         return sorted(out, key=lambda x: x[-1])
 
     @classmethod
-    async def from_request(cls: type[Self], request: web.Request) -> Self:
+    async def from_request(cls, request: web.Request) -> Self:
         """
         The first time we encounter the data, it's an aiohttp request
 
@@ -199,9 +201,7 @@ class QueryIteration:
         return script + end
 
     @classmethod
-    async def from_manual(
-        cls: type[Self], manual: JSONObject, app: web.Application
-    ) -> Self:
+    async def from_manual(cls, manual: JSONObject, app: web.Application) -> Self:
         """
         For subsequent queries (i.e. over non-initial batches), there is no request;
         the request handler is manually called with JSON data instead of a request object.
