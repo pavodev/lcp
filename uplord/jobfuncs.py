@@ -10,6 +10,7 @@ from typing import cast
 
 import psycopg
 
+from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 from rq.job import get_current_job
 
 from .configure import CorpusTemplate
@@ -124,11 +125,10 @@ async def _db_query(
         params = (ids,)
 
     name = "_upool" if store else "_pool"
-
-    await getattr(get_current_job(), name).open()
-
+    pool: AsyncConnectionPool | AsyncNullConnectionPool
+    pool = getattr(get_current_job(), name)
+    await pool.open()
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
-
     result: list[tuple]
 
     async with getattr(get_current_job(), name).connection(timeout) as conn:
