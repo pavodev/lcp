@@ -351,7 +351,7 @@ def _add_results(
         else:
             rest = [rest[0], rest[1:]]
         # rest = cast(list, rest)
-        # bit = cast(list, bundle[key])
+        bit = cast(list, bundle[key])
         bit.append(rest)
         counts[key] += 1
 

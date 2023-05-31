@@ -117,7 +117,7 @@ upool: AsyncConnectionPool | AsyncNullConnectionPool = upload_conn_type(
 
 
 class SQLJob(Job):
-    def __init__(self, *args: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args)
         self._connstr = upload_connstr
         # self._db_conn = conn
