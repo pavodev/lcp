@@ -6,7 +6,8 @@ from aiohttp import web
 from rq.job import Job
 
 from .typed import JSONObject
-from .utils import SQLJob, ensure_authorised
+from .utils import ensure_authorised
+from .worker import SQLJob
 
 
 @ensure_authorised

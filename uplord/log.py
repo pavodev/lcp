@@ -7,7 +7,7 @@ import traceback
 
 from collections.abc import Callable
 from functools import wraps
-from typing import TypeVar
+from typing import Any, TypeVar
 from uuid import uuid4
 
 R = TypeVar("R")
@@ -19,7 +19,7 @@ def logged(f: Callable[..., R]) -> Callable[..., R]:
     """
 
     @wraps(f)
-    def wrapper(*args, **kwargs) -> R:
+    def wrapper(*args: Any, **kwargs: Any) -> R:
         stargs = [str(a) for a in args]
         stkwargs = {str(k): str(v) for k, v in kwargs.items()}
         uu = str(uuid4())

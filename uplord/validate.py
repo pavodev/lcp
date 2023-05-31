@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 
+from typing import cast
+
 from aiohttp import web
 
 from .dqd_parser import convert
@@ -13,12 +15,12 @@ async def validate(
     room: str | None = None,
     query: str = "",
     query_name: str | None = None,
-    **kwargs,
+    **kwargs: bool | None,
 ) -> web.Response | JSONObject:
     """
     Validate user query?
     """
-    is_websocket: bool = kwargs.get("_ws", False)
+    is_websocket: bool = cast(bool, kwargs.get("_ws", False))
     result: JSONObject = {}
     try:
         json.loads(query)

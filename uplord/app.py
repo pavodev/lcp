@@ -55,7 +55,7 @@ from .query import query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
-from .typed import Websockets
+from .typed import Task, Websockets
 from .upload import make_schema, upload
 from .utils import ParserClass, handle_lama_error, handle_timeout
 from .validate import validate
@@ -95,9 +95,9 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    listener: asyncio.Task = asyncio.create_task(listen_to_redis(app))
+    listener: Task = asyncio.create_task(listen_to_redis(app))
     app["redis_listener"] = listener
-    cleanup: asyncio.Task = asyncio.create_task(ws_cleanup(app["websockets"]))
+    cleanup: Task = asyncio.create_task(ws_cleanup(app["websockets"]))
     app["ws_cleanup"] = cleanup
 
 
@@ -111,7 +111,7 @@ async def cleanup_background_tasks(app: web.Application) -> None:
     await app["ws_cleanup"]
 
 
-async def create_app(*args, **kwargs) -> web.Application:
+async def create_app(test: bool = False) -> web.Application:
     """
     Build an instance of the app. If test=True is passed, it is returned
     before background tasks are added, to aid with unit tests
@@ -234,7 +234,7 @@ async def create_app(*args, **kwargs) -> web.Application:
     canceled: deque[str] = deque(maxlen=99999)
     app["canceled"] = canceled
 
-    if kwargs.get("test"):
+    if test:
         return app
 
     app.on_startup.append(start_background_tasks)

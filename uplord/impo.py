@@ -11,17 +11,16 @@ from typing import Any, cast
 import aiofiles
 
 from aiofiles.threadpool.binary import AsyncBufferedReader
-from aiofiles.threadpool.text import AsyncTextIOWrapper
 from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 
-from .configure import CorpusTemplate
+from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
 from .utils import gather
 
 
 class SQLstats:
     def __init__(self) -> None:
-        self.check_tbl = lambda x, y: dedent(
+        self.check_tbl: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             SELECT EXISTS (
                    SELECT 1
@@ -30,14 +29,14 @@ class SQLstats:
                       AND table_name = '{y}');"""
         )
 
-        self.copy_table = lambda x, y, z: dedent(
+        self.copy_table: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
             COPY {x}.{y} {z}
             FROM STDIN
             WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
         )
 
-        self.main_corp = dedent(
+        self.main_corp: str = dedent(
             f"""
             INSERT
               INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
@@ -46,7 +45,7 @@ class SQLstats:
             """
         )
 
-        self.token_count = lambda x, y: dedent(
+        self.token_count: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             SELECT count(*)
               FROM {x}.{y};"""
@@ -83,9 +82,9 @@ class Importer:
         self.connection = connection
         self.template = cast(CorpusTemplate, data["template"])
         self.template["uploaded"] = True
-        self.name: str = cast(dict, self.template["meta"])["name"]
-        self.version: int | str | float = cast(dict, self.template["meta"])["version"]
-        self.schema = cast(str, self.template["schema_name"])
+        self.name: str = cast(Meta, self.template["meta"])["name"]
+        self.version: int | str | float = cast(Meta, self.template["meta"])["version"]
+        self.schema = self.template["schema_name"]
         self.batches = cast(list[str], data["batchnames"])
         self.insert = cast(str, data["prep_seg_insert"])
         self.constraints = cast(list[str], data["constraints"])
@@ -198,11 +197,11 @@ class Importer:
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
         table = Table(self.schema, tab, headers.decode("utf-8").split("\t"))
-        script = self.sql.check_tbl(table.schema, table.name)
+        script: str = self.sql.check_tbl(table.schema, table.name)
         exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
             raise ValueError(f"Table not found: {self.schema}.{tab}")
-        cop = self.sql.copy_table(table.schema, table.name, table.col_repr())
+        cop: str = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent != 1:
             args = (cop, csv_path, fsize - headlen, tot)
@@ -241,9 +240,9 @@ class Importer:
     async def process_data(
         self,
         iterable: Sequence[str | tuple[str | int, int]],
-        method: Callable[..., Coroutine],
-        *args,
-        **kwargs,
+        method: Callable[..., Coroutine[None, None, RunScript]],
+        *args: int | None | str,
+        **kwargs: bool | str | None | Params,
     ) -> list[RunScript]:
         """
         Do the execution of copy_batch or copy_table (method) from iterable data
@@ -256,13 +255,13 @@ class Importer:
         mc = self.max_concurrent
         name = "import"
         current_size = 0
-        tasks: list[Coroutine] = []
+        tasks: list[Coroutine[None, None, RunScript]] = []
         batches = f"in batches of {mc}" if mc > 0 else "concurrently"
         gathered: list[Any] = []
         cs: float | int = 0.0
         first: str | int = ""
-        more: list = []
-        give: bool = kwargs.get("give", False)
+        more: list[RunScript] | list[()] = []
+        give: bool = cast(bool, kwargs.get("give", False))
         mname = method.__name__
         progs = "Doing {} {} tasks {}...({}MB vs {}GB)"
         for tup in iterable:
@@ -306,7 +305,7 @@ class Importer:
         for i in range(self.n_batches + 1):
             formed = f"{token}{i}" if i < self.n_batches else f"{token}rest"
             names.append(formed)
-            query = self.sql.token_count(self.schema, formed)
+            query: str = self.sql.token_count(self.schema, formed)
             queries.append(query)
         task = self.process_data(queries, self.run_script, give=True)
         response = cast(list[list[tuple[int]]], await task)
@@ -366,7 +365,8 @@ class Importer:
             json.dumps(self.token_count),
             json.dumps(self.mapping),
         )
-        task = self.run_script(self.sql.main_corp, give=True, params=params)
+        mc: str = self.sql.main_corp
+        task = self.run_script(mc, give=True, params=params)
         rows = cast(list[MainCorpus], await task)
         return rows[0]
 

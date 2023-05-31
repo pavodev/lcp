@@ -24,8 +24,8 @@ from .utils import (
     _lama_project_create,
     ensure_authorised,
     _lama_user_details,
-    SQLJob,
 )
+from .worker import SQLJob
 
 
 VALID_EXTENSIONS = ("vrt", "csv")

@@ -7,9 +7,12 @@ import os
 import re
 
 from collections import abc, defaultdict
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from textwrap import dedent
-from typing import Any
+from typing import Any, cast
+
+from .typed import JSONObject
 
 
 @dataclass
@@ -19,18 +22,20 @@ class DataNeededLater:
     prep_seg_create: str = ""
     prep_seg_insert: str = ""
     batchnames: list[str] = field(default_factory=list)
-    mapping: dict[str, int] = field(default_factory=dict)
+    mapping: dict[str, JSONObject] = field(default_factory=dict)
     perms: str = ""
     refs: list[str] = field(default_factory=list)
 
-    def asdict(self) -> dict[str, str | list[str] | dict[Any, Any]]:
+    def asdict(
+        self,
+    ) -> dict[str, str | list[str] | dict[str, int]]:
         return asdict(self)
 
 
 class Globs:
     def __init__(self) -> None:
-        self.base_map: dict[str, Any] = {}
-        self.layers: dict[str, dict] = {}
+        self.base_map: dict[str, str] = {}
+        self.layers: dict[str, dict[str, Any | str | list[str]]] = {}
         self.schema: list[str] = []
         self.tables: list[Table] = []
         self.types: list[Type] = []
@@ -38,7 +43,7 @@ class Globs:
         self.prep_seg_create: str = ""
         self.prep_seg_insert: str = ""
         self.batchnames: list[str] = []
-        self.mapping: dict[str, Any] = {}
+        self.mapping: dict[str, JSONObject] = {}
         self.perms: str = ""
 
 
@@ -49,13 +54,13 @@ class DDL:
 
     def __init__(self) -> None:
 
-        self.perms = lambda x, y: dedent(
+        self.perms: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             GRANT USAGE ON SCHEMA {x} TO {y};
             GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
         )
 
-        self.create_scm = lambda x, y, z: dedent(
+        self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
             BEGIN;
             CREATE SCHEMA {x};
@@ -63,7 +68,7 @@ class DDL:
             SET search_path TO {x};"""
         )
 
-        self.create_prepared_segs = lambda x, y: dedent(
+        self.create_prepared_segs: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             CREATE TABLE prepared_{x} (
                 {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
@@ -72,7 +77,7 @@ class DDL:
             );"""
         )
 
-        self.compute_prep_segs = lambda x, y, z: dedent(
+        self.compute_prep_segs: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
             WITH ins AS (
                    SELECT {x}
@@ -114,9 +119,21 @@ class DDL:
             "text": 4,
             "uuid": 16,
         }
+        return None
 
-    def create_str(self):
+    def create_str(self) -> None:
         raise NotImplementedError
+
+    def __lt__(self, other: object) -> bool:
+        o = cast(Table, other)
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name < o.name)
+
+    def __eq__(self, other: object) -> bool:
+        o = cast(Table, other)
+        assert hasattr(o, "name")
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name == o.name)
 
     @staticmethod
     def fmt(string: str, quote: bool = True, comma: bool = False) -> str:
@@ -146,7 +163,9 @@ class Column(DDL):
     _uniq_constr = "ADD UNIQUE ({});"
     _idx_constr = "{} ({});"
 
-    def __init__(self, name: str, typ: str, **constrs) -> None:
+    def __init__(
+        self, name: str, typ: str, **constrs: bool | None | str | dict[str, str]
+    ) -> None:
         super().__init__()
         self.name = name
         self.type = typ
@@ -166,7 +185,7 @@ class Column(DDL):
         )
         # + self.t * (math.ceil((self._max_strtype - len(self.type)) / 8) + 1)
 
-    def ret_constrs(self, schema) -> str:
+    def ret_constrs(self, schema: str) -> str:
         """
         method for generating all DLL constraints for a column (if there are any)
         """
@@ -222,12 +241,6 @@ class Table(DDL):
         # self._max_strtype = max([len(col.type) for col in cols])
         # self._order_cols()
 
-    def __lt__(self, other: Any) -> bool:
-        return self.name < other.name
-
-    def __eq__(self, other: Any) -> bool:
-        return self.name == other.name
-
     def primary_key(self) -> list[Column]:
         return [x for x in self.cols if x.constrs.get("primary_key")]
 
@@ -280,6 +293,17 @@ class Table(DDL):
             + "\n\n"
             + "\n".join(self.create_idxs(schema))
         )
+
+    def __lt__(self, other: object) -> bool:
+        o = cast(Table, other)
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name < o.name)
+
+    def __eq__(self, other: object) -> bool:
+        o = cast(Table, other)
+        assert hasattr(o, "name")
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name == o.name)
 
 
 class PartitionedTable(Table):
@@ -398,12 +422,6 @@ class Type(DDL):
             + self.end
         )
 
-    def __lt__(self, other: Any) -> bool:
-        return self.name < other.name
-
-    def __eq__(self, other: Any) -> bool:
-        return self.name == other.name
-
 
 class CTProcessor:
     def __init__(self, corpus_template: dict[str, Any], glos: Globs) -> None:
@@ -449,14 +467,13 @@ class CTProcessor:
 
     @staticmethod
     def _process_attributes(
-        attr_structure: abc.ItemsView,
+        attr_structure: abc.ItemsView[str, Any],
         tables: list[Table],
         table_cols: list[Column],
         types: list[Type],
     ) -> tuple[list[Table], list[Column]]:
         for attr, vals in attr_structure:
-            nullable = res if (res := vals.get("nullable")) else False
-
+            nullable = vals.get("nullable", False) or False
             # TODO: make this working also for e.g. "isGlobal" & "text"
             if (typ := vals.get("type")) == "text":
                 norm_col = f"{attr}_id"
@@ -607,13 +624,13 @@ class CTProcessor:
         corpus_version = str(int(self.corpus_temp["meta"]["version"]))
         corpus_version = re.sub(r"\W", "_", corpus_version.lower())
         corpus_version = re.sub(r"_+", "_", corpus_version)
-        schema_name = self.schema_name
+        schema_name: str = self.schema_name
 
-        self.globals.schema.append(
-            self.ddl.create_scm(schema_name, corpus_name, corpus_version)
-        )
+        scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
+        self.globals.schema.append(scm)
         query_user = os.getenv("SQL_QUERY_USERNAME", "lcp_dev_webuser")
-        self.globals.perms = self.ddl.perms(schema_name, query_user)
+        perms: str = self.ddl.perms(schema_name, query_user)
+        self.globals.perms = perms
         return schema_name
 
     def create_compute_prep_segs(self) -> None:
@@ -667,7 +684,9 @@ class CTProcessor:
 
         searchpath = f"\nSET search_path TO {self.schema_name};"
 
-        ddl = self.ddl.create_prepared_segs(seg_tab.name, seg_tab.primary_key()[0].name)
+        ddl: str = self.ddl.create_prepared_segs(
+            seg_tab.name, seg_tab.primary_key()[0].name
+        )
 
         self.globals.prep_seg_create = f"\n\n{searchpath}\n{ddl}"
 
@@ -678,12 +697,12 @@ class CTProcessor:
                 [
                     f"JOIN {fk['table']} USING ({fk['column']})"
                     for x in rel_cols
-                    if (fk := x.constrs.get("foreign_key"))
+                    if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
                 ]
             )
         )
 
-        query = (
+        query: str = (
             self.ddl.compute_prep_segs(
                 seg_tab.primary_key()[0].name,
                 tok_pk.name,

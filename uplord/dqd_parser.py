@@ -71,7 +71,7 @@ class TreeIndenter(Indenter):
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
-def merge_constraints(constraints: list) -> dict[str, Any]:
+def merge_constraints(constraints: list[dict[str, Any]]) -> dict[str, Any]:
     retval = {}
     if len(constraints) == 1 and len(constraints[0]) > 1:
         retval = {"constraints": {**constraints[0]}}
@@ -94,9 +94,10 @@ def merge_constraints(constraints: list) -> dict[str, Any]:
     return retval
 
 
-def merge_filter(filters: list) -> dict[str, Any] | str:
+def merge_filter(filters: list[dict]) -> dict[str, Any] | str:
     if len(filters) == 1:
-        return filters[0]
+        res: dict = filters[0]
+        return res
     elif len(filters) > 1:
         return {"filters": {"operator": "AND", "args": filters}}
     return {}
@@ -256,10 +257,11 @@ def to_dict(tree: Any) -> Any:
 
 def convert(dqd_query: str) -> dict[str, Any]:
     data = parser.parse(dqd_query)
-    return to_dict(data)
+    res: dict = to_dict(data)
+    return res
 
 
-def cmdline():
+def cmdline() -> None:
     if os.path.isfile(sys.argv[-1]):
         with open(sys.argv[-1], "r") as fo:
             dqd = fo.read()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import final
+from typing import final, Unpack
 
 from aiohttp import web
 from rq.command import send_stop_job_command
@@ -22,7 +22,7 @@ from .callbacks import (
     _upload,
 )
 from .jobfuncs import _db_query, _upload_data, _create_schema
-from .typed import JSONObject
+from .typed import JSONObject, QueryArgs
 from .worker import SQLJob
 
 
@@ -44,14 +44,14 @@ class QueryService:
     def query(
         self,
         query: str,
-        params: tuple = tuple(),
+        params: None = None,
         queue: str = "query",
-        **kwargs,
+        **kwargs: Unpack[QueryArgs],  # type: ignore
     ) -> SQLJob | Job:
         """
         Here we send the query to RQ and therefore to redis
         """
-        hashed = hash((query, params))
+        hashed = hash(query)
         queries = self.app["memory"]["queries"]
         exists = queries.get(hashed)
         if exists:
@@ -70,7 +70,7 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
-            args=(query, params),
+            args=(query,),
             kwargs=kwargs,
         )
         if self.remembered_queries > 0 and len(queries) >= self.remembered_queries:
@@ -92,7 +92,7 @@ class QueryService:
         query = f"SELECT {schema}.doc_export(%s);"
         params = (doc_id,)
         kwargs = {"document": True, "corpus": corpus, "user": user, "room": room}
-        return self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             on_success=_document,
             on_failure=_general_failure,
@@ -101,41 +101,41 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
+        return job
 
     def sentences(
         self,
         query: str,
-        params: tuple,
         queue: str = "query",
-        **kwargs,
+        **kwargs: int,
     ) -> SQLJob | Job:
         kwargs["is_sentences"] = True
         depends_on = kwargs.get("depends_on")
 
-        hashed = hash((query, params))
+        hashed = hash(query)
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
         if exists:
             try:
-                job = Job.fetch(exists, connection=self.app["redis"])
-                if job.get_status() == "finished":
+                sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])
+                if sjob.get_status() == "finished":
                     print("Sentences found in redis memory. Retrieving...")
                     kwa = {
                         "total_results_requested": kwargs["total_results_requested"],
                     }
-                    _sentences(job, self.app["redis"], job.result, **kwa)
-                    return job
+                    _sentences(sjob, self.app["redis"], sjob.result, **kwa)
+                    return sjob
             except NoSuchJobError:
                 sents.pop(hashed)
 
-        job = self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             depends_on=depends_on,
-            args=(query, params),
+            args=(query,),
             kwargs=kwargs,
         )
         if self.remembered_queries > 0 and len(sents) >= self.remembered_queries:
@@ -151,7 +151,7 @@ class QueryService:
         """
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
         opts = {"config": True}
-        return self.app["alt"].enqueue(
+        job: Job | SQLJob = self.app["alt"].enqueue(
             _db_query,
             on_success=_config,
             on_failure=_general_failure,
@@ -160,6 +160,7 @@ class QueryService:
             args=(query,),
             kwargs=opts,
         )
+        return job
 
     def fetch_queries(
         self, user: str, room: str, queue: str = "alt", limit: int = 10
@@ -183,7 +184,7 @@ class QueryService:
             "room": room,
             "config": True,
         }
-        return self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             on_success=_queries,
             on_failure=_general_failure,
@@ -192,6 +193,7 @@ class QueryService:
             args=args,
             kwargs=opts,
         )
+        return job
 
     def store_query(
         self,
@@ -213,7 +215,7 @@ class QueryService:
             "query_id": idx,
         }
         params = (idx, json.dumps(query_data), user, room)
-        return self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
             on_success=_queries,
@@ -222,6 +224,7 @@ class QueryService:
             args=(query, params),
             kwargs=kwargs,
         )
+        return job
 
     def upload(
         self,
@@ -241,7 +244,7 @@ class QueryService:
             "user_data": user_data,
             "is_vian": is_vian,
         }
-        return self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _upload_data,
             on_success=_upload,
             on_failure=_upload_failure,
@@ -250,6 +253,7 @@ class QueryService:
             args=(project, user, room),
             kwargs=kwargs,
         )
+        return job
 
     def create(
         self,
@@ -272,7 +276,7 @@ class QueryService:
             "project_name": project_name,
             "gui": gui,
         }
-        return self.app[queue].enqueue(
+        job: Job | SQLJob = self.app[queue].enqueue(
             _create_schema,
             # schema job remembered for one day?
             result_ttl=60 * 60 * 24,
@@ -282,6 +286,7 @@ class QueryService:
             args=(create, schema_name, drops),
             kwargs=kwargs,
         )
+        return job
 
     def cancel(self, job: SQLJob | Job | str) -> str:
         """

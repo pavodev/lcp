@@ -15,12 +15,9 @@ from rq.job import Job
 from .callbacks import _query, _sentences
 from .log import logged
 from .qi import QueryIteration
-from .typed import JSONObject, Batch
-from .utils import (
-    _get_all_results,
-    ensure_authorised,
-    push_msg,
-)
+from .typed import Batch, JSONObject
+from .utils import _get_all_results, ensure_authorised, push_msg
+from .worker import SQLJob
 
 
 def _get_word_count(qi: QueryIteration) -> int:
@@ -117,14 +114,17 @@ def _get_base(qi: QueryIteration, first_job: Job | None) -> str:
     """
     Find the original base of a query
     """
+    j: str
     if qi.simultaneous and first_job:
-        return first_job.id
+        j = first_job.id
+        return j
     elif qi.resuming and qi.done and qi.base:
-        return qi.base
+        j = qi.base
     elif qi.resuming and qi.done and not qi.base and qi.previous_job:
         # todo: not sure if this is right...
-        return qi.previous_job.kwargs.get("base", qi.previous_job.id)
-    final = qi.job_id if qi.base is None and qi.job_id else qi.base
+        j = qi.previous_job.kwargs.get("base", qi.previous_job.id)
+    final: str | None = qi.job_id if qi.base is None and qi.job_id else qi.base
+    assert final is not None
     return final if final else ""
 
 
@@ -151,7 +151,7 @@ def _submit_sents(
         total_results_requested=qi.total_results_requested,
     )
     qs = qi.app["query_service"]
-    sents_job = qs.sentences(qi.sents_query(), tuple(), depends_on=to_use, **kwargs)
+    sents_job = qs.sentences(qi.sents_query(), depends_on=to_use, **kwargs)
     # if simultaneous:
     #    dep_chain.append(stats_job.id)
     return sents_job, dep_chain
@@ -195,7 +195,9 @@ def _submit_query(
         parent=parent,
     )
 
-    job = qi.app["query_service"].query(qi.sql, depends_on=qd, **query_kwargs)
+    job: Job | SQLJob = qi.app["query_service"].query(
+        qi.sql, depends_on=qd, **query_kwargs
+    )
     return job
 
 
@@ -323,12 +325,12 @@ async def query(
             http_response.append(jobs)
     except Exception as err:
         tb = traceback.format_exc()
-        fail: JSONObject = {
+        fail: dict[str, str] = {
             "status": "error",
             "type": str(type(err)),
             "info": f"Could not create query: {str(err)}",
         }
-        extra = {
+        extra: dict[str, str | None] = {
             "user": qi.user,
             "room": qi.room,
             "traceback": tb,
@@ -338,7 +340,10 @@ async def query(
         # alert everyone possible about this problem:
         print(f"{msg}:\n\n{tb}")
         logging.error(msg, extra=extra)
-        await push_msg(qi.app["websockets"], qi.room, fail, just=(qi.room, qi.user))
+        broadcast = cast(JSONObject, fail)
+        await push_msg(
+            qi.app["websockets"], qi.room or "", broadcast, just=(qi.room, qi.user)
+        )
         return web.json_response(fail)
 
     if qi.simultaneous:

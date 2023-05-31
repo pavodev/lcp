@@ -7,11 +7,11 @@ import os
 import re
 
 from collections import Counter, defaultdict
-from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 
 from datetime import date, datetime
 
-from typing import Any, cast, final
+from typing import Any, cast, final, Literal, TypeAlias
 
 from uuid import UUID
 
@@ -42,11 +42,14 @@ from .typed import (
     Batch,
     Config,
     Headers,
+    ResultSents,
     JSON,
     JSONObject,
     MainCorpus,
     QueryMeta,
     Results,
+    RawSent,
+    RunScript,
     Websockets,
 )
 from .worker import SQLJob
@@ -72,7 +75,8 @@ class CustomEncoder(json.JSONEncoder):
             return obj.hex
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
-        return json.JSONEncoder.default(self, obj)
+        default: JSON = json.JSONEncoder.default(self, obj)
+        return default
 
 
 def ensure_authorised(func: Callable) -> Callable:
@@ -110,7 +114,7 @@ def ensure_authorised(func: Callable) -> Callable:
     # return deco
 
 
-def _extract_lama_headers(headers: Mapping) -> dict[str, str]:
+def _extract_lama_headers(headers: Mapping[str, Any]) -> dict[str, str]:
     """
     Create needed headers from existing headers
     """
@@ -172,7 +176,8 @@ async def _lama_user_details(headers: Headers) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/user/details"
     async with ClientSession() as session:
         async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
-            return await resp.json()
+            jso: JSONObject = await resp.json()
+            return jso
 
 
 async def _lama_project_create(
@@ -184,7 +189,8 @@ async def _lama_project_create(
     url = f"{os.environ['LAMA_API_URL']}/profile"
     async with ClientSession() as session:
         async with session.post(url, json=project_data, headers=headers) as resp:
-            return await resp.json()
+            jso: JSONObject = await resp.json()
+            return jso
 
 
 async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
@@ -194,7 +200,8 @@ async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/create"
     async with ClientSession() as session:
         async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
-            return await resp.json(content_type=None)
+            jso: JSONObject = await resp.json(content_type=None)
+            return jso
 
 
 async def _lama_api_revoke(
@@ -209,7 +216,8 @@ async def _lama_api_revoke(
         async with session.post(
             url, headers=_extract_lama_headers(headers), json=data
         ) as resp:
-            return await resp.json(content_type=None)
+            jso: JSONObject = await resp.json(content_type=None)
+            return jso
 
 
 async def _lama_check_api_key(headers: Headers) -> JSONObject:
@@ -222,7 +230,8 @@ async def _lama_check_api_key(headers: Headers) -> JSONObject:
     api_headers = {"X-API-Key": key, "X-API-Secret": secret}
     async with ClientSession() as session:
         async with session.post(url, headers=api_headers) as resp:
-            return await resp.json()
+            jso: JSONObject = await resp.json()
+            return jso
 
 
 def _get_all_results(qi: QueryIteration) -> Results:
@@ -230,7 +239,7 @@ def _get_all_results(qi: QueryIteration) -> Results:
     Get results from all parents -- reconstruct results from just latest batch
     """
     job: Job | SQLJob | str = qi.previous
-    connection: RedisConnection = qi.app["redis"]
+    connection: RedisConnection[bytes] = qi.app["redis"]
     out: Results = {}
     if isinstance(job, str):
         job = Job.fetch(job, connection=connection)
@@ -253,11 +262,11 @@ def _get_all_results(qi: QueryIteration) -> Results:
     return out
 
 
-def _get_kwics(result: dict) -> set[int]:
+def _get_kwics(result: dict[str, list[dict[str, Any]]]) -> set[int]:
     """
     Helper to get set of kwic ids
     """
-    itt = result.get("result_sets", result)
+    itt = cast(list[dict[str, Any]], result.get("result_sets", result))
     kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
     return set(kwics)
 
@@ -271,14 +280,14 @@ def _add_results(
     total_requested: int,
     kwic: bool = False,
     is_vian: bool = False,
-    sents: list[tuple[str | UUID | int, int, list[Sequence[Any]]]] | None = None,
+    sents: list[RawSent] | None = None,
     meta: QueryMeta | None = None,
 ) -> tuple[Results, int]:
     """
     todo: check limits here?
     """
     met: QueryMeta = {}
-    sen: dict[str, tuple[int, list]] = {}
+    sen: ResultSents = {}
     bundle: Results = {0: met, -1: sen}
     counts: defaultdict[int, int] = defaultdict(int)
     if meta:
@@ -295,7 +304,7 @@ def _add_results(
 
     if sents:
         for sent in sents:
-            add_to = cast(dict, bundle[-1])
+            add_to = cast(ResultSents, bundle[-1])
             add_to[str(sent[0])] = [sent[1], sent[2]]
 
     for x, line in enumerate(result):
@@ -320,7 +329,6 @@ def _add_results(
             if key not in bundle:
                 bundle[key] = [rest]
             else:
-                rest = cast(list, rest)
                 bit = cast(list, bundle[key])
                 bit.append(rest)
             counts[key] += 1
@@ -342,8 +350,8 @@ def _add_results(
             rest = [seg_id, tok_ids, extras]
         else:
             rest = [rest[0], rest[1:]]
-        rest = cast(list, rest)
-        bit = cast(list, bundle[key])
+        # rest = cast(list, rest)
+        # bit = cast(list, bundle[key])
         bit.append(rest)
         counts[key] += 1
 
@@ -434,7 +442,7 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
         return None
 
 
-def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
+def _get_status(n_results: int, tot_req: int, **kwargs: Batch | list[Batch]) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """
@@ -447,7 +455,9 @@ def _get_status(n_results: int, tot_req: int, **kwargs) -> str:
     return "partial"
 
 
-async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
+async def sem_coro(
+    semaphore: asyncio.Semaphore, coro: Awaitable[list[tuple[int | str | bool]]]
+) -> list[tuple[int | str | bool]]:
     """
     Stop too many tasks from running at once
     """
@@ -455,7 +465,9 @@ async def sem_coro(semaphore: asyncio.Semaphore, coro: Awaitable[Any]):
         return await coro
 
 
-async def gather(n: int, tasks: list[Coroutine], name: str | None = None) -> list[Any]:
+async def gather(
+    n: int, tasks: list[Coroutine], name: str | None = None
+) -> list[list[RunScript]]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -466,7 +478,8 @@ async def gather(n: int, tasks: list[Coroutine], name: str | None = None) -> lis
     else:
         tsks = [asyncio.create_task(c, name=name) for c in tasks]
     try:
-        return await asyncio.gather(*tsks)
+        gathered: list[list[RunScript]] = await asyncio.gather(*tsks)
+        return gathered
     except BaseException as err:
         print(f"Error while gathering tasks: {str(err)[:1000]}. Cancelling others...")
         running_tasks = asyncio.all_tasks()
@@ -488,8 +501,8 @@ async def push_msg(
     sockets: Websockets,
     session_id: str,
     msg: JSONObject,
-    skip: tuple[str, str] | None = None,
-    just: tuple[str, str] | None = None,
+    skip: tuple[str | None, str] | None = None,
+    just: tuple[str | None, str] | None = None,
 ) -> None:
     """
     Send JSON websocket message to one or more users
@@ -520,13 +533,15 @@ def _filter_corpora(
     get_all: bool = False,
 ) -> Config:
 
+    subtype: TypeAlias = list[dict[str, str]]
+
     ids: set[str] = set()
     if isinstance(user_data, dict):
-        subs = cast(dict, user_data.get("subscription", {}))
-        sub = cast(list[dict[str, Any]], subs.get("subscriptions", []))
+        subs = cast(dict[str, subtype], user_data.get("subscription", {}))
+        sub = cast(subtype, subs.get("subscriptions", []))
         for s in sub:
             ids.add(s["id"])
-        for proj in cast(list[dict], user_data.get("publicProfiles", [])):
+        for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
             ids.add(proj["id"])
 
     corpora: dict[str, CorpusConfig] = {}
@@ -535,7 +550,7 @@ def _filter_corpora(
         if idx == "-1":
             corpora[idx] = conf
             continue
-        allowed: list[str] = cast(list[str], conf.get("projects", []))
+        allowed: list[str] = conf.get("projects", [])
         if get_all:
             corpora[idx] = conf
             continue
@@ -657,33 +672,34 @@ def _make_sent_query(
                 continue
             seg_ids.add(str(rest[0]))
 
-    form = ", ".join(sorted(seg_ids))
-    query = query.format(schema=current_batch[1], table=current_batch[2], allowed=form)
+    query = query.format(schema=current_batch[1], table=current_batch[2])
 
     return query, list(sorted(seg_ids))
 
 
 @final
 class WorkingParser(HiredisParser):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         return super().__init__(*args, **kwargs)
 
-    def on_connect(self, *args, **kwargs) -> None:
-        return super().on_connect(*args, **kwargs)
+    def on_connect(self, *args: Any, **kwargs: Any) -> None:
+        super().on_connect(*args, **kwargs)
+        return None
 
-    def on_disconnect(self, *args, **kwargs) -> None:
-        return super().on_disconnect(*args, **kwargs)
+    def on_disconnect(self, *args: Any, **kwargs: Any) -> None:
+        super().on_disconnect(*args, **kwargs)
+        return None
 
-    async def read_from_socket(self) -> Any:
+    async def read_from_socket(self) -> Literal[True]:
         return await super().read_from_socket()
 
-    async def can_read_destructive(self, *args, **kwargs) -> bool:
+    async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
         return False
 
 
 @final
 class WorkingPythonParser(PythonParser):
-    async def can_read_destructive(self, *args, **kwargs) -> bool:
+    async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
         return False
 
 
@@ -704,4 +720,5 @@ async def corpora(app_type: str = "all") -> JSONObject:
     url = f"http://localhost:{os.environ['AIO_PORT']}/corpora"
     async with ClientSession() as session:
         async with session.post(url, headers=headers, json=jso) as resp:
-            return await resp.json()
+            result: JSONObject = await resp.json()
+            return result

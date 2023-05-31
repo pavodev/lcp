@@ -14,12 +14,12 @@ from rq.job import get_current_job
 
 from .configure import CorpusTemplate
 from .impo import Importer
-from .typed import Batch, JSONObject, MainCorpus, Sentence, UserQuery
+from .typed import Batch, DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
 from .utils import _make_sent_query
 
 
 async def _upload_data(
-    project: str, user: str, room: str | None, **kwargs
+    project: str, user: str, room: str | None, **kwargs: dict[str, JSONObject]
 ) -> MainCorpus | None:
     """
     Script to be run by rq worker, convert data and upload to postgres
@@ -66,7 +66,7 @@ async def _create_schema(
     drops: list[str] | None,
     user: str = "",
     room: str | None = None,
-    **kwargs,
+    **kwargs: str | None,
 ) -> None:
     """
     To be run by rq worker, create schema
@@ -104,7 +104,7 @@ async def _create_schema(
 
 async def _db_query(
     query: str,
-    params: tuple = tuple(),
+    params: DBQueryParams = None,
     config: bool = False,
     store: bool = False,
     document: bool = False,
@@ -112,8 +112,8 @@ async def _db_query(
     resuming: bool = False,
     depends_on: str | list[str] = "",
     current_batch: Batch | None = None,
-    **kwargs,
-) -> list[tuple] | list[JSONObject] | JSONObject | list[MainCorpus] | list[
+    **kwargs: str | None | int | float,
+) -> list[tuple] | tuple | list[JSONObject] | JSONObject | list[MainCorpus] | list[
     UserQuery
 ] | list[Sentence] | None:
     """
@@ -121,13 +121,15 @@ async def _db_query(
     """
     if is_sentences and current_batch:
         query, ids = _make_sent_query(query, depends_on, current_batch, resuming)
-        params = tuple(list(params) + [ids])
+        params = (ids,)
 
     name = "_upool" if store else "_pool"
 
     await getattr(get_current_job(), name).open()
 
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+
+    result: list[tuple]
 
     async with getattr(get_current_job(), name).connection(timeout) as conn:
         if store:
@@ -144,7 +146,8 @@ async def _db_query(
                     result = await cur.fetchone()
                     return result[0]
                 else:
-                    return await cur.fetchall()
+                    result = await cur.fetchall()
+                    return result
             except psycopg.ProgrammingError as err:
                 tb = traceback.format_exc()
                 print("Warning: psycopg error, no results?", err, tb)

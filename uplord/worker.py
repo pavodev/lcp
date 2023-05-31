@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
+from __future__ import annotations
 
 import asyncio
 import logging
 import os
 import sys
+
+from typing import Any
 
 import uvloop
 
@@ -114,18 +117,18 @@ upool: AsyncConnectionPool | AsyncNullConnectionPool = upload_conn_type(
 
 
 class SQLJob(Job):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any) -> None:
         super().__init__(*args)
         self._connstr = upload_connstr
         # self._db_conn = conn
         self._pool = pool
         self._upool = upool
-        self._redis: Redis = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
+        self._redis: Redis[bytes] = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
         self._redis.pubsub()
 
 
 class MyWorker(Worker):
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         kwargs["job_class"] = SQLJob
         super().__init__(*args, **kwargs)
 

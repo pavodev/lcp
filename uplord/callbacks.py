@@ -6,13 +6,13 @@ import shutil
 import traceback
 
 from types import TracebackType
-from typing import Any
+from typing import Any, Unpack
 
 from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
-from .typed import MainCorpus, JSONObject, UserQuery, Sentence, Config
+from .typed import MainCorpus, JSONObject, UserQuery, RawSent, Config, QueryArgs
 from .utils import (
     CustomEncoder,
     Interrupted,
@@ -26,7 +26,10 @@ from .worker import SQLJob
 
 
 def _query(
-    job: SQLJob | Job, connection: RedisConnection, result: list[tuple], **kwargs
+    job: SQLJob | Job,
+    connection: RedisConnection[bytes],
+    result: list[tuple],
+    **kwargs: Unpack[QueryArgs],  # type: ignore
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -101,7 +104,7 @@ def _query(
         if total_requested < total_found:
             total_found = total_requested
 
-    job.save_meta()
+    job.save_meta()  # type: ignore
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -127,9 +130,9 @@ def _query(
 
 def _sentences(
     job: SQLJob | Job,
-    connection: RedisConnection,
-    result: list[Sentence],
-    **kwargs,
+    connection: RedisConnection[bytes],
+    result: list[RawSent],
+    **kwargs: int | None,
 ) -> None:
     """
     Create KWIC data and send via websocket
@@ -148,7 +151,7 @@ def _sentences(
     depended = Job.fetch(depends_on, connection=connection)
     if "associated" not in depended.meta:
         depended.meta["associated"] = job.id
-    depended.save_meta()
+    depended.save_meta()  # type: ignore
 
     aargs: tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
@@ -174,7 +177,7 @@ def _sentences(
         base.meta["latest_sentences"] = job.id
         base.meta["_sentences"] = results_so_far
 
-    base.save_meta()
+    base.save_meta()  # type: ignore
 
     jso = {
         "result": results_so_far,
@@ -192,7 +195,7 @@ def _sentences(
 
 def _document(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
 ) -> None:
     """
@@ -219,7 +222,7 @@ def _document(
 
 def _schema(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     result: bool | None = None,
 ) -> None:
     """
@@ -248,7 +251,7 @@ def _schema(
 
 def _upload(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     result: MainCorpus,
 ) -> None:
     """
@@ -284,7 +287,7 @@ def _upload(
 
 def _upload_failure(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     typ: type,
     value: BaseException,
     trace: Any,
@@ -338,7 +341,7 @@ def _upload_failure(
 
 def _general_failure(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     typ: type,
     value: BaseException,
     trace: TracebackType,
@@ -376,7 +379,7 @@ def _general_failure(
 
 def _queries(
     job: SQLJob | Job,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
     result: list[UserQuery] | None,
 ) -> None:
     """
@@ -408,7 +411,7 @@ def _queries(
 
 
 def _config(
-    job: SQLJob | Job, connection: RedisConnection, result: list[MainCorpus]
+    job: SQLJob | Job, connection: RedisConnection[bytes], result: list[MainCorpus]
 ) -> None:
     """
     Run by worker: make config data

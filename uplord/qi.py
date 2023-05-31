@@ -3,7 +3,7 @@ import sys
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TypeVar, cast
+from typing import TypeAlias, TypeVar, TypedDict, cast
 from uuid import uuid4
 
 from abstract_query.create import json_to_sql
@@ -36,7 +36,7 @@ class QueryIteration:
     Model an iteration of a query, with all its associated settings
     """
 
-    config: dict[str, JSONObject]
+    config: dict[str, CorpusConfig]
     user: str
     room: str | None
     query: str
@@ -141,7 +141,7 @@ class QueryIteration:
         previous = request_data.get("previous", "")
         base = None if not request_data.get("resume") else previous
         is_vian = request_data.get("appType") == "vian"
-        is_vian = True  # todo: remove
+        is_vian = False  # todo: remove
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
             corpora_to_use, request.app["config"], languages, is_vian
@@ -211,12 +211,17 @@ class QueryIteration:
         job_id = cast(str, manual["job"])
         job = Job.fetch(job_id, connection=app["redis"])
 
-        done_batches = [tuple(i) for i in cast(list, manual["done_batches"])]
-        cur = cast(Sequence, manual["current_batch"])
-        current: Batch = (cur[0], cur[1], cur[2], cur[3])
+        done_batches = [
+            tuple(i) for i in cast(list[Sequence[str | int]], manual["done_batches"])
+        ]
+        cur = cast(Sequence[int | str], manual["current_batch"])
+        # sorry about this:
+        current: Batch = (int(cur[0]), str(cur[1]), str(cur[2]), int(cur[3]))
         if current not in done_batches:
             done_batches.append(current)
-        all_batches = [tuple(i) for i in cast(list, manual["all_batches"])]
+        all_batches = [
+            tuple(i) for i in cast(list[Sequence[int | str]], manual["all_batches"])
+        ]
 
         corpora_to_use = cast(list[int], manual["corpora"])
 

@@ -5,7 +5,7 @@ import json
 import logging
 import traceback
 
-from typing import cast
+from typing import Sized, cast
 
 try:
     from aiohttp import WSCloseCode, WSMsgType, web
@@ -184,8 +184,8 @@ async def _handle_query(
     if not total or total == -1:
         total = "all"
     so_far = payload.get("total_results_so_far", -1)
-    done_batch = len(cast(list, payload["done_batches"]))
-    tot_batch = len(cast(list, payload["all_batches"]))
+    done_batch = len(cast(Sized, payload["done_batches"]))
+    tot_batch = len(cast(Sized, payload["all_batches"]))
     print(
         f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total\n"
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% done)"
@@ -204,8 +204,8 @@ async def _handle_query(
     to_send = payload
     n_users = len(app["websockets"].get(room, set()))
     if status in {"finished", "satisfied", "partial"}:
-        done = len(cast(list, payload["done_batches"]))
-        total_batches = len(cast(list, payload["all_batches"]))
+        done = len(cast(Sized, payload["done_batches"]))
+        total_batches = len(cast(Sized, payload["all_batches"]))
         to_send = {
             "result": payload["result"],
             "job": job,
