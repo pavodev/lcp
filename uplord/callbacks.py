@@ -132,7 +132,7 @@ def _sentences(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],
     result: list[RawSent],
-    **kwargs: int | None,
+    **kwargs: int | bool | str | None,
 ) -> None:
     """
     Create KWIC data and send via websocket
