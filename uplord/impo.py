@@ -1,21 +1,24 @@
 from __future__ import annotations
 
 import importlib
-import json
 import os
 
 from collections.abc import Callable, Coroutine, Sequence
+from io import BytesIO
 from textwrap import dedent
 from typing import Any, cast
 
 import aiofiles
 
 from aiofiles.threadpool.binary import AsyncBufferedReader
-from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
+
+from sqlalchemy.engine.row import Row
+from sqlalchemy.ext.asyncio import AsyncEngine
+from sqlalchemy.sql import text
 
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
-from .utils import gather
+from .utils import format_query_params, gather
 
 
 class SQLstats:
@@ -40,7 +43,7 @@ class SQLstats:
             f"""
             INSERT
               INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-            VALUES (%s, %s, %s, %s, %s, %s, true)
+            VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
             RETURNING *;
             """
         )
@@ -70,16 +73,16 @@ class Table:
 class Importer:
     def __init__(
         self,
-        connection: AsyncConnectionPool | AsyncNullConnectionPool,
+        pool: AsyncEngine,
         data: JSONObject,
         project_dir: str,
     ) -> None:
         """
-        Manage the import of a corpus into the DB via async psycopg connection
+        Manage the import of a corpus into the DB via async postgres connection
         """
         _loader = importlib.import_module(self.__module__).__loader__
         self.sql: SQLstats = SQLstats()
-        self.connection = connection
+        self.pool: AsyncEngine = pool
         self.template = cast(CorpusTemplate, data["template"])
         self.template["uploaded"] = True
         self.name: str = cast(Meta, self.template["meta"])["name"]
@@ -155,38 +158,41 @@ class Importer:
         self,
         start: int,
         chunk: int,
-        cop: str,
         csv_path: str,
         fsize: int,
         tot: int,
+        schema: str,
+        table: str,
+        columns: list[str],
     ) -> None:
         """
         Copy a chunk of CSV into the DB, going no larger than self.batchsize
         plus potentially the remainder of a line
         """
         base = os.path.basename(csv_path)
-        sz: int = 0
-        async with aiofiles.open(csv_path, "r") as f:
-            await f.seek(start)
-            data = await f.read(chunk)
-            if not data or not data.strip():
-                return None
-            async with self.connection.connection(self.upload_timeout) as conn:
-                async with conn.cursor() as cur:
-                    async with cur.copy(cop) as copy:
-                        await copy.write(data)
-                        sz = len(data)
-        prog = f":progress:{sz}:{tot}:{base}:"
-        self.update_progress(prog)
+        async with aiofiles.open(csv_path, "rb") as f:
+            async with self.pool.begin() as conn:
+                raw = await conn.get_raw_connection()
+                await f.seek(start)
+                data = await f.read(chunk)
+                if not data or not data.strip():
+                    return None
+                await raw.cursor()._connection.copy_to_table(
+                    table,
+                    source=BytesIO(data),
+                    schema_name=schema,
+                    columns=columns,
+                    delimiter="\t",
+                    quote="\b",
+                    format="csv",
+                    timeout=self.upload_timeout,
+                )
+            self.update_progress(f":progress:{len(data)}:{tot}:{base}:")
         return None
 
     async def _copy_tbl(self, csv_path: str, fsize: int, tot: int) -> None:
         """
         Import csv_path to the DB, with or without concurrency
-
-        Note that we need to add the newline flag to open in order
-        to get the correct number of bytes in the file. but then
-        progress will show 100% instead of 98% which is worse UX.
         """
         base = os.path.basename(csv_path)
         async with aiofiles.open(csv_path, "rb") as fop:
@@ -196,30 +202,44 @@ class Importer:
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        table = Table(self.schema, tab, headers.decode("utf-8").split("\t"))
-        script: str = self.sql.check_tbl(table.schema, table.name)
+        table = Table(self.schema, tab, headers.decode("utf-8").strip().split("\t"))
+        script = self.sql.check_tbl(table.schema, table.name)
         exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
             raise ValueError(f"Table not found: {self.schema}.{tab}")
-        cop: str = self.sql.copy_table(table.schema, table.name, table.col_repr())
 
         if self.max_concurrent != 1:
-            args = (cop, csv_path, fsize - headlen, tot)
+            args = (
+                csv_path,
+                fsize - headlen,
+                tot,
+                table.schema,
+                table.name,
+                table.columns,
+            )
             await self.process_data(positions, self.copy_batch, *args)
             return None
 
         # no concurrency:
         async with aiofiles.open(csv_path, "rb") as f:
-            async with self.connection.connection(self.upload_timeout) as conn:
-                async with conn.cursor() as cur:
-                    async with cur.copy(cop) as copy:
-                        for start, chunk in positions:
-                            await f.seek(start)
-                            data = await f.read(chunk)
-                            await copy.write(data)
-                            sz = len(data)
-                            headlen += sz
-                            self.update_progress(f":progress:{sz}:{tot}:{base}:")
+            async with self.pool.begin() as conn:
+                raw = await conn.get_raw_connection()
+                for start, chunk in positions:
+                    await f.seek(start)
+                    data = await f.read(chunk)
+                    await raw.cursor()._connection.copy_to_table(
+                        table.name,
+                        source=BytesIO(data),
+                        schema_name=self.schema,
+                        columns=table.columns,
+                        delimiter="\t",
+                        quote="\b",
+                        format="csv",
+                        timeout=self.upload_timeout,
+                    )
+                    sz = len(data)
+                    headlen += sz
+                    self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None
 
     async def import_corpus(self) -> None:
@@ -241,7 +261,7 @@ class Importer:
         self,
         iterable: Sequence[str | tuple[str | int, int]],
         method: Callable[..., Coroutine[None, None, RunScript]],
-        *args: int | None | str,
+        *args: int | None | str | list[str],
         **kwargs: bool | str | None | Params,
     ) -> list[RunScript]:
         """
@@ -319,22 +339,45 @@ class Importer:
         give: bool = False,
         progress: str | None = None,
         # todo: params could get a more general type if it is used for anything else:
-        params: Params | None = None,
+        params: Params = None,
     ) -> RunScript:
         """
         Run a simple script, and return the result if give
 
         If progress, also print/write progress info
+
+        Messing with this method in even trivial ways can cause segfaults for mysterious reasons
         """
-        async with self.connection.connection(self.upload_timeout) as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(script, params or tuple())
-                if isinstance(progress, str):
-                    self.update_progress(progress)
-                if not give:
+
+        base: dict[str, str] = {}
+        out: list[tuple]
+        params = params or base
+        ares: list[Row] | str | None
+        async with self.pool.begin() as conn:
+            # bit of a hack to deal with sqlalchemy problem with prepared_statements
+            if script.count(";") > 1:
+                raw = await conn.get_raw_connection()
+                con = raw._connection
+                async with con.transaction():
+                    script, new_params = format_query_params(script, params)
+                    # i believe this first one is broken but unused:
+                    if new_params:
+                        ares = await con.execute(script, new_params)
+                    else:
+                        ares = await con.execute(script)
+                    if progress:
+                        self.update_progress(progress)
+                    if give and ares:
+                        out = [tuple(i) for i in ares]
+                        return out
                     return None
-                res: RunScript = await cur.fetchall()
-                return res
+            res = await conn.execute(text(script), params)
+            if progress:
+                self.update_progress(progress)
+            if not give:
+                return None
+            out = [tuple(i) for i in res.fetchall()]
+            return cast(RunScript, [tuple(i) for i in out])
         return None
 
     async def prepare_segments(
@@ -357,13 +400,13 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
-        params = (
-            self.name,
-            self.version,
-            json.dumps(self.template),
-            self.schema,
-            json.dumps(self.token_count),
-            json.dumps(self.mapping),
+        params = dict(
+            name=self.name,
+            ver=self.version,
+            template=dict(self.template),
+            schema=self.schema,
+            counts=self.token_count,
+            mapping=dict(self.mapping),
         )
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)
@@ -377,8 +420,12 @@ class Importer:
         This is dangerous and needs to be updated with logic checkin
         """
         start = self.schema[:-4]
-        query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ '^{start}';"
-        results = cast(list[tuple[str]], await self.run_script(query, give=True))
+        regex = f"^{start}"
+        query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ :regex ;"
+        results = cast(
+            list[tuple[str]],
+            await self.run_script(query, give=True, params={"regex": regex}),
+        )
         if not results:
             return None
         base = "DROP SCHEMA {schema} CASCADE;"

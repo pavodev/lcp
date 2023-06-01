@@ -12,7 +12,6 @@ import nest_asyncio
 import uvloop
 
 from dotenv import load_dotenv
-from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
@@ -61,10 +60,12 @@ REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 QUERY_MIN_NUM_CONNS = int(os.getenv("QUERY_MIN_NUM_CONNECTIONS", 8))
 UPLOAD_MIN_NUM_CONNS = int(os.getenv("UPLOAD_MIN_NUM_CONNECTIONS", 8))
 UPLOAD_MIN_NUM_CONNS = max(UPLOAD_MIN_NUM_CONNS, MAX_CONCURRENT)
+QUERY_TIMEOUT = int(os.getenv("QUERY_TIMEOUT", 1000))
 
 QUERY_MAX_NUM_CONNS = int(os.getenv("QUERY_MAX_NUM_CONNECTIONS", 8))
 UPLOAD_MAX_NUM_CONNS = int(os.getenv("UPLOAD_MAX_NUM_CONNECTIONS", 8))
 UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT)
+UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 43200))
 
 POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
@@ -85,8 +86,8 @@ else:
 
 
 if tunnel:
-    upload_connstr = f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
-    query_connstr = f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    upload_connstr = f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}?prepared_statement_cache_size=1"
+    query_connstr = f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}?prepared_statement_cache_size=1"
 else:
     upload_connstr = (
         f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
@@ -94,38 +95,30 @@ else:
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
 
-pool: AsyncConnectionPool = AsyncConnectionPool(
-    query_connstr,
-    name="query-connection",
-    num_workers=POOL_WORKERS,
-    min_size=QUERY_MIN_NUM_CONNS,
-    max_size=QUERY_MAX_NUM_CONNS,
-    timeout=60,
-    open=False,
-)
-
-upload_conn_type: type = (
-    AsyncNullConnectionPool if not UPLOAD_POOL else AsyncConnectionPool
-)
 min_size = UPLOAD_MIN_NUM_CONNS if UPLOAD_POOL else 0
 max_size = UPLOAD_MAX_NUM_CONNS if UPLOAD_POOL else 0
 
-upool: AsyncConnectionPool | AsyncNullConnectionPool = upload_conn_type(
-    upload_connstr,
-    name="upload-connection",
-    num_workers=POOL_WORKERS,
-    min_size=min_size,
-    max_size=max_size,
-    timeout=60,
-    open=False,
+
+query_kwargs = dict(
+    pool_size=QUERY_MAX_NUM_CONNS,
+    connect_args={
+        "timeout": QUERY_TIMEOUT,
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "server_settings": {"jit": "off"},
+    },
+    echo_pool=True,
 )
-
-
-# asyncio.run(pool.open())
-# asyncio.run(upool.open())
-
-query_kwargs = dict(pool_size=QUERY_MAX_NUM_CONNS, echo_pool=True)
-upload_kwargs = dict(pool_size=UPLOAD_MAX_NUM_CONNS, echo_pool=True)
+upload_kwargs = dict(
+    pool_size=UPLOAD_MAX_NUM_CONNS,
+    connect_args={
+        "timeout": UPLOAD_TIMEOUT,
+        "statement_cache_size": 0,
+        "prepared_statement_cache_size": 0,
+        "server_settings": {"jit": "off"},
+    },
+    echo_pool=True,
+)
 
 
 class SQLJob(Job):

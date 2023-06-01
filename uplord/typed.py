@@ -7,7 +7,7 @@ import asyncio
 
 from collections import defaultdict
 from datetime import datetime
-from typing import Mapping, TypeAlias
+from typing import Any, Mapping, TypeAlias
 from uuid import UUID
 
 from aiohttp import web
@@ -67,10 +67,9 @@ MainCorpus: TypeAlias = tuple[
 RunScript: TypeAlias = WordCounts | SQLDrops | TableExists | list[MainCorpus] | None
 
 # the args needed to add an entry to main.corpus
-# keep synced with SQLstats.main_corp
-MainCorpusEntry: TypeAlias = tuple[str, int | float | str, str, str, str, str]
+MainCorpusEntry: TypeAlias = dict[str, int | float | str]
 # right now MainCorpusEntry/nothing are the only possible params for run_script
-Params: TypeAlias = MainCorpusEntry | tuple[()]
+Params: TypeAlias = MainCorpusEntry | tuple[()] | dict[str, Any] | None
 
 # Request headers for LAMa  calls
 Headers: TypeAlias = Mapping[str, JSON]
@@ -101,16 +100,10 @@ Results: TypeAlias = dict[
 # todo: figure this out -- eternally running background jobs
 Task: TypeAlias = asyncio.Task
 
-# kwargs to db_query
-DBQueryParams: TypeAlias = (
-    tuple[str, str]  # user,room
-    | tuple[str]  # user
-    | tuple[int, str, str, str]  # store query
-    | dict[str, list[str] | list[int]]  # new sent ids
-    | None
-)
+# params for db_query execute
+DBQueryParams: TypeAlias = dict[
+    str, list[str] | list[int] | str | dict[str, Any] | None
+]
 
 # todo: finish this one
-from typing import Any
-
-QueryArgs: TypeAlias = str | int | float | Any
+QueryArgs: TypeAlias = Any

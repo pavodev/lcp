@@ -252,11 +252,14 @@ def _schema(
 def _upload(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],
-    result: MainCorpus,
+    result: MainCorpus | None,
 ) -> None:
     """
     Success callback when user has uploaded a dataset
     """
+    if result is None:
+        print("Result was none. Skipping callback.")
+        return None
     project: str = job.args[0]
     user: str = job.args[1]
     room: str | None = job.args[2]

@@ -718,3 +718,22 @@ async def corpora(app_type: str = "all") -> JSONObject:
         async with session.post(url, headers=headers, json=jso) as resp:
             result: JSONObject = await resp.json()
             return result
+
+
+def format_query_params(
+    query: str, params: tuple | dict[str, Any]
+) -> tuple[str, tuple]:
+    """
+    Helper to allow for sqlalchemy format query with asyncpg
+    """
+    if isinstance(params, tuple):
+        return query, params
+    out = []
+    n = 1
+    for k, v in params.items():
+        in_query = f":{k}"
+        if in_query in query:
+            query = query.replace(in_query, f"${n}")
+            n += 1
+            out.append(v)
+    return query, tuple(out)

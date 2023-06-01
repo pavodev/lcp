@@ -44,7 +44,6 @@ class QueryService:
     def query(
         self,
         query: str,
-        params: None = None,
         queue: str = "query",
         **kwargs: Unpack[QueryArgs],  # type: ignore
     ) -> SQLJob | Job:
@@ -89,8 +88,8 @@ class QueryService:
         room: str | None,
         queue: str = "query",
     ) -> SQLJob | Job:
-        query = f"SELECT {schema}.doc_export(%s);"
-        params = (doc_id,)
+        query = f"SELECT {schema}.doc_export(:doc_id);"
+        params = {"doc_id": doc_id}
         kwargs = {"document": True, "corpus": corpus, "user": user, "room": room}
         job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
@@ -166,17 +165,16 @@ class QueryService:
         """
         Get previous saved queries for this user/room
         """
-        params: tuple[str, str] | tuple[str] = (user,)
+        params: dict[str, str] = {"user": user}
         room_info: str = ""
         if room:
-            room_info = " AND room = %s"
-            params = (user, room)
+            room_info = " AND room = :room"
+            params["room"] = room
 
         query = f"""SELECT * FROM lcp_user.queries 
-                    WHERE username = %s {room_info}
+                    WHERE username = :user {room_info}
                     ORDER BY created_at DESC LIMIT {limit};
                 """
-        args = (query, params)
         opts = {
             "user": user,
             "room": room,
@@ -188,7 +186,7 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
-            args=args,
+            args=(query, params),
             kwargs=opts,
         )
         return job
@@ -204,7 +202,7 @@ class QueryService:
         """
         Add a saved query to the db
         """
-        query = f"INSERT INTO lcp_user.queries VALUES(%s, %s, %s, %s);"
+        query = f"INSERT INTO lcp_user.queries VALUES(:idx, :query, :user, :room);"
         kwargs = {
             "user": user,
             "room": room,
@@ -212,7 +210,12 @@ class QueryService:
             "config": True,
             "query_id": idx,
         }
-        params = (idx, json.dumps(query_data), user, room)
+        params: dict[str, str | int | None | JSONObject] = {
+            "idx": idx,
+            "query": query_data,
+            "user": user,
+            "room": room,
+        }
         job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,

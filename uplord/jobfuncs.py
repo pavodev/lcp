@@ -6,7 +6,7 @@ import os
 import shutil
 import traceback
 
-from typing import Any, cast
+from typing import cast
 
 from sqlalchemy.sql import text
 
@@ -40,7 +40,7 @@ async def _upload_data(
         template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
-    await upool.open()
+
     importer = Importer(upool, data, corpus)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
@@ -71,24 +71,25 @@ async def _create_schema(
     """
     To be run by rq worker, create schema
     """
-    timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
     extra = {"user": user, "room": room, "drops": drops, "schema": schema_name}
 
+    # todo: figure out how to make this block a little nicer :P
     async with get_current_job()._upool.begin() as conn:  # type: ignore
-        try:
-            if drops:
-                msg = f"Attempting schema drop (create) * {len(drops)-1}"
-                print("Dropping/deleting:", "\n".join(drops))
+        raw = await conn.get_raw_connection()
+        con = raw._connection
+        async with con.transaction():
+            try:
+                if drops:
+                    msg = f"Attempting schema drop (create) * {len(drops)-1}"
+                    create = "\n".join(drops) + "\n" + create
+                print("Creating schema...\n", create)
+                await con.execute(create)
+            except Exception:
+                script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
+                extra.pop("drops")
+                msg = f"Attempting schema drop (create): {schema_name}"
                 logging.info(msg, extra=extra)
-                await conn.execute(text("\n".join(drops)))
-            print("Creating schema...\n", create)
-            await conn.execute(text(create))
-        except Exception:
-            script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
-            extra.pop("drops")
-            msg = f"Attempting schema drop (create): {schema_name}"
-            logging.info(msg, extra=extra)
-            await conn.execute(text(script))
+                await con.execute(script)
     return None
 
 
@@ -105,18 +106,16 @@ async def _db_query(
     """
     The function queued by RQ, which executes our DB query
     """
+    # this can only be done after the previous job finished...
     if "depends_on" in kwargs and "done" in kwargs:
-        # this can only be done after the previous job finished...
         dep = cast(list[str] | str, kwargs["depends_on"])
         params = {"ids": _get_sent_ids(dep, cast(bool, kwargs["done"]))}
 
     name = "_upool" if store else "_pool"
     pool = getattr(get_current_job(), name)
-
     method = "begin" if store else "connect"
 
-    if not params:
-        params = {}
+    params = params or {}
 
     async with getattr(pool, method)() as conn:
 
