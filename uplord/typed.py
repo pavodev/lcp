@@ -106,7 +106,7 @@ DBQueryParams: TypeAlias = (
     tuple[str, str]  # user,room
     | tuple[str]  # user
     | tuple[int, str, str, str]  # store query
-    | tuple[list[str]]  # sentence ids
+    | dict[str, list[str] | list[int]]  # new sent ids
     | None
 )
 

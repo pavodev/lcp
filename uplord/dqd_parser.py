@@ -94,9 +94,9 @@ def merge_constraints(constraints: list[dict[str, Any]]) -> dict[str, Any]:
     return retval
 
 
-def merge_filter(filters: list[dict]) -> dict[str, Any] | str:
+def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
     if len(filters) == 1:
-        res: dict = filters[0]
+        res: dict[str, Any] | str = filters[0]
         return res
     elif len(filters) > 1:
         return {"filters": {"operator": "AND", "args": filters}}

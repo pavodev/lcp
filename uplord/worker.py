@@ -8,6 +8,7 @@ import sys
 
 from typing import Any
 
+import nest_asyncio
 import uvloop
 
 from dotenv import load_dotenv
@@ -16,10 +17,14 @@ from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
 from rq.worker import Worker
+from sqlalchemy.ext.asyncio import create_async_engine
 
 from sshtunnel import SSHTunnelForwarder
 
+
 load_dotenv(override=True)
+
+nest_asyncio.apply()
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
@@ -80,8 +85,8 @@ else:
 
 
 if tunnel:
-    upload_connstr = f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
-    query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    upload_connstr = f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
+    query_connstr = f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}"
 else:
     upload_connstr = (
         f"postgresql://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
@@ -116,15 +121,20 @@ upool: AsyncConnectionPool | AsyncNullConnectionPool = upload_conn_type(
 )
 
 
+# asyncio.run(pool.open())
+# asyncio.run(upool.open())
+
+query_kwargs = dict(pool_size=QUERY_MAX_NUM_CONNS, echo_pool=True)
+upload_kwargs = dict(pool_size=UPLOAD_MAX_NUM_CONNS, echo_pool=True)
+
+
 class SQLJob(Job):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args)
-        self._connstr = upload_connstr
-        # self._db_conn = conn
-        self._pool = pool
-        self._upool = upool
         self._redis: Redis[bytes] = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
         self._redis.pubsub()
+        self._pool = create_async_engine(query_connstr, **query_kwargs)
+        self._upool = create_async_engine(upload_connstr, **upload_kwargs)
 
 
 class MyWorker(Worker):

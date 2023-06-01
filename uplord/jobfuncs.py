@@ -6,17 +6,16 @@ import os
 import shutil
 import traceback
 
-from typing import cast
+from typing import Any, cast
 
-import psycopg
+from sqlalchemy.sql import text
 
-from psycopg_pool import AsyncConnectionPool, AsyncNullConnectionPool
 from rq.job import get_current_job
 
 from .configure import CorpusTemplate
 from .impo import Importer
-from .typed import Batch, DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
-from .utils import _make_sent_query
+from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
+from .utils import _get_sent_ids
 
 
 async def _upload_data(
@@ -73,33 +72,23 @@ async def _create_schema(
     To be run by rq worker, create schema
     """
     timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
-    await get_current_job()._upool.open()  # type: ignore
-    async with get_current_job()._upool.connection(timeout) as conn:  # type: ignore
-        await conn.set_autocommit(True)
-        async with conn.cursor() as cur:
-            try:
-                if drops:
-                    extra = {
-                        "user": user,
-                        "room": room,
-                        "drops": drops,
-                    }
-                    msg = f"Attempting schema drop (create) * {len(drops)-1}"
-                    print("Dropping/deleting:", "\n".join(drops))
-                    logging.info(msg, extra=extra)
-                    await cur.execute("\n".join(drops))
-                print("Creating schema...\n", create)
-                await cur.execute(create)
-            except Exception:
-                script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
-                extra = {
-                    "user": user,
-                    "room": room,
-                    "schema": schema_name,
-                }
-                msg = f"Attempting schema drop (create): {schema_name}"
+    extra = {"user": user, "room": room, "drops": drops, "schema": schema_name}
+
+    async with get_current_job()._upool.begin() as conn:  # type: ignore
+        try:
+            if drops:
+                msg = f"Attempting schema drop (create) * {len(drops)-1}"
+                print("Dropping/deleting:", "\n".join(drops))
                 logging.info(msg, extra=extra)
-                await cur.execute(script)
+                await conn.execute(text("\n".join(drops)))
+            print("Creating schema...\n", create)
+            await conn.execute(text(create))
+        except Exception:
+            script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
+            extra.pop("drops")
+            msg = f"Attempting schema drop (create): {schema_name}"
+            logging.info(msg, extra=extra)
+            await conn.execute(text(script))
     return None
 
 
@@ -109,47 +98,39 @@ async def _db_query(
     config: bool = False,
     store: bool = False,
     document: bool = False,
-    is_sentences: bool = False,
-    resuming: bool = False,
-    depends_on: str | list[str] = "",
-    current_batch: Batch | None = None,
-    **kwargs: str | None | int | float,
+    **kwargs: str | None | int | float | bool | list[str],
 ) -> list[tuple] | tuple | list[JSONObject] | JSONObject | list[MainCorpus] | list[
     UserQuery
 ] | list[Sentence] | None:
     """
     The function queued by RQ, which executes our DB query
     """
-    if is_sentences and current_batch:
-        query, ids = _make_sent_query(query, depends_on, current_batch, resuming)
-        params = (ids,)
+    if "depends_on" in kwargs and "done" in kwargs:
+        # this can only be done after the previous job finished...
+        dep = cast(list[str] | str, kwargs["depends_on"])
+        params = {"ids": _get_sent_ids(dep, cast(bool, kwargs["done"]))}
 
     name = "_upool" if store else "_pool"
-    pool: AsyncConnectionPool | AsyncNullConnectionPool
     pool = getattr(get_current_job(), name)
-    await pool.open()
-    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
-    result: list[tuple]
 
-    async with getattr(get_current_job(), name).connection(timeout) as conn:
+    method = "begin" if store else "connect"
+
+    if not params:
+        params = {}
+
+    async with getattr(pool, method)() as conn:
+
+        # for eventual use in importer:
+        # raw = await conn.get_raw_connection()
+        # raw.cursor()._connection.copy_to_table)
+
+        _n = 1
+        while "%s" in query:
+            query = query.replace("%s", f"${_n}", 1)
+            _n += 1
+
+        res = await conn.execute(text(query), params)
         if store:
-            await conn.set_autocommit(True)
-        async with conn.cursor() as cur:
-            await cur.execute(query, params)
-            if store:
-                return None
-            try:
-                if config or is_sentences:
-                    result = await cur.fetchall()
-                    return result
-                if document:
-                    result = await cur.fetchone()
-                    return result[0]
-                else:
-                    result = await cur.fetchall()
-                    return result
-            except psycopg.ProgrammingError as err:
-                tb = traceback.format_exc()
-                print("Warning: psycopg error, no results?", err, tb)
-                out: list[tuple] = []
-                return out
+            return None
+        out: list[tuple] = [tuple(i) for i in res.fetchall()]
+        return out

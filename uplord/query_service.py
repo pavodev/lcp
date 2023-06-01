@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 
-from typing import final, Unpack
+from typing import final, Unpack, Any
 
 from aiohttp import web
 from rq.command import send_stop_job_command
@@ -107,11 +107,8 @@ class QueryService:
         self,
         query: str,
         queue: str = "query",
-        **kwargs: int,
+        **kwargs: int | bool | str | None,
     ) -> SQLJob | Job:
-        kwargs["is_sentences"] = True
-        depends_on = kwargs.get("depends_on")
-
         hashed = hash(query)
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
@@ -133,8 +130,9 @@ class QueryService:
             on_success=_sentences,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
+            depends_on=kwargs["depends_on"],
+            done=kwargs["done"],
             job_timeout=self.timeout,
-            depends_on=depends_on,
             args=(query,),
             kwargs=kwargs,
         )

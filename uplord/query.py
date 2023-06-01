@@ -141,13 +141,13 @@ def _submit_sents(
         to_use = dep_chain
     elif depends_on:
         to_use = depends_on
+
     kwargs = dict(
         user=qi.user,
         room=qi.room,
+        done=qi.done,
         simultaneous=qi.simultaneous,
-        current_batch=qi.current_batch,
         base=_get_base(qi, first_job),
-        resuming=qi.done,
         total_results_requested=qi.total_results_requested,
     )
     qs = qi.app["query_service"]

@@ -627,12 +627,10 @@ def _row_to_value(
     return cast(CorpusConfig, together)
 
 
-def _make_sent_query(
-    query: str,
+def _get_sent_ids(
     associated: str | list[str],
-    current_batch: Batch,
     resuming: bool,
-) -> tuple[str, list[str]]:
+) -> list[str]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
@@ -640,7 +638,7 @@ def _make_sent_query(
     if isinstance(associated, list):
         associated = associated[-1]
     if associated is None:
-        return ""
+        return []
     job = Job.fetch(associated, connection=conn)
     hit_limit = job.meta.get("hit_limit")
     if job.get_status(refresh=True) in ("stopped", "canceled"):
@@ -648,7 +646,7 @@ def _make_sent_query(
     if job.result is None:
         raise Interrupted()
     if not job.result:
-        return "", []
+        return []
     prev_results = job.result
     # so we don't double count on resuming
     if resuming:
@@ -672,9 +670,7 @@ def _make_sent_query(
                 continue
             seg_ids.add(str(rest[0]))
 
-    query = query.format(schema=current_batch[1], table=current_batch[2])
-
-    return query, list(sorted(seg_ids))
+    return list(sorted(seg_ids))
 
 
 @final

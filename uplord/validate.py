@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import traceback
 
 from typing import cast
 
@@ -36,12 +37,15 @@ async def validate(
                 "status": 200,
             }
         except Exception as err:
+            tb = traceback.format_exc()
+            print("Error during DQD->JSON:", err, tb)
             result = {
                 "kind": "dqd?",
                 "valid": False,
                 "action": "validate",
                 "error": str(err),
                 "status": 400,
+                "trace": tb,  # todo: remove from prod
             }
     if is_websocket:
         return result

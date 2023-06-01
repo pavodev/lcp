@@ -3,7 +3,7 @@ import sys
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TypeAlias, TypeVar, TypedDict, cast
+from typing import TypeVar, cast
 from uuid import uuid4
 
 from abstract_query.create import json_to_sql
@@ -200,9 +200,8 @@ class QueryIteration:
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
         seg_name = f"prepared_{name}{underlang}"
-        script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} "
-        end = f"WHERE {name}" + "_id = ANY(%s);"
-        return script + end
+        script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
+        return script
 
     @classmethod
     async def from_manual(cls, manual: JSONObject, app: web.Application) -> Self:
