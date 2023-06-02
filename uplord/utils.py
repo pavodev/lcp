@@ -630,7 +630,7 @@ def _row_to_value(
 def _get_sent_ids(
     associated: str | list[str],
     resuming: bool,
-) -> list[str]:
+) -> list[str | int]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
@@ -668,7 +668,7 @@ def _get_sent_ids(
                 continue
             elif hit_limit is not False and counts[key] > hit_limit:
                 continue
-            seg_ids.add(str(rest[0]))
+            seg_ids.add(rest[0])
 
     return list(sorted(seg_ids))
 

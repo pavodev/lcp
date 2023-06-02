@@ -270,6 +270,8 @@ class QueryIteration:
 
         so_far = self.total_results_so_far
         if self.is_vian:
+            if self.done_batches:
+                raise ValueError("VIAN corpora have only one batch!?")
             self.current_batch = self.all_batches[0]
             return None
 

@@ -80,7 +80,7 @@ class Importer:
         """
         Manage the import of a corpus into the DB via async postgres connection
         """
-        _loader = importlib.import_module(self.__module__).__loader__
+        _loader: str = str(importlib.import_module(self.__module__).__loader__)
         self.sql: SQLstats = SQLstats()
         self.pool: AsyncEngine = pool
         self.template = cast(CorpusTemplate, data["template"])
@@ -100,7 +100,7 @@ class Importer:
         self.project_dir: str = project_dir
         self.corpus_size: int = 0
         self.max_concurrent = int(os.getenv("IMPORT_MAX_CONCURRENT", 2))
-        self.mypy = "SourceFileLoader" not in str(_loader)
+        self.mypy = "SourceFileLoader" not in _loader
         self.batchsize = int(float(os.getenv("IMPORT_MAX_COPY_GB", 1)) * 1e9)
         self.max_gb = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
@@ -238,7 +238,6 @@ class Importer:
                         timeout=self.upload_timeout,
                     )
                     sz = len(data)
-                    headlen += sz
                     self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None
 
@@ -357,7 +356,7 @@ class Importer:
             # bit of a hack to deal with sqlalchemy problem with prepared_statements
             if script.count(";") > 1:
                 raw = await conn.get_raw_connection()
-                con = raw._connection
+                con = raw._connection  # type: ignore
                 async with con.transaction():
                     script, new_params = format_query_params(script, params)
                     # i believe this first one is broken but unused:
@@ -369,7 +368,7 @@ class Importer:
                         self.update_progress(progress)
                     if give and ares:
                         out = [tuple(i) for i in ares]
-                        return out
+                        return cast(RunScript, out)
                     return None
             res = await conn.execute(text(script), params)
             if progress:
@@ -377,7 +376,7 @@ class Importer:
             if not give:
                 return None
             out = [tuple(i) for i in res.fetchall()]
-            return cast(RunScript, [tuple(i) for i in out])
+            return cast(RunScript, out)
         return None
 
     async def prepare_segments(

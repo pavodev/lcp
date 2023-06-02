@@ -8,7 +8,6 @@ import sys
 
 from typing import Any
 
-import nest_asyncio
 import uvloop
 
 from dotenv import load_dotenv
@@ -17,13 +16,12 @@ from rq.connections import Connection
 from rq.job import Job
 from rq.worker import Worker
 from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.pool import NullPool
 
 from sshtunnel import SSHTunnelForwarder
 
-
 load_dotenv(override=True)
 
-nest_asyncio.apply()
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
@@ -59,17 +57,18 @@ REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 
 QUERY_MIN_NUM_CONNS = int(os.getenv("QUERY_MIN_NUM_CONNECTIONS", 8))
 UPLOAD_MIN_NUM_CONNS = int(os.getenv("UPLOAD_MIN_NUM_CONNECTIONS", 8))
-UPLOAD_MIN_NUM_CONNS = max(UPLOAD_MIN_NUM_CONNS, MAX_CONCURRENT)
+UPLOAD_MIN_NUM_CONNS = max(UPLOAD_MIN_NUM_CONNS, MAX_CONCURRENT) if UPLOAD_POOL else 0
 QUERY_TIMEOUT = int(os.getenv("QUERY_TIMEOUT", 1000))
 
 QUERY_MAX_NUM_CONNS = int(os.getenv("QUERY_MAX_NUM_CONNECTIONS", 8))
 UPLOAD_MAX_NUM_CONNS = int(os.getenv("UPLOAD_MAX_NUM_CONNECTIONS", 8))
-UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT)
+UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT) if UPLOAD_POOL else 0
 UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 43200))
 
 POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
 
 tunnel: SSHTunnelForwarder | None
 if os.getenv("SSH_HOST"):
@@ -95,10 +94,6 @@ else:
     query_connstr = f"postgresql://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
 
-min_size = UPLOAD_MIN_NUM_CONNS if UPLOAD_POOL else 0
-max_size = UPLOAD_MAX_NUM_CONNS if UPLOAD_POOL else 0
-
-
 query_kwargs = dict(
     pool_size=QUERY_MAX_NUM_CONNS,
     connect_args={
@@ -119,6 +114,8 @@ upload_kwargs = dict(
     },
     echo_pool=True,
 )
+if not UPLOAD_POOL:
+    upload_kwargs["pool_class"] = NullPool
 
 
 class SQLJob(Job):
