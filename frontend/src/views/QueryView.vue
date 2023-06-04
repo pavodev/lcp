@@ -530,19 +530,6 @@ sequence seq
         lemma.length > 5
         upos = NOUN
 
-set tdeps
-    Token@s tx
-        DepRel
-            head = t3
-            dep = tx
-
-Token@s thead
-    upos = VERB
-    DepRel
-        head = thead
-        dep = t3
-
-
 myKWIC1 => plain
     context
         s
@@ -583,20 +570,6 @@ myColl1 => collocation
         t3
     window
         -5..+5
-    attribute
-        lemma
-
-myColl2 => collocation
-    space
-        tdeps
-    attribute
-        lemma
-    comment
-        PoS collocations of all dependends
-
-myColl3 => collocation
-    space
-        thead
     attribute
         lemma
 `,
