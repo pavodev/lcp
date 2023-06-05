@@ -1,8 +1,9 @@
 ?start: _NL* [predicate+]
 
-predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]        -> token
+predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
                 | "Segment"scope? label? _NL                                        -> segment
                 | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
+                | "Gesture" label? _NL [_INDENT property+ _DEDENT]                  -> gesture
                 | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                 | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                 | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
@@ -26,7 +27,7 @@ r_coll_prop     : "center" _NL [_INDENT (STRING _NL)+ _DEDENT]                  
                 | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
 
 VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!)/
+OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!|in)/
 STRING          : /[^\n\r ].*/
 SL_COMMENT      : /#[^\r\n]+/ _NL
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL

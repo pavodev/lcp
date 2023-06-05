@@ -18,6 +18,7 @@ dqd_grammar = r"""
     predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
                     | "Segment"scope? label? _NL                                        -> segment
                     | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
+                    | "Gesture" label? _NL [_INDENT property+ _DEDENT]                  -> gesture
                     | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                     | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                     | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
@@ -41,7 +42,7 @@ dqd_grammar = r"""
                     | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
 
     VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-    OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!)/
+    OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!|in)/
     STRING          : /[^\n\r ].*/
     SL_COMMENT      : /#[^\r\n]+/ _NL
     DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
@@ -149,14 +150,19 @@ def to_dict(tree: Any) -> Any:
             }
         }
 
-    elif tree.data in ("turn", "token", "segment", "deprel"):
+    elif tree.data in ("not_exist"):
+        # print("ADADADD", tree.data, tree.children)
+        children = [to_dict(child) for child in tree.children]
+        return {"filters": {"operator": "EXIST", "args": children}}
+
+    elif tree.data in ("turn", "token", "segment", "deprel", "gesture"):
         children = [to_dict(child) for child in tree.children]
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
         )
         others = [child for child in children if "constraints" not in child]
         layer = (
-            "DepRel"
+            "DependencyRelation"
             if tree.data == "deprel"
             else f"{tree.data[0].upper()}{tree.data[1:]}"
         )
