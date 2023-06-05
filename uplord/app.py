@@ -48,7 +48,7 @@ from rq.queue import Queue
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
-from .document import document
+from .document import document, document_ids
 from .lama_user_data import lama_user_data
 from .project import project_api_create, project_api_revoke, project_create
 from .query import query
@@ -197,6 +197,9 @@ async def create_app(test: bool = False) -> web.Application:
     cors.add(resource.add_route("GET", sock))
 
     resource = cors.add(app.router.add_resource("/document/{doc_id}"))
+    cors.add(resource.add_route("POST", document))
+
+    resource = cors.add(app.router.add_resource("/document_ids/{corpus_id}"))
     cors.add(resource.add_route("POST", document))
 
     resource = cors.add(app.router.add_resource("/fetch"))

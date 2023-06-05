@@ -120,6 +120,7 @@ async def _handle_message(
         "fetch_queries",
         "store_query",
         "document",
+        "document_ids",
         "sentences",
         "failed",
         "timeout",

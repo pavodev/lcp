@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
 import os
 
-from typing import final, Unpack, Any
+from typing import final, Unpack
 
 from aiohttp import web
 from rq.command import send_stop_job_command
@@ -13,6 +12,7 @@ from rq.job import Job
 from .callbacks import (
     _config,
     _document,
+    _document_ids,
     _general_failure,
     _upload_failure,
     _queries,
@@ -77,6 +77,25 @@ class QueryService:
             queries.pop(first)
         if self.remembered_queries:
             queries[hashed] = job.id
+        return job
+
+    def document_ids(
+        self,
+        schema: str,
+        corpus_id: int,
+        user: str,
+        room: str | None,
+        queue: str = "query",
+    ) -> SQLJob | Job:
+        query = f"SELECT document_id, name FROM {schema}.document;"
+        kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
+        job: Job | SQLJob = self.app[queue].enqueue(
+            _db_query,
+            on_success=_document_ids,
+            on_failure=_general_failure,
+            args=(query, {}),
+            kwargs=kwargs,
+        )
         return job
 
     def document(

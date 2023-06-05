@@ -220,6 +220,31 @@ def _document(
     return None
 
 
+def _document_ids(
+    job: SQLJob | Job,
+    connection: RedisConnection[bytes],
+    result: list[JSONObject] | JSONObject,
+) -> None:
+    """
+    When a user requests a document, we give it to them via websocket
+    """
+    user = job.kwargs["user"]
+    room = job.kwargs["room"]
+    if not room:
+        return
+    formatted = {str(idx): name for idx, name in result}
+    jso = {
+        "document_ids": formatted,
+        "action": "document_ids",
+        "user": user,
+        "room": room,
+        "corpus_id": job.kwargs["corpus_id"],
+    }
+    red = job._redis if hasattr(job, "_redis") else connection
+    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
+
+
 def _schema(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],

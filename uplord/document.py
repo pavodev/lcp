@@ -23,3 +23,15 @@ async def document(request: web.Request) -> web.Response:
     job = request.app["query_service"].document(schema, corpus, doc_id, user, room)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
+
+
+@ensure_authorised
+async def document_ids(request: web.Request) -> web.Response:
+    request_data: dict[str, Any] = await request.json()
+    room: str | None = request_data.get("room")
+    user: str = request_data.get("user", "")
+    corpus_id = str(request.match_info["corpus_id"])
+    schema = request.app["config"][corpus_id]["schema_path"]
+    job = request.app["query_service"].document_ids(schema, int(corpus_id), user, room)
+    info: dict[str, str] = {"status": "started", "job": job.id}
+    return web.json_response(info)
