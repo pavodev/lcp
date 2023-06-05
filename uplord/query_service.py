@@ -136,7 +136,7 @@ class QueryService:
         hashed = hash(query)
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
-        if exists:
+        if exists and False:  # disable because we get false positives
             try:
                 sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])
                 if sjob.get_status() == "finished":
