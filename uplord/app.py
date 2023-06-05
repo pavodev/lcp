@@ -200,7 +200,7 @@ async def create_app(test: bool = False) -> web.Application:
     cors.add(resource.add_route("POST", document))
 
     resource = cors.add(app.router.add_resource("/document_ids/{corpus_id}"))
-    cors.add(resource.add_route("POST", document))
+    cors.add(resource.add_route("POST", document_ids))
 
     resource = cors.add(app.router.add_resource("/fetch"))
     cors.add(resource.add_route("POST", fetch_queries))
