@@ -367,6 +367,7 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
+            "action": "failed",
             "traceback": form_error,
             "job": job.id,
             **job.kwargs,
