@@ -8,6 +8,7 @@ import traceback
 
 from typing import cast
 
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 
 from rq.job import get_current_job
@@ -128,8 +129,12 @@ async def _db_query(
             query = query.replace("%s", f"${_n}", 1)
             _n += 1
 
-        res = await conn.execute(text(query), params)
-        if store:
-            return None
-        out: list[tuple] = [tuple(i) for i in res.fetchall()]
-        return out
+        try:
+            res = await conn.execute(text(query), params)
+            if store:
+                return None
+            out: list[tuple] = [tuple(i) for i in res.fetchall()]
+            return out
+        except SQLAlchemyError as err:
+            print(f"SQL error: {err}")
+            raise err
