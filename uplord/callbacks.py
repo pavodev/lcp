@@ -213,7 +213,7 @@ def _document(
         "user": user,
         "room": room,
         "corpus": job.kwargs["corpus"],
-        "doc_id": job.args[-1][0],
+        "doc_id": job.kwargs["doc"],
     }
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))

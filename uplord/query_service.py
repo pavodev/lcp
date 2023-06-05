@@ -90,7 +90,13 @@ class QueryService:
     ) -> SQLJob | Job:
         query = f"SELECT {schema}.doc_export(:doc_id);"
         params = {"doc_id": doc_id}
-        kwargs = {"document": True, "corpus": corpus, "user": user, "room": room}
+        kwargs = {
+            "document": True,
+            "corpus": corpus,
+            "user": user,
+            "room": room,
+            "doc": doc_id,
+        }
         job: Job | SQLJob = self.app[queue].enqueue(
             _db_query,
             on_success=_document,
