@@ -526,13 +526,6 @@ sequence seq
         lemma.length > 5
         upos = NOUN
 
-sequence seqa
-    Token@s t1a
-        upos = NOUN
-    Token@s t2a
-        upos = VERB
-
-
 set tdeps
     Token@s tx
         DepRel
@@ -553,7 +546,6 @@ myKWIC1 => plain
         t1
         #t2
         t3
-        t2a
 
 myKWIC2 => plain
     context

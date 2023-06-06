@@ -3,7 +3,7 @@
     <div class="container mt-4">
       <div class="row">
         <div class="col-5">
-          <label class="form-label">Corpora</label>
+          <label class="form-label">Corpus</label>
           <!-- <multiselect
             v-model="selectedCorpora"
             :options="corporaList"
@@ -509,7 +509,7 @@ import { useUserStore } from "@/stores/userStore";
 import EditorView from "@/components/EditorView.vue";
 const videoBase = "http://localhost:8000"
 
-import exampleData from '@/assets/example_data.json';
+// import exampleData from '@/assets/example_data.json';
 
 export default {
   data() {
@@ -1229,7 +1229,7 @@ KWIC => plain
 
 
     // this.showData(exampleData.document[0])
-    exampleData;
+    // exampleData;
   },
   beforeMount() {
     window.addEventListener("beforeunload", this.sendLeft);
