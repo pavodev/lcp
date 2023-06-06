@@ -1,4 +1,4 @@
-from typing import Any, NotRequired, TypedDict
+from typing import Any, NotRequired, Sequence, TypedDict
 
 
 class Meta(TypedDict, total=False):
@@ -62,6 +62,8 @@ class CorpusConfig(CorpusTemplate, total=False):
     token: str
     document: str
     column_names: list[str]
+    # doc ids is stored as [job_id, {1: "AKAW"}]
+    doc_ids: NotRequired[Sequence[str | dict[str, str]]]
     _batches: NotRequired[dict[str, int]]
 
 

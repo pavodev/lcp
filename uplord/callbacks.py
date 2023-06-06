@@ -238,6 +238,7 @@ def _document_ids(
         "action": "document_ids",
         "user": user,
         "room": room,
+        "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
     }
     red = job._redis if hasattr(job, "_redis") else connection

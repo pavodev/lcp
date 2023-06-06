@@ -126,6 +126,11 @@ async def _handle_message(
         "timeout",
         "interrupted",  # not currently used, maybe when rooms have multiple users
     )
+    if action == "document_ids":
+        app["config"][str(payload["corpus_id"])]["doc_ids"] = [
+            payload["job"],
+            payload["document_ids"],
+        ]
 
     if action in simples:
         await push_msg(

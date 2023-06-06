@@ -15,12 +15,12 @@ async def fetch_queries(request: web.Request) -> web.Response:
     """
     User wants to retrieve their stored queries from the DB
     """
-    request_data: JSONObject = await request.json()
-    user = cast(str, request_data["user"])
-    room = cast(str | None, request_data["room"])
+    request_data: dict[str, str] = await request.json()
+    user = request_data["user"]
+    room = request_data.get("room")
     job: Job | SQLJob = request.app["query_service"].fetch_queries(user, room)
-    jobs: dict[str, str] = {"status": "started", "job": job.id}
-    return web.json_response(jobs)
+    info: dict[str, str] = {"status": "started", "job": job.id}
+    return web.json_response(info)
 
 
 @ensure_authorised
@@ -43,5 +43,5 @@ async def store_query(request: web.Request) -> web.Response:
     idx = uuid4()
     args = (to_store, idx, user, room)
     job: Job | SQLJob = request.app["query_service"].store_query(*args)
-    jobs: dict[str, str] = {"status": "started", "job": job.id, "query_id": str(idx)}
-    return web.json_response(jobs)
+    info: dict[str, str] = {"status": "started", "job": job.id, "query_id": str(idx)}
+    return web.json_response(info)

@@ -14,10 +14,11 @@ async def corpora(request: web.Request) -> web.Response:
     """
     Return config to frontend
     """
+    request_data: dict[str, str | bool] = {}
     try:
         request_data = await request.json()
     except JSONDecodeError:  # no data was sent ... eventually this should not happpen
-        request_data = {}
+        pass
     is_vian = request_data.get("appType", "lcp") == "vian"
 
     if not request_data.get("all", False):
