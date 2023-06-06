@@ -630,10 +630,11 @@ def _row_to_value(
 def _get_sent_ids(
     associated: str | list[str],
     resuming: bool,
-) -> list[str | int]:
+) -> list[int] | list[str]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
+    out: list[int] = []
     conn = get_current_connection()
     if isinstance(associated, list):
         associated = associated[-1]
@@ -646,7 +647,7 @@ def _get_sent_ids(
     if job.result is None:
         raise Interrupted()
     if not job.result:
-        return []
+        return out
     prev_results = job.result
     # so we don't double count on resuming
     if resuming:

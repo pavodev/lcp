@@ -1,7 +1,9 @@
+from typing import Sequence, cast
+
 from aiohttp import web
 
 from .sock import push_msg
-from .typed import Config
+from .typed import Config, JSONObject
 from .utils import ensure_authorised
 
 
@@ -34,11 +36,11 @@ async def document_ids(request: web.Request) -> web.Response:
     trigger a new job; subsequent calls get the stored result from config.
     """
     request_data: dict[str, str] = await request.json()
-    room: str | None = request_data.get("room")
+    room: str = request_data.get("room", "")
     user: str = request_data.get("user", "")
     corpus_id = str(request.match_info["corpus_id"])
-    config: Config = request.app["config"][corpus_id]
-    schema: str = config["schema_path"]
+    config: Config = request.app["config"]
+    schema = cast(str, config["schema_path"])
 
     if "doc_ids" not in config:
         job = request.app["query_service"].document_ids(
@@ -49,9 +51,9 @@ async def document_ids(request: web.Request) -> web.Response:
 
     job_id: str
     doc_ids: dict[str, str]
-
-    job_id, doc_ids = config["doc_ids"]
-    payload = {
+    ids: Sequence = config[corpus_id]["doc_ids"]
+    job_id, doc_ids = ids
+    payload: JSONObject = {
         "document_ids": doc_ids,
         "action": "document_ids",
         "user": user,

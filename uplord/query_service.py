@@ -143,8 +143,10 @@ class QueryService:
                 sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])
                 if sjob.get_status() == "finished":
                     print("Sentences found in redis memory. Retrieving...")
-                    kwa = {
-                        "total_results_requested": kwargs["total_results_requested"],
+                    kwa: dict[str, int | bool | str | None] = {
+                        "total_results_requested": cast(
+                            int, kwargs["total_results_requested"]
+                        ),
                     }
                     _sentences(sjob, self.app["redis"], sjob.result, **kwa)
                     return sjob

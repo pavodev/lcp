@@ -6,7 +6,7 @@ import shutil
 import traceback
 
 from types import TracebackType
-from typing import Any, Unpack
+from typing import Any, Unpack, cast
 
 from redis import Redis as RedisConnection
 from rq.job import Job
@@ -232,7 +232,7 @@ def _document_ids(
     room = job.kwargs["room"]
     if not room:
         return
-    formatted = {str(idx): name for idx, name in result}
+    formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
     jso = {
         "document_ids": formatted,
         "action": "document_ids",
