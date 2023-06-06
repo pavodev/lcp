@@ -42,7 +42,7 @@ async def document_ids(request: web.Request) -> web.Response:
     config: Config = request.app["config"]
     schema = cast(str, config[corpus_id]["schema_path"])
 
-    if "doc_ids" not in config:
+    if "doc_ids" not in config[corpus_id]:
         job = request.app["query_service"].document_ids(
             schema, int(corpus_id), user, room
         )
