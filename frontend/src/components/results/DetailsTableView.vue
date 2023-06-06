@@ -51,7 +51,7 @@ export default {
       let partitions = this.corpora.corpus.partitions
         ? this.corpora.corpus.partitions.values
         : [];
-      let columns = this.corpora.corpus["mapping"]["layer"]["Segment"];
+      let columns = this.corpora.corpus["mapping"]["layer"][this.corpora.corpus["segment"]];
       if (partitions.length) {
         columns = columns["partitions"][partitions[0]];
       }

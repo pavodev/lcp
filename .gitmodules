@@ -4,3 +4,6 @@
 [submodule "lcp-upload"]
 	path = lcp-upload
 	url = ../lcp-upload.git
+[submodule "vian-eventdrops"]
+	path = vian-eventdrops
+	url = ../vian-eventdrops.git

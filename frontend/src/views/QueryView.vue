@@ -3,7 +3,7 @@
     <Title :title="'Query'" class="mt-4" />
     <div class="container mt-4">
       <div class="row">
-        <div class="col-5">
+        <div class="col-6">
           <div class="mb-3">
             <label class="form-label">Corpora</label>
             <multiselect
@@ -127,7 +127,7 @@
             <div></div>
           </div>
         </div>
-        <div class="col-7">
+        <div class="col-6">
           <div class="form-floating mb-3">
             <nav>
               <div class="nav nav-tabs" id="nav-tab" role="tablist">
@@ -161,7 +161,7 @@
             </nav>
             <div class="tab-content" id="nav-tabContent">
               <div
-                class="tab-pane fade show active"
+                class="tab-pane fade show active pt-3"
                 id="nav-dqd"
                 role="tabpanel"
                 aria-labelledby="nav-results-tab"
@@ -179,7 +179,7 @@
                 </p>
               </div>
               <div
-                class="tab-pane fade"
+                class="tab-pane fade pt-3"
                 id="nav-json"
                 role="tabpanel"
                 aria-labelledby="nav-stats-tab"
@@ -476,10 +476,6 @@
 }
 .query-field {
   height: 328px;
-  /* background: url(http://i.imgur.com/2cOaJ.png);
-  background-attachment: local;
-  background-repeat: no-repeat;
-  padding-left: 40px; */
 }
 .query-field.error {
   border-color: red;
@@ -530,6 +526,13 @@ sequence seq
         lemma.length > 5
         upos = NOUN
 
+sequence seqa
+    Token@s t1a
+        upos = NOUN
+    Token@s t2a
+        upos = VERB
+
+
 set tdeps
     Token@s tx
         DepRel
@@ -550,6 +553,7 @@ myKWIC1 => plain
         t1
         #t2
         t3
+        t2a
 
 myKWIC2 => plain
     context
@@ -830,6 +834,12 @@ myColl2 => collocation
           // console.log("sentences", data);
           this.WSDataSentences = data;
           return;
+        } else if (data["action"] === "failed") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.value,
+          });
         }
       } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {

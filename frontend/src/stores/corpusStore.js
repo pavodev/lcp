@@ -5,6 +5,7 @@ export const useCorpusStore = defineStore("corpusData", {
   state: () => ({
     queryData: null,
     corpora: [],
+    vianCorpus: [],
   }),
   getters: {},
   actions: {
@@ -24,8 +25,8 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
-    fetchCorpora(data) {
-      httpApi.post(`/corpora`, data).then((response) => {
+    fetchCorpora() {
+      httpApi.post(`/corpora`).then((response) => {
         this.corporaJson = response.data;
         delete this.corporaJson.config["-1"]
         this.corpora = Object.keys(this.corporaJson.config).map(corpusId => {
@@ -34,6 +35,16 @@ export const useCorpusStore = defineStore("corpusData", {
           return corpus
         })
       });
-    }
+    },
+    fetchDocuments(data) {
+      httpApi.post(`/document_ids/${data.corpora_id}`, data).then((response) => {
+        return response.data;
+      });
+    },
+    fetchDocument(data) {
+      httpApi.post(`/document/${data.doc_id}`, data).then((response) => {
+        return response.data;
+      });
+    },
   },
 });

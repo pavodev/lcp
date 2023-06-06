@@ -5,7 +5,11 @@
   "scripts": {
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
-    "lint": "vue-cli-service lint"
+    "lint": "vue-cli-service lint",
+    "serve:lcp": "vue-cli-service serve",
+    "build:lcp": "vue-cli-service build",
+    "serve:vian": "env APP_TYPE=vian vue-cli-service serve",
+    "build:vian": "env APP_TYPE=vian vue-cli-service build"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.3.0",
@@ -16,7 +20,8 @@
     "bootstrap": "^5.2.0",
     "chart.js": "^4.2.1",
     "core-js": "^3.8.3",
-    "d3": "^7.8.1",
+    "d3": "4.7.0",
+    "d3-zoom": "1.1.2",
     "monaco-editor": "^0.34.1",
     "pinia": "^2.0.17",
     "util": "^0.12.5",

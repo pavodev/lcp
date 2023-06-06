@@ -10,7 +10,7 @@
 }
 #editor {
   height: 300px;
-  width: 730px;
+  width: 630px;
 }
 </style>
 
@@ -73,6 +73,57 @@ function checkCode (content) {
   }
   return retval
 }
+
+// monaco.editor.defineTheme('DQDTheme', MonacoTheme)
+monaco.editor.defineTheme('DQDTheme', {
+  base: 'vs',
+  inherit: false,
+  colors: {
+    "input.background": "#DDD6C1",
+		"input.foreground": "#586E75",
+  },
+  rules: [],
+  tokenColors: [{
+			settings: {
+				background: "#FDF6E3",
+				"foreground": "#657B83"
+			}
+		},
+		{
+			"scope": ["meta.embedded", "source.groovy.embedded"],
+			"settings": {
+				"background": "#FDF6E3",
+				"foreground": "#657B83"
+			}
+		},
+		{
+			"name": "Comment",
+			"scope": "comment",
+			"settings": {
+				"fontStyle": "italic",
+				"foreground": "#93A1A1"
+			}
+		},
+    {
+			"name": "Variable",
+			"scope": [
+				"variable.language",
+				"variable.other"
+			],
+			"settings": {
+				"foreground": "#268BD2"
+			}
+		},
+    {
+			"name": "Keyword",
+			"scope": "keyword",
+			"settings": {
+				"foreground": "#859900"
+			}
+		}
+  ]
+});
+
 
 monaco.editor.onDidCreateModel(function(model) {
   function validate() {
@@ -303,7 +354,7 @@ export default {
         let partitions = this.corpora.corpus.partitions
           ? this.corpora.corpus.partitions.values
           : [];
-        let columns = this.corpora.corpus["mapping"]["layer"]["Segment"];
+        let columns = this.corpora.corpus["mapping"]["layer"][this.corpora.corpus["segment"]];
         if (partitions.length) {
           columns = columns["partitions"][partitions[0]];
         }

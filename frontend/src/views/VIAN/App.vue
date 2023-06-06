@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3">
       <div class="container">
-        <a class="navbar-brand" href="#">LCP</a>
+        <a class="navbar-brand" href="#">VIAN</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -22,7 +22,7 @@
                 Home
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -30,16 +30,22 @@
                 />
                 Query
               </router-link>
-            </li>
+            </li> -->
             <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query-test">
                 <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
                 Query Test
               </router-link>
             </li> -->
-            <!-- <li class="nav-item">
-              <router-link class="nav-link" to="/player">Player</router-link>
-            </li> -->
+            <li class="nav-item">
+              <router-link class="nav-link" to="/player">
+                <FontAwesomeIcon
+                  :icon="['fas', 'video']"
+                  class="me-1"
+                />
+                Player
+              </router-link>
+            </li>
           </ul>
           <ul class="navbar-nav ms-auto">
             <li class="nav-item">
@@ -75,6 +81,7 @@ import LoadingView from "@/components/LoadingView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 
 export default {
+  name: "App-Vian-View",
   mounted() {
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();

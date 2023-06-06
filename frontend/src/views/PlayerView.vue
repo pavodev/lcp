@@ -1,56 +1,492 @@
 <template>
-  <div class="about">
-    <!-- <h1>This is a player page</h1> -->
-
-    <!-- <VideoPlayer :corpora="['asdads']" /> -->
-
-    <video width="320" height="240" ref="videoPlayer1">
-      <source src="http://localhost:3000/video/e822e422-32e1-4635-a0c9-0366970affeb/video.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-
-    <video width="480" height="320" ref="videoPlayer2" @timeupdate="timeupdate">
-      <source src="http://localhost:3000/video/e822e422-32e1-4635-a0c9-0366970affeb/24fps.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-
-    <video width="320" height="240" ref="videoPlayer3">
-      <source src="http://localhost:3000/video/e822e422-32e1-4635-a0c9-0366970affeb/video.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-
-    <video width="240" height="160" ref="videoPlayer4">
-      <source src="http://localhost:3000/video/e822e422-32e1-4635-a0c9-0366970affeb/24fps.mp4" type="video/mp4">
-      Your browser does not support the video tag.
-    </video>
-
-    <br>
-
-    <a href="#" @click="playerPlay" class="btn btn-primary">Play</a>
-    <a href="#" @click="playerStop" class="btn btn-primary ms-1">Stop</a>
-    <a href="#" @click="playerVolumeUp" class="btn btn-primary ms-1">Vol +</a>
-    <a href="#" @click="playerVolumeDown" class="btn btn-primary ms-1">Vol -</a>
-    <!-- <a href="#" @click="playerSetTime" class="btn btn-primary ms-1">Set time (0:10)</a> -->
-    <a href="#" @click="playerFrameUp" class="btn btn-primary ms-1">Frame +</a>
-    <a href="#" @click="playerFrameDown" class="btn btn-primary ms-1">Frame -</a>
-    <a href="#" @click="playerFrame100" class="btn btn-primary ms-1">Set Frame 100</a>
-    <br>
-
+  <div class="player mb-5">
     <div class="container mt-4">
       <div class="row">
-        <div class="col12" style="position: relative;" @click="timelineClick">
-          <div class="vertical-line" :style="'margin-left: ' + progress + '%'"></div>
-          <div class="progress" style="height: 10px;" ref="timeline">
-            <div class="progress-bar" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+        <div class="col-5">
+          <label class="form-label">Corpora</label>
+          <!-- <multiselect
+            v-model="selectedCorpora"
+            :options="corporaList"
+            :multiple="false"
+            label="name"
+            track-by="value"
+          ></multiselect> -->
+          <select v-model="selectedCorpora" class="form-select">
+            <option
+              v-for="corpus in corporaList"
+              :value="corpus"
+              v-html="corpus.name"
+              :key="corpus.value"
+            ></option>
+          </select>
+        </div>
+        <div class="col-5">
+          <label class="form-label">Document</label>
+          <!-- <span v-if="loading">Loading ...</span> -->
+          <select v-model="currentDocument" class="form-select">
+            <option
+              v-for="document in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
+              :value="document"
+              v-html="document[1]"
+              :key="document[0]"
+            ></option>
+          </select>
+        </div>
+      </div>
+    </div>
+
+    <!-- <div id="eventdrops-demo" style="width: 90%" class="mt-4"></div> -->
+
+    <div v-if="currentDocument">
+      <div class="container mt-4 mb-4">
+        <div class="video-box">
+          <div class="video-text-test" v-html="subtext"></div>
+          <div :class="mainVideo == 1 ? 'active' : ''">
+            <video ref="videoPlayer1" @timeupdate="timeupdate">
+              <source
+                :src="baseVideoUrl + currentDocument[2][0]"
+                type="video/mp4"
+              />
+            </video>
           </div>
-          <div class="progress" style="height: 10px;">
-            <div class="progress-bar bg-info" role="progressbar" style="width: 35%" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+          <div
+            :class="mainVideo == 2 ? 'active' : ''"
+            v-if="currentDocument[2].length > 1"
+          >
+            <video ref="videoPlayer2">
+              <source
+                :src="baseVideoUrl + currentDocument[2][1]"
+                type="video/mp4"
+              />
+            </video>
           </div>
-          <div class="progress" style="height: 10px;">
-            <div class="progress-bar bg-danger" role="progressbar" style="width: 25%; margin-left: 20%" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+          <div
+            :class="mainVideo == 3 ? 'active' : ''"
+            v-if="currentDocument[2].length > 2"
+          >
+            <video ref="videoPlayer3">
+              <source
+                :src="baseVideoUrl + currentDocument[2][2]"
+                type="video/mp4"
+              />
+            </video>
           </div>
-          <div class="progress" style="height: 10px;">
-            <div class="progress-bar bg-success" role="progressbar" style="width: 55%; margin-left: 40%" aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
+          <div
+            :class="mainVideo == 4 ? 'active' : ''"
+            v-if="currentDocument[2].length > 3"
+          >
+            <video ref="videoPlayer4">
+              <source
+                :src="baseVideoUrl + currentDocument[2][3]"
+                type="video/mp4"
+              />
+            </video>
+          </div>
+        </div>
+      </div>
+
+      <div class="container mt-4 mb-4">
+        <div class="btn-group" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            @click="playerFromStart"
+          >
+            <FontAwesomeIcon :icon="['fas', 'backward-step']" />
+          </button>
+          <button type="button" class="btn btn-sm btn-primary">
+            <FontAwesomeIcon :icon="['fas', 'backward']" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary active"
+            @click="playerStop"
+            v-if="playing"
+          >
+            <FontAwesomeIcon :icon="['fas', 'pause']" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            @click="playerPlay"
+            v-else
+          >
+            <FontAwesomeIcon :icon="['fas', 'play']" />
+          </button>
+          <button type="button" class="btn btn-sm btn-primary">
+            <FontAwesomeIcon :icon="['fas', 'forward']" />
+          </button>
+        </div>
+        <div class="btn-group ms-1" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            @click="playerVolumeDown"
+          >
+            <FontAwesomeIcon :icon="['fas', 'volume-down']" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            @click="playerVolumeUp"
+          >
+            <FontAwesomeIcon :icon="['fas', 'volume-up']" />
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary"
+            @click="playerVolumeMute"
+          >
+            <FontAwesomeIcon :icon="['fas', 'volume-off']" />
+          </button>
+          <input
+            type="range"
+            class="form-range mt-1 ms-1"
+            v-model="volume"
+            min="0"
+            max="1"
+            step="0.05"
+          />
+        </div>
+        <div class="btn-group ms-1" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            @click="playerFrameDown(5)"
+          >
+            -5
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            @click="playerFrameDown(1)"
+          >
+            -1
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            @click="playerFrameUp(1)"
+          >
+            +1
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            @click="playerFrameUp(5)"
+          >
+            +5
+          </button>
+          <!-- <button type="button" class="btn btn-sm btn-primary" @click="playerFrame100"><div class="icon-number">F100</div></button>
+          <button type="button" class="btn btn-sm btn-primary" @click="playerSetTime"><div class="icon-number">Set time 10</div></button> -->
+        </div>
+        <div class="btn-group ms-1" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="playerSpeed == 0.5 ? 'active' : ''"
+            @click="playerSetSpeed(0.5)"
+          >
+            0.5x
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="playerSpeed == 1 ? 'active' : ''"
+            @click="playerSetSpeed(1)"
+          >
+            1x
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="playerSpeed == 1.5 ? 'active' : ''"
+            @click="playerSetSpeed(1.5)"
+          >
+            1.5x
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="playerSpeed == 2 ? 'active' : ''"
+            @click="playerSetSpeed(2)"
+          >
+            2x
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="playerSpeed == 3 ? 'active' : ''"
+            @click="playerSetSpeed(3)"
+          >
+            3x
+          </button>
+        </div>
+        <div class="btn-group ms-1" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="mainVideo == 1 ? 'active' : ''"
+            @click="playerMainVideo(1)"
+          >
+            V1
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 1"
+            :class="mainVideo == 2 ? 'active' : ''"
+            @click="playerMainVideo(2)"
+          >
+            V2
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 2"
+            :class="mainVideo == 3 ? 'active' : ''"
+            @click="playerMainVideo(3)"
+          >
+            V3
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 3"
+            :class="mainVideo == 4 ? 'active' : ''"
+            @click="playerMainVideo(4)"
+          >
+            V4
+          </button>
+        </div>
+        <div class="btn-group ms-1" role="group">
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            :class="mainAudio == 1 ? 'active' : ''"
+            @click="playerMainAudio(1)"
+          >
+            A1
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 1"
+            :class="mainAudio == 2 ? 'active' : ''"
+            @click="playerMainAudio(2)"
+          >
+            A2
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 2"
+            :class="mainAudio == 3 ? 'active' : ''"
+            @click="playerMainAudio(3)"
+          >
+            A3
+          </button>
+          <button
+            type="button"
+            class="btn btn-sm btn-primary btn-text-icon"
+            v-if="currentDocument[2].length > 3"
+            :class="mainAudio == 4 ? 'active' : ''"
+            @click="playerMainAudio(4)"
+          >
+            A4
+          </button>
+        </div>
+      </div>
+      <div class="container mt-4">
+        <div class="row">
+          <div class="col" @click="timelineClick">
+            <div
+              class="progress"
+              style="height: 10px; widdth: 100%"
+              ref="timeline"
+            >
+              <div
+                class="progress-bar bg-danger"
+                role="progressbar"
+                :style="'width: ' + progress + '%'"
+                aria-valuenow="25"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              ></div>
+            </div>
+          </div>
+        </div>
+        <div class="row mb-3 mt-2">
+          <div class="col">
+            <!-- Percentage: <span v-html="progress.toFixed(2)" />% -->
+            Frame:
+            <span
+              v-html="parseInt(currentFrame, 10)"
+            />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Time: <span v-html="currentTime" />
+          </div>
+        </div>
+      </div>
+
+      <div id="eventdrops-demo" style="width: 90%" class="mt-4"></div>
+
+      <hr />
+
+      <div class="container mt-4">
+        <div class="row">
+          <div class="col-6">
+            <div class="form-floating mb-3">
+              <nav>
+                <div class="nav nav-tabs" id="nav-tab" role="tablist">
+                  <button
+                    class="nav-link active"
+                    id="nav-dqd-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#nav-dqd"
+                    type="button"
+                    role="tab"
+                    aria-controls="nav-dqd"
+                    aria-selected="true"
+                    @click="currentTab = 'dqd'"
+                  >
+                    DQD
+                  </button>
+                  <button
+                    class="nav-link"
+                    id="nav-json-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#nav-json"
+                    type="button"
+                    role="tab"
+                    aria-controls="nav-json"
+                    aria-selected="false"
+                    @click="currentTab = 'json'"
+                  >
+                    JSON
+                  </button>
+                </div>
+              </nav>
+              <div class="tab-content" id="nav-tabContent">
+                <div
+                  class="tab-pane fade show active pt-3"
+                  id="nav-dqd"
+                  role="tabpanel"
+                  aria-labelledby="nav-results-tab"
+                >
+                  <EditorView
+                    :query="queryDQD"
+                    :corpora="selectedCorpora"
+                    @update="updateQueryDQD"
+                    :key="editorIndex"
+                  />
+                  <p
+                    class="error-text text-danger mt-3"
+                    v-if="isQueryValidData && isQueryValidData.valid != true"
+                  >
+                    {{ isQueryValidData.error }}
+                  </p>
+                </div>
+                <div
+                  class="tab-pane fade pt-3"
+                  id="nav-json"
+                  role="tabpanel"
+                  aria-labelledby="nav-stats-tab"
+                >
+                  <textarea
+                    class="form-control query-field"
+                    placeholder="Query (e.g. test.*)"
+                    :class="
+                      isQueryValidData == null || isQueryValidData.valid == true
+                        ? 'ok'
+                        : 'error'
+                    "
+                    v-model="query"
+                  ></textarea>
+                  <!-- <label for="floatingTextarea">Query</label> -->
+                  <p
+                    class="error-text text-danger"
+                    v-if="isQueryValidData && isQueryValidData.valid != true"
+                  >
+                    {{ isQueryValidData.error }}
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div class="form-floating mb-3">
+              <!-- <textarea
+                class="form-control query-field"
+                style="height: 200px"
+                placeholder="Query (e.g. test.*)"
+                v-model="query"
+              ></textarea>
+              <label for="floatingTextarea">Query</label> -->
+            </div>
+            <button
+              type="button"
+              @click="submitQuery"
+              class="btn btn-primary"
+              :disabled="
+                (selectedCorpora && selectedCorpora.length == 0) ||
+                loading ||
+                (isQueryValidData != null && isQueryValidData.valid == false) ||
+                !query
+              "
+            >
+              Submit
+            </button>
+            <br />
+            <br />
+            Load example query:
+            <button
+              type="button"
+              @click="setExample(1)"
+              class="btn btn-sm btn-secondary ms-1"
+            >
+              1
+            </button>
+            <button type="button" @click="setExample(2)" class="btn btn-sm btn-secondary ms-1">2</button>
+            <button
+              type="button"
+              @click="setExample(3)"
+              class="btn btn-sm btn-secondary ms-1"
+            >
+              3
+            </button>
+            <button
+              type="button"
+              @click="setExample(4)"
+              class="btn btn-sm btn-secondary ms-1"
+            >
+              4
+            </button>
+          </div>
+          <div class="col-6" v-if="loading || WSDataResults">
+            <span v-if="WSDataResults">
+              <ul class="list-no-bullets">
+                <li
+                  v-for="(result, index) in WSDataResults.result[1]"
+                  :key="index"
+                  class="cursor-pointer hover-opacity"
+                  @click="resultClick(result)"
+                >
+                  <div class="row">
+                    <div class="col-2">
+                      <span
+                        class="badge bg-secondary"
+                        v-html="frameNumberToTime(result[1][5][0])"
+                      ></span>
+                    </div>
+                    <div class="col">
+                      <span class="text-bold" v-html="WSDataResults.result[-1][result[0]][1].map(x => x[0]).join(' ')" />
+                    </div>
+                    <div class="col-1">
+                      <span v-html="documentDict[result[1][3]]"></span>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+            </span>
+            <!-- <span v-else-if="queryData == 1"></span> -->
+            <span v-else>Loading ...</span>
           </div>
         </div>
       </div>
@@ -59,100 +495,823 @@
 </template>
 
 <script>
-// import VideoPlayer from "@/components/VideoPlayer";
+import Utils from "@/utils.js";
+import * as d3 from "d3/build/d3";
+import eventDrops from "../../../vian-eventdrops/src/";
+
+import { mapState } from "pinia";
+
+import { useCorpusStore } from "@/stores/corpusStore";
+import { useNotificationStore } from "@/stores/notificationStore";
+import { useUserStore } from "@/stores/userStore";
+
+// import config from "@/config";
+import EditorView from "@/components/EditorView.vue";
+const videoBase = "http://localhost:8000"
+
+import exampleData from '@/assets/example_data.json';
 
 export default {
-  data(){
+  data() {
     return {
-      progress: 0
-    }
+      selectedCorpora: null,
+      currentDocument: null,
+      currentDocumentData: null,
+      isQueryValidData: null,
+      loading: false,
+      failedStatus: false,
+      WSDataResults: null,
+
+      progress: 0,
+      chart: null,
+      editorIndex: 0,
+      currentFrame: 0,
+      currentTime: "",
+      subtitles: {},
+      subtext: "",
+      playing: false,
+      playerSpeed: 1,
+      mainVideo: 1,
+      mainAudio: 1,
+      baseVideoUrl: `${videoBase}/e822e422-32e1-4635-a0c9-0366970affeb/`,
+      volume: 0.5,
+      frameRate: 25.0,
+
+      setResultTime: null,
+      query: "",
+      queryDQD: `Segment s
+
+sequence@s
+	Token t1
+		upos = DET
+	Token t2
+		upos = NOUN
+
+Gesture g
+	speaker = s.speaker
+	type = PG
+	start >= s.start - 3s
+	end <= s.end + 3s
+
+KWIC => plain
+	context
+		s
+	entities
+		t1
+		t2
+		g
+`,
+      corpusData: [
+        [2, "AKAW1", ["AKAW1_K1.mp4", "AKAW1_K2.mp4"]],
+        [3, "AKAW2", ["AKAW2_K1.mp4"]],
+        [4, "AWAV1", ["AWAV1_K1.mp4"]],
+        [5, "CALK1", ["CALK1_K1.mp4", "CALK1_K2.mp4"]],
+        [6, "CHAB2", ["CHAB2_K1.mp4", "CHAB2_K2.mp4"]],
+        [7, "DAAF1", ["DAAF1_K1.mp4", "DAAF1_K2.mp4"]],
+      ],
+      documentDict: {},
+    };
+  },
+  components: {
+    EditorView,
+  },
+  computed: {
+    ...mapState(useCorpusStore, ["queryData", "corpora"]),
+    ...mapState(useUserStore, ["userData", "roomId"]),
+    corporaList() {
+      return this.corpora
+        ? this.corpora.map((corpus) => {
+            return {
+              name: corpus.meta.name,
+              value: corpus.meta.id,
+              corpus: corpus,
+            };
+          })
+        : [];
+    },
   },
   methods: {
-    playerPlay(){
-      this.$refs.videoPlayer1.play()
-      this.$refs.videoPlayer2.play()
-      this.$refs.videoPlayer3.play()
-      this.$refs.videoPlayer4.play()
+    frameNumberToTime(frameNumber) {
+      let seconds = Utils.frameNumberToSeconds(frameNumber);
+      return Utils.msToTime(seconds);
     },
-    playerStop(){
-      this.$refs.videoPlayer1.pause()
-      this.$refs.videoPlayer2.pause()
-      this.$refs.videoPlayer3.pause()
-      this.$refs.videoPlayer4.pause()
+    resultClick(result) {
+      let value = Utils.frameNumberToSeconds(result[1][5][0]) / 1000;
+      if (this.currentDocument[0] == result[1][3]) {
+        this._playerSetTime(value);
+      } else {
+        // this.currentDocument = this.corpusData[result[2] - 1];
+        this.currentDocument = this.documentDict[result[1][3]];
+        // console.log("Change document")
+        this.setResultTime = value;
+      }
     },
-    playerVolumeUp(){
-      let vol = this.$refs.videoPlayer2.volume
-      vol = Math.min(1, vol + 0.05)
-      this.$refs.videoPlayer2.volume = vol
-      console.log("Vol", this.$refs.videoPlayer2.volume)
+    playerPlay() {
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.play();
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.play();
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.play();
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.play();
+      }
+      this.playing = true;
+      this.chart.player.playing = true;
     },
-    playerVolumeDown(){
-      let vol = this.$refs.videoPlayer2.volume
-      vol = Math.max(0, vol - 0.05)
-      this.$refs.videoPlayer2.volume = vol
-      console.log("Vol", this.$refs.videoPlayer2.volume)
+    playerStop() {
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.pause();
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.pause();
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.pause();
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.pause();
+      }
+      this.playing = false;
+      this.chart.player.playing = false;
     },
-    playerFrameUp(){
-      let currentFrame = this.$refs.videoPlayer2.currentTime.toFixed(5)*24
-      console.log("CFU", currentFrame)
-      let newTime = parseFloat((currentFrame + 1)/24.)
-      console.log("UFG", currentFrame, newTime)
-      this.$refs.videoPlayer1.currentTime = newTime
-      this.$refs.videoPlayer2.currentTime = newTime
-      this.$refs.videoPlayer3.currentTime = newTime
-      this.$refs.videoPlayer4.currentTime = newTime
+    playerFromStart() {
+      this._playerSetToFrame(0);
     },
-    playerFrame100(){
-      let value = (100./24.).toFixed(5)
-      this.$refs.videoPlayer1.currentTime = value;
-      this.$refs.videoPlayer2.currentTime = value;
-      this.$refs.videoPlayer3.currentTime = value;
-      this.$refs.videoPlayer4.currentTime = value;
+    playerVolumeUp() {
+      this.volume = Math.max(0, this.volume + 0.05);
+      this._setVolume();
     },
-    playerFrameDown(){
-      let currentFrame = this.$refs.videoPlayer2.currentTime.toFixed(5)*24
-      console.log("CFD", currentFrame)
-      let newTime = parseFloat((currentFrame - 1)/24.)
-      console.log("DFG", currentFrame, newTime)
-      this.$refs.videoPlayer1.currentTime = newTime
-      this.$refs.videoPlayer2.currentTime = newTime
-      this.$refs.videoPlayer3.currentTime = newTime
-      this.$refs.videoPlayer4.currentTime = newTime
+    playerVolumeDown() {
+      this.volume = Math.max(0, this.volume - 0.05);
+      this._setVolume();
     },
-    // playerSetTime(){
-    //   this.$refs.videoPlayer1.currentTime = 10.56547
-    //   this.$refs.videoPlayer2.currentTime = 10.56547
-    //   this.$refs.videoPlayer3.currentTime = 10.56547
+    playerVolumeMute() {
+      this._setVolume(0);
+    },
+    playerFrameUp(value) {
+      this.currentFrame =
+        this.$refs.videoPlayer1.currentTime.toFixed(5) * this.frameRate;
+      this._playerSetToFrame(this.currentFrame + value);
+    },
+    _playerSetToFrame(frameNumber) {
+      let value = (frameNumber / this.frameRate).toFixed(5);
+      this._playerSetTime(value);
+    },
+    _playerSetTime(value) {
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.currentTime = value;
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.currentTime = value;
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.currentTime = value;
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.currentTime = value;
+      }
+    },
+    playerFrameDown(value) {
+      this.currentFrame =
+        this.$refs.videoPlayer1.currentTime.toFixed(5) * this.frameRate;
+      this._playerSetToFrame(this.currentFrame - value);
+    },
+    playerSetSpeed(speed) {
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.playbackRate = speed;
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.playbackRate = speed;
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.playbackRate = speed;
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.playbackRate = speed;
+      }
+      this.playerSpeed = speed;
+    },
+    timeupdate() {
+      try {
+        this.currentFrame =
+          this.$refs.videoPlayer1.currentTime.toFixed(5) * this.frameRate;
+        this.currentTime =
+          new Date(this.$refs.videoPlayer1.currentTime * 1000)
+            .toISOString()
+            .substring(14, 19) +
+          "/" +
+          new Date(this.$refs.videoPlayer1.duration * 1000)
+            .toISOString()
+            .substring(14, 19);
+        this.progress =
+          (this.$refs.videoPlayer1.currentTime /
+            this.$refs.videoPlayer1.duration) *
+          100;
+      } catch {
+        this.currentFrame = 0;
+        this.progress = 0;
+      }
+
+      let filtered = Object.keys(this.subtitles).filter(
+        (x) => x >= this.currentFrame
+      );
+      if (filtered.length) {
+        this.subtext = this.subtitles[filtered[0]];
+      }
+      if (this.chart) {
+        this.chart.player.time = this.$refs.videoPlayer1.currentTime;
+      }
+    },
+    playerMainVideo(number) {
+      this.mainVideo = number;
+    },
+    playerMainAudio(number) {
+      this.mainAudio = number;
+      this._setVolume();
+    },
+    timelineClick(event) {
+      let percent =
+        parseFloat(
+          event.clientX - this.$refs.timeline.getBoundingClientRect().left
+        ) / this.$refs.timeline.getBoundingClientRect().width;
+      let time = this.$refs.videoPlayer1.player.time * percent;
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.currentTime = time;
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.currentTime = time;
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.currentTime = time;
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.currentTime = time;
+      }
+    },
+    // calcSize(number) {
+    //   let retVal = [320, 240]
+    //   if (number == this.mainVideo) {
+    //     retVal = [480, 320]
+    //   }
+    //   return retVal
     // },
-    timeupdate(){
-      // let percent = this.$refs.videoPlayer2.currentTime / this.$refs.videoPlayer2.duration
-      this.progress = (this.$refs.videoPlayer2.currentTime / this.$refs.videoPlayer2.duration) * 100
-      // console.log("Current time", this.$refs.videoPlayer2.currentTime, this.$refs.videoPlayer2.duration, percent*100, this.progress)
+    _setVolume(volume = null) {
+      let _volume = volume != null ? volume : this.volume;
+      if (this.$refs.videoPlayer1) {
+        this.$refs.videoPlayer1.volume = this.mainAudio == 1 ? _volume : 0;
+      }
+      if (this.$refs.videoPlayer2) {
+        this.$refs.videoPlayer2.volume = this.mainAudio == 2 ? _volume : 0;
+      }
+      if (this.$refs.videoPlayer3) {
+        this.$refs.videoPlayer3.volume = this.mainAudio == 3 ? _volume : 0;
+      }
+      if (this.$refs.videoPlayer4) {
+        this.$refs.videoPlayer4.volume = this.mainAudio == 4 ? _volume : 0;
+      }
     },
-    timelineClick(event){
-      let percent = parseFloat(event.clientX - this.$refs.timeline.getBoundingClientRect().left) / this.$refs.timeline.getBoundingClientRect().width
-      let time = this.$refs.videoPlayer2.duration * percent
-      this.$refs.videoPlayer1.currentTime = time
-      this.$refs.videoPlayer2.currentTime = time
-      this.$refs.videoPlayer3.currentTime = time
-      this.$refs.videoPlayer4.currentTime = time
+    // loadData() {
+    //   if (this.currentDocument) {
+    //     this.mainVideo = 1;
+    //     this.mainAudio = 1;
+    //     this.subtitles = {};
+    //     this.loading = true;
+    //     this.playing = false;
+    //     this._playerSetTime(0);
+    //     useCorpusStore()
+    //       .fetchDocument(this.currentDocument[0])
+    //       .then((data) => {
+    //         this.loadDataJobId = data.job;
+    //       });
+    //   }
+    // },
+    updateQueryDQD(query) {
+      this.queryDQD = query
+      this.validate()
+    },
+    updateQueryJSON(query) {
+      console.log("Update JSON query", query)
+      this.query = query
+      // this.queryDQD = query;
+      // this.validate();
+    },
+    async submitQuery() {
+      this.WSDataResults = null;
+
+      let data = {
+        corpora: this.selectedCorpora.value,
+        query: this.query,
+        user: this.userId,
+        room: this.roomId,
+      }
+      let retval = await useCorpusStore().fetchQuery(data);
+      if (retval.status == "started") {
+        this.loading = true;
+        this.percentageDone = 0.001;
+      }
+      // useCorpusStore()
+      //   .fetchQuery(data)
+      //   .then((data) => {
+      //     this.loading = true
+      //   });
+    },
+    connectToRoom() {
+      this.waitForConnection(() => {
+        this.$socket.sendObj({
+          room: this.roomId,
+          // room: null,
+          action: "joined",
+          user: this.userId,
+        });
+        this.$socket.onmessage = this.onSocketMessage;
+      }, 500);
+    },
+    onSocketMessage(event) {
+      let data = JSON.parse(event.data);
+      console.log("SOC", data)
+      if (Object.prototype.hasOwnProperty.call(data, "action")) {
+        if (data["action"] === "document") {
+          this.showData(data.document[0]);
+          return;
+        }
+        else if (data["action"] === "document_ids") {
+          // console.log("DOC", data);
+          this.documentDict = data.document_ids
+          return;
+        }
+        else if (data["action"] === "validate") {
+          console.log("Query validation", data);
+          if (data.kind == "dqd" && data.valid == true) {
+            // console.log("Set query from server");
+            this.query = JSON.stringify(data.json, null, 2);
+          }
+          this.isQueryValidData = data;
+          return;
+        }
+        else if (data["action"] === "sentences") {
+          // this.failedStatus = false;
+          this.WSDataResults = data;
+          return;
+        } else if (data["action"] === "failed") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.value,
+          });
+        }
+        // else if (data["action"] === "timeout") {
+        //   console.log("Query job expired", data);
+        //   this.failedStatus = true;
+        //   this.submit(null, false, false);
+        //   return;
+        // }
+      } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
+        if (data["status"] == "failed") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.value,
+          });
+        }
+      }
+    },
+    waitForConnection(callback, interval) {
+      if (this.$socket.readyState === 1) {
+        callback();
+      } else {
+        setTimeout(() => {
+          this.waitForConnection(callback, interval);
+        }, interval);
+      }
+    },
+    showData(data) {
+      this.chart = eventDrops({
+        d3,
+        range: {
+          start: new Date("2022-01-01T00:00:00.000"),
+          end: new Date("2022-01-01T00:20:00.000"),
+        },
+        // axis: {
+        //   formats: {
+        //       milliseconds: '%L',
+        //       seconds: ':%S',
+        //       minutes: '%H:%M',
+        //       hours: '%H',
+        //       days: '',
+        //       weeks: '',
+        //       months: '',
+        //       year: '',
+        //   },
+        //   verticalGrid: false,
+        //   tickPadding: 6,
+        // },
+        drop: {
+          date: (d) => new Date(d.date),
+          // onClick: e => {
+          //   // console.log(e, 123123)
+          //   this._playerSetToFrame(e.frameNumber)
+          // },
+          // onMouseOver: commit => {
+          //   tooltip
+          //     .transition()
+          //     .duration(200)
+          //     .style('opacity', 1)
+          //     .style('pointer-events', 'auto');
+
+          //   tooltip
+          //     .html(`
+          //       <div class="content">
+          //         ${commit.message}
+          //       </div>
+          //     `)
+          //     .style('left', `${d3.event.pageX - 30}px`)
+          //     .style('top', `${d3.event.pageY + 20}px`)
+          // },
+          // onMouseOut: () => {
+          //   tooltip
+          //     .transition()
+          //     .duration(500)
+          //     .style('opacity', 0)
+          //     .style('pointer-events', 'none');
+          // },
+        },
+      });
+
+      // this.chart.player.time = 0
+
+      let that = this;
+      function calcDate(frameNumber) {
+        Utils.msToTime((frameNumber * 1000) / that.frameRate);
+        let time = new Date((parseFloat(frameNumber) / that.frameRate) * 1000)
+          .toISOString()
+          .substring(11, 23);
+        return `2022-01-01T${time}`;
+      }
+
+      // Prepare data - group by agent
+      let _tmpData = {};
+      if (data && data.tracks) {
+        for (let track of Object.values(data.tracks)) {
+          if (track.sentences && track["agent"]) {
+            if (!(track["agent"] in _tmpData)) {
+              _tmpData[track["agent"]] = {
+                sentences: [],
+                gestures: [],
+              };
+            }
+            let _track = {
+              name: track["name"],
+              data: [],
+              height: 50,
+            };
+            // let _track2 = {
+            //   name: "Annotation",
+            //   data: [],
+            // };
+            // let _track3 = {
+            //   name: "Lemma",
+            //   data: [],
+            // };
+            for (let sentence of track["sentences"]) {
+              _track.data.push({
+                date: calcDate(sentence.frame_range[0]),
+                dateEnd: calcDate(sentence.frame_range[1]),
+                specClass: "threeLine",
+                l1: sentence.content.map((text) => text[0]).join(" "),
+                l2: sentence.content.map((text) => text[1]).join(" "),
+                l3: sentence.content.map((text) => text[2]).join(" "),
+                frameRange: sentence.frame_range,
+              });
+              // _track2.data.push({
+              //   date: calcDate(sentence.frame_range[0]),
+              //   dateEnd: calcDate(sentence.frame_range[1]),
+              //   message: sentence.content.map((text) => text[3]).join(" "),
+              //   frameRange: sentence.frame_range,
+              // });
+              // _track3.data.push({
+              //   date: calcDate(sentence.frame_range[0]),
+              //   dateEnd: calcDate(sentence.frame_range[1]),
+              //   message: sentence.content.map((text) => text[2]).join(" "),
+              //   frameRange: sentence.frame_range,
+              // });
+              this.subtitles[sentence.frame_range[1]] = sentence.content
+                .map((text) => text[1])
+                .join(" ");
+            }
+            _tmpData[track["agent"]]["sentences"].push(_track);
+            // _tmpData[track["agent"]]["sentences"].push(_track2);
+            // _tmpData[track["agent"]]["sentences"].push(_track3);
+          }
+          if (track.gestures && track["agent"]) {
+            if (!(track["agent"] in _tmpData)) {
+              _tmpData[track["agent"]] = {
+                sentences: [],
+                gestures: [],
+              };
+            }
+            let _track = {
+              name: track["name"],
+              data: [],
+            };
+            for (let gesture of track["gestures"]) {
+              _track.data.push({
+                date: calcDate(gesture.frame_range[0]),
+                dateEnd: calcDate(gesture.frame_range[1]),
+                specClass: "oneLine",
+                l2: gesture.gesture,
+                frameRange: gesture.frame_range,
+              });
+            }
+            _tmpData[track["agent"]]["gestures"].push(_track);
+          }
+        }
+      }
+
+      let repositoriesData = [];
+      for (let agentId of Object.keys(_tmpData)) {
+        for (let sentence of _tmpData[agentId]["sentences"]) {
+          repositoriesData.push(sentence);
+        }
+        for (let gesture of _tmpData[agentId]["gestures"]) {
+          repositoriesData.push(gesture);
+        }
+      }
+
+      d3.select("#eventdrops-demo").data([repositoriesData]).call(this.chart);
+
+      // this.loading = false;
+      if (this.setResultTime) {
+        this._playerSetTime(this.setResultTime);
+        this.setResultTime = null;
+      }
+    },
+    setExample(num) {
+      if (num == 1) {
+        this.queryDQD = `Segment s
+
+sequence@s
+	Token t1
+		upos = DET
+	Token t2
+		upos = NOUN
+
+Gesture g
+	agent = s.agent
+	type = PG
+	start >= s.start - 3s
+	end <= s.end + 3s
+
+KWIC => plain
+	context
+		s
+	entities
+		t1
+		t2
+		g
+`
+      }
+      else if (num == 2) {
+        this.queryDQD = `Segment s
+
+sequence@s
+	Token t1
+		upos = DET
+	Token t2
+		upos = NOUN
+
+Gesture g
+	agent = s.agent
+	type in (PG, OG, IG, UG)
+	start >= s.start - 5s
+	end <= s.start - 2s
+
+KWIC => plain
+	context
+		s
+	entities
+		t1
+		t2
+		g
+`
+      }
+      else if (num == 3) {
+        this.queryDQD = `Segment s1
+	agent.name = speaker_1
+
+Token@s1 t1
+	form = kopf
+
+Segment s2
+	agent.name = speaker_2
+	start >= s1.start
+	end <= s1.end
+
+Token@s2 t2
+	form = rechts
+
+KWIC => plain
+	context
+		s1
+		s2
+	entities
+		t1
+		t2
+`
+      }
+      else if (num == 4) {
+        this.queryDQD = `Document d
+
+Gesture g1
+    agent.name = speaker_1
+    !EXISTS
+        Gesture g2
+            agent.name = speaker_2
+            start >= g1.start - 3s
+            end <= g1.end + 3s
+
+KWIC => plain
+    context
+        d
+    entities
+        g1
+
+`
+      }
+      this.editorIndex++
+      this.validate()
+    },
+    // async fetch() {
+    //   let data = {
+    //     user: this.userId,
+    //     room: this.roomId,
+    //     // room: null,
+    //   };
+    //   // useCorpusStore().fetchQueries(data);
+    //   let retval = await useCorpusStore().fetchQuery(data);
+    //   if (retval.status == "started") {
+    //     this.loading = true;
+    //     this.percentageDone = 0.001;
+    //   }
+    // },
+    sendLeft() {
+      this.$socket.sendObj({
+        room: this.roomId,
+        // room: null,
+        action: "left",
+        user: this.userId,
+      });
+    },
+    // resume() {
+    //   this.submit(null, true);
+    // },
+    stop() {
+      this.currentResults = [];
+      this.percentageDone = 0;
+      this.percentageTotalDone = 0;
+      this.failedStatus = false;
+      this.$socket.sendObj({
+        room: this.roomId,
+        // room: null,
+        action: "stop",
+        user: this.userId,
+      });
+      this.loading = false;
+      // if (this.WSData) {
+      //   this.WSData.percentage_done = 100;
+      // }
+    },
+    validate() {
+      this.$socket.sendObj({
+        room: this.roomId,
+        action: "validate",
+        user: this.userId,
+        query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
+      });
+    },
+  },
+  mounted() {
+    if (this.userData) {
+      this.userId = this.userData.user.id;
+      this.connectToRoom();
+      this.stop();
+      this.validate();
     }
+    this._setVolume();
+    window.addEventListener("keydown", (e) => {
+      if (e.key == "ArrowLeft") {
+        // key left
+        this.playerFrameDown(25);
+      } else if (e.key == "ArrowRight") {
+        // key right
+        this.playerFrameUp(25);
+      }
+    });
+    // window.addEventListener("keypress", (e) => {
+    //   if (e.key == " ") {
+    //     e.preventDefault();
+    //     if (this.playing) {
+    //       this.playerStop();
+    //     } else {
+    //       this.playerPlay();
+    //     }
+    //   }
+    // });
+    window.addEventListener("timelineClick", () => {
+      if (this.chart && this.chart.player) {
+        let time = this.chart.player.time;
+        this._playerSetTime(time);
+      }
+    });
+
+
+    // this.showData(exampleData.document[0])
+    exampleData;
   },
-  mounted(){
-    this.$refs.videoPlayer1.volume = 0
-    this.$refs.videoPlayer2.volume = 1
-    this.$refs.videoPlayer3.volume = 0
-    this.$refs.videoPlayer4.volume = 0
+  beforeMount() {
+    window.addEventListener("beforeunload", this.sendLeft);
   },
-  // components: {
-  //   VideoPlayer
-  // }
-}
+  unmounted() {
+    this.sendLeft();
+  },
+  watch: {
+    selectedCorpora() {
+      this.documentDict = {}
+      useCorpusStore().fetchDocuments({
+        room: this.roomId,
+        user: this.userId,
+        corpora_id: this.selectedCorpora.value,
+      })
+    },
+    currentDocument() {
+      try {
+        this.$refs.videoPlayer1.load();
+        if (this.currentDocument[2].length > 1) {
+          this.$refs.videoPlayer2.load();
+        }
+        if (this.currentDocument[2].length > 2) {
+          this.$refs.videoPlayer3.load();
+        }
+        if (this.currentDocument[2].length > 3) {
+          this.$refs.videoPlayer4.load();
+        }
+      } catch {
+        console.log("Error player");
+      }
+      if (this.currentDocument) {
+        // console.log("AA", this.currentDocument)
+        useCorpusStore().fetchDocument({
+          doc_id: this.currentDocument[0],
+          corpora: [this.selectedCorpora.value],
+          user: this.userId,
+          room: this.roomId,
+        });
+      }
+    },
+    volume() {
+      this._setVolume();
+    },
+    WSDataResults() {
+      if (this.WSDataResults) {
+        if (this.WSDataResults.percentage_done) {
+          this.percentageDone = this.WSDataResults.percentage_done;
+        }
+        if (
+          this.WSDataResults.total_results_so_far &&
+          this.WSDataResults.projected_results
+        ) {
+          this.percentageTotalDone =
+            (this.WSDataResults.total_results_so_far /
+              this.WSDataResults.projected_results) *
+            100;
+        }
+        if (["finished"].includes(this.WSDataResults.status)) {
+          this.percentageDone = 100;
+          this.percentageTotalDone = 100;
+        }
+        if (["satisfied"].includes(this.WSDataResults.status)) {
+          // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
+          this.percentageDone = 100;
+          this.loading = false;
+        }
+        // console.log("XXX", this.percentageTotalDone, this.percentageDone);
+        if (this.WSDataResults.percentage_done >= 100) {
+          this.loading = false;
+        }
+      }
+    },
+  },
+};
 </script>
 
 <style scoped>
 video {
   margin-right: 3px;
+  object-fit: fill;
+  height: 140px;
 }
 .vertical-line {
   position: absolute;
@@ -163,5 +1322,59 @@ video {
 }
 .progress-bar {
   border-radius: 4px;
+}
+.btn-text-icon {
+  font-weight: bold;
+  color: #fff;
+  font-size: 12px;
+  padding-top: 6px;
+}
+
+.video-text-test {
+  position: absolute;
+  top: 400px;
+  width: 710px;
+  left: 45px;
+  color: #fff;
+  font-weight: bold;
+  user-select: none;
+  font-size: 110%;
+  text-align: center;
+  background-color: #0000008c;
+  padding: 2px;
+}
+
+.video-box {
+  height: 450px;
+  display: flex;
+  flex-flow: column wrap;
+  transition: 2s ease;
+  position: relative;
+  cursor: default;
+}
+.video-box > div {
+  flex: 1 1 80px;
+  margin: 1px;
+}
+.video-box > div.active {
+  min-height: 100%;
+  order: -1;
+}
+div.active video {
+  height: 450px;
+}
+
+* >>> .drop {
+  cursor: pointer;
+}
+.query-field {
+  height: 328px;
+}
+.list-no-bullets {
+  list-style-type: none;
+}
+.list-no-bullets li:hover {
+  cursor: pointer;
+  opacity: 0.8;
 }
 </style>

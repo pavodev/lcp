@@ -13,6 +13,22 @@ const httpApi = axios.create({
   },
 });
 
+httpApi.interceptors.request.use(requestConfig => {
+  if (requestConfig.method == "post") {
+    requestConfig.data = {
+      appType: config.appType,
+      ...requestConfig.data,
+    }
+  }
+  else {
+    requestConfig.params = {
+      appType: config.appType,
+      ...requestConfig.params,
+    }
+  }
+  return requestConfig;
+});
+
 axios.interceptors.request.use((axiosConfig) => {
   axiosConfig.headers = config.apiHeaders;
   return axiosConfig;

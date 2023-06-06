@@ -16,12 +16,14 @@ dqd_grammar = r"""
     ?start: _NL* [predicate+]
 
     predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
-                    | "Segment"scope? label? _NL                                        -> segment
+                    | "Segment"scope? label? _NL [_INDENT property+ _DEDENT]            -> segment
                     | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
-                    | "Gesture" label? _NL [_INDENT property+ _DEDENT]                  -> gesture
+                    | "Document" label? _NL [_INDENT property+ _DEDENT]                 -> document
+                    | "Gesture" label? _NL [_INDENT (property|predicate)+ _DEDENT]      -> gesture
                     | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                     | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                     | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
+                    | NOT_OPERATOR? "EXISTS" _NL [_INDENT (predicate)+ _DEDENT]         -> exists
                     | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                     | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
                     | label "=> collocation" _NL [_INDENT r_coll_prop+ _DEDENT]         -> results_collocation
@@ -30,7 +32,7 @@ dqd_grammar = r"""
     label           : VARIABLE                                                          -> label
     scope           : "@"VARIABLE                                                       -> scope
     result_variable : VARIABLE _NL
-    r_plain_prop    : "context" _NL [_INDENT (label _NL) _DEDENT]                       -> result_plain_context
+    r_plain_prop    : "context" _NL [_INDENT (label _NL)+ _DEDENT]                      -> result_plain_context
                     | "entities" _NL [_INDENT (label _NL)+ _DEDENT]                     -> result_plain_entities
     r_analysis_prop : "attributes" _NL [_INDENT (STRING _NL)+ _DEDENT]                  -> result_analysis_attributes
                     | "functions" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_analysis_functions
@@ -42,12 +44,13 @@ dqd_grammar = r"""
                     | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
 
     VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-    OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!|in)/
+    NOT_OPERATOR    : /(¬|~|NOT|!)/
+    OPERATOR        : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
     STRING          : /[^\n\r ].*/
     SL_COMMENT      : /#[^\r\n]+/ _NL
     DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
-    %import common.CNAME                                                                    -> NAME
+    %import common.CNAME                                                                -> NAME
     %import common.WS_INLINE
     %declare _INDENT _DEDENT
     %ignore WS_INLINE
@@ -104,7 +107,7 @@ def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
     return {}
 
 
-def to_dict(tree: Any) -> Any:
+def to_dict(tree: Any, part_of: str = None) -> Any:
     if isinstance(tree, Token):
         return tree.value
 
@@ -119,7 +122,9 @@ def to_dict(tree: Any) -> Any:
         }
 
     elif tree.data in ("sequence"):
-        children = [to_dict(child) for child in tree.children]
+        partOf = [str(child.children[0]) for child in tree.children if child.data == "scope"]
+        partOf = partOf[0] if len(partOf) else None
+        children = [to_dict(child, partOf) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
         members = [child for child in children if child.get("layer") is not None]
         return {
@@ -150,12 +155,11 @@ def to_dict(tree: Any) -> Any:
             }
         }
 
-    elif tree.data in ("not_exist"):
-        # print("ADADADD", tree.data, tree.children)
+    elif tree.data in ("exists"):
         children = [to_dict(child) for child in tree.children]
-        return {"filters": {"operator": "EXIST", "args": children}}
+        return {"constraints": {"quantor": "EXISTS", "args": children}}
 
-    elif tree.data in ("turn", "token", "segment", "deprel", "gesture"):
+    elif tree.data in ("turn", "token", "segment", "deprel", "gesture", "document"):
         children = [to_dict(child) for child in tree.children]
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
@@ -166,10 +170,12 @@ def to_dict(tree: Any) -> Any:
             if tree.data == "deprel"
             else f"{tree.data[0].upper()}{tree.data[1:]}"
         )
+        _part_of = {"partOf": part_of} if part_of else {}
         return {
             "layer": layer,
             **({k: v for child in others for k, v in child.items()} if others else {}),
             **constraints,
+            **_part_of,
         }
     elif tree.data == "property":
         return {

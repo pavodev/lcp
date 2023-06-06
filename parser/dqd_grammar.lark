@@ -1,12 +1,14 @@
 ?start: _NL* [predicate+]
 
 predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
-                | "Segment"scope? label? _NL                                        -> segment
+                | "Segment"scope? label? _NL [_INDENT property+ _DEDENT]            -> segment
                 | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
-                | "Gesture" label? _NL [_INDENT property+ _DEDENT]                  -> gesture
+                | "Document" label? _NL [_INDENT property+ _DEDENT]                 -> document
+                | "Gesture" label? _NL [_INDENT (property|predicate)+ _DEDENT]      -> gesture
                 | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
                 | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                 | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
+                | NOT_OPERATOR? "EXISTS" _NL [_INDENT (predicate)+ _DEDENT]         -> exists
                 | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                 | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
                 | label "=> collocation" _NL [_INDENT r_coll_prop+ _DEDENT]         -> results_collocation
@@ -15,7 +17,7 @@ repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/                                     
 label           : VARIABLE                                                          -> label
 scope           : "@"VARIABLE                                                       -> scope
 result_variable : VARIABLE _NL
-r_plain_prop    : "context" _NL [_INDENT (label _NL) _DEDENT]                       -> result_plain_context
+r_plain_prop    : "context" _NL [_INDENT (label _NL)+ _DEDENT]                      -> result_plain_context
                 | "entities" _NL [_INDENT (label _NL)+ _DEDENT]                     -> result_plain_entities
 r_analysis_prop : "attributes" _NL [_INDENT (STRING _NL)+ _DEDENT]                  -> result_analysis_attributes
                 | "functions" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_analysis_functions
@@ -27,12 +29,13 @@ r_coll_prop     : "center" _NL [_INDENT (STRING _NL)+ _DEDENT]                  
                 | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
 
 VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-OPERATOR        : /(<>|<|>|!=|~|¬|¬=|¬~|<=|>=|=|!|in)/
+NOT_OPERATOR    : /(¬|~|NOT|!)/
+OPERATOR        : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 STRING          : /[^\n\r ].*/
 SL_COMMENT      : /#[^\r\n]+/ _NL
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
-%import common.CNAME                                                                    -> NAME
+%import common.CNAME                                                                -> NAME
 %import common.WS_INLINE
 %declare _INDENT _DEDENT
 %ignore WS_INLINE
