@@ -118,17 +118,12 @@ async def _db_query(
 
     params = params or {}
 
+    n = 1
+    while "%s" in query:
+        query = query.replace("%s", f"${n}", 1)
+        n += 1
+
     async with getattr(pool, method)() as conn:
-
-        # for eventual use in importer:
-        # raw = await conn.get_raw_connection()
-        # raw.cursor()._connection.copy_to_table)
-
-        _n = 1
-        while "%s" in query:
-            query = query.replace("%s", f"${_n}", 1)
-            _n += 1
-
         try:
             res = await conn.execute(text(query), params)
             if store:

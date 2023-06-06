@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import final, Unpack
+from typing import final, Unpack, cast
 
 from aiohttp import web
 from rq.command import send_stop_job_command
@@ -131,12 +131,14 @@ class QueryService:
         self,
         query: str,
         queue: str = "query",
-        **kwargs: int | bool | str | None,
+        **kwargs: int | bool | str | None | list[str],
     ) -> SQLJob | Job:
-        hashed = hash(query)
+        depend = cast(str | list[str], kwargs["depends_on"])
+        hash_dep = tuple(depend) if isinstance(depend, list) else depend
+        hashed = hash((query, hash_dep))
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
-        if exists and False:  # disable because we get false positives
+        if exists:
             try:
                 sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])
                 if sjob.get_status() == "finished":
