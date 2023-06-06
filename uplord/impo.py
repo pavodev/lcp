@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib
+import json
 import os
 
 from collections.abc import Callable, Coroutine, Sequence
@@ -402,10 +403,10 @@ class Importer:
         params = dict(
             name=self.name,
             ver=self.version,
-            template=dict(self.template),
+            template=json.dumps(dict(self.template)),
             schema=self.schema,
-            counts=self.token_count,
-            mapping=dict(self.mapping),
+            counts=json.dumps(self.token_count),
+            mapping=json.dumps(dict(self.mapping)),
         )
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)
