@@ -66,7 +66,9 @@ def _query(
         total_requested,
     )
 
-    new_res, n_results = _add_results(*aargs, kwic=False, meta=meta_json)
+    new_res, n_results = _add_results(
+        *aargs, kwic=False, meta=meta_json, is_vian=kwargs.get("is_vian", False)
+    )
 
     total_found = total_before_now + n_results
     limited = not unlimited and total_found > job.kwargs["needed"]
@@ -167,6 +169,7 @@ def _sentences(
             *aargs,
             kwic=True,
             sents=result,
+            is_vian=depended.kwargs.get("is_vian", False),
             meta=depended.kwargs.get("meta_json"),
         )
         results_so_far = _union_results(base.meta["_sentences"], new_res)

@@ -7,7 +7,7 @@ import os
 import re
 
 from collections import Counter, defaultdict
-from collections.abc import Awaitable, Callable, Coroutine, Mapping
+from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
 
 from datetime import date, datetime
 
@@ -298,6 +298,7 @@ def _add_results(
     res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
     kwics = set(res_objs)
     n_skipped: Counter[int] = Counter()
+    first_list: int | None = None
 
     if meta:
         bundle[0] = meta
@@ -343,11 +344,13 @@ def _add_results(
             continue
         if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
             continue
-        if is_vian is True:
-            tok_ids = rest[1:-4]
-            seg_id = rest[0]
-            extras = rest[-4:]
-            rest = [seg_id, tok_ids, extras]
+        if is_vian:
+            if first_list is None:
+                first_list = next(
+                    (i for i, x in enumerate(rest) if isinstance(x, (list, tuple))),
+                    len(rest),
+                )
+            rest = list(_format_vian(rest, first_list))
         else:
             rest = [rest[0], rest[1:]]
         # rest = cast(list, rest)
@@ -362,6 +365,18 @@ def _add_results(
             bundle[k] = cast(list, bundle[k])[:total_requested]
 
     return bundle, counts[list(kwics)[0]]
+
+
+def _format_vian(
+    rest: Sequence, first_list: int
+) -> tuple[int | str, list[int], int | str, str | None, list[list[int]]]:
+    seg_id = cast(str | int, rest[0])
+    tok_ids = cast(list[int], rest[1 : first_list - 2])
+    gesture = cast(str | None, rest[first_list - 1])
+    doc_id = cast(int | str, rest[first_list - 2])
+    frame_ranges = cast(list[list[int]], rest[first_list:])
+    out = (seg_id, tok_ids, doc_id, gesture, frame_ranges)
+    return out
 
 
 def _union_results(so_far: Results, incoming: Results) -> Results:

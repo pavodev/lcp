@@ -142,9 +142,8 @@ class QueryIteration:
         base = None if not request_data.get("resume") else previous
         is_vian = request_data.get("appType") == "vian"
         # todo: remove this line:
-        is_vian = (
-            "tangram" in request.app["config"][str(corpora_to_use[0])]["schema_path"]
-        )
+        corpus_conf: CorpusConfig = request.app["config"][str(corpora_to_use[0])]
+        is_vian = "tangram" in corpus_conf["schema_path"].lower()
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
             corpora_to_use, request.app["config"], languages, is_vian
