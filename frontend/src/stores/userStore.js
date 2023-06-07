@@ -8,6 +8,7 @@ if (!roomId) {
   roomId = Utils.uuidv4()
   localStorage.setItem("roomId", roomId);
 }
+roomId = Utils.uuidv4()
 
 export const useUserStore = defineStore("userData", {
   state: () => ({

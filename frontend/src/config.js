@@ -134,9 +134,11 @@ else {
         // "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
       },
       sentryDSN: null,
+      baseVideoUrl: "http://localhost:8000",
     };
   }
 }
-config.appType = "vian";
+config.appType = process.env.APP_TYPE == "vian" ? "vian" : "lcp";
+config.appType = "lcp"
 
 export default config;

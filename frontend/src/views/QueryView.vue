@@ -500,6 +500,7 @@ import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useUserStore } from "@/stores/userStore";
+import { useWsStore } from "@/stores/wsStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ResultsTableView from "@/components/results/TableView.vue";
@@ -607,7 +608,6 @@ myColl2 => collocation
       queryName: "",
       currentTab: "dqd",
       simultaneousMode: false,
-      currentResults: [],
       percentageDone: 0,
       percentageTotalDone: 0,
       loading: false,
@@ -630,20 +630,32 @@ myColl2 => collocation
   mounted() {
     if (this.userData) {
       this.userId = this.userData.user.id;
-      this.connectToRoom();
-      this.stop();
+      // this.connectToRoom();
+      // this.stop();
     }
-  },
-  beforeMount() {
-    window.addEventListener("beforeunload", this.sendLeft);
-  },
-  unmounted() {
-    this.sendLeft();
+  // },
+  // beforeMount() {
+  //   window.addEventListener("beforeunload", this.sendLeft);
+  // },
+  // unmounted() {
+  //   this.sendLeft();
   },
   watch: {
+    messages: {
+      handler() {
+        let _messages = this.messages;
+        if (_messages.length > 0) {
+          console.log("WSM", _messages)
+          _messages.forEach(message => this.onSocketMessage(message))
+          useWsStore().clear();
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
     userData() {
       this.userId = this.userData.user.id;
-      this.connectToRoom();
+      // this.connectToRoom();
     },
     selectedCorpora() {
       this.validate();
@@ -722,35 +734,38 @@ myColl2 => collocation
         user: this.userId,
       });
       this.wsConnected = false;
+      console.log("Left WS")
     },
-    connectToRoom() {
-      if (this.wsConnected == true) {
-        this.sendLeft();
-      }
-      this.waitForConnection(() => {
-        this.$socket.sendObj({
-          room: this.roomId,
-          // room: null,
-          action: "joined",
-          user: this.userId,
-        });
-        this.wsConnected = true;
-        this.$socket.onmessage = this.onSocketMessage;
-        this.validate();
-      }, 500);
-    },
-    waitForConnection(callback, interval) {
-      if (this.$socket.readyState === 1) {
-        callback();
-      } else {
-        setTimeout(() => {
-          this.waitForConnection(callback, interval);
-        }, interval);
-      }
-    },
-    onSocketMessage(event) {
+    // connectToRoom() {
+    //   console.log("Connect to WS room", this.wsConnected, this.$socket.readyState)
+    //   if (this.$socket.readyState != 1 || this.wsConnected == false){
+    //     console.log("Connect to WS")
+    //     this.waitForConnection(() => {
+    //       this.$socket.sendObj({
+    //         room: this.roomId,
+    //         // room: null,
+    //         action: "joined",
+    //         user: this.userId,
+    //       });
+    //       this.wsConnected = true;
+    //       this.$socket.onmessage = this.onSocketMessage;
+    //       console.log("Connected to WS")
+    //       this.validate();
+    //     }, 500);
+    //   }
+    // },
+    // waitForConnection(callback, interval) {
+    //   if (this.$socket.readyState === 1) {
+    //     callback();
+    //   } else {
+    //     setTimeout(() => {
+    //       this.waitForConnection(callback, interval);
+    //     }, interval);
+    //   }
+    // },
+    onSocketMessage(data) {
       // the below is just temporary code
-      let data = JSON.parse(event.data);
+      // let data = JSON.parse(event.data);
       // console.log("R", event)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "interrupted") {
@@ -910,7 +925,6 @@ myColl2 => collocation
       this.submit(null, true);
     },
     stop() {
-      this.currentResults = [];
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
@@ -972,6 +986,7 @@ myColl2 => collocation
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useWsStore, ["messages"]),
     availableLanguages() {
       let retval = [];
       if (this.selectedCorpora) {

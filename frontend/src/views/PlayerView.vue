@@ -423,7 +423,7 @@
             <button
               type="button"
               @click="submitQuery"
-              class="btn btn-primary"
+              class="btn btn-primary me-1"
               :disabled="
                 (selectedCorpora && selectedCorpora.length == 0) ||
                 loading ||
@@ -432,6 +432,14 @@
               "
             >
               Submit
+            </button>
+            <button
+              type="button"
+              @click="stop"
+              :disabled="loading == false"
+              class="btn btn-primary"
+            >
+              Stop
             </button>
             <br />
             <br />
@@ -460,6 +468,23 @@
             </button>
           </div>
           <div class="col-6" v-if="loading || WSDataResults">
+            Total progress
+            <div class="progress mb-2">
+              <div
+                class="progress-bar"
+                :class="
+                  loading ? 'progress-bar-striped progress-bar-animated' : ''
+                "
+                role="progressbar"
+                aria-label="Basic example"
+                :style="`width: ${percentageTotalDone}%`"
+                :aria-valuenow="percentageTotalDone"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ percentageTotalDone.toFixed(2) }}%
+              </div>
+            </div>
             <span v-if="WSDataResults">
               <ul class="list-no-bullets">
                 <li
@@ -472,14 +497,14 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(result[1][5][0])"
+                        v-html="frameNumberToTime(result[1][0])"
                       ></span>
                     </div>
                     <div class="col">
                       <span class="text-bold" v-html="WSDataResults.result[-1][result[0]][1].map(x => x[0]).join(' ')" />
                     </div>
                     <div class="col-1">
-                      <span v-html="documentDict[result[1][3]]"></span>
+                      <span v-html="documentDict[result[1][2]]"></span>
                     </div>
                   </div>
                 </li>
@@ -504,10 +529,10 @@ import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useUserStore } from "@/stores/userStore";
+import { useWsStore } from "@/stores/wsStore";
 
-// import config from "@/config";
+import config from "@/config";
 import EditorView from "@/components/EditorView.vue";
-const videoBase = "http://localhost:8000"
 
 // import exampleData from '@/assets/example_data.json';
 
@@ -522,6 +547,7 @@ export default {
       failedStatus: false,
       WSDataResults: null,
 
+      percentageTotalDone: 0,
       progress: 0,
       chart: null,
       editorIndex: 0,
@@ -533,7 +559,7 @@ export default {
       playerSpeed: 1,
       mainVideo: 1,
       mainAudio: 1,
-      baseVideoUrl: `${videoBase}/e822e422-32e1-4635-a0c9-0366970affeb/`,
+      baseVideoUrl: `${config.baseVideoUrl}/e822e422-32e1-4635-a0c9-0366970affeb/`,
       volume: 0.5,
       frameRate: 25.0,
 
@@ -548,7 +574,7 @@ sequence@s
 		upos = NOUN
 
 Gesture g
-	speaker = s.speaker
+	agent = s.agent
 	type = PG
 	start >= s.start - 3s
 	end <= s.end + 3s
@@ -578,6 +604,7 @@ KWIC => plain
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useWsStore, ["messages"]),
     corporaList() {
       return this.corpora
         ? this.corpora.map((corpus) => {
@@ -819,19 +846,19 @@ KWIC => plain
       //     this.loading = true
       //   });
     },
-    connectToRoom() {
-      this.waitForConnection(() => {
-        this.$socket.sendObj({
-          room: this.roomId,
-          // room: null,
-          action: "joined",
-          user: this.userId,
-        });
-        this.$socket.onmessage = this.onSocketMessage;
-      }, 500);
-    },
-    onSocketMessage(event) {
-      let data = JSON.parse(event.data);
+    // connectToRoom() {
+    //   this.waitForConnection(() => {
+    //     this.$socket.sendObj({
+    //       room: this.roomId,
+    //       // room: null,
+    //       action: "joined",
+    //       user: this.userId,
+    //     });
+    //     this.$socket.onmessage = this.onSocketMessage;
+    //   }, 500);
+    // },
+    onSocketMessage(data) {
+      // let data = JSON.parse(event.data);
       console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
@@ -853,7 +880,7 @@ KWIC => plain
           return;
         }
         else if (data["action"] === "sentences") {
-          // this.failedStatus = false;
+          this.failedStatus = false;
           this.WSDataResults = data;
           return;
         } else if (data["action"] === "failed") {
@@ -863,12 +890,12 @@ KWIC => plain
             text: data.value,
           });
         }
-        // else if (data["action"] === "timeout") {
-        //   console.log("Query job expired", data);
-        //   this.failedStatus = true;
-        //   this.submit(null, false, false);
-        //   return;
-        // }
+        else if (data["action"] === "timeout") {
+          console.log("Query job expired", data);
+          this.failedStatus = true;
+          // this.submit(null, false, false);
+          return;
+        }
       } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {
           this.loading = false;
@@ -877,17 +904,24 @@ KWIC => plain
             text: data.value,
           });
         }
+        if (data["status"] == "error") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.info,
+          });
+        }
       }
     },
-    waitForConnection(callback, interval) {
-      if (this.$socket.readyState === 1) {
-        callback();
-      } else {
-        setTimeout(() => {
-          this.waitForConnection(callback, interval);
-        }, interval);
-      }
-    },
+    // waitForConnection(callback, interval) {
+    //   if (this.$socket.readyState === 1) {
+    //     callback();
+    //   } else {
+    //     setTimeout(() => {
+    //       this.waitForConnection(callback, interval);
+    //     }, interval);
+    //   }
+    // },
     showData(data) {
       this.chart = eventDrops({
         d3,
@@ -1169,20 +1203,15 @@ KWIC => plain
     //   this.submit(null, true);
     // },
     stop() {
-      this.currentResults = [];
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
       this.$socket.sendObj({
         room: this.roomId,
-        // room: null,
         action: "stop",
         user: this.userId,
       });
       this.loading = false;
-      // if (this.WSData) {
-      //   this.WSData.percentage_done = 100;
-      // }
     },
     validate() {
       this.$socket.sendObj({
@@ -1196,8 +1225,8 @@ KWIC => plain
   mounted() {
     if (this.userData) {
       this.userId = this.userData.user.id;
-      this.connectToRoom();
-      this.stop();
+      // this.connectToRoom();
+      // this.stop();
       this.validate();
     }
     this._setVolume();
@@ -1231,13 +1260,25 @@ KWIC => plain
     // this.showData(exampleData.document[0])
     // exampleData;
   },
-  beforeMount() {
-    window.addEventListener("beforeunload", this.sendLeft);
-  },
-  unmounted() {
-    this.sendLeft();
-  },
+  // beforeMount() {
+  //   window.addEventListener("beforeunload", this.sendLeft);
+  // },
+  // unmounted() {
+  //   this.sendLeft();
+  // },
   watch: {
+    messages: {
+      handler() {
+        let _messages = this.messages;
+        if (_messages.length > 0) {
+          console.log("WSM", _messages)
+          _messages.forEach(message => this.onSocketMessage(message))
+          useWsStore().clear();
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
     selectedCorpora() {
       this.documentDict = {}
       useCorpusStore().fetchDocuments({

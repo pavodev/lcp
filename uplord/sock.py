@@ -270,8 +270,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     Socket has to handle incoming messages, but also send a message when
     queries have finished processing
     """
-    ws = web.WebSocketResponse()
-
+    ws = web.WebSocketResponse(autoping=True, heartbeat=17)
     # setattr(ws, "__aiter__", _ait)
 
     await ws.prepare(request)
