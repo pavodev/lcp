@@ -58,7 +58,13 @@ class QueryService:
                 job = Job.fetch(exists, connection=self.app["redis"])
                 if job.get_status() == "finished":
                     print("Query found in redis memory. Retrieving...")
-                    _query(job, self.app["redis"], job.result)
+                    _query(
+                        job,
+                        self.app["redis"],
+                        job.result,
+                        user=kwargs["user"],
+                        room=kwargs["room"],
+                    )
                     return job
             except NoSuchJobError:
                 queries.pop(hashed)
@@ -145,6 +151,8 @@ class QueryService:
                 if sjob.get_status() == "finished":
                     print("Sentences found in redis memory. Retrieving...")
                     kwa: dict[str, int | bool | str | None] = {
+                        "user": cast(str, kwargs["user"]),
+                        "room": cast(str | None, kwargs["room"]),
                         "total_results_requested": cast(
                             int, kwargs["total_results_requested"]
                         ),

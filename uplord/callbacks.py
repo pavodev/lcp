@@ -125,6 +125,8 @@ def _query(
             "total_results_requested": total_requested,
         }
     )
+    jso["user"] = kwargs.get("user", jso["user"])
+    jso["room"] = kwargs.get("room", jso["room"])
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
@@ -186,12 +188,13 @@ def _sentences(
         "result": results_so_far,
         "status": depended.meta["_status"],
         "action": "sentences",
-        "user": job.kwargs["user"],
-        "room": job.kwargs["room"],
+        "user": kwargs.get("user", job.kwargs["user"]),
+        "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
         "base": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
+
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
