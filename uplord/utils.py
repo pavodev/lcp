@@ -614,8 +614,6 @@ def _row_to_value(
     corpus_template = cast(CorpusTemplate, template)
     if not enabled:
         print(f"Corpus disabled: {name}={corpus_id}")
-        # disabled.append((name, corpus_id))
-        # continue
 
     schema_path = schema_path.replace("<version>", ver)
     if not schema_path.endswith(ver):

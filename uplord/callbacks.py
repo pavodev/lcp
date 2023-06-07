@@ -455,6 +455,8 @@ def _config(
     fixed: Config = {}
     for tup in result:
         made = _row_to_value(tup)
+        if not made["enabled"]:
+            continue
         fixed[str(made["corpus_id"])] = made
 
     for name, conf in fixed.items():
