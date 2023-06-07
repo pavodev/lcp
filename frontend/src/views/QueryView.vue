@@ -534,6 +534,12 @@ set tdeps
             head = t3
             dep = tx
 
+Token@s thead
+    upos = VERB
+    DepRel
+        head = thead
+        dep = t3
+
 
 myKWIC1 => plain
     context
@@ -585,6 +591,12 @@ myColl2 => collocation
         lemma
     comment
         PoS collocations of all dependends
+
+myColl3 => collocation
+    space
+        thead
+    attribute
+        lemma
 `,
       userId: null,
       wsConnected: false,
