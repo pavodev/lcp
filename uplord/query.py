@@ -148,6 +148,9 @@ def _submit_sents(
         done=qi.done,
         simultaneous=qi.simultaneous,
         base=_get_base(qi, first_job),
+        dqd=qi.dqd,
+        jso=json.dumps(qi.jso, indent=4),
+        sql=qi.sql,
         total_results_requested=qi.total_results_requested,
     )
     qs = qi.app["query_service"]
@@ -190,6 +193,9 @@ def _submit_query(
         languages=list(qi.languages),
         simultaneous=qi.simultaneous,
         is_vian=qi.is_vian,
+        dqd=qi.dqd,
+        jso=json.dumps(qi.jso, indent=4),
+        sql=qi.sql,
         meta_json=qi.meta,
         word_count=word_count,
         parent=parent,

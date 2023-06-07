@@ -138,6 +138,7 @@ class QueryService:
         hashed = hash((query, hash_dep))
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
+        kwargs["sentences_query"] = query
         if exists:
             try:
                 sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])

@@ -107,6 +107,21 @@ async def listen_to_redis(app: web.Application) -> None:
             pass
 
 
+async def _handle_error(
+    app: web.Application, user: str, room: str | None, payload: JSONObject
+) -> None:
+    """
+    Sanitise errors send to FE if not in debug mode
+    """
+    payload["debug"] = app["_debug"]
+    bad_keys = {"traceback", "original_query", "sentences_query", "sql"}
+    if not app["_debug"]:
+        for key in bad_keys:
+            payload.pop(key, None)
+    await push_msg(app["websockets"], room, payload, skip=None, just=(room, user))
+    return None
+
+
 async def _handle_message(
     payload: JSONObject, channel: PubSub, app: web.Application
 ) -> None:
@@ -122,7 +137,11 @@ async def _handle_message(
         "document",
         "document_ids",
         "sentences",
+    )
+    errors = (
         "failed",
+        "upload_fail",
+        "unregistered",
         "timeout",
         "interrupted",  # not currently used, maybe when rooms have multiple users
     )
@@ -140,6 +159,10 @@ async def _handle_message(
             skip=None,
             just=(room, user),
         )
+        return None
+
+    if action in errors:
+        await _handle_error(app, user, room, payload)
         return None
 
     # handle configuration message
@@ -248,6 +271,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     queries have finished processing
     """
     ws = web.WebSocketResponse()
+
     # setattr(ws, "__aiter__", _ait)
 
     await ws.prepare(request)

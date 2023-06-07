@@ -67,6 +67,7 @@ C_COMPILED = "SourceFileLoader" not in str(_LOADER)
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
+DEBUG = bool(os.getenv("DEBUG", "false").lower() in ("true", "1"))
 
 
 async def on_shutdown(app: web.Application) -> None:
@@ -155,6 +156,7 @@ async def create_app(test: bool = False) -> web.Application:
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
     ws: Websockets = defaultdict(set)
     app["websockets"] = ws
+    app["_debug"] = DEBUG
 
     # here we store corpus_id: config
     conf: dict[str, CorpusConfig] = {}

@@ -532,12 +532,6 @@ set tdeps
             head = t3
             dep = tx
 
-Token@s thead
-    upos = VERB
-    DepRel
-        head = thead
-        dep = t3
-
 
 myKWIC1 => plain
     context

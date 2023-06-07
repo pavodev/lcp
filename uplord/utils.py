@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import re
+import traceback
 
 from collections import Counter, defaultdict
 from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
@@ -407,6 +408,13 @@ def _union_results(so_far: Results, incoming: Results) -> Results:
     return so_far
 
 
+async def _get_traceback(exc: Exception) -> str:
+    try:
+        return "".join(traceback.format_tb(exc.__traceback__))
+    except Exception:
+        return ""
+
+
 async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
@@ -424,6 +432,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
         "error": str(exc),
         "status": "timeout",
         "job": job,
+        "traceback": await _get_traceback(exc),
         "action": "timeout",
     }
     logging.warning(f"RQ job timeout: {job}", extra=jso)
@@ -448,6 +457,7 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
             "user": user,
             "room": room,
             "error": str(exc),
+            "traceback": await _get_traceback(exc),
             "status": "unregistered",
             "action": "unregistered",
         }
