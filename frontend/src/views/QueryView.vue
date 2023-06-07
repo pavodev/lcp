@@ -80,7 +80,8 @@
                 (selectedCorpora && selectedCorpora.length == 0) ||
                 loading ||
                 (isQueryValidData != null && isQueryValidData.valid == false) ||
-                !query
+                !query ||
+                languages.length == 0
               "
             >
               Submit
@@ -591,6 +592,7 @@ myColl2 => collocation
         PoS collocations of all dependends
 `,
       userId: null,
+      wsConnected: false,
       selectedCorpora: this.corpora
         ? this.corpora
             .filter((corpus) => corpus.meta.id == 2)
@@ -636,7 +638,6 @@ myColl2 => collocation
       this.userId = this.userData.user.id;
       this.connectToRoom();
       this.stop();
-      this.validate();
     }
   },
   beforeMount() {
@@ -649,6 +650,9 @@ myColl2 => collocation
     userData() {
       this.userId = this.userData.user.id;
       this.connectToRoom();
+    },
+    selectedCorpora() {
+      this.validate();
     },
     corpora() {
       this.selectedCorpora =
@@ -723,8 +727,12 @@ myColl2 => collocation
         action: "left",
         user: this.userId,
       });
+      this.wsConnected = false;
     },
     connectToRoom() {
+      if (this.wsConnected == true) {
+        this.sendLeft();
+      }
       this.waitForConnection(() => {
         this.$socket.sendObj({
           room: this.roomId,
@@ -732,7 +740,9 @@ myColl2 => collocation
           action: "joined",
           user: this.userId,
         });
+        this.wsConnected = true;
         this.$socket.onmessage = this.onSocketMessage;
+        this.validate();
       }, 500);
     },
     waitForConnection(callback, interval) {
@@ -839,6 +849,13 @@ myColl2 => collocation
           useNotificationStore().add({
             type: "error",
             text: data.value,
+          });
+        }
+        if (data["status"] == "error") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.info,
           });
         }
       }
