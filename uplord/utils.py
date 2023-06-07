@@ -122,17 +122,17 @@ def _extract_lama_headers(headers: Mapping[str, Any]) -> dict[str, str]:
     retval = {
         "X-API-Key": os.environ["LAMA_API_KEY"],
         "X-Remote-User": headers.get("X-Remote-User"),
-        "X-Display-Name": headers["X-Display-Name"].encode("cp1252").decode("utf8")
+        "X-Display-Name": headers["X-Display-Name"]
         if headers.get("X-Display-Name")
         else "",
         "X-Edu-Person-Unique-Id": headers.get("X-Edu-Person-Unique-Id"),
         "X-Home-Organization": headers.get("X-Home-Organization"),
         "X-Schac-Home-Organization": headers.get("X-Schac-Home-Organization"),
         "X-Persistent-Id": headers.get("X-Persistent-Id"),
-        "X-Given-Name": headers["X-Given-Name"].encode("cp1252").decode("utf8")
+        "X-Given-Name": headers["X-Given-Name"]
         if headers.get("X-Given-Name")
         else "",
-        "X-Surname": headers["X-Surname"].encode("cp1252").decode("utf8")
+        "X-Surname": headers["X-Surname"]
         if headers.get("X-Surname")
         else "",
         "X-Principal-Name": headers.get("X-Principal-Name"),
