@@ -298,6 +298,10 @@ async def _handle_sock(
     ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService
 ) -> None:
     if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
+        try:
+            await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
+        except Exception:
+            pass
         return None
     if msg.type != WSMsgType.TEXT:
         return None
