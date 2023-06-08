@@ -380,10 +380,10 @@ export default {
       return token;
     },
     results() {
+      let start = this.resultsPerPage * (this.currentPage - 1);
+      let end = start + this.resultsPerPage;
       return this.data
         .filter((row, rowIndex) => {
-          let start = this.resultsPerPage * (this.currentPage - 1);
-          let end = start + this.resultsPerPage;
           return rowIndex >= start && rowIndex < end;
         })
         .map((row) => {

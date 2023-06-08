@@ -73,6 +73,11 @@
   color: var(--bs-pagination-color);
   background-color: var(--bs-pagination-bg);
 }
+.active > .page-link, .page-link.active {
+  color: var(--bs-pagination-active-color);
+  background-color: #2a7f62;
+  border-color: #2a7f62;
+}
 </style>>
 
 <script>
