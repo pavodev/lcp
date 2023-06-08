@@ -222,6 +222,13 @@ List corpora and their configs:
 python -m lcpvian corpora
 ```
 
+Run query on corpus with id `1` (i.e. `sparcling`):
+
+```bash
+python -m lcpvian query 1 query.dqd
+```
+
+You can pass the query as a string, or as a filepath. If the filepath ends with `.json`, a JSON query is expected. Otherwise, DQD format is expected.
 
 ## Testing
 
