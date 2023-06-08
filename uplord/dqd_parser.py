@@ -103,9 +103,11 @@ def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
     return {}
 
 
-def to_dict(tree: Any, part_of: str = None) -> Any:
+def to_dict(tree: Any, part_of: str | None = None) -> Any:
     if isinstance(tree, Token):
         return tree.value
+
+    partOf: str | list[str] | None
 
     if tree.data == "start":
         children = [to_dict(child) for child in tree.children]
@@ -118,7 +120,9 @@ def to_dict(tree: Any, part_of: str = None) -> Any:
         }
 
     elif tree.data in ("sequence"):
-        partOf = [str(child.children[0]) for child in tree.children if child.data == "scope"]
+        partOf = [
+            str(child.children[0]) for child in tree.children if child.data == "scope"
+        ]
         partOf = partOf[0] if len(partOf) else None
         children = [to_dict(child, partOf) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
@@ -164,18 +168,18 @@ def to_dict(tree: Any, part_of: str = None) -> Any:
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
         )
-        others = [child for child in children if "constraints" not in child and "layer1" not in child]
+        others = [
+            child
+            for child in children
+            if "constraints" not in child and "layer1" not in child
+        ]
         _layer = [child for child in children if "layer1" in child]
         layer = {}
         if _layer and _layer[0] and _layer[0]["layer1"]:
             if _layer[0]["layer1"].lower() == "deprel":
-                layer = {
-                    "layer": "DependencyRelation"
-                }
+                layer = {"layer": "DependencyRelation"}
             else:
-                layer = {
-                    "layer": _layer[0]["layer1"]
-                }
+                layer = {"layer": _layer[0]["layer1"]}
         _part_of = {"partOf": part_of} if part_of else {}
         return {
             **layer,
