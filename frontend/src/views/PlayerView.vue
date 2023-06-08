@@ -486,9 +486,17 @@
               </div>
             </div>
             <span v-if="WSDataResults">
+              <PaginationComponent
+                :resultCount="WSDataResults.result[1].length"
+                :resultsPerPage="resultsPerPage"
+                :currentPage="currentPage"
+                @update="updatePage"
+                :key="WSDataResults.result[1].length"
+                :loading="loading"
+              />
               <ul class="list-no-bullets">
                 <li
-                  v-for="(result, index) in WSDataResults.result[1]"
+                  v-for="(result, index) in currentPageResults"
                   :key="index"
                   class="cursor-pointer hover-opacity"
                   @click="resultClick(result)"
@@ -497,14 +505,17 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(result[1][0])"
+                        v-html="frameNumberToTime(result[4][0][0])"
                       ></span>
                     </div>
                     <div class="col">
                       <span class="text-bold" v-html="WSDataResults.result[-1][result[0]][1].map(x => x[0]).join(' ')" />
+                        <span v-if="result[3]">
+                          <br><span v-html="result[3]"></span>
+                        </span>
                     </div>
                     <div class="col-1">
-                      <span v-html="documentDict[result[1][2]]"></span>
+                      <span v-html="documentDict[result[2]]"></span>
                     </div>
                   </div>
                 </li>
@@ -533,6 +544,7 @@ import { useWsStore } from "@/stores/wsStore";
 
 import config from "@/config";
 import EditorView from "@/components/EditorView.vue";
+import PaginationComponent from "@/components/PaginationComponent.vue";
 
 // import exampleData from '@/assets/example_data.json';
 
@@ -546,6 +558,9 @@ export default {
       loading: false,
       failedStatus: false,
       WSDataResults: null,
+
+      resultsPerPage: 20,
+      currentPage: 1,
 
       percentageTotalDone: 0,
       progress: 0,
@@ -588,18 +603,19 @@ KWIC => plain
 		g
 `,
       corpusData: [
-        [2, "AKAW1", ["AKAW1_K1.mp4", "AKAW1_K2.mp4"]],
-        [3, "AKAW2", ["AKAW2_K1.mp4"]],
-        [4, "AWAV1", ["AWAV1_K1.mp4"]],
-        [5, "CALK1", ["CALK1_K1.mp4", "CALK1_K2.mp4"]],
-        [6, "CHAB2", ["CHAB2_K1.mp4", "CHAB2_K2.mp4"]],
-        [7, "DAAF1", ["DAAF1_K1.mp4", "DAAF1_K2.mp4"]],
+        [2, "AKAW1", ["AKAW1_K1.mp4", "AKAW1_K2.mp4"], [1,57800]],
+        [3, "AKAW2", ["AKAW2_K1.mp4"], [57799,103525]],
+        [4, "AWAV1", ["AWAV1_K1.mp4"], [103524,142044]],
+        [5, "CALK1", ["CALK1_K1.mp4", "CALK1_K2.mp4"], [142043,180563]],
+        [6, "CHAB2", ["CHAB2_K1.mp4", "CHAB2_K2.mp4"], [180562,235692]],
+        [7, "DAAF1", ["DAAF1_K1.mp4", "DAAF1_K2.mp4"], [0, 0]],
       ],
       documentDict: {},
     };
   },
   components: {
     EditorView,
+    PaginationComponent,
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -616,19 +632,31 @@ KWIC => plain
           })
         : [];
     },
+    currentPageResults() {
+      let start = this.resultsPerPage * (this.currentPage - 1);
+      let end = start + this.resultsPerPage;
+      return this.WSDataResults.result[1]
+        .filter((row, rowIndex) => {
+          return rowIndex >= start && rowIndex < end;
+        })
+    },
   },
   methods: {
     frameNumberToTime(frameNumber) {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
+    updatePage(currentPage) {
+      this.currentPage = currentPage;
+    },
     resultClick(result) {
-      let value = Utils.frameNumberToSeconds(result[1][5][0]) / 1000;
-      if (this.currentDocument[0] == result[1][3]) {
+      // console.log(result, result[4][0][1])
+      let value = Utils.frameNumberToSeconds(result[4][0][1]) / 1000;
+      if (this.currentDocument[0] == result[2]) {
         this._playerSetTime(value);
       } else {
         // this.currentDocument = this.corpusData[result[2] - 1];
-        this.currentDocument = this.documentDict[result[1][3]];
+        this.currentDocument = this.documentDict[result[2]];
         // console.log("Change document")
         this.setResultTime = value;
       }
@@ -979,6 +1007,13 @@ KWIC => plain
 
       let that = this;
       function calcDate(frameNumber) {
+        try {
+          let shift = that.corpusData[that.currentDocument[0]-2][3][0]
+          frameNumber = frameNumber - shift
+        }
+        catch {
+          console.log("Shift error")
+        }
         Utils.msToTime((frameNumber * 1000) / that.frameRate);
         let time = new Date((parseFloat(frameNumber) / that.frameRate) * 1000)
           .toISOString()
