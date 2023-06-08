@@ -15,21 +15,17 @@ from lark.lexer import Token
 dqd_grammar = r"""
     ?start: _NL* [predicate+]
 
-    predicate       : "Token"scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> token
-                    | "Segment"scope? label? _NL [_INDENT property+ _DEDENT]            -> segment
-                    | "DepRel" label? _NL [_INDENT property+ _DEDENT]                   -> deprel
-                    | "Document" label? _NL [_INDENT property+ _DEDENT]                 -> document
-                    | "Gesture" label? _NL [_INDENT (property|predicate)+ _DEDENT]      -> gesture
-                    | "Turn" label? _NL [_INDENT property+ _DEDENT]                     -> turn
-                    | "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
+    predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                     | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
-                    | NOT_OPERATOR? "EXISTS" _NL [_INDENT (predicate)+ _DEDENT]         -> exists
+                    | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
+                    | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
                     | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                     | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
                     | label "=> collocation" _NL [_INDENT r_coll_prop+ _DEDENT]         -> results_collocation
     property        : VARIABLE OPERATOR STRING _NL                                      -> property
     repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/                                         -> loop
     label           : VARIABLE                                                          -> label
+    layer1          : VARIABLE                                                          -> layer1
     scope           : "@"VARIABLE                                                       -> scope
     result_variable : VARIABLE _NL
     r_plain_prop    : "context" _NL [_INDENT (label _NL)+ _DEDENT]                      -> result_plain_context
@@ -44,8 +40,8 @@ dqd_grammar = r"""
                     | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
 
     VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-    NOT_OPERATOR    : /(¬|~|NOT|!)/
-    OPERATOR        : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
+    NOT_OPERATOR.1  : /(¬|NOT|!)\s?/
+    OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
     STRING          : /[^\n\r ].*/
     SL_COMMENT      : /#[^\r\n]+/ _NL
     DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
@@ -107,10 +103,7 @@ def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
     return {}
 
 
-def to_dict(tree: Any, part_of: str | None = None) -> Any:
-
-    partOf: list[str] | str | None
-
+def to_dict(tree: Any, part_of: str = None) -> Any:
     if isinstance(tree, Token):
         return tree.value
 
@@ -125,9 +118,7 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
         }
 
     elif tree.data in ("sequence"):
-        partOf = [
-            str(child.children[0]) for child in tree.children if child.data == "scope"
-        ]
+        partOf = [str(child.children[0]) for child in tree.children if child.data == "scope"]
         partOf = partOf[0] if len(partOf) else None
         children = [to_dict(child, partOf) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]
@@ -162,22 +153,32 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
 
     elif tree.data in ("exists"):
         children = [to_dict(child) for child in tree.children]
-        return {"constraints": {"quantor": "EXISTS", "args": children}}
+        exists = "EXISTS"
+        if isinstance(children[0], str) and children[0].strip() in ["!", "NOT", "¬"]:
+            exists = "NOT EXISTS"
+            children = children[1:]
+        return {"constraints": {"quantor": exists, "args": children}}
 
-    elif tree.data in ("turn", "token", "segment", "deprel", "gesture", "document"):
+    elif tree.data in ("layer_def"):
         children = [to_dict(child) for child in tree.children]
         constraints = merge_constraints(
             [child for child in children if "constraints" in child]
         )
-        others = [child for child in children if "constraints" not in child]
-        layer = (
-            "DependencyRelation"
-            if tree.data == "deprel"
-            else f"{tree.data[0].upper()}{tree.data[1:]}"
-        )
+        others = [child for child in children if "constraints" not in child and "layer1" not in child]
+        _layer = [child for child in children if "layer1" in child]
+        layer = {}
+        if _layer and _layer[0] and _layer[0]["layer1"]:
+            if _layer[0]["layer1"].lower() == "deprel":
+                layer = {
+                    "layer": "DependencyRelation"
+                }
+            else:
+                layer = {
+                    "layer": _layer[0]["layer1"]
+                }
         _part_of = {"partOf": part_of} if part_of else {}
         return {
-            "layer": layer,
+            **layer,
             **({k: v for child in others for k, v in child.items()} if others else {}),
             **constraints,
             **_part_of,
@@ -190,6 +191,8 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
         }
     elif tree.data == "label":
         return {"label": str(tree.children[0])}
+    elif tree.data == "layer1":
+        return {"layer1": str(tree.children[0])}
     elif tree.data == "scope":
         return {"partOf": str(tree.children[0])}
 

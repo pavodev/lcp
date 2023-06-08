@@ -486,14 +486,6 @@
               </div>
             </div>
             <span v-if="WSDataResults">
-              <PaginationComponent
-                :resultCount="WSDataResults.result[1].length"
-                :resultsPerPage="resultsPerPage"
-                :currentPage="currentPage"
-                @update="updatePage"
-                :key="WSDataResults.result[1].length"
-                :loading="loading"
-              />
               <ul class="list-no-bullets">
                 <li
                   v-for="(result, index) in currentPageResults"
@@ -510,9 +502,9 @@
                     </div>
                     <div class="col">
                       <span class="text-bold" v-html="WSDataResults.result[-1][result[0]][1].map(x => x[0]).join(' ')" />
-                        <span v-if="result[3]">
-                          <br><span v-html="result[3]"></span>
-                        </span>
+                      <span v-if="result[3]">
+                        <br>Gesture: <b><span v-html="result[3]"></span></b>
+                      </span>
                     </div>
                     <div class="col-1">
                       <span v-html="documentDict[result[2]]"></span>
@@ -520,6 +512,14 @@
                   </div>
                 </li>
               </ul>
+              <PaginationComponent
+                :resultCount="WSDataResults.result[1].length"
+                :resultsPerPage="resultsPerPage"
+                :currentPage="currentPage"
+                @update="updatePage"
+                :key="WSDataResults.result[1].length"
+                :loading="loading"
+              />
             </span>
             <!-- <span v-else-if="queryData == 1"></span> -->
             <span v-else>Loading ...</span>
@@ -856,6 +856,7 @@ KWIC => plain
     },
     async submitQuery() {
       this.WSDataResults = null;
+      this.currentPage = 1;
 
       let data = {
         corpora: this.selectedCorpora.value,
