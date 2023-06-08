@@ -108,7 +108,7 @@ async def listen_to_redis(app: web.Application) -> None:
 
 
 async def _handle_error(
-    app: web.Application, user: str, room: str | None, payload: JSONObject
+    app: web.Application, user: str, room: str, payload: JSONObject
 ) -> None:
     """
     Sanitise errors send to FE if not in debug mode

@@ -50,7 +50,7 @@ async def document_ids(request: web.Request) -> web.Response:
         return web.json_response(info)
 
     job_id: str
-    doc_ids: dict[str, str]
+    doc_ids: JSONObject
     ids: Sequence = config[corpus_id]["doc_ids"]
     job_id, doc_ids = ids
     payload: JSONObject = {
@@ -68,7 +68,7 @@ async def document_ids(request: web.Request) -> web.Response:
         skip=None,
         just=(room, user),
     )
-    early: dict[str, str | dict[str, str]] = {
+    early: JSONObject = {
         "status": "finished",
         "job": job_id,
         "document_ids": doc_ids,

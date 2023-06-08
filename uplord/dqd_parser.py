@@ -107,7 +107,10 @@ def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
     return {}
 
 
-def to_dict(tree: Any, part_of: str = None) -> Any:
+def to_dict(tree: Any, part_of: str | None = None) -> Any:
+
+    partOf: list[str] | str | None
+
     if isinstance(tree, Token):
         return tree.value
 
@@ -122,7 +125,9 @@ def to_dict(tree: Any, part_of: str = None) -> Any:
         }
 
     elif tree.data in ("sequence"):
-        partOf = [str(child.children[0]) for child in tree.children if child.data == "scope"]
+        partOf = [
+            str(child.children[0]) for child in tree.children if child.data == "scope"
+        ]
         partOf = partOf[0] if len(partOf) else None
         children = [to_dict(child, partOf) for child in tree.children]
         others = [child for child in children if child.get("layer") is None]

@@ -120,6 +120,10 @@ The defaults in `.env` should work for PostgreSQL and LAMa. Default Redis is loc
 
 Some `.env` values that might need adjusting for deployment:
 
+> `DEBUG`
+
+When this is truthy (`true`, `1`), certain sensitive info can be passed to frontend for display in error messages or console. Usually, this is error tracebacks or SQL scripts. When `debug` is falsey, sensitive values are sanitised.
+
 > `AIO_PORT`
 
 The port that the backend runs on.
