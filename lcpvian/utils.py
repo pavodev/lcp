@@ -281,6 +281,10 @@ def _add_results(
     meta: QueryMeta | None = None,
 ) -> tuple[Results, int]:
     """
+    Compile results of SQL query into the Results dict format
+
+    Return the Results object and an int, the number of results found
+
     todo: check limits here?
     """
     met: QueryMeta = {}
@@ -367,6 +371,9 @@ def _add_results(
 def _format_vian(
     rest: Sequence, first_list: int
 ) -> tuple[int | str, list[int], int | str, str | None, list[list[int]]]:
+    """
+    Little helper to build VIAN kwic sentence data
+    """
     seg_id = cast(str | int, rest[0])
     tok_ids = cast(list[int], rest[1 : first_list - 2])
     gesture = cast(str | None, rest[first_list - 1])
@@ -552,6 +559,9 @@ def _filter_corpora(
     user_data: JSONObject | None,
     get_all: bool = False,
 ) -> Config:
+    """
+    Filter corpora based on app type and user projects
+    """
 
     subtype: TypeAlias = list[dict[str, str]]
 
@@ -718,27 +728,6 @@ class WorkingPythonParser(PythonParser):
         return False
 
 
-ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser
-
-
-async def corpora(app_type: str = "all") -> JSONObject:
-    """
-    Helper to quickly show corpora in app
-    """
-    from dotenv import load_dotenv
-
-    load_dotenv(override=True)
-
-    headers: JSONObject = {}
-    jso = {"appType": app_type, "all": True}
-
-    url = f"http://localhost:{os.environ['AIO_PORT']}/corpora"
-    async with ClientSession() as session:
-        async with session.post(url, headers=headers, json=jso) as resp:
-            result: JSONObject = await resp.json()
-            return result
-
-
 def format_query_params(
     query: str, params: tuple | dict[str, Any]
 ) -> tuple[str, tuple]:
@@ -756,3 +745,6 @@ def format_query_params(
             n += 1
             out.append(v)
     return query, tuple(out)
+
+
+ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser
