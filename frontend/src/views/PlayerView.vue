@@ -1124,90 +1124,94 @@ KWIC => plain
         this.queryDQD = `Segment s
 
 sequence@s
-	Token t1
-		upos = DET
-	Token t2
-		upos = NOUN
+  Token t1
+    upos = DET
+  Token t2
+    upos = NOUN
 
-Gesture g
-	agent = s.agent
-	type = PG
-	start >= s.start - 3s
-	end <= s.end + 3s
+Gesture g1
+  speaker = s.speaker
+  gesture = PG
+  start >= s.start - 3s
+  end <= s.end + 3s
 
 KWIC => plain
-	context
-		s
-	entities
-		t1
-		t2
-		g
+  context
+    s
+  entities
+    t1
+    t2
+    g1
+
 `
       }
       else if (num == 2) {
         this.queryDQD = `Segment s
 
 sequence@s
-	Token t1
-		upos = DET
-	Token t2
-		upos = NOUN
+  Token@s t1
+    upos = DET
+  Token@s t2
+    upos = NOUN
 
 Gesture g
-	agent = s.agent
-	type in (PG, OG, IG, UG)
-	start >= s.start - 5s
-	end <= s.start - 2s
+  agent = s.agent
+  gesture in (PG, OG, IG, UG)
+  g.start >= s.start - 5s
+  g.end <= s.end + 2s
 
 KWIC => plain
-	context
-		s
-	entities
-		t1
-		t2
-		g
+  context
+    s
+  entities
+    t1
+    t2
+    g
+
 `
       }
       else if (num == 3) {
         this.queryDQD = `Segment s1
-	agent.name = speaker_1
+  agent.name = speaker_1
 
 Token@s1 t1
-	form = kopf
+  form = [kK]opf
 
 Segment s2
-	agent.name = speaker_2
-	start >= s1.start
-	end <= s1.end
+  agent.name = speaker_2
+  start >= s1.start
+  end <= s1.end
 
 Token@s2 t2
-	form = rechts
+  form = rechts
 
 KWIC => plain
-	context
-		s1
-		s2
-	entities
-		t1
-		t2
+  context
+    s1
+    s2
+  entities
+    t1
+    t2
+
 `
       }
       else if (num == 4) {
         this.queryDQD = `Document d
 
 Gesture g1
-    agent.name = speaker_1
-    !EXISTS
-        Gesture g2
-            agent.name = speaker_2
-            start >= g1.start - 3s
-            end <= g1.end + 3s
+  agent.name = speaker_1
+
+NOT EXISTS
+  Gesture g2
+    agent.name = speaker_2
+    start >= g1.start - 3s
+    end <= g1.end + 3s
 
 KWIC => plain
-    context
-        d
-    entities
-        g1
+  context
+    d
+  entities
+    g1
 
 `
       }

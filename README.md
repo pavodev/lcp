@@ -216,6 +216,12 @@ Convert corpus tempate to DDL:
 python -m uplord ddl file.json --tabwidth 4
 ```
 
+List corpora and their configs:
+
+```bash
+python -m uplord corpora
+```
+
 
 ## Testing
 
