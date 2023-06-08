@@ -129,12 +129,8 @@ def _extract_lama_headers(headers: Mapping[str, Any]) -> dict[str, str]:
         "X-Home-Organization": headers.get("X-Home-Organization"),
         "X-Schac-Home-Organization": headers.get("X-Schac-Home-Organization"),
         "X-Persistent-Id": headers.get("X-Persistent-Id"),
-        "X-Given-Name": headers["X-Given-Name"]
-        if headers.get("X-Given-Name")
-        else "",
-        "X-Surname": headers["X-Surname"]
-        if headers.get("X-Surname")
-        else "",
+        "X-Given-Name": headers["X-Given-Name"] if headers.get("X-Given-Name") else "",
+        "X-Surname": headers["X-Surname"] if headers.get("X-Surname") else "",
         "X-Principal-Name": headers.get("X-Principal-Name"),
         "X-Mail": headers.get("X-Mail"),
         "X-Shib-Identity-Provider": headers.get("X-Shib-Identity-Provider"),
