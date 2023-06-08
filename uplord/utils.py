@@ -404,13 +404,6 @@ def _union_results(so_far: Results, incoming: Results) -> Results:
     return so_far
 
 
-async def _get_traceback(exc: Exception) -> str:
-    try:
-        return "".join(traceback.format_tb(exc.__traceback__))
-    except Exception:
-        return ""
-
-
 async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
@@ -419,8 +412,11 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
         request_data = await request.json()
     except json.decoder.JSONDecodeError:
         return None
-    user = request_data["user"]
-    room = request_data["room"]
+    tb = ""
+    if hasattr(exc, "__traceback__"):
+        tb = "".join(traceback.format_tb(exc.__traceback__))
+    user = cast(str, request_data.get("user", ""))
+    room = cast(str | None, request_data.get("room", None))
     job = str(exc).split("rq:job:")[-1]
     jso = {
         "user": user,
@@ -428,7 +424,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
         "error": str(exc),
         "status": "timeout",
         "job": job,
-        "traceback": await _get_traceback(exc),
+        "traceback": tb,
         "action": "timeout",
     }
     logging.warning(f"RQ job timeout: {job}", extra=jso)
@@ -446,6 +442,9 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
         request_data = await request.json()
     except json.decoder.JSONDecodeError:
         request_data = {}
+    tb = ""
+    if hasattr(exc, "__traceback__"):
+        tb = "".join(traceback.format_tb(exc.__traceback__))
     user = cast(str, request_data.get("user", ""))
     room = cast(str | None, request_data.get("room", None))
     if user:
@@ -453,7 +452,7 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
             "user": user,
             "room": room,
             "error": str(exc),
-            "traceback": await _get_traceback(exc),
+            "traceback": tb,
             "status": "unregistered",
             "action": "unregistered",
         }
