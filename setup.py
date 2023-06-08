@@ -6,7 +6,7 @@ from setuptools import setup
 from typing import Set
 
 
-PACKAGE_DIR = "uplord"
+PACKAGE_DIR = "lcpvian"
 BASEPATH = os.path.dirname(__file__)
 MODULE_PATH = os.path.join(BASEPATH, PACKAGE_DIR)
 
@@ -55,13 +55,13 @@ kwargs = dict(
     description="corpus linguistics app",
     long_description=read("README.md"),
     long_description_content_type="text/markdown",
-    url="https://gitlab.uzh.ch/LiRI/projects/uplord",
+    url="https://gitlab.uzh.ch/LiRI/projects/lcpvian",
     author="Danny McDonald",
     include_package_data=True,
     zip_safe=False,
     packages=[PACKAGE_DIR],
     package_data={
-        PACKAGE_DIR: ["uplord/py.typed"],
+        PACKAGE_DIR: ["lcpvian/py.typed"],
     },
     author_email="mcddjx@gmail.com",
     license="MIT",

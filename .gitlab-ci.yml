@@ -58,8 +58,8 @@ test:
     - redis-cli -h redis ping
     - pwd
     - ls -al
-    - cd /builds/LiRI/projects/uplord
-    - mypy uplord/app.py
+    - cd /builds/LiRI/projects/lcpvian
+    - mypy lcpvian/app.py
     # building c is not ready yet, mypy bugs most likely
     - python setup.py build_ext --inplace
     # unit tests will not work until db access exists

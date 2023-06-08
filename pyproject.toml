@@ -17,7 +17,7 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "uplord"
+name = "lcpvian"
 authors = [
     {name = "Danny McDonald", email = "daniel.mcdonald@uzh.ch"},
 ]

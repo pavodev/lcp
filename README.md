@@ -1,6 +1,6 @@
-# uplord
+# LCP/VIAN
 
-> uplord monorepository
+> Boths apps together in one monorepository!
 
 First, install Python 3.11 (though anything from 3.9 onward should work) or setup a Python 3.11 virtual environment.
 
@@ -11,15 +11,15 @@ Make sure you also have access to `abstract-query` and `lcp-upload` submodule re
 Then clone this repo and its submodules:
 
 ```bash
-git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/uplord.git 
-cd uplord
+git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/lcpvian.git 
+cd lcpvian
 ````
 
-This will also clone the `abstract-query` and `lcp-upload` submodules. If they are not available in the `uplord` directory, you should remove the first two lines from `requirements.txt` before installing.
+This will also clone the `abstract-query` and `lcp-upload` submodules. If they are not available in the `lcpvian` directory, you should remove the first two lines from `requirements.txt` before installing.
 
-## Things that need to be running for uplord to work
+## Things that need to be running for lcpvian to work
 
-* The backend (`./uplord`)
+* The backend (`./lcpvian`)
 * The frontend (`./frontend`)
 * LAMa (local or remote)
 * PostgreSQL (local or remote)
@@ -49,15 +49,15 @@ Then, start as many RQ workers as you want. To start one:
 
 ```bash
 # uses c code if available, otherwise py:
-python -m uplord worker
+python -m lcpvian worker
 # to only use .py:
-# python uplord/worker.py
+# python lcpvian/worker.py
 ````
 
 In another session, start the app with:
 
 ```bash
-python -m uplord
+python -m lcpvian
 ```
 
 It will use C extension modules if they are available, or else straight Python.
@@ -87,7 +87,7 @@ yarn install
 Then you can start it with:
 
 ```bash
-# in uplord/frontend:
+# in ./frontend:
 yarn serve
 ```
 
@@ -101,7 +101,7 @@ When pulling latest code, you should also fetch the latest from the submodules. 
 git pull --recurse-submodules
 ```
 
-You might also want to configure `git` to push changes to submodules when you push to `uplord`:
+You might also want to configure `git` to push changes to submodules when you push to `lcpvian`:
 
 ```bash
 git config --global push.recurseSubmodules "on-demand"
@@ -111,7 +111,7 @@ git config --global push.recurseSubmodules "on-demand"
 
 To check that typing is correct (do before commit/push/c-extension building):
 ```bash
-mypy uplord
+mypy lcpvian
 ```
 
 ## Configuration
@@ -190,36 +190,36 @@ Currently not used; in theory if there are free resources we could allow a user 
 
 ## Command line interface
 
-Once `uplord` is installed you can run a variety of commands via `python -m uplord`
+Once `lcpvian` is installed you can run a variety of commands via `python -m lcpvian`
 
 Start backend:
 
 ```bash
-python -m uplord
+python -m lcpvian
 ```
 
 Start worker:
 
 ```bash
-python -m uplord worker
+python -m lcpvian worker
 ```
 
 Convert DQD to JSON:
 
 ```bash
-python -m uplord dqd file.dqd
+python -m lcpvian dqd file.dqd
 ```
 
 Convert corpus tempate to DDL:
 
 ```bash
-python -m uplord ddl file.json --tabwidth 4
+python -m lcpvian ddl file.json --tabwidth 4
 ```
 
 List corpora and their configs:
 
 ```bash
-python -m uplord corpora
+python -m lcpvian corpora
 ```
 
 
@@ -245,7 +245,7 @@ coverage html
 5. Start app:
 
 ```bash
-gunicorn --workers 3 --bind 127.0.0.1:9090 uplord.deploy:create_app --worker-class aiohttp.GunicornUVLoopWebWorker
+gunicorn --workers 3 --bind 127.0.0.1:9090 lcpvian.deploy:create_app --worker-class aiohttp.GunicornUVLoopWebWorker
 ```
 
 ## Count lines of code 😉

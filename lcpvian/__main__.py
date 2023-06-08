@@ -1,5 +1,5 @@
 """
-Interface for interacting with uplord server
+Interface for interacting with lcpvian server
 
 Not compiled to c!
 """
@@ -7,11 +7,11 @@ import asyncio
 import json
 import sys
 
-COMMANDS = {"start", "uplord", "worker", "dqd", "ddl", "corpora"}
+COMMANDS = {"start", "lcpvian", "worker", "dqd", "ddl", "corpora"}
 
-command = next((i for i in reversed(sys.argv) if i in COMMANDS), "uplord")
+command = next((i for i in reversed(sys.argv) if i in COMMANDS), "lcpvian")
 
-if command == "uplord" or command == "start":
+if command == "lcpvian" or command == "start":
     from .app import start
 
     print("Starting application...")

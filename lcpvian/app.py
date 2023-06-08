@@ -32,7 +32,7 @@ if SENTRY_DSN:
         dsn=SENTRY_DSN,
         integrations=[AioHttpIntegration(), sentry_logging],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
-        environment=os.getenv("SENTRY_ENVIRONMENT", "uplord"),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "lcpvian"),
     )
 
 
