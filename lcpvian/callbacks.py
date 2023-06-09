@@ -12,7 +12,7 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
-from .typed import MainCorpus, JSONObject, UserQuery, RawSent, Config, QueryArgs
+from .typed import MainCorpus, JSONObject, UserQuery, RawSent, Config, QueryArgs, Batch
 from .utils import (
     CustomEncoder,
     Interrupted,
@@ -20,6 +20,7 @@ from .utils import (
     _get_status,
     _union_results,
     _row_to_value,
+    _apply_filters,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
@@ -34,6 +35,7 @@ def _query(
     """
     Job callback, publishes a redis message containing the results
     """
+    from_memory = kwargs.get("from_memory", False)
     restart = kwargs.get("hit_limit", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     results_so_far = job.kwargs.get("existing_results", {})
@@ -57,6 +59,8 @@ def _query(
 
     unlimited = needed == -1 or job.kwargs.get("simultaneous", False) or False
 
+    post_processes = job.kwargs.get("post_processes", {})
+
     aargs = (
         result,
         total_before_now,
@@ -73,6 +77,7 @@ def _query(
     total_found = total_before_now + n_results
     limited = not unlimited and total_found > job.kwargs["needed"]
     results_so_far = _union_results(results_so_far, new_res)
+    results_to_send = _apply_filters(results_so_far, post_processes)
     limit = False if n_results < total_requested else total_found - total_requested
 
     just_finished = tuple(job.kwargs["current_batch"])
@@ -86,8 +91,8 @@ def _query(
     # the +1 could be wrong, maybe hit_limit should be -1?
     job.meta["start_at"] = 0 if restart is False else restart
     job.meta["_args"] = aargs[1:]
-    # job.meta["lines_sent_to_fe"] = lines_sent_to_fe
-    # job.meta["all_results"] = results_so_far
+    table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
+    first_job = job.kwargs["first_job"] or job.id
 
     if status == "finished":
         projected_results = total_found
@@ -110,7 +115,8 @@ def _query(
     jso = dict(**job.kwargs)
     jso.update(
         {
-            "result": results_so_far,
+            "result": results_to_send,
+            "full_result": results_so_far,
             "status": status,
             "job": job.id,
             "action": "query_result",
@@ -118,7 +124,10 @@ def _query(
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "hit_limit": limit,
+            "from_memory": from_memory,
             "total_results_so_far": total_found,
+            "table": table,
+            "first_job": first_job,
             "batch_matches": n_results,
             "done_batches": done_part,
             "sentences": job.kwargs["sentences"],
@@ -144,7 +153,7 @@ def _sentences(
     total_requested = kwargs.get("total_results_requested")
     start_at = kwargs.get("start_at")
 
-    base = Job.fetch(job.kwargs["base"], connection=connection)
+    base = Job.fetch(job.kwargs["first_job"], connection=connection)
     if "_sentences" not in base.meta:
         base.meta["_sentences"] = {}
 
@@ -162,6 +171,10 @@ def _sentences(
         aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
 
     already = base.meta.get("already", [])
+
+    cb: Batch = depended.kwargs["current_batch"]
+
+    table = f"{cb[1]}.{cb[2]}"
 
     if job.id not in already:
         already.append(job.id)
@@ -191,7 +204,8 @@ def _sentences(
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
-        "base": base.id,
+        "table": table,
+        "first_job": base.id,
         "percentage_done": round(depended.meta["percentage_done"], 3),
     }
 
@@ -392,8 +406,9 @@ def _general_failure(
 
     print("Failure of some kind:", job, trace, typ, value)
     if isinstance(typ, Interrupted) or typ == Interrupted:
-        # jso = {"status": "interrupted", "action": "interrupted", "job": job.id, **kwargs, **job.kwargs}
-        return  # do we need to send this?
+        # no need to send a message to the user for interrupts
+        # jso = {"status": "interrupted", "action": "interrupted", "job": job.id}
+        return
     else:
         jso = {
             "status": "failed",

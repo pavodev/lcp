@@ -50,7 +50,7 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        hashed = hash(query)
+        hashed = hash((query, kwargs["sentences"]))
         queries = self.app["memory"]["queries"]
         exists = queries.get(hashed)
         if exists:
@@ -64,6 +64,7 @@ class QueryService:
                         job.result,
                         user=kwargs["user"],
                         room=kwargs["room"],
+                        from_memory=True,
                     )
                     return job
             except NoSuchJobError:

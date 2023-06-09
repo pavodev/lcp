@@ -7,7 +7,7 @@ import traceback
 
 from collections.abc import Sequence
 
-from typing import cast
+from typing import TypeAlias, cast
 
 from aiohttp import web
 from rq.job import Job
@@ -20,27 +20,9 @@ from .utils import _get_all_results, ensure_authorised, push_msg
 from .worker import SQLJob
 
 
-def _get_word_count(qi: QueryIteration) -> int:
-    """
-    Sum the word counts for corpora being searched
-    """
-    total = 0
-    for corpus in qi.corpora:
-        conf = qi.app["config"][str(corpus)]
-        try:
-            has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
-        except (KeyError, TypeError):
-            has_partitions = False
-        if not has_partitions or not qi.languages:
-            total += sum(conf["token_counts"].values())
-        else:
-            counts = conf["token_counts"]
-            for name, num in counts.items():
-                for lang in qi.languages:
-                    if name.rstrip("0").endswith(lang):
-                        total += num
-                        break
-    return total
+Iteration: TypeAlias = tuple[
+    Job | None, str | None, dict[str, str | bool | None], list[str]
+]
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -110,121 +92,17 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         return qi
 
 
-def _get_base(qi: QueryIteration, first_job: Job | None) -> str:
-    """
-    Find the original base of a query
-    """
-    j: str
-    if qi.simultaneous and first_job:
-        j = first_job.id
-        return j
-    elif qi.resuming and qi.done and qi.base:
-        j = qi.base
-    elif qi.resuming and qi.done and not qi.base and qi.previous_job:
-        # todo: not sure if this is right...
-        j = qi.previous_job.kwargs.get("base", qi.previous_job.id)
-    final: str | None = qi.job_id if qi.base is None and qi.job_id else qi.base
-    assert final is not None
-    return final if final else ""
-
-
-def _submit_sents(
-    qi: QueryIteration, first_job: Job | None, dep_chain: list[str]
-) -> tuple[Job, list[str]]:
-    """
-    Helper to submit a sentences job
-    """
-    depends_on = qi.job_id if not qi.done and qi.job is not None else qi.previous
-    to_use: list[str] | str = []
-    if qi.simultaneous and depends_on:
-        dep_chain.append(depends_on)
-        to_use = dep_chain
-    elif depends_on:
-        to_use = depends_on
-
-    kwargs = dict(
-        user=qi.user,
-        room=qi.room,
-        done=qi.done,
-        simultaneous=qi.simultaneous,
-        base=_get_base(qi, first_job),
-        dqd=qi.dqd,
-        jso=json.dumps(qi.jso, indent=4),
-        sql=qi.sql,
-        total_results_requested=qi.total_results_requested,
-    )
-    qs = qi.app["query_service"]
-    sents_job = qs.sentences(qi.sents_query(), depends_on=to_use, **kwargs)
-    # if simultaneous:
-    #    dep_chain.append(stats_job.id)
-    return sents_job, dep_chain
-
-
-def _submit_query(
-    qi: QueryIteration,
-    word_count: int,
-    qd: list[str],
-) -> Job:
-    """
-    Helper to submit a query job
-    """
-    parent: str | None = None
-    if qi.job is not None:
-        parent = qi.job_id
-    elif qi.resuming:
-        parent = qi.previous
-
-    query_kwargs = dict(
-        original_query=qi.query,
-        user=qi.user,
-        room=qi.room,
-        needed=qi.needed,
-        total_results_requested=qi.total_results_requested,
-        done_batches=qi.done_batches,
-        all_batches=qi.all_batches,
-        current_batch=qi.current_batch,
-        total_results_so_far=qi.total_results_so_far,
-        corpora=qi.corpora,
-        base=qi.base,
-        existing_results=qi.existing_results,
-        sentences=qi.sentences,
-        offset=qi.hit_limit,
-        page_size=qi.page_size,
-        languages=list(qi.languages),
-        simultaneous=qi.simultaneous,
-        is_vian=qi.is_vian,
-        dqd=qi.dqd,
-        jso=json.dumps(qi.jso, indent=4),
-        sql=qi.sql,
-        meta_json=qi.meta,
-        word_count=word_count,
-        parent=parent,
-    )
-
-    job: Job | SQLJob = qi.app["query_service"].query(
-        qi.sql, depends_on=qd, **query_kwargs
-    )
-    return job
-
-
-async def _query_iteration(
-    qi: QueryIteration,
-    it: int,
-    first_job: Job | None,
-    query_depends: list[str],
-    dep_chain: list[str],
-) -> tuple[Job | None, str | None, dict[str, str | bool | None], list[str]]:
+async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     """
     Oversee the querying of a single batch
     """
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
-    depend: str | None = None
 
     # handle resumed queries -- figure out if we need to query new batch
     if qi.resuming:
         qi = await _do_resume(qi)
 
-    jobs: dict[str, str | bool | None] = {}
+    jobs: dict[str, str | bool] = {}
 
     if qi.done:
         jobs = {
@@ -232,13 +110,11 @@ async def _query_iteration(
             "sentences": qi.sentences,
             "job": qi.job_id if qi.job else qi.previous,
         }
+        qi.job_info = jobs
         if qi.simultaneous and qi.current_batch is not None:
             qi.done_batches.append(qi.current_batch)
             qi.current_batch = None
-
-        return qi.job, depend, jobs, dep_chain
-
-    word_count = _get_word_count(qi)
+        return qi
 
     qi.decide_batch()
     qi.make_query()
@@ -251,39 +127,36 @@ async def _query_iteration(
         print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
 
     # organise and submit query to rq via query service
-    job = _submit_query(qi, word_count, query_depends)
-    qi.job = job
-    qi.job_id = job.id
+    query_job = qi.submit_query()
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
     if qi.job and qi.simultaneous and it and max_jobs > 0 and not divv:
-        depend = qi.job_id
+        qi.dep_chain.append(query_job.id)
 
     if qi.current_batch is not None and qi.job is not None:
         schema_table = ".".join(qi.current_batch[1:3])
-        print(f"\nNow querying: {schema_table} ... {qi.job_id}")
-
-    if qi.simultaneous and not it:
-        first_job = qi.job
+        print(f"\nNow querying: {schema_table} ... {query_job.id}")
 
     # prepare and submit sentences query
-    if qi.sentences:
-        sents_job, dep_chain = _submit_sents(qi, first_job, dep_chain)
+    if qi.sentences and not qi.from_memory:
+        sents_job = qi.submit_sents()
 
     jobs = {
         "status": "started",
         "job": qi.job_id if qi.job else qi.previous,
     }
 
-    if qi.sentences and not qi.done:
+    if qi.sentences and not qi.done and not qi.from_memory:
         jobs.update({"sentences": True, "sentences_job": sents_job.id})
+
+    qi.job_info = jobs
 
     if qi.simultaneous and qi.current_batch is not None:
         qi.done_batches.append(qi.current_batch)
         qi.current_batch = None
 
-    return job, depend, jobs, dep_chain
+    return qi  # job, depend, jobs, dep_chain
 
 
 @ensure_authorised
@@ -304,7 +177,6 @@ async def query(
     by creating a utils.QueryIteration dataclass. Use this to keep the namespace of this
     function from growing any larger...
     """
-
     # Turn request or manual dict into a QueryIteration object
     if manual is not None and isinstance(app, web.Application):
         # 'request' comes from sock.py, it is a non-first iteration
@@ -315,41 +187,32 @@ async def query(
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
-    http_response: list[dict[str, str | bool | None]] = []
-    first: Job | None = None
-    dep_chain: list[str] = []
-    depends: list[str] = []
+    http_response: list[dict[str, str | bool]] = []
+    out: Iteration
 
     try:
         for it in range(iterations):
-            out = await _query_iteration(qi, it, first, depends, dep_chain)
-            job, dep, jobs, dep_chain = out
-            if not it and job:
-                first = job
-            if dep:
-                depends.append(dep)
-            http_response.append(jobs)
+            qi = await _query_iteration(qi, it)
+            http_response.append(qi.job_info)
     except Exception as err:
         tb = traceback.format_exc()
         fail: dict[str, str] = {
             "status": "error",
+            "action": "query_error",
             "type": str(type(err)),
-            "info": f"Could not create query: {str(err)}",
-        }
-        extra: dict[str, str | None] = {
-            "user": qi.user,
-            "room": qi.room,
             "traceback": tb,
-            **fail,
+            "user": qi.user,
+            "room": qi.room or "",
+            "info": f"Could not create query: {str(err)}",
         }
         msg = f"Error: {err} ({qi.user}/{qi.room})"
         # alert everyone possible about this problem:
         print(f"{msg}:\n\n{tb}")
-        logging.error(msg, extra=extra)
-        broadcast = cast(JSONObject, fail)
-        await push_msg(
-            qi.app["websockets"], qi.room or "", broadcast, just=(qi.room, qi.user)
-        )
+        logging.error(msg, extra=fail)
+        payload = cast(JSONObject, fail)
+        room: str = qi.room or ""
+        just: tuple[str, str] = (room, qi.user)
+        await push_msg(qi.app["websockets"], room, payload, just=just)
         return web.json_response(fail)
 
     if qi.simultaneous:

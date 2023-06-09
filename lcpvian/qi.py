@@ -3,7 +3,7 @@ import sys
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import TypeVar, cast
+from typing import Any, TypeVar, cast
 from uuid import uuid4
 
 from abstract_query.create import json_to_sql
@@ -47,7 +47,6 @@ class QueryIteration:
     page_size: int
     languages: set[str]
     simultaneous: str
-    base: None | str
     sentences: bool
     is_vian: bool
     app: Application
@@ -61,12 +60,20 @@ class QueryIteration:
     total_results_so_far: int = 0
     existing_results: Results = field(default_factory=dict)
     job: Job | SQLJob | None = None
-    job_id: str | None = ""
+    job_id: str = ""
+    from_memory: bool = False
     previous_job: Job | SQLJob | None = None
     dqd: str = ""
     sql: str = ""
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
+    job_info: dict[str, str | bool] = field(default_factory=dict)
+    word_count: int = 0
+    iteration: int = 0
+    first_job: str = ""
+    query_depends: list[str] = field(default_factory=list)
+    dep_chain: list[str] = field(default_factory=list)
+    post_processes: dict[int, Any] = field(default_factory=dict)
 
     def make_query(self) -> None:
         """
@@ -89,10 +96,11 @@ class QueryIteration:
         except json.JSONDecodeError:
             json_query = convert(self.query)
             self.dqd = self.query
-        sql_query, meta_json = json_to_sql(json_query, **kwa)
+        sql_query, meta_json, post_processes = json_to_sql(json_query, **kwa)
         self.jso = json_query
         self.sql = sql_query
         self.meta = meta_json
+        self.post_processes = post_processes
         return None
 
     @staticmethod
@@ -139,10 +147,10 @@ class QueryIteration:
         languages = set(langs)
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
-        base = None if not request_data.get("resume") else previous
+        first_job = "" if not request_data.get("resume") else previous
         is_vian = request_data.get("appType") == "vian"
-        # todo: remove this line:
         corpus_conf: CorpusConfig = request.app["config"][str(corpora_to_use[0])]
+        # todo: remove this line:
         is_vian = "tangram" in corpus_conf["schema_path"].lower()
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -165,13 +173,114 @@ class QueryIteration:
             "existing_results": {},
             "total_results_requested": total_requested,
             "needed": total_requested,
+            "first_job": first_job,
             "total_results_so_far": 0,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
-            "base": base,
             "is_vian": is_vian,
         }
-        return cls(**details)
+        made: Self = cls(**details)
+        made.get_word_count()
+        return made
+
+    def get_word_count(self) -> None:
+        """
+        Sum the word counts for corpora being searched
+        """
+        total = 0
+        for corpus in self.corpora:
+            conf = self.app["config"][str(corpus)]
+            try:
+                has_partitions = "partitions" in conf["mapping"]["layer"][conf["token"]]
+            except (KeyError, TypeError):
+                has_partitions = False
+            if not has_partitions or not self.languages:
+                total += sum(conf["token_counts"].values())
+            else:
+                counts = conf["token_counts"]
+                for name, num in counts.items():
+                    for lang in self.languages:
+                        if name.rstrip("0").endswith(lang):
+                            total += num
+                            break
+        self.word_count = total
+        return None
+
+    def submit_query(self) -> Job:
+        """
+        Helper to submit a query job
+        """
+        parent: str | None = None
+        if self.job is not None:
+            parent = self.job_id
+        elif self.resuming:
+            parent = self.previous
+
+        query_kwargs = dict(
+            original_query=self.query,
+            user=self.user,
+            room=self.room,
+            needed=self.needed,
+            total_results_requested=self.total_results_requested,
+            done_batches=self.done_batches,
+            all_batches=self.all_batches,
+            current_batch=self.current_batch,
+            total_results_so_far=self.total_results_so_far,
+            corpora=self.corpora,
+            existing_results=self.existing_results,
+            sentences=self.sentences,
+            offset=self.hit_limit,
+            page_size=self.page_size,
+            post_processes=self.post_processes,
+            languages=list(self.languages),
+            simultaneous=self.simultaneous,
+            is_vian=self.is_vian,
+            dqd=self.dqd,
+            first_job=self.first_job,
+            jso=json.dumps(self.jso, indent=4),
+            sql=self.sql,
+            meta_json=self.meta,
+            word_count=self.word_count,
+            parent=parent,
+        )
+
+        job: Job | SQLJob = self.app["query_service"].query(
+            self.sql, depends_on=self.query_depends, **query_kwargs
+        )
+        self.job = job
+        self.job_id = job.id
+        if not self.first_job:
+            self.first_job = job.id
+        return job
+
+    def submit_sents(self) -> Job:
+        """
+        Helper to submit a sentences job
+        """
+        depends_on = self.job_id if not self.done and self.job_id else self.previous
+        to_use: list[str] | str = []
+        if self.simultaneous and depends_on:
+            self.dep_chain.append(depends_on)
+            to_use = self.dep_chain
+        elif depends_on:
+            to_use = depends_on
+
+        kwargs = dict(
+            user=self.user,
+            room=self.room,
+            done=self.done,
+            simultaneous=self.simultaneous,
+            first_job=self.first_job or self.job_id,
+            dqd=self.dqd,
+            jso=json.dumps(self.jso, indent=4),
+            sql=self.sql,
+            total_results_requested=self.total_results_requested,
+        )
+        qs = self.app["query_service"]
+        sents_job = qs.sentences(self.sents_query(), depends_on=to_use, **kwargs)
+        # if simultaneous:
+        #    dep_chain.append(stats_job.id)
+        return sents_job
 
     @staticmethod
     def _determine_language(batch: str) -> str | None:
@@ -230,24 +339,28 @@ class QueryIteration:
         tot_req = cast(int, manual["total_results_requested"])
         tot_so_far = cast(int, manual["total_results_so_far"])
         needed = tot_req - tot_so_far if tot_req > 0 else -1
+        from_memory = manual.get("from_memory", False)
+        sentences = manual.get("sentences", True)
 
         details = {
             "corpora": corpora_to_use,
-            "existing_results": manual["result"],
+            "existing_results": manual.get("full_result", manual["result"]),
             "user": manual["user"],
             "room": manual["room"],
             "job": job,
             "app": app,
             "job_id": manual["job"],
             "config": app["config"],
+            "word_count": manual["word_count"],
             "simultaneous": manual.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),  # comment out?
             "page_size": job.kwargs.get("page_size", 20),
             "total_results_requested": tot_req,
-            "base": manual["base"],
+            "first_job": manual["first_job"],
             "query": job.kwargs["original_query"],
-            "sentences": manual.get("sentences", True),
+            "sentences": sentences,
+            "from_memory": from_memory,
             "hit_limit": manual.get("hit_limit", False),
             "current_batch": None,
             "all_batches": all_batches,

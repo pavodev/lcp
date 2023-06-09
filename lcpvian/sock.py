@@ -5,6 +5,7 @@ import json
 import logging
 import traceback
 
+from collections.abc import Coroutine
 from typing import Sized, cast
 
 try:
@@ -215,6 +216,8 @@ async def _handle_query(
     so_far = payload.get("total_results_so_far", -1)
     done_batch = len(cast(Sized, payload["done_batches"]))
     tot_batch = len(cast(Sized, payload["all_batches"]))
+    to_submit: None | Coroutine = None
+
     print(
         f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total\n"
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% done)"
@@ -225,11 +228,10 @@ async def _handle_query(
         and job not in app["canceled"]
     ):
         payload["config"] = app["config"]
-        if payload["base"] is None:
-            payload["base"] = job
+        if not payload["first_job"]:
+            payload["first_job"] = job
         if not payload.get("simultaneous"):
-            await query(None, manual=payload, app=app)
-        # return  # return will prevent partial results from going back to frontend
+            to_submit = query(None, manual=payload, app=app)
     to_send = payload
     n_users = len(app["websockets"].get(room, set()))
     if status in {"finished", "satisfied", "partial"}:
@@ -243,8 +245,11 @@ async def _handle_query(
             "room": room,
             "n_users": n_users,
             "status": status,
-            "base": payload["base"],
+            "word_count": payload["word_count"],
+            "first_job": payload["first_job"],
             "is_vian": payload.get("is_vian", False),
+            "table": payload.get("table"),
+            "from_memory": payload.get("from_memory", False),
             "batch_matches": payload["batch_matches"],
             "total_results_so_far": payload["total_results_so_far"],
             "percentage_done": payload["percentage_done"],
@@ -256,6 +261,8 @@ async def _handle_query(
             "simultaneous": payload.get("simultaneous", False),
         }
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
+    if to_submit is not None:
+        await to_submit
 
 
 async def _ait(self: WSMessage) -> WSMessage:

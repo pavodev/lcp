@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import operator
 import os
 import re
 import traceback
@@ -56,6 +57,18 @@ from .typed import (
 from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
+
+
+OPS = {
+    "<": operator.lt,
+    "<=": operator.le,
+    "=": operator.eq,
+    "==": operator.eq,
+    "<>": operator.ne,
+    "!=": operator.ne,
+    ">": operator.ge,
+    ">=": operator.gt,
+}
 
 
 class Interrupted(Exception):
@@ -309,7 +322,7 @@ def _add_results(
             add_to = cast(ResultSents, bundle[-1])
             add_to[str(sent[0])] = [sent[1], sent[2]]
 
-    for x, line in enumerate(result):
+    for line in result:
         key = int(line[0])
         rest: list[Any] = line[1]
         if not key:
@@ -383,10 +396,84 @@ def _format_vian(
     return out
 
 
+def _make_filters(
+    post: dict[int, list[dict[str, Any]]]
+) -> dict[int, list[tuple[str, str, str | int | float]]]:
+    """
+    Because we iterate over them a lot, turn the filters object into something
+    as performant as possible
+    """
+    out = {}
+    for idx, filters in post.items():
+        fixed: list[tuple[str, str, str | int | float]] = []
+        for filt in filters:
+            name, comp = cast(tuple[str, str], list(filt.items())[0])
+            if name != "comparison":
+                raise ValueError("expected comparion")
+
+            bits: Sequence[str | int | float] = comp.split()
+            last_bit = cast(str, bits[-1])
+            body = bits[:-1]
+            assert isinstance(body, list)
+            if last_bit.isnumeric():
+                body.append(int(last_bit))
+            elif last_bit.replace(".", "").isnumeric():
+                body.append(float(last_bit))
+            else:
+                body = bits
+            made = cast(tuple[str, str, int | str | float], tuple(body))
+            fixed.append(made)
+        out[idx] = fixed
+    return out
+
+
+def _apply_filters(results_so_far: Results, post_processes: dict[int, Any]) -> Results:
+    """
+    Take the unioned results and apply any post process functions
+    """
+    if not post_processes:
+        return results_so_far
+    out: Results = {}
+    post = _make_filters(post_processes)
+    for k, v in results_so_far.items():
+        for key, filters in post.items():
+            if not filters:
+                continue
+            if int(k) < 1:
+                continue
+            if int(k) != int(key):
+                continue
+            for name, op, num in filters:
+                v = _apply_filter(cast(list, v), name, op, num)
+        out[k] = v
+    return out
+
+
+def _apply_filter(result: list, name: str, op: str, num: int | str | float) -> list:
+    """
+    Apply a single filter to a group of results, returning only those that match
+    """
+    out: list = []
+    for r in result:
+        total = r[-1]
+        res = OPS[op](total, num)
+        if res and r not in out:
+            out.append(r)
+    return out
+
+
 def _union_results(so_far: Results, incoming: Results) -> Results:
     """
     Join two results objects
     """
+    met = cast(dict[str, list[dict]], incoming[0])
+    freqs = set(
+        [
+            i
+            for i, r in enumerate(met["result_sets"], start=1)
+            if r["name"] == "analysis"
+        ]
+    )
     for k, v in incoming.items():
         if not k:
             if k in so_far:
@@ -408,65 +495,76 @@ def _union_results(so_far: Results, incoming: Results) -> Results:
             lst = cast(list, so_far[k])
             lst += v
             so_far[k] = lst
+
+    for k, v in so_far.items():
+        if k in freqs:
+            so_far[k] = _fix_freq(cast(list[list], v))
+
     return so_far
+
+
+def _fix_freq(v: list[list]) -> list[list]:
+    """
+    Sum frequency objects and remove duplicate
+    """
+    fixed = []
+    for r in v:
+        body = r[:-1]
+        total = sum(x[-1] for x in v if x[:-1] == body)
+        body.append(total)
+        if body not in fixed:
+            fixed.append(body)
+    return fixed
+
+
+async def _general_error_handler(
+    kind: str, exc: Exception, request: web.Request
+) -> None:
+    """
+    Catch exception, log it, try to send ws message
+    """
+    try:
+        request_data = await request.json()
+    except json.decoder.JSONDecodeError:
+        return None
+    tb = ""
+    if hasattr(exc, "__traceback__"):
+        tb = "".join(traceback.format_tb(exc.__traceback__))
+    user = cast(str, request_data.get("user", ""))
+    room = cast(str | None, request_data.get("room", None))
+    job = str(exc).split("rq:job:")[-1] if kind == "timeout" else ""
+    jso = {
+        "user": user,
+        "room": room,
+        "error": str(exc),
+        "status": kind,
+        "action": kind,
+        "traceback": tb,
+    }
+    msg = f"Warning: {kind}"
+    if job:
+        msg += f" -- {job}"
+        jso["job"] = job
+    print(msg)
+    logging.warning(msg, extra=jso)
+    if user:
+        connection = request.app["redis"]
+        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 async def handle_timeout(exc: Exception, request: web.Request) -> None:
     """
     If a job dies due to TTL, we send this...
     """
-    try:
-        request_data = await request.json()
-    except json.decoder.JSONDecodeError:
-        return None
-    tb = ""
-    if hasattr(exc, "__traceback__"):
-        tb = "".join(traceback.format_tb(exc.__traceback__))
-    user = cast(str, request_data.get("user", ""))
-    room = cast(str | None, request_data.get("room", None))
-    job = str(exc).split("rq:job:")[-1]
-    jso = {
-        "user": user,
-        "room": room,
-        "error": str(exc),
-        "status": "timeout",
-        "job": job,
-        "traceback": tb,
-        "action": "timeout",
-    }
-    logging.warning(f"RQ job timeout: {job}", extra=jso)
-    connection = request.app["redis"]
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    await _general_error_handler("timeout", exc, request)
 
 
 async def handle_lama_error(exc: Exception, request: web.Request) -> None:
     """
     If we get a connectionerror when trying to reach lama...
     """
-    request_data: JSONObject
-    try:
-        request_data = await request.json()
-    except json.decoder.JSONDecodeError:
-        request_data = {}
-    tb = ""
-    if hasattr(exc, "__traceback__"):
-        tb = "".join(traceback.format_tb(exc.__traceback__))
-    user = cast(str, request_data.get("user", ""))
-    room = cast(str | None, request_data.get("room", None))
-    if user:
-        jso = {
-            "user": user,
-            "room": room,
-            "error": str(exc),
-            "traceback": tb,
-            "status": "unregistered",
-            "action": "unregistered",
-        }
-        logging.warning(f"Unregistered user/no lama: {user}/{room}", extra=jso)
-        connection = request.app["redis"]
-        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-        return None
+    await _general_error_handler("unregistered", exc, request)
 
 
 def _get_status(n_results: int, tot_req: int, **kwargs: Batch | list[Batch]) -> str:
@@ -534,7 +632,7 @@ async def push_msg(
     """
     Send JSON websocket message to one or more users
     """
-    sent_to = set()
+    sent_to: set[tuple[str | None, str]] = set()
     for room, users in sockets.items():
         if session_id and room != session_id:
             continue
@@ -562,7 +660,6 @@ def _filter_corpora(
     """
     Filter corpora based on app type and user projects
     """
-
     subtype: TypeAlias = list[dict[str, str]]
 
     ids: set[str] = set()
