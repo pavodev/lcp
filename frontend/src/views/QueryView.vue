@@ -1,10 +1,10 @@
 <template>
   <div class="query">
     <Title :title="'Query'" class="mt-4" />
-    <div class="container mt-4">
+    <div class="container mt-2">
       <div class="row">
-        <div class="col-6">
-          <div class="mb-3">
+        <div class="col-4">
+          <div class="mb-3 mt-3">
             <label class="form-label">Corpora</label>
             <multiselect
               v-model="selectedCorpora"
@@ -12,6 +12,14 @@
               :multiple="false"
               label="name"
               track-by="value"
+            ></multiselect>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Languages</label>
+            <multiselect
+              v-model="languages"
+              :options="availableLanguages"
+              :multiple="true"
             ></multiselect>
           </div>
           <!-- <div class="mb-3">
@@ -37,7 +45,7 @@
               disabled
             />
           </div> -->
-          <div class="row">
+          <!-- <div class="row">
             <div class="col-3">
               <div class="mb-3">
                 <label class="form-label">Res. per page</label>
@@ -70,7 +78,7 @@
                 ></multiselect>
               </div>
             </div>
-          </div>
+          </div> -->
           <div class="mb-3">
             <button
               type="button"
@@ -128,7 +136,7 @@
             <div></div>
           </div>
         </div>
-        <div class="col-6">
+        <div class="col-8">
           <div class="form-floating mb-3">
             <nav>
               <div class="nav nav-tabs" id="nav-tab" role="tablist">

@@ -9,8 +9,8 @@
   text-align: left;
 }
 #editor {
-  height: 300px;
-  width: 630px;
+  height: 200px;
+  width: 100%;
 }
 </style>
 
@@ -68,7 +68,7 @@ function checkCode (content) {
     parser.parser.parse(content)
   }
   catch (e) {
-    console.log("ERROR", e.token_history, e.line, e.column)
+    // console.log("ERROR", e.token_history, e.line, e.column)
     retval = e.token_history
   }
   return retval
@@ -342,6 +342,16 @@ export default {
     editor.getModel().onDidChangeContent(() => {
       this.updateContent()
     });
+
+    editor.onDidFocusEditorText(()=>{
+      this.$refs.editor.style.height = "500px"
+      editor.layout()
+    })
+    editor.onDidBlurEditorWidget(()=>{
+      this.$refs.editor.style.height = "200px"
+      editor.layout()
+    })
+
 
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
