@@ -1130,8 +1130,8 @@ sequence@s
     upos = NOUN
 
 Gesture g1
-  speaker = s.speaker
-  gesture = PG
+  agent = s.agent
+  type = PG
   start >= s.start - 3s
   end <= s.end + 3s
 
@@ -1156,7 +1156,7 @@ sequence@s
 
 Gesture g
   agent = s.agent
-  gesture in (PG, OG, IG, UG)
+  type in (PG, OG, IG, UG)
   g.start >= s.start - 5s
   g.end <= s.end + 2s
 
