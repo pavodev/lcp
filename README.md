@@ -11,7 +11,7 @@ Make sure you also have access to `abstract-query` and `lcp-upload` submodule re
 Then clone this repo and its submodules:
 
 ```bash
-git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/lcpvian.git 
+git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/lcpvian.git
 cd lcpvian
 ````
 
@@ -80,7 +80,9 @@ npm install --global yarn
 Then, if you haven't before, install the frontend:
 
 ```bash
-cd frontend
+cd vian-eventdrops
+yarn install
+cd ../frontend
 yarn install
 ```
 
@@ -88,7 +90,10 @@ Then you can start it with:
 
 ```bash
 # in ./frontend:
-yarn serve
+# for LCP frontend
+yarn serve:lcp
+# for VIAN frontend
+yarn serve:vian
 ```
 
 The app will be available at `http://localhost:8080`.
