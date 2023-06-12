@@ -125,5 +125,6 @@ else {
     };
   }
 }
+config.appType = process.env.APP_TYPE == "vian" ? "vian" : "lcp";
 
 export default config;
