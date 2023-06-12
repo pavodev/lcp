@@ -1,5 +1,6 @@
 const { defineConfig } = require("@vue/cli-service");
 const isVian = process.env.APP_TYPE == "vian"
+const webpack = require('webpack');
 const appType = isVian ? "vian" : "lcp";
 const monacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 
@@ -13,6 +14,9 @@ module.exports = defineConfig({
     config.plugins = [
       ...config.plugins,
       new monacoWebpackPlugin(),
+      new webpack.DefinePlugin({
+        'process.env.APP_TYPE': JSON.stringify(appType),
+      }),
     ]
   },
 });

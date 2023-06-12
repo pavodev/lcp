@@ -3,7 +3,7 @@
     <div class="container">
       <div class="row mt-4">
         <div class="col">
-          <Title :title="'Welcome'" />
+          <Title :title="`Welcome to ${appName}`" />
         </div>
         <div class="col mt-1 text-end">
           <button
@@ -230,7 +230,7 @@
                   v-if="showGraph"
                   :nodes="graphData"
                   type="graph TD"
-                  :config="config"
+                  :config="mermaidConfig"
                   :key="graphIndex"
                 ></vue3-mermaid>
               </div>
@@ -261,6 +261,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 import Title from "@/components/TitleComponent.vue";
 import ProjectNewView from "@/components/project/NewView.vue";
 import Utils from "@/utils";
+import config from "@/config";
 
 export default {
   name: "HomeView",
@@ -269,11 +270,12 @@ export default {
       corpusModal: null,
       graphIndex: 0,
       showGraph: false,
-      config: {
+      mermaidConfig: {
         theme: "neutral",
       },
       allowProjectModalSave: false,
       modalProjectData: null,
+      appName: config.appName,
     };
   },
   components: {

@@ -2,33 +2,40 @@ let config = null;
 if (process.env.APP_TYPE == "vian") {
   if (process.env.NODE_ENV === "production") {
     config = {
-      apiUrl: "https://lcp.linguistik.uzh.ch/be",
-      wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
-      appDomain: "lcp.linguistik.uzh.ch",
+      appName: "VIAN",
+      apiUrl: "https://vian.linguistik.uzh.ch/be",
+      wsUrl: "wss://vian.linguistik.uzh.ch/ws",
+      appDomain: "vian.linguistik.uzh.ch",
       environment: "production",
       apiHeaders: {},
       sentryDSN: null,
+      baseVideoUrl: "https://vian.linguistik.uzh.ch/video",
     };
   } else if (process.env.NODE_ENV === "test") {
     config = {
-      apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
-      wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
-      appDomain: "lcp.test.linguistik.uzh.ch",
+      appName: "VIAN",
+      apiUrl: "https://vian.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://vian.test.linguistik.uzh.ch/ws",
+      appDomain: "vian.test.linguistik.uzh.ch",
       environment: "test",
       apiHeaders: {},
       sentryDSN: null,
+      baseVideoUrl: "https://vian.test.linguistik.uzh.ch/video",
     };
   } else if (process.env.NODE_ENV === "dev") {
     config = {
+      appName: "VIAN",
       apiUrl: "http://localhost:9090",
-      appDomain: "lcp.dev.linguistik.uzh.ch",
+      appDomain: "vian.dev.linguistik.uzh.ch",
       environment: "development",
       apiHeaders: {},
       sentryDSN: null,
+      baseVideoUrl: "https://vian.dev.linguistik.uzh.ch/video",
     };
   } else {
     // development
     config = {
+      appName: "VIAN",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
@@ -51,18 +58,6 @@ if (process.env.APP_TYPE == "vian") {
         "X-Principal-Name": "553131353436323302@uzh.ch",
         "X-Mail": "igor.mustac@uzh.ch",
         "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
-
-        // "X-Remote-User": "igor.mustac@gmail.com",
-        // "X-Display-Name": "Igor Mustac",
-        // "X-Edu-Person-Unique-Id": "553131353436323305@gmail.com",
-        // "X-Home-Organization": "switch.ch",
-        // "X-Schac-Home-Organization": "switch.ch",
-        // "X-Persistent-Id": "https://aai-idp.uzh.ch/idp/shibboleth!https://liri.linguistik.uzh.ch/shibboleth!switchkf123123QnxHUi4aIyJGRB+o=",
-        // "X-Given-Name": "Igor1",
-        // "X-Surname": "Mustac1",
-        // "X-Principal-Name": "553131353436323305@gmail.com",
-        // "X-Mail": "igor.mustac@gmail.com",
-        // "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
       },
       sentryDSN: null,
     };
@@ -71,6 +66,7 @@ if (process.env.APP_TYPE == "vian") {
 else {
   if (process.env.NODE_ENV === "production") {
     config = {
+      appName: "LCP",
       apiUrl: "https://lcp.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
       appDomain: "lcp.linguistik.uzh.ch",
@@ -80,6 +76,7 @@ else {
     };
   } else if (process.env.NODE_ENV === "test") {
     config = {
+      appName: "LCP",
       apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
       appDomain: "lcp.test.linguistik.uzh.ch",
@@ -89,6 +86,7 @@ else {
     };
   } else if (process.env.NODE_ENV === "dev") {
     config = {
+      appName: "LCP",
       apiUrl: "http://localhost:9090",
       appDomain: "lcp.dev.linguistik.uzh.ch",
       environment: "development",
@@ -98,6 +96,7 @@ else {
   } else {
     // development
     config = {
+      appName: "LCP",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
@@ -120,25 +119,11 @@ else {
         "X-Principal-Name": "553131353436323302@uzh.ch",
         "X-Mail": "igor.mustac@uzh.ch",
         "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
-
-        // "X-Remote-User": "igor.mustac@gmail.com",
-        // "X-Display-Name": "Igor Mustac",
-        // "X-Edu-Person-Unique-Id": "553131353436323305@gmail.com",
-        // "X-Home-Organization": "switch.ch",
-        // "X-Schac-Home-Organization": "switch.ch",
-        // "X-Persistent-Id": "https://aai-idp.uzh.ch/idp/shibboleth!https://liri.linguistik.uzh.ch/shibboleth!switchkf123123QnxHUi4aIyJGRB+o=",
-        // "X-Given-Name": "Igor1",
-        // "X-Surname": "Mustac1",
-        // "X-Principal-Name": "553131353436323305@gmail.com",
-        // "X-Mail": "igor.mustac@gmail.com",
-        // "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
       },
       sentryDSN: null,
       baseVideoUrl: "http://localhost:8000",
     };
   }
 }
-config.appType = process.env.APP_TYPE == "vian" ? "vian" : "lcp";
-config.appType = "lcp"
 
 export default config;
