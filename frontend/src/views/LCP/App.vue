@@ -169,7 +169,7 @@ export default {
 
 <style scoped>
 .version-number {
-  font-size: 80%;
+  font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
 }
