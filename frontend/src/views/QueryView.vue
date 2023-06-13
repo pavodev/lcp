@@ -606,19 +606,9 @@ myColl3 => collocation
     attribute
         lemma
 `,
-      userId: null,
+      preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
-      selectedCorpora: this.corpora
-        ? this.corpora
-            .filter((corpus) => corpus.meta.id == 2)
-            .map((corpus) => {
-              return {
-                name: corpus.meta.name,
-                value: corpus.meta.id,
-                corpus: corpus,
-              };
-            })
-        : [],
+      selectedCorpora: [],
       isQueryValidData: null,
       WSDataResults: "",
       WSDataSentences: "",
@@ -647,20 +637,25 @@ myColl3 => collocation
     // DetailsTableView,
     EditorView,
   },
-  mounted() {
-    if (this.userData) {
-      this.userId = this.userData.user.id;
-      // this.connectToRoom();
-      // this.stop();
-    }
-  // },
-  // beforeMount() {
-  //   window.addEventListener("beforeunload", this.sendLeft);
-  // },
-  // unmounted() {
-  //   this.sendLeft();
-  },
   watch: {
+    corpora: {
+      handler() {
+        if (this.preselectedCorporaId) {
+          let corpus = this.corpora.filter(corpus => corpus.meta.id == this.preselectedCorporaId)
+          if (corpus.length) {
+            this.selectedCorpora = {
+              name: corpus[0].meta.name,
+              value: corpus[0].meta.id,
+              corpus: corpus[0],
+            }
+          }
+          this.preselectedCorporaId = null
+          this.validate()
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
     messages: {
       handler() {
         let _messages = this.messages;
@@ -673,26 +668,13 @@ myColl3 => collocation
       immediate: true,
       deep: true,
     },
-    userData() {
-      this.userId = this.userData.user.id;
-      // this.connectToRoom();
-    },
     selectedCorpora() {
       this.validate();
-    },
-    corpora() {
-      this.selectedCorpora =
-        this.corpora && this.selectedCorpora.length == 0
-          ? this.corpora
-              .filter((corpus) => corpus.meta.id == 2)
-              .map((corpus) => {
-                return {
-                  name: corpus.meta.name,
-                  value: corpus.meta.id,
-                  corpus: corpus,
-                };
-              })
-          : [];
+      history.pushState(
+        {},
+        null,
+        `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
+      )
     },
     WSDataResults() {
       if (this.WSDataResults) {
@@ -751,7 +733,7 @@ myColl3 => collocation
         room: this.roomId,
         // room: null,
         action: "left",
-        user: this.userId,
+        user: this.userData.user.id,
       });
       this.wsConnected = false;
       console.log("Left WS")
@@ -871,6 +853,12 @@ myColl3 => collocation
             type: "error",
             text: data.value,
           });
+        } else if (data["action"] === "query_error") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.info,
+          });
         }
       } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {
@@ -920,7 +908,7 @@ myColl3 => collocation
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
         query: this.query,
-        user: this.userId,
+        user: this.userData.user.id,
         room: this.roomId,
         // room: null,
         // page_size: this.pageSize,
@@ -952,7 +940,7 @@ myColl3 => collocation
         room: this.roomId,
         // room: null,
         action: "stop",
-        user: this.userId,
+        user: this.userData.user.id,
       });
       this.loading = false;
       // if (this.WSData) {
@@ -964,17 +952,16 @@ myColl3 => collocation
         room: this.roomId,
         // room: null,
         action: "enough_results",
-        user: this.userId,
+        user: this.userData.user.id,
         job: job,
       });
     },
     validate() {
-      // console.log("RRRR")
       this.$socket.sendObj({
         room: this.roomId,
         // room: null,
         action: "validate",
-        user: this.userId,
+        user: this.userData.user.id,
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
         // query_name: this.queryName,
       });
@@ -984,7 +971,7 @@ myColl3 => collocation
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
         query: this.query,
-        user: this.userId,
+        user: this.userData.user.id,
         room: this.roomId,
         // room: null,
         page_size: this.pageSize,
@@ -996,7 +983,7 @@ myColl3 => collocation
     },
     fetch() {
       let data = {
-        user: this.userId,
+        user: this.userData.user.id,
         room: this.roomId
         // room: null,
       };

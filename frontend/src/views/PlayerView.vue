@@ -13,10 +13,10 @@
           ></multiselect> -->
           <select v-model="selectedCorpora" class="form-select">
             <option
-              v-for="corpus in corporaList"
-              :value="corpus"
-              v-html="corpus.name"
-              :key="corpus.value"
+              v-for="corpora in corpusList"
+              :value="corpora"
+              v-html="corpora.name"
+              :key="corpora.value"
             ></option>
           </select>
         </div>
@@ -551,6 +551,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 export default {
   data() {
     return {
+      preselectedCorporaId: this.$route.params.id,
       selectedCorpora: null,
       currentDocument: null,
       currentDocumentData: null,
@@ -621,7 +622,7 @@ KWIC => plain
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["userData", "roomId"]),
     ...mapState(useWsStore, ["messages"]),
-    corporaList() {
+    corpusList() {
       return this.corpora
         ? this.corpora.map((corpus) => {
             return {
@@ -1261,6 +1262,19 @@ KWIC => plain
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
       });
     },
+    loadDocuments() {
+      this.documentDict = {}
+      if (this.roomId && this.userId) {
+        useCorpusStore().fetchDocuments({
+          room: this.roomId,
+          user: this.userId,
+          corpora_id: this.selectedCorpora.value,
+        })
+      }
+      else {
+        setTimeout(() => this.loadDocuments(), 200)
+      }
+    }
   },
   mounted() {
     if (this.userData) {
@@ -1307,6 +1321,24 @@ KWIC => plain
   //   this.sendLeft();
   // },
   watch: {
+    corpora: {
+      handler() {
+        if (this.preselectedCorporaId) {
+          let corpus = this.corpora.filter(corpus => corpus.meta.id == this.preselectedCorporaId)
+          if (corpus.length) {
+            this.selectedCorpora = {
+              name: corpus[0].meta.name,
+              value: corpus[0].meta.id,
+              corpus: corpus[0],
+            }
+          }
+          this.preselectedCorporaId = null
+          this.loadDocuments()
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
     messages: {
       handler() {
         let _messages = this.messages;
@@ -1320,12 +1352,12 @@ KWIC => plain
       deep: true,
     },
     selectedCorpora() {
-      this.documentDict = {}
-      useCorpusStore().fetchDocuments({
-        room: this.roomId,
-        user: this.userId,
-        corpora_id: this.selectedCorpora.value,
-      })
+      this.loadDocuments()
+      history.pushState(
+        {},
+        null,
+        `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
+      )
     },
     currentDocument() {
       try {
