@@ -49,6 +49,11 @@
           </ul>
           <ul class="navbar-nav ms-auto">
             <li class="nav-item">
+              <span class="nav-link version-number">
+                #{{ appVersion }}
+              </span>
+            </li>
+            <li class="nav-item">
               <router-link
                 class="nav-link"
                 to="/Shibboleth.sso/Logout"
@@ -83,6 +88,11 @@ import NotificationView from "@/components/NotificationView.vue";
 
 export default {
   name: "AppLCP",
+  data() {
+    return {
+      appVersion: process.env.GIT_HASH,
+    }
+  },
   mounted() {
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();
@@ -156,3 +166,11 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.version-number {
+  font-size: 80%;
+  opacity: 0.75;
+  margin-top: 2px;
+}
+</style>
