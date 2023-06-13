@@ -62,7 +62,7 @@
 </style>
 
 <script>
-import * as d3 from 'd3'
+import * as d3 from 'd3-v7'
 
 const browserText = (function () {
   const canvas = document.createElement('canvas'),
