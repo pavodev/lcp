@@ -39,6 +39,7 @@ library.add(faVideo);
 library.add(faVolumeDown);
 library.add(faVolumeOff);
 library.add(faVolumeUp);
+library.add(faVolumeXmark);
 library.add(faXmark);
 
 export default FontAwesomeIcon;
