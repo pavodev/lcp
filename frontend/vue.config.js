@@ -3,6 +3,7 @@ const isVian = process.env.APP_TYPE == "vian"
 const webpack = require('webpack');
 const appType = isVian ? "vian" : "lcp";
 const monacoWebpackPlugin = require("monaco-editor-webpack-plugin");
+const {gitDescribeSync} = require('git-describe');
 
 module.exports = defineConfig({
   transpileDependencies: true,
@@ -16,6 +17,7 @@ module.exports = defineConfig({
       new monacoWebpackPlugin(),
       new webpack.DefinePlugin({
         'process.env.APP_TYPE': JSON.stringify(appType),
+        'process.env.GIT_HASH': JSON.stringify(gitDescribeSync().hash),
       }),
     ]
   },

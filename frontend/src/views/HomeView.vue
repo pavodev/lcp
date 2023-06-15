@@ -80,9 +80,7 @@
                 class="col-4 mb-3"
                 v-for="corpus in project.corpora"
                 :key="corpus.id"
-                @click="openCorpus(corpus)"
-                data-bs-toggle="modal"
-                data-bs-target="#corpusDetailsModal"
+                @click="openQueryWithCorpus(corpus)"
               >
                 <div class="corpus-block">
                   <p class="title mb-0">{{ corpus.meta.name }}</p>
@@ -95,12 +93,22 @@
                   <p class="word-count mb-0">
                     Word count:
                     <b>{{
-                      nFormatter(calculateSum(Object.values(corpus.token_counts)))
+                      nFormatter(
+                        calculateSum(Object.values(corpus.token_counts))
+                      )
                     }}</b>
                   </p>
                   <p class="word-count">
                     Version: <b>{{ corpus.meta.version }}</b>
                   </p>
+                  <div
+                    class="details-button"
+                    @click.stop="openCorpus(corpus)"
+                    data-bs-toggle="modal"
+                    data-bs-target="#corpusDetailsModal"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+                  </div>
                 </div>
               </div>
             </div>
@@ -121,9 +129,7 @@
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="newProjectModalLabel">
-              New Project
-            </h5>
+            <h5 class="modal-title" id="newProjectModalLabel">New Project</h5>
             <button
               type="button"
               class="btn-close"
@@ -132,7 +138,7 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-              <ProjectNewView @updated="updateProjectModalData" />
+            <ProjectNewView @updated="updateProjectModalData" />
           </div>
           <div class="modal-footer">
             <button
@@ -260,6 +266,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ProjectNewView from "@/components/project/NewView.vue";
+import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
 
@@ -286,6 +293,13 @@ export default {
     openCorpus(corpus) {
       this.corpusModal = corpus;
     },
+    openQueryWithCorpus(corpus) {
+      if (config.appType == "vian") {
+        router.push(`/player/${corpus.meta.id}/${corpus.shortname}`);
+      } else {
+        router.push(`/query/${corpus.meta.id}/${corpus.shortname}`);
+      }
+    },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
@@ -293,17 +307,17 @@ export default {
     },
     nFormatter: Utils.nFormatter,
     async APIKeyRevoke(projectId, apiKeyId) {
-      let retval = await useProjectStore().revokeApiKey(projectId, apiKeyId)
+      let retval = await useProjectStore().revokeApiKey(projectId, apiKeyId);
       if (retval.result == "ok") {
         useUserStore().fetchUserData();
         useNotificationStore().add({
           type: "success",
-          text: "The API key is successfully revoked"
+          text: "The API key is successfully revoked",
         });
       }
     },
     async APIKeyCreate(projectId) {
-      let retval = await useProjectStore().createApiKey(projectId)
+      let retval = await useProjectStore().createApiKey(projectId);
       if (retval.result == "ok") {
         useUserStore().fetchUserData();
         useNotificationStore().add({
@@ -318,7 +332,7 @@ export default {
       this.modalProjectData = data;
     },
     async saveModalProject() {
-      let retval = await useProjectStore().create(this.modalProjectData)
+      let retval = await useProjectStore().create(this.modalProjectData);
       if (retval) {
         useUserStore().fetchUserData();
         useNotificationStore().add({
@@ -337,7 +351,7 @@ export default {
           id: null,
           title: "No project",
           corpora: [],
-        }
+        },
       };
       let projectIds = [];
       this.projects.forEach((project) => {
@@ -417,6 +431,7 @@ export default {
   border-radius: 5px;
   padding: 20px;
   cursor: pointer;
+  position: relative;
 }
 .author {
   font-size: 70%;
@@ -445,5 +460,21 @@ export default {
 .api-badge {
   font-size: 80%;
   font-weight: bold;
+}
+.details-button {
+  position: absolute;
+  bottom: 20px;
+  right: 20px;
+  background-color: #2a7f62;
+  padding: 3px 10px;
+  border-radius: 4px;
+  color: #fff;
+  opacity: 0.6;
+}
+.corpus-block:hover .details-button {
+  opacity: 0.8;
+}
+.details-button:hover {
+  opacity: 1 !important;
 }
 </style>

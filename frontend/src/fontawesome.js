@@ -3,6 +3,7 @@ import { library } from '@fortawesome/fontawesome-svg-core';
 import {
   faBackward,
   faBackwardStep,
+  faCircleInfo,
   faCircleNodes,
   faCirclePlus,
   faForward,
@@ -17,11 +18,13 @@ import {
   faVolumeDown,
   faVolumeOff,
   faVolumeUp,
+  faVolumeXmark,
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
 library.add(faBackward);
 library.add(faBackwardStep);
+library.add(faCircleInfo);
 library.add(faCircleNodes);
 library.add(faCirclePlus);
 library.add(faForward);
@@ -36,6 +39,7 @@ library.add(faVideo);
 library.add(faVolumeDown);
 library.add(faVolumeOff);
 library.add(faVolumeUp);
+library.add(faVolumeXmark);
 library.add(faXmark);
 
 export default FontAwesomeIcon;

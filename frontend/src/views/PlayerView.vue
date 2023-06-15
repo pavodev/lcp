@@ -13,16 +13,16 @@
           ></multiselect> -->
           <select v-model="selectedCorpora" class="form-select">
             <option
-              v-for="corpus in corporaList"
-              :value="corpus"
-              v-html="corpus.name"
-              :key="corpus.value"
+              v-for="corpora in corpusList"
+              :value="corpora"
+              v-html="corpora.name"
+              :key="corpora.value"
             ></option>
           </select>
         </div>
-        <div class="col-5">
+        <!--<div class="col-5">
           <label class="form-label">Document</label>
-          <!-- <span v-if="loading">Loading ...</span> -->
+          <!- - <span v-if="loading">Loading ...</span> - ->
           <select v-model="currentDocument" class="form-select">
             <option
               v-for="document in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
@@ -31,6 +31,42 @@
               :key="document[0]"
             ></option>
           </select>
+        </div>-->
+      </div>
+      <div class="row mt-4" v-if="selectedCorpora">
+        <div class="col">
+          <nav>
+            <div class="nav nav-tabs" id="nav-tab" role="tablist">
+              <button
+                v-for="document in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
+                :key="document[0]"
+                class="nav-link"
+                :class="currentDocument && currentDocument[2] == document[2] ? 'active' : ''"
+                :id="`nav-${document[0]}-tab`"
+                data-bs-toggle="tab"
+                :data-bs-target="`#nav-${document[0]}`"
+                type="button"
+                role="tab"
+                @click="setDocument(document)"
+                :aria-controls="`nav-${document[0]}`"
+                aria-selected="true"
+              >
+                {{ document[1] }}
+              </button>
+            </div>
+          </nav>
+          <!-- <div class="tab-content pt-3" id="nav-tabContent">
+            <div
+              v-for="(document, index) in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
+              :key="document[0]"
+              class="tab-pane fade"
+              :class="index == -1 ? 'active show' : ''"
+              :id="`nav-${document[0]}`"
+              role="tabpanel"
+              aria-labelledby="nav-results-tab"
+            >
+            </div>
+          </div> -->
         </div>
       </div>
     </div>
@@ -139,6 +175,18 @@
           >
             <FontAwesomeIcon :icon="['fas', 'volume-off']" />
           </button>
+
+          <!-- <span class="btn btn-sm btn-primary">
+            <FontAwesomeIcon :icon="['fas', 'volume-off']" />
+            <input
+              type="range"
+              class="form-range mt-1 ms-1"
+              v-model="volume"
+              min="0"
+              max="1"
+              step="0.05"
+            />
+          </span> -->
           <input
             type="range"
             class="form-range mt-1 ms-1"
@@ -551,6 +599,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 export default {
   data() {
     return {
+      preselectedCorporaId: this.$route.params.id,
       selectedCorpora: null,
       currentDocument: null,
       currentDocumentData: null,
@@ -621,7 +670,7 @@ KWIC => plain
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["userData", "roomId"]),
     ...mapState(useWsStore, ["messages"]),
-    corporaList() {
+    corpusList() {
       return this.corpora
         ? this.corpora.map((corpus) => {
             return {
@@ -642,6 +691,9 @@ KWIC => plain
     },
   },
   methods: {
+    setDocument(document) {
+      this.currentDocument = document
+    },
     frameNumberToTime(frameNumber) {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
@@ -650,15 +702,17 @@ KWIC => plain
       this.currentPage = currentPage;
     },
     resultClick(result) {
-      // console.log(result, result[4][0][1])
+      // console.log(result, result[4][0][1], this.currentDocument)
       let value = Utils.frameNumberToSeconds(result[4][0][1]) / 1000;
       if (this.currentDocument[0] == result[2]) {
         this._playerSetTime(value);
       } else {
-        // this.currentDocument = this.corpusData[result[2] - 1];
-        this.currentDocument = this.documentDict[result[2]];
-        // console.log("Change document")
+        //   // this.currentDocument = this.corpusData[result[2] - 1];
+        // this.currentDocument = this.documentDict[result[2]];
         this.setResultTime = value;
+        this.currentDocument = this.corpusData.filter(corpus => corpus[0] == result[2])[0]
+        //   // console.log("Change document")
+        // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
     },
     playerPlay() {
@@ -777,7 +831,7 @@ KWIC => plain
       if (filtered.length) {
         this.subtext = this.subtitles[filtered[0]];
       }
-      if (this.chart) {
+      if (this.chart && this.$refs.videoPlayer1) {
         this.chart.player.time = this.$refs.videoPlayer1.currentTime;
       }
     },
@@ -828,6 +882,7 @@ KWIC => plain
       if (this.$refs.videoPlayer4) {
         this.$refs.videoPlayer4.volume = this.mainAudio == 4 ? _volume : 0;
       }
+      this.volume = _volume
     },
     // loadData() {
     //   if (this.currentDocument) {
@@ -1115,6 +1170,7 @@ KWIC => plain
 
       // this.loading = false;
       if (this.setResultTime) {
+        // console.log("Set time", this.setResultTime)
         this._playerSetTime(this.setResultTime);
         this.setResultTime = null;
       }
@@ -1261,6 +1317,44 @@ KWIC => plain
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
       });
     },
+    loadDocuments() {
+      this.documentDict = {}
+      if (this.roomId && this.userId) {
+        useCorpusStore().fetchDocuments({
+          room: this.roomId,
+          user: this.userId,
+          corpora_id: this.selectedCorpora.value,
+        })
+      }
+      else {
+        setTimeout(() => this.loadDocuments(), 200)
+      }
+    },
+    loadDocument() {
+      try {
+        this.$refs.videoPlayer1.load();
+        if (this.currentDocument[2].length > 1) {
+          this.$refs.videoPlayer2.load();
+        }
+        if (this.currentDocument[2].length > 2) {
+          this.$refs.videoPlayer3.load();
+        }
+        if (this.currentDocument[2].length > 3) {
+          this.$refs.videoPlayer4.load();
+        }
+      } catch {
+        console.log("Error player");
+      }
+      if (this.currentDocument) {
+        // console.log("AA", this.currentDocument)
+        useCorpusStore().fetchDocument({
+          doc_id: this.currentDocument[0],
+          corpora: [this.selectedCorpora.value],
+          user: this.userId,
+          room: this.roomId,
+        });
+      }
+    },
   },
   mounted() {
     if (this.userData) {
@@ -1307,6 +1401,24 @@ KWIC => plain
   //   this.sendLeft();
   // },
   watch: {
+    corpora: {
+      handler() {
+        if (this.preselectedCorporaId) {
+          let corpus = this.corpora.filter(corpus => corpus.meta.id == this.preselectedCorporaId)
+          if (corpus.length) {
+            this.selectedCorpora = {
+              name: corpus[0].meta.name,
+              value: corpus[0].meta.id,
+              corpus: corpus[0],
+            }
+          }
+          this.preselectedCorporaId = null
+          this.loadDocuments()
+        }
+      },
+      immediate: true,
+      deep: true,
+    },
     messages: {
       handler() {
         let _messages = this.messages;
@@ -1320,37 +1432,15 @@ KWIC => plain
       deep: true,
     },
     selectedCorpora() {
-      this.documentDict = {}
-      useCorpusStore().fetchDocuments({
-        room: this.roomId,
-        user: this.userId,
-        corpora_id: this.selectedCorpora.value,
-      })
+      this.loadDocuments()
+      history.pushState(
+        {},
+        null,
+        `/player/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
+      )
     },
     currentDocument() {
-      try {
-        this.$refs.videoPlayer1.load();
-        if (this.currentDocument[2].length > 1) {
-          this.$refs.videoPlayer2.load();
-        }
-        if (this.currentDocument[2].length > 2) {
-          this.$refs.videoPlayer3.load();
-        }
-        if (this.currentDocument[2].length > 3) {
-          this.$refs.videoPlayer4.load();
-        }
-      } catch {
-        console.log("Error player");
-      }
-      if (this.currentDocument) {
-        // console.log("AA", this.currentDocument)
-        useCorpusStore().fetchDocument({
-          doc_id: this.currentDocument[0],
-          corpora: [this.selectedCorpora.value],
-          user: this.userId,
-          room: this.roomId,
-        });
-      }
+      this.loadDocument()
     },
     volume() {
       this._setVolume();
