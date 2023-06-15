@@ -176,7 +176,7 @@ def _sentences(
 
     table = f"{cb[1]}.{cb[2]}"
 
-    if job.id not in already:
+    if job.id not in already or start_at is not None:
         already.append(job.id)
         base.meta["already"] = already
         new_res, _ = _add_results(
