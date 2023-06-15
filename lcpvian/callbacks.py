@@ -21,6 +21,8 @@ from .utils import (
     _union_results,
     _row_to_value,
     _apply_filters,
+    _trim_bundle,
+    _get_kwics,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
@@ -150,12 +152,14 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
-    total_requested = kwargs.get("total_results_requested")
+    total_requested = cast(int | None, kwargs.get("total_results_requested"))
     start_at = kwargs.get("start_at")
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
     if "_sentences" not in base.meta:
         base.meta["_sentences"] = {}
+
+    # total_requested:300 start_at:170 current_len:200
 
     depends_on = job.kwargs["depends_on"]
     if isinstance(depends_on, list):
@@ -168,7 +172,13 @@ def _sentences(
 
     aargs: tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
-        aargs = (aargs[0], aargs[1], start_at, aargs[3], total_requested)
+        aargs = (
+            aargs[0],
+            aargs[1],
+            start_at,
+            aargs[3],
+            cast(int, total_requested),
+        )
 
     already = base.meta.get("already", [])
 
@@ -188,6 +198,10 @@ def _sentences(
             meta=depended.kwargs.get("meta_json"),
         )
         results_so_far = _union_results(base.meta["_sentences"], new_res)
+        # todo: remove these three lines ... debug why we need to do it
+        if total_requested is not None:
+            kwics = _get_kwics(depended.kwargs.get("meta_json"))
+            results_so_far = _trim_bundle(results_so_far, kwics, total_requested)
     else:
         results_so_far = base.meta["_sentences"]
 

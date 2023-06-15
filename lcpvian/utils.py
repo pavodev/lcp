@@ -372,13 +372,21 @@ def _add_results(
         bit.append(rest)
         counts[key] += 1
 
+    bundle = _trim_bundle(bundle, kwics, total_requested)
+
+    return bundle, counts[list(kwics)[0]]
+
+
+def _trim_bundle(bundle: Results, kwics: set[int], total_requested: int) -> Results:
+    """
+    Trim kwics so we don't return too many...
+    """
     for k in kwics:
         if k not in bundle:
             continue
         if len(bundle[k]) > total_requested:
             bundle[k] = cast(list, bundle[k])[:total_requested]
-
-    return bundle, counts[list(kwics)[0]]
+    return bundle
 
 
 def _format_vian(
