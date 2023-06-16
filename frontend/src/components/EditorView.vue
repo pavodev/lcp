@@ -9,7 +9,7 @@
   text-align: left;
 }
 #editor {
-  height: 200px;
+  height: 500px;
   width: 100%;
 }
 </style>
@@ -343,15 +343,14 @@ export default {
       this.updateContent()
     });
 
-    editor.onDidFocusEditorText(()=>{
-      this.$refs.editor.style.height = "500px"
-      editor.layout()
-    })
-    editor.onDidBlurEditorWidget(()=>{
-      this.$refs.editor.style.height = "200px"
-      editor.layout()
-    })
-
+    // editor.onDidFocusEditorText(()=>{
+    //   this.$refs.editor.style.height = "500px"
+    //   editor.layout()
+    // })
+    // editor.onDidBlurEditorWidget(()=>{
+    //   this.$refs.editor.style.height = "200px"
+    //   editor.layout()
+    // })
 
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
