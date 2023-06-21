@@ -12,12 +12,13 @@ from typing import TypeAlias, cast
 from aiohttp import web
 from rq.job import Job
 
-from .callbacks import _query, _sentences
+# from .callbacks import _query, _sentences
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, JSONObject
 from .utils import _get_all_results, ensure_authorised, push_msg
-from .worker import SQLJob
+
+# from .worker import SQLJob
 
 
 Iteration: TypeAlias = tuple[
@@ -30,66 +31,23 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     Resume a query, or decide that we need to query the next batch
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    hit_limit = prev_job.meta.get("hit_limit", 0)
-    if hit_limit:
-        # base = prev_job.kwargs.get("base", prev_job.id)
-        _query(
-            prev_job,
-            qi.app["redis"],
-            prev_job.result,
-            hit_limit=hit_limit,
-            total_results_requested=qi.total_results_requested,
-        )
-        current_batch = prev_job.kwargs["current_batch"]
-
-        associated_sents = prev_job.meta.get("associated")
-        if not associated_sents:
-            msg = "Sent job not finished. todo: fix this"
-            raise ValueError(msg)
-        else:
-            sent_job = Job.fetch(associated_sents, connection=qi.app["redis"])
-
-            _sentences(
-                sent_job,
-                qi.app["redis"],
-                sent_job.result,
-                start_at=hit_limit,
-                total_results_requested=qi.total_results_requested,
-            )
-
-        # todo: review this
-
-        # basejob = Job.fetch(base, connection=qi.app["redis"])
-        # res_so_far = basejob.meta.get("_sentences", {})
-
-        # sent_result = Job.fetch(base, connection=qi.app["redis"]).result
-
-        # latest_sents = basejob.meta.get("latest_sentences")
-        # if latest_sents:
-        #    latest_sents = Job.fetch(latest_sents, connection=qi.app["redis"])
-
-        qi.current_batch = current_batch
-        qi.previous_job = prev_job
-        qi.done = True
-        return qi
-    else:
-        # all_batches = prev_job.kwargs["all_batches"]
-        dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
-        done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
-        so_far = prev_job.meta["total_results"]
-        tot_req = qi.total_results_requested
-        needed = tot_req - so_far if tot_req != -1 else -1
-        prev = cast(Sequence, prev_job.kwargs["current_batch"])
-        previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
-        if previous_batch not in done_batches:
-            done_batches.append(previous_batch)
-        # qi.all_batches = all_batches
-        qi.done_batches = done_batches
-        qi.total_results_so_far = so_far
-        qi.needed = needed
-        ex = _get_all_results(qi)
-        qi.existing_results = ex
-        return qi
+    # all_batches = prev_job.kwargs["all_batches"]
+    dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
+    done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
+    so_far = prev_job.meta["total_results_so_far"]
+    tot_req = qi.total_results_requested
+    needed = tot_req - so_far if tot_req != -1 else -1
+    prev = cast(Sequence, prev_job.kwargs["current_batch"])
+    previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
+    if previous_batch not in done_batches:
+        done_batches.append(previous_batch)
+    # qi.all_batches = all_batches
+    qi.done_batches = done_batches
+    qi.total_results_so_far = so_far
+    qi.needed = needed
+    ex = _get_all_results(qi)
+    qi.existing_results = ex
+    return qi
 
 
 async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
@@ -103,18 +61,6 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         qi = await _do_resume(qi)
 
     jobs: dict[str, str | bool] = {}
-
-    if qi.done:
-        jobs = {
-            "status": "started",
-            "sentences": qi.sentences,
-            "job": qi.job_id if qi.job else qi.previous,
-        }
-        qi.job_info = jobs
-        if qi.simultaneous and qi.current_batch is not None:
-            qi.done_batches.append(qi.current_batch)
-            qi.current_batch = None
-        return qi
 
     qi.decide_batch()
     qi.make_query()
@@ -147,7 +93,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         "job": qi.job_id if qi.job else qi.previous,
     }
 
-    if qi.sentences and not qi.done and not qi.from_memory:
+    if qi.sentences and not qi.from_memory:
         jobs.update({"sentences": True, "sentences_job": sents_job.id})
 
     qi.job_info = jobs

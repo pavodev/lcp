@@ -261,9 +261,7 @@ def _get_all_results(qi: QueryIteration) -> Results:
 
     while True:
         meta = job.kwargs.get("meta_json")
-        batch, _ = _add_results(
-            job.result, 0, True, False, False, 0, meta=meta, is_vian=qi.is_vian
-        )
+        batch, _ = _add_results(job.result, 0, True, 0, meta=meta, is_vian=qi.is_vian)
         out = _union_results(out, batch)
         parent = job.kwargs.get("parent", None)
         if not parent:
@@ -285,8 +283,6 @@ def _add_results(
     result: list[tuple],
     so_far: int,
     unlimited: bool,
-    offset: int | None,
-    restart: bool | int,
     total_requested: int,
     kwic: bool = False,
     is_vian: bool = False,
@@ -349,15 +345,9 @@ def _add_results(
             counts[key] += 1
             continue
 
-        # doing kwics and this is a kwic line
-        if not unlimited and offset and n_skipped[key] < offset:
+        if False:
             n_skipped[key] += 1
-            continue
-        if restart is not False and n_skipped[key] < restart:
-            n_skipped[key] += 1
-            continue
-        if not unlimited and so_far + len(bundle.get(key, [])) >= total_requested:
-            continue
+
         if is_vian:
             if first_list is None:
                 first_list = next(
@@ -372,7 +362,7 @@ def _add_results(
         bit.append(rest)
         counts[key] += 1
 
-    bundle = _trim_bundle(bundle, kwics, total_requested)
+    # bundle = _trim_bundle(bundle, kwics, total_requested)
 
     return bundle, counts[list(kwics)[0]]
 
@@ -760,10 +750,7 @@ def _row_to_value(
     return cast(CorpusConfig, together)
 
 
-def _get_sent_ids(
-    associated: str | list[str],
-    resuming: bool,
-) -> list[int] | list[str]:
+def _get_sent_ids(associated: str | list[str]) -> list[int] | list[str]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
@@ -774,7 +761,6 @@ def _get_sent_ids(
     if associated is None:
         return []
     job = Job.fetch(associated, connection=conn)
-    hit_limit = job.meta.get("hit_limit")
     if job.get_status(refresh=True) in ("stopped", "canceled"):
         raise Interrupted()
     if job.result is None:
@@ -782,11 +768,6 @@ def _get_sent_ids(
     if not job.result:
         return out
     prev_results = job.result
-    # so we don't double count on resuming
-    if resuming:
-        start_at = job.meta.get("start_at", 0)
-    else:
-        start_at = 0
 
     seg_ids = set()
     result_sets = job.kwargs["meta_json"]
@@ -798,10 +779,6 @@ def _get_sent_ids(
         rest = res[1]
         if key in kwics:
             counts[key] += 1
-            if start_at and counts[key] < start_at:
-                continue
-            elif hit_limit is not False and counts[key] > hit_limit:
-                continue
             seg_ids.add(rest[0])
 
     return list(sorted(seg_ids))

@@ -108,9 +108,9 @@ async def _db_query(
     The function queued by RQ, which executes our DB query
     """
     # this can only be done after the previous job finished...
-    if "depends_on" in kwargs and "done" in kwargs:
+    if "depends_on" in kwargs and "sentences_query" in kwargs:
         dep = cast(list[str] | str, kwargs["depends_on"])
-        params = {"ids": _get_sent_ids(dep, cast(bool, kwargs["done"]))}
+        params = {"ids": _get_sent_ids(dep)}
 
     name = "_upool" if store else "_pool"
     pool = getattr(get_current_job(), name)

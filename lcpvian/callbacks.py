@@ -21,7 +21,7 @@ from .utils import (
     _union_results,
     _row_to_value,
     _apply_filters,
-    _trim_bundle,
+    # _trim_bundle,
     _get_kwics,
     PUBSUB_CHANNEL,
 )
@@ -37,8 +37,8 @@ def _query(
     """
     Job callback, publishes a redis message containing the results
     """
+    restart = False
     from_memory = kwargs.get("from_memory", False)
-    restart = kwargs.get("hit_limit", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     results_so_far = job.kwargs.get("existing_results", {})
     results_so_far = {int(k): v for k, v in results_so_far.items()}
@@ -50,25 +50,15 @@ def _query(
         else kwargs["total_results_requested"]
     )
     done_part = job.kwargs["done_batches"]
-    # this seemed to be wrong:
-    # offset = job.kwargs.get("offset", False) if restart is False else False
-    offset = restart if restart is not False else False
 
-    if restart is False:
-        needed = job.kwargs["needed"]
-    else:
-        needed = total_requested - total_before_now
-
+    needed = total_requested - total_before_now
     unlimited = needed == -1 or job.kwargs.get("simultaneous", False) or False
-
     post_processes = job.kwargs.get("post_processes", {})
 
     aargs = (
         result,
         total_before_now,
         unlimited,
-        offset,
-        restart,
         total_requested,
     )
 
@@ -77,21 +67,17 @@ def _query(
     )
 
     total_found = total_before_now + n_results
-    limited = not unlimited and total_found > job.kwargs["needed"]
+    # limited = not unlimited and total_found > job.kwargs["needed"]
     results_so_far = _union_results(results_so_far, new_res)
     results_to_send = _apply_filters(results_so_far, post_processes)
-    limit = False if n_results < total_requested else total_found - total_requested
+    # limit = False if n_results < total_requested else total_found - total_requested
 
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
 
     status = _get_status(total_found, tot_req=total_requested, **job.kwargs)
-    hit_limit = False if not limited else needed
     job.meta["_status"] = status
-    job.meta["hit_limit"] = hit_limit
     job.meta["total_results_so_far"] = total_found
-    # the +1 could be wrong, maybe hit_limit should be -1?
-    job.meta["start_at"] = 0 if restart is False else restart
     job.meta["_args"] = aargs[1:]
     table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
     first_job = job.kwargs["first_job"] or job.id
@@ -110,8 +96,8 @@ def _query(
         perc_matches = min(total_found, total_requested) * 100.0 / total_requested
         job.meta["percentage_done"] = round(perc_matches, 3)
         # todo: can remove this for more accuracy if need be
-        if total_requested < total_found:
-            total_found = total_requested
+        # if total_requested < total_found:
+        #    total_found = total_requested
 
     job.save_meta()  # type: ignore
     jso = dict(**job.kwargs)
@@ -125,7 +111,6 @@ def _query(
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
-            "hit_limit": limit,
             "from_memory": from_memory,
             "total_results_so_far": total_found,
             "table": table,
@@ -153,13 +138,8 @@ def _sentences(
     Create KWIC data and send via websocket
     """
     total_requested = cast(int | None, kwargs.get("total_results_requested"))
-    start_at = kwargs.get("start_at")
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
-    if "_sentences" not in base.meta:
-        base.meta["_sentences"] = {}
-
-    # total_requested:300 start_at:170 current_len:200
 
     depends_on = job.kwargs["depends_on"]
     if isinstance(depends_on, list):
@@ -170,13 +150,11 @@ def _sentences(
         depended.meta["associated"] = job.id
     depended.save_meta()  # type: ignore
 
-    aargs: tuple[int, bool, Any, Any, Any] = depended.meta["_args"]
+    aargs: tuple[int, bool, Any] = depended.meta["_args"]
     if "total_results_requested" in kwargs:
         aargs = (
             aargs[0],
             aargs[1],
-            start_at,
-            aargs[3],
             cast(int, total_requested),
         )
 
@@ -186,10 +164,11 @@ def _sentences(
 
     table = f"{cb[1]}.{cb[2]}"
 
-    if job.id not in already or start_at is not None:
-        already.append(job.id)
+    if job.id not in already:
+        if job.id not in already:
+            already.append(job.id)
         base.meta["already"] = already
-        new_res, _ = _add_results(
+        results_so_far, _ = _add_results(
             depended.result,
             *aargs,
             kwic=True,
@@ -197,17 +176,13 @@ def _sentences(
             is_vian=depended.kwargs.get("is_vian", False),
             meta=depended.kwargs.get("meta_json"),
         )
-        results_so_far = _union_results(base.meta["_sentences"], new_res)
-        # todo: remove these three lines ... debug why we need to do it
-        if total_requested is not None:
-            kwics = _get_kwics(depended.kwargs.get("meta_json"))
-            results_so_far = _trim_bundle(results_so_far, kwics, total_requested)
+        job.meta["_sentences"] = results_so_far
+        job.save_meta()  # type: ignore
     else:
-        results_so_far = base.meta["_sentences"]
+        results_so_far = job.meta["_sentences"]
 
     if job.id not in already:
         base.meta["latest_sentences"] = job.id
-        base.meta["_sentences"] = results_so_far
 
     base.save_meta()  # type: ignore
 

@@ -50,10 +50,8 @@ class QueryIteration:
     sentences: bool
     is_vian: bool
     app: Application
-    hit_limit: bool | int = False
     resuming: bool = False
     previous: str = ""
-    done: bool = False
     request_data: JSONObject | None = None
     current_batch: Batch | None = None
     done_batches: list[Batch] = field(default_factory=list)
@@ -96,6 +94,7 @@ class QueryIteration:
         except json.JSONDecodeError:
             json_query = convert(self.query)
             self.dqd = self.query
+
         sql_query, meta_json, post_processes = json_to_sql(json_query, **kwa)
         self.jso = json_query
         self.sql = sql_query
@@ -208,10 +207,10 @@ class QueryIteration:
         Helper to submit a query job
         """
         parent: str | None = None
-        if self.job is not None:
-            parent = self.job_id
-        elif self.resuming:
-            parent = self.previous
+        parent = self.job_id if self.job is not None else None
+
+        # elif self.resuming:
+        # parent = self.previous
 
         query_kwargs = dict(
             original_query=self.query,
@@ -226,7 +225,6 @@ class QueryIteration:
             corpora=self.corpora,
             existing_results=self.existing_results,
             sentences=self.sentences,
-            offset=self.hit_limit,
             page_size=self.page_size,
             post_processes=self.post_processes,
             languages=list(self.languages),
@@ -254,7 +252,7 @@ class QueryIteration:
         """
         Helper to submit a sentences job
         """
-        depends_on = self.job_id if not self.done and self.job_id else self.previous
+        depends_on = self.job_id if self.job_id else self.previous
         to_use: list[str] | str = []
         if self.simultaneous and depends_on:
             self.dep_chain.append(depends_on)
@@ -265,7 +263,6 @@ class QueryIteration:
         kwargs = dict(
             user=self.user,
             room=self.room,
-            done=self.done,
             simultaneous=self.simultaneous,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
@@ -358,7 +355,6 @@ class QueryIteration:
             "query": job.kwargs["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
-            "hit_limit": manual.get("hit_limit", False),
             "current_batch": None,
             "all_batches": all_batches,
             "total_results_so_far": tot_so_far,
@@ -386,10 +382,6 @@ class QueryIteration:
 
         if not len(self.done_batches):
             self.current_batch = self.all_batches[0]
-            return None
-
-        if self.hit_limit != 0:  # do not change to 'if hit limit!'
-            self.current_batch = self.done_batches[-1]
             return None
 
         # set here ensures we don't double count, even though it should not happen

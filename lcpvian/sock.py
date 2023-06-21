@@ -255,7 +255,6 @@ async def _handle_query(
             "percentage_done": payload["percentage_done"],
             "percentage_words_done": payload["percentage_words_done"],
             "total_results_requested": payload["total_results_requested"],
-            "hit_limit": payload["hit_limit"],
             "projected_results": payload["projected_results"],
             "batches_done": f"{done}/{total_batches}",
             "simultaneous": payload.get("simultaneous", False),

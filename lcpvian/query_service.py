@@ -169,7 +169,6 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             depends_on=kwargs["depends_on"],
-            done=kwargs["done"],
             job_timeout=self.timeout,
             args=(query,),
             kwargs=kwargs,
