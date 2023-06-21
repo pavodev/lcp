@@ -3,14 +3,18 @@
     <table class="table" v-if="data">
       <thead>
         <tr>
-          <th scope="col" v-for="(col, index) in attributes" :key="index">
+          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)">
             {{ col.name }}
+            <span v-if="index == sortBy">
+              <FontAwesomeIcon :icon="['fas', 'arrow-up']" v-if="sortDirection == 0" />
+              <FontAwesomeIcon :icon="['fas', 'arrow-down']" v-else />
+            </span>
           </th>
         </tr>
       </thead>
       <tbody>
         <tr
-          v-for="(item, resultIndex) in data"
+          v-for="(item, resultIndex) in sortedData"
           :key="resultIndex"
           :data-index="resultIndex"
         >
@@ -107,6 +111,8 @@ export default {
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
+      sortBy: 0,
+      sortDirection: 0,
     };
   },
   components: {
@@ -140,6 +146,15 @@ export default {
       }
       return classes
     },
+    sortChange(index) {
+      if (this.sortBy == index) {
+        this.sortDirection = this.sortDirection == 0 ? 1 : 0
+      }
+      else {
+        this.sortBy = index
+        this.sortDirection = 0
+      }
+    }
   },
   computed: {
     headToken() {
@@ -165,6 +180,21 @@ export default {
         columns = columns["partitions"][partitions[0]];
       }
       return columns["prepared"]["columnHeaders"];
+    },
+    sortedData() {
+      let data = this.data
+      console.log("Sort by", this.sortBy, this.sortDirection)
+      data.sort((a, b) => {
+        let retval = 0
+        if (a[this.sortBy] > b[this.sortBy]) {
+          retval = this.sortDirection == 0 ? 1 : -1
+        }
+        if (a[this.sortBy] < b[this.sortBy]) {
+          retval = this.sortDirection == 0 ? -1 : 1
+        }
+        return retval
+      })
+      return data
     },
   },
 };

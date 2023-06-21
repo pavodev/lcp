@@ -1,6 +1,8 @@
 import { FontAwesomeIcon } from '@fortawesome/vue-fontawesome';
 import { library } from '@fortawesome/fontawesome-svg-core';
 import {
+  faArrowDown,
+  faArrowUp,
   faBackward,
   faBackwardStep,
   faCircleInfo,
@@ -22,6 +24,8 @@ import {
   faXmark,
 } from '@fortawesome/free-solid-svg-icons';
 
+library.add(faArrowDown);
+library.add(faArrowUp);
 library.add(faBackward);
 library.add(faBackwardStep);
 library.add(faCircleInfo);
