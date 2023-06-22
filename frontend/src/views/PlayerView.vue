@@ -980,6 +980,13 @@ KWIC => plain
           // this.submit(null, false, false);
           return;
         }
+        else if (data["action"] === "query_error") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "error",
+            text: data.info,
+          });
+        }
       } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {
           this.loading = false;

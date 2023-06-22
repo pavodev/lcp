@@ -1,6 +1,6 @@
 <template>
   <div id="app-content">
-    <nav class="navbar navbar-expand-lg bg-liri mb-3">
+    <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
         <a class="navbar-brand" href="/">VIAN</a>
         <button

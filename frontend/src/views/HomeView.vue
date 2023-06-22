@@ -5,7 +5,7 @@
         <div class="col">
           <Title :title="`Welcome to ${appName}`" />
         </div>
-        <div class="col mt-1 text-end">
+        <!-- <div class="col mt-1 text-end">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -15,8 +15,28 @@
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
             Add new project
           </button>
-        </div>
+        </div> -->
       </div>
+      <!-- <div class="row mt-4">
+        <div class="col">
+          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
+          condimentum, nisi at semper varius, risus arcu dictum felis, at
+          faucibus lacus tortor sed felis. Vivamus malesuada nulla id nisl
+          consequat porta. Nam eu erat porta ipsum suscipit ultricies sodales
+          sed nibh. Morbi fringilla scelerisque orci, quis pulvinar justo dictum
+          in. Phasellus ex tortor, tincidunt vitae dui at, accumsan placerat
+          erat. Nunc a interdum nulla. Aliquam eu nulla sed nisi mollis
+          efficitur.
+        </div>
+        <div class="col">
+          Duis et augue vitae nisl pharetra pellentesque. Sed vulputate rhoncus
+          faucibus. Cras dapibus eu est ultricies viverra. Donec non lectus
+          scelerisque, hendrerit nisl nec, blandit odio. Praesent vitae faucibus
+          risus, sit amet blandit erat. Orci varius natoque penatibus et magnis
+          dis parturient montes, nascetur ridiculus mus. Mauris sed pharetra
+          purus.
+        </div>
+      </div> -->
     </div>
     <div class="container mt-4 text-start">
       <div class="row">
@@ -34,6 +54,7 @@
               role="tab"
               :aria-controls="`nav-${project.id}`"
               aria-selected="true"
+              @click="corporaFilter = ''"
             >
               {{ project.title }}
               <span class="api-badge">({{ project.corpora.length }})</span>
@@ -51,41 +72,60 @@
             role="tabpanel"
             aria-labelledby="nav-results-tab"
           >
-            <span v-if="index != -1">
-              <span v-if="project.api">
-                <p class="mb-0">API Key: {{ project.api.key }}</p>
-                <p class="">Secret Key: {{ project.api.secretPart }}</p>
+            <div class="row">
+              <div class="col">
+                <div class="input-group mb-3">
+                  <span class="input-group-text" id="basic-addon1">
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass']" />
+                  </span>
+                  <input
+                    type="text"
+                    class="form-control"
+                    v-model="corporaFilter"
+                    placeholder="Search corpora"
+                  />
+                </div>
+              </div>
+              <div v-if="index != -1" class="col-2 text-end">
+                <span v-if="project.api">
+                  <p class="mb-0">API Key: {{ project.api.key }}</p>
+                  <p class="">Secret Key: {{ project.api.secretPart }}</p>
+                  <button
+                    type="button"
+                    class="btn btn-secondary btn-sm mb-3"
+                    @click="APIKeyRevoke(project.id, project.api.id)"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'trash']" class="me-1" />
+                    Revoke API Key
+                  </button>
+                </span>
                 <button
                   type="button"
-                  class="btn btn-secondary btn-sm mb-3"
-                  @click="APIKeyRevoke(project.id, project.api.id)"
+                  class="btn btn-light"
+                  @click="APIKeyCreate(project.id)"
+                  v-else
                 >
-                  <FontAwesomeIcon :icon="['fas', 'trash']" class="me-1" />
-                  Revoke API Key
+                  <FontAwesomeIcon
+                    :icon="['fas', 'circle-plus']"
+                    class="me-1"
+                  />
+                  Create API Key
                 </button>
-              </span>
-              <button
-                type="button"
-                class="btn btn-secondary btn-sm"
-                @click="APIKeyCreate(project.id)"
-                v-else
-              >
-                <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
-                Create API Key
-              </button>
-            </span>
-            <p>Corpora:</p>
+              </div>
+            </div>
             <div class="row mt-2">
               <div
                 class="col-4 mb-3"
-                v-for="corpus in project.corpora"
+                v-for="corpus in filterCorpora(project.corpora)"
                 :key="corpus.id"
                 @click="openQueryWithCorpus(corpus)"
               >
                 <div class="corpus-block">
                   <p class="title mb-0">{{ corpus.meta.name }}</p>
-                  <p class="author mb-0" v-if="corpus.meta.author">
-                    by {{ corpus.meta.author }}
+                  <p class="author mb-0">
+                    <span v-if="corpus.meta.author"
+                      >by {{ corpus.meta.author }}</span
+                    >
                   </p>
                   <p class="description mt-3">
                     {{ corpus.meta.corpusDescription }}
@@ -102,10 +142,29 @@
                     Version: <b>{{ corpus.meta.version }}</b>
                   </p>
                   <div
-                    class="details-button"
+                    class="details-button icon-1 tooltips"
+                    title="Query corpus"
+                  >
+                    <FontAwesomeIcon
+                      :icon="['fas', 'magnifying-glass-chart']"
+                    />
+                  </div>
+                  <a
+                    class="details-button icon-2 tooltips"
+                    :href="corpus.meta.url"
+                    title="Corpus webpage"
+                    :disabled="!corpus.meta.url"
+                    target="_blank"
+                    @click.stop
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'link']" />
+                  </a>
+                  <div
+                    class="details-button icon-3 tooltips"
                     @click.stop="openCorpus(corpus)"
                     data-bs-toggle="modal"
                     data-bs-target="#corpusDetailsModal"
+                    title="Corpus details"
                   >
                     <FontAwesomeIcon :icon="['fas', 'circle-info']" />
                   </div>
@@ -270,6 +329,8 @@ import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
 
+import { Tooltip } from "bootstrap";
+
 export default {
   name: "HomeView",
   data() {
@@ -283,6 +344,8 @@ export default {
       allowProjectModalSave: false,
       modalProjectData: null,
       appName: config.appName,
+      tooltips: [],
+      corporaFilter: "",
     };
   },
   components: {
@@ -290,6 +353,16 @@ export default {
     ProjectNewView,
   },
   methods: {
+    filterCorpora(corpora) {
+      if (this.corporaFilter) {
+        corpora = corpora.filter(
+          (c) =>
+            c.meta.name.search(new RegExp(this.corporaFilter, "i")) > -1 ||
+            c.meta.author.search(new RegExp(this.corporaFilter, "i")) > -1
+        );
+      }
+      return corpora;
+    },
     openCorpus(corpus) {
       this.corpusModal = corpus;
     },
@@ -341,6 +414,22 @@ export default {
         });
       }
     },
+    setTooltips() {
+      this.removeTooltips();
+      const tooltipTriggerList = Array.from(
+        document.querySelectorAll(".tooltips")
+      );
+      tooltipTriggerList.forEach((tooltipTriggerEl) => {
+        let tooltipInstance = new Tooltip(tooltipTriggerEl);
+        this.tooltips.push(tooltipInstance);
+      });
+    },
+    removeTooltips() {
+      this.tooltips.forEach((tooltipInstance) => {
+        tooltipInstance.dispose();
+      });
+      this.tooltips = [];
+    },
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -349,7 +438,7 @@ export default {
       let retval = {
         "-1": {
           id: null,
-          title: "No project",
+          title: "Public",
           corpora: [],
         },
       };
@@ -421,6 +510,13 @@ export default {
     this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
       this.showGraph = false;
     });
+    this.setTooltips();
+  },
+  updated() {
+    this.setTooltips();
+  },
+  beforeUnmount() {
+    this.removeTooltips();
   },
 };
 </script>
@@ -432,12 +528,14 @@ export default {
   padding: 20px;
   cursor: pointer;
   position: relative;
+  height: 230px;
 }
 .author {
   font-size: 70%;
+  height: 10px;
 }
 .corpus-block:hover {
-  background-color: #f3f3f3;
+  background-color: #f9f9f9;
 }
 .title {
   font-size: 110%;
@@ -445,6 +543,8 @@ export default {
 }
 .description {
   font-size: 90%;
+  height: 70px;
+  overflow: hidden;
 }
 .word-count {
   font-size: 80%;
@@ -463,18 +563,31 @@ export default {
 }
 .details-button {
   position: absolute;
-  bottom: 20px;
-  right: 20px;
-  background-color: #2a7f62;
+  bottom: 10px;
+  /* background-color: #2a7f62;
   padding: 3px 10px;
   border-radius: 4px;
-  color: #fff;
-  opacity: 0.6;
+  color: #fff; */
+  color: #1e9989;
+  opacity: 0.9;
+}
+details-button:disabled {
+  filter: grayscale(100);
+  opacity: 0.5;
 }
 .corpus-block:hover .details-button {
-  opacity: 0.8;
+  opacity: 1;
 }
 .details-button:hover {
-  opacity: 1 !important;
+  opacity: 0.7 !important;
+}
+.details-button.icon-1 {
+  right: 20px;
+}
+.details-button.icon-2 {
+  right: 55px;
+}
+.details-button.icon-3 {
+  right: 90px;
 }
 </style>

@@ -1,34 +1,22 @@
 <template>
-  <div id="kwic-view">
+  <div id="plain-table-view">
     <table class="table" v-if="data">
-      <thead>
+      <!-- <thead>
         <tr>
-          <template
-            v-for="(group, groupIndex) in groups"
-            :key="`thead-${groupIndex}`"
-          >
-            <th scope="col" class="header-left">
-              {{ groupIndex == 0 ? "Left context" : "Context" }}
-            </th>
-            <th scope="col" class="header-form">Form</th>
-          </template>
-          <th scope="col">Right context</th>
+          <th scope="col" style="width: 100%">Result</th>
           <th scope="col">-</th>
         </tr>
-      </thead>
+      </thead> -->
       <tbody>
         <tr
           v-for="(item, resultIndex) in results"
           :key="resultIndex"
           :data-index="resultIndex"
         >
-          <template
-            v-for="(group, groupIndex) in groups"
-            :key="`tbody-${groupIndex}`"
-          >
-            <td
-              scope="row"
-              :class="groupIndex == 0 ? 'left-context' : 'middle-context'"
+          <td scope="row">
+            <template
+              v-for="(group, groupIndex) in groups"
+              :key="`tbody-${groupIndex}`"
             >
               <span
                 class="token"
@@ -40,8 +28,6 @@
               >
                 {{ token[0] }}
               </span>
-            </td>
-            <td scope="row" class="match-context text-bold">
               <span
                 class="token"
                 v-for="(token, tokenIndex) in item[groupIndex * 2 + 1]"
@@ -52,9 +38,7 @@
               >
                 {{ token[0] }}
               </span>
-            </td>
-          </template>
-          <td scope="row" class="right-context">
+            </template>
             <span
               class="token"
               v-for="(token, tokenIndex) in item[groups.length * 2]"
@@ -230,7 +214,11 @@
   cursor: pointer;
 }
 .highlight {
-  background-color: #1e999967;
+  background-color: #1e999967 !important;
+  color: #000 !important;
+}
+*[class^="color-group-"] {
+  border-radius: 2px;
 }
 </style>
 
@@ -239,7 +227,7 @@ import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
-  name: "ResultsKWICView",
+  name: "ResultsPlainTableView",
   props: [
     "data",
     "sentences",
@@ -323,7 +311,12 @@ export default {
     },
     bgCheck(resultIndex, groupIndex, tokenIndexInResultset, range, type) {
       let classes = [];
-      // if (type) {
+
+      if (type == 2) {
+        classes.push('text-bold')
+        classes.push(`color-group-${groupIndex}`)
+      }
+
       if (this.currentResultIndex == resultIndex && this.currentToken) {
         // Because of pages
         resultIndex =
@@ -337,9 +330,9 @@ export default {
         // Left context of resultset
         if (type == 1) {
           // Beacuse of reverse
-          if (range[groupIndex].length >= tokenIndexInResultset) {
-            tokenIndexInResultset = range[groupIndex].length - tokenIndexInResultset - 1
-          }
+          // if (range[groupIndex].length >= tokenIndexInResultset) {
+          //   tokenIndexInResultset = range[groupIndex].length - tokenIndexInResultset - 1
+          // }
           if (groupIndex > 0) {
             groupStartIndex = range[range.length - 1][groupIndex - 1].at(-1) + 1;
           }
@@ -384,7 +377,8 @@ export default {
       let end = start + this.resultsPerPage;
       return this.data
         .filter((row, rowIndex) => {
-          return rowIndex >= start && rowIndex < end;
+          let sentenceId = row[0];
+          return rowIndex >= start && rowIndex < end && this.sentences[sentenceId];
         })
         .map((row) => {
           let sentenceId = row[0];
@@ -396,9 +390,10 @@ export default {
           );
 
           let retval = [
-            // Before first
-            tokens.filter((_, index) => index < range[0][0]).reverse(),
-            // tokens.filter((_, index) => index < range[0][0])
+            // Before first match
+            // Revert when in table
+            // tokens.filter((_, index) => index < range[0][0]).reverse(),
+            tokens.filter((_, index) => index < range[0][0])
           ];
 
           for (let index = 0; index < range.length; index++) {
