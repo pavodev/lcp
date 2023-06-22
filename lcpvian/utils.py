@@ -381,16 +381,17 @@ def _trim_bundle(bundle: Results, kwics: set[int], total_requested: int) -> Resu
 
 def _format_vian(
     rest: Sequence, first_list: int
-) -> tuple[int | str, list[int], int | str, str | None, list[list[int]]]:
+) -> tuple[int | str, list[int], int | str, str | None, str | None, list[list[int]]]:
     """
     Little helper to build VIAN kwic sentence data
     """
     seg_id = cast(str | int, rest[0])
-    tok_ids = cast(list[int], rest[1 : first_list - 2])
-    gesture = cast(str | None, rest[first_list - 1])
-    doc_id = cast(int | str, rest[first_list - 2])
+    tok_ids = cast(list[int], rest[1 : first_list - 3])
+    gesture = cast(str | None, rest[first_list - 2])
+    doc_id = cast(int | str, rest[first_list - 3])
+    agent_name = cast(str | None, rest[first_list - 1])
     frame_ranges = cast(list[list[int]], rest[first_list:])
-    out = (seg_id, tok_ids, doc_id, gesture, frame_ranges)
+    out = (seg_id, tok_ids, doc_id, gesture, agent_name, frame_ranges)
     return out
 
 
