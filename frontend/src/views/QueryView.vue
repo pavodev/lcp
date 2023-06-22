@@ -1,7 +1,11 @@
 <template>
   <div class="query">
-    <Title :title="'Query'" class="mt-4" />
-    <div class="container mt-2">
+    <div class="container mt-4">
+      <div class="row">
+        <div class="col">
+          <Title :title="'Query'" />
+        </div>
+      </div>
       <div class="row">
         <div class="col-4">
           <div class="mb-3 mt-3">
@@ -17,9 +21,9 @@
           <div class="mb-3">
             <label class="form-label">Languages</label>
             <multiselect
-              v-model="languages"
+              v-model="selectedLanguages"
               :options="availableLanguages"
-              :multiple="true"
+              :multiple="false"
             ></multiselect>
           </div>
           <!-- <div class="mb-3">
@@ -83,23 +87,26 @@
             <button
               type="button"
               @click="submit"
-              class="btn btn-primary"
+              class="btn btn-primary me-1"
               :disabled="
                 (selectedCorpora && selectedCorpora.length == 0) ||
                 loading ||
                 (isQueryValidData != null && isQueryValidData.valid == false) ||
                 !query ||
-                languages.length == 0
+                !selectedLanguages
               "
             >
+              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               Submit
             </button>
             <button
+              v-if="loading"
               type="button"
               @click="stop"
               :disabled="loading == false"
-              class="btn btn-primary"
+              class="btn btn-primary me-1"
             >
+              <FontAwesomeIcon :icon="['fas', 'xmark']" />
               Stop
             </button>
             <!-- <button
@@ -330,6 +337,9 @@
                   .result_sets"
                 :key="`result-btn-${index}`"
               >
+                <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
+                <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'" :icon="['fas', 'circle-nodes']" />
+                <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
                 {{ resultSet.name }}
                 <small>(<span v-if="resultSet.type == 'plain'">
                   {{
@@ -361,7 +371,7 @@
           </nav>
           <div class="tab-content" id="nav-tabContent">
             <div
-              class="tab-pane fade show"
+              class="tab-pane fade show pt-3"
               :class="index == 0 ? 'active' : ''"
               :id="`nav-results-${index}`"
               role="tabpanel"
@@ -370,16 +380,49 @@
                 .result_sets"
               :key="`result-tab-${index}`"
             >
-              <ResultsKWICView
-                v-if="resultSet.type == 'plain' && WSDataSentences"
-                :data="WSDataSentences.result[index + 1]"
-                :sentences="WSDataSentences.result[-1]"
-                :attributes="resultSet.attributes"
-                :corpora="selectedCorpora"
-                @updatePage="updatePage"
-                :resultsPerPage="resultsPerPage"
-                :loading="loading"
-              />
+              <span v-if="resultSet.type == 'plain' && WSDataSentences">
+                <div class="btn-group mt-2 btn-group-sm mb-3">
+                  <a
+                    href="#"
+                    @click.stop.prevent="plainType = 'kwic'"
+                    class="btn"
+                    :class="plainType != 'table' ? 'active btn-primary' : 'btn-light'"
+                    aria-current="page"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'barcode']" />
+                    KWIC
+                  </a>
+                  <a
+                    href="#"
+                    @click.stop.prevent="plainType = 'table'"
+                    class="btn"
+                    :class="plainType == 'table' ? 'active btn-primary' : 'btn-light'"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'table']" />
+                    Table
+                  </a>
+                </div>
+                <ResultsPlainTableView
+                  v-if="plainType == 'table'"
+                  :data="WSDataSentences.result[index + 1]"
+                  :sentences="WSDataSentences.result[-1]"
+                  :attributes="resultSet.attributes"
+                  :corpora="selectedCorpora"
+                  @updatePage="updatePage"
+                  :resultsPerPage="resultsPerPage"
+                  :loading="loading"
+                />
+                <ResultsKWICView
+                  v-else
+                  :data="WSDataSentences.result[index + 1]"
+                  :sentences="WSDataSentences.result[-1]"
+                  :attributes="resultSet.attributes"
+                  :corpora="selectedCorpora"
+                  @updatePage="updatePage"
+                  :resultsPerPage="resultsPerPage"
+                  :loading="loading"
+                />
+              </span>
               <!-- <ResultsAnalysisView
                 v-else-if="resultSet.type == 'analysis'"
                 v-else-if="resultSet.type == 'collocation'"
@@ -462,7 +505,7 @@
               type="button"
               :disabled="!queryName"
               @click="saveQuery"
-              class="btn btn-primary"
+              class="btn btn-primary me-1"
             >
               Save query
             </button>
@@ -489,10 +532,6 @@
 .query-field.error {
   border-color: red;
 }
-.btn-primary {
-  margin-left: 2px;
-  margin-right: 2px;
-}
 textarea {
   font-family: Consolas, Monaco, Lucida Console, Liberation Mono,
     DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
@@ -513,6 +552,7 @@ import { useWsStore } from "@/stores/wsStore";
 import Title from "@/components/TitleComponent.vue";
 import ResultsTableView from "@/components/results/TableView.vue";
 import ResultsKWICView from "@/components/results/KWICView.vue";
+import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
 
 export default {
@@ -614,7 +654,7 @@ myColl3 => collocation
       WSDataSentences: "",
       nResults: 200,
       pageSize: 100,
-      languages: ["en"],
+      selectedLanguages: "en",
       queryName: "",
       currentTab: "dqd",
       simultaneousMode: false,
@@ -625,12 +665,14 @@ myColl3 => collocation
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
       failedStatus: false,
+      plainType: "kwic",
       // nResults: 50,
     };
   },
   components: {
     Title,
     ResultsKWICView,
+    ResultsPlainTableView,
     ResultsTableView,
     // ResultsAnalysisView,
     // KWICTable,
@@ -641,16 +683,18 @@ myColl3 => collocation
     corpora: {
       handler() {
         if (this.preselectedCorporaId) {
-          let corpus = this.corpora.filter(corpus => corpus.meta.id == this.preselectedCorporaId)
+          let corpus = this.corpora.filter(
+            (corpus) => corpus.meta.id == this.preselectedCorporaId
+          );
           if (corpus.length) {
             this.selectedCorpora = {
               name: corpus[0].meta.name,
               value: corpus[0].meta.id,
               corpus: corpus[0],
-            }
+            };
           }
-          this.preselectedCorporaId = null
-          this.validate()
+          this.preselectedCorporaId = null;
+          this.validate();
         }
       },
       immediate: true,
@@ -660,8 +704,8 @@ myColl3 => collocation
       handler() {
         let _messages = this.messages;
         if (_messages.length > 0) {
-          console.log("WSM", _messages)
-          _messages.forEach(message => this.onSocketMessage(message))
+          console.log("WSM", _messages);
+          _messages.forEach((message) => this.onSocketMessage(message));
           useWsStore().clear();
         }
       },
@@ -674,7 +718,13 @@ myColl3 => collocation
         {},
         null,
         `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
-      )
+      );
+      if (
+        this.selectedLanguages &&
+        !this.availableLanguages.includes(this.selectedLanguages)
+      ) {
+        this.selectedLanguages = this.availableLanguages[0];
+      }
     },
     WSDataResults() {
       if (this.WSDataResults) {
@@ -736,7 +786,7 @@ myColl3 => collocation
         user: this.userData.user.id,
       });
       this.wsConnected = false;
-      console.log("Left WS")
+      console.log("Left WS");
     },
     // connectToRoom() {
     //   console.log("Connect to WS room", this.wsConnected, this.$socket.readyState)
@@ -804,13 +854,15 @@ myColl3 => collocation
           // will get this message containing the new config data. plz
           // ensure that it gets added to the corpusstore properly and
           // the app is updated accordingly
-          delete data["config"]["-1"]
+          delete data["config"]["-1"];
           // todo: no idea if this is right:
-          useCorpusStore().corpora = Object.keys(data["config"]).map(corpusId => {
-            let corpus = data["config"][corpusId]
-            corpus.meta["id"] = corpusId
-            return corpus
-          });
+          useCorpusStore().corpora = Object.keys(data["config"]).map(
+            (corpusId) => {
+              let corpus = data["config"][corpusId];
+              corpus.meta["id"] = corpusId;
+              return corpus;
+            }
+          );
           // we could also do this but we already have the data here...
           // useCorpusStore().fetchCorpora();
           return;
@@ -828,7 +880,7 @@ myColl3 => collocation
               type: "success",
               text: "Query stopped",
             });
-            this.loading = false
+            this.loading = false;
           }
           return;
         } else if (data["action"] === "query_result") {
@@ -845,7 +897,20 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "sentences") {
           // console.log("sentences", data);
-          this.WSDataSentences = data;
+          if (this.WSDataSentences && this.WSDataSentences.first_job == data.first_job) {
+            Object.keys(this.WSDataSentences.result).forEach(key => {
+              if (key > 0) {
+                this.WSDataSentences.result[key] = this.WSDataSentences.result[key].concat(data.result[key])
+              }
+            })
+            this.WSDataSentences.result[-1] = {
+              ...this.WSDataSentences.result[-1],
+              ...data.result[-1]
+            }
+          }
+          else {
+            this.WSDataSentences = data;
+          }
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
@@ -914,7 +979,7 @@ myColl3 => collocation
         // page_size: this.pageSize,
         // page_size: this.nResults,
         page_size: this.resultsPerPage,
-        languages: this.languages,
+        languages: [this.selectedLanguages],
         total_results_requested: this.nResults,
         stats: true,
         resume: resumeQuery,
@@ -975,7 +1040,7 @@ myColl3 => collocation
         room: this.roomId,
         // room: null,
         page_size: this.pageSize,
-        languages: this.languages,
+        languages: [this.selectedLanguages],
         total_results_requested: this.nResults,
         query_name: this.queryName,
       };
@@ -984,7 +1049,7 @@ myColl3 => collocation
     fetch() {
       let data = {
         user: this.userData.user.id,
-        room: this.roomId
+        room: this.roomId,
         // room: null,
       };
       useCorpusStore().fetchQueries(data);

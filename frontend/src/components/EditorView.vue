@@ -77,51 +77,17 @@ function checkCode (content) {
 // monaco.editor.defineTheme('DQDTheme', MonacoTheme)
 monaco.editor.defineTheme('DQDTheme', {
   base: 'vs',
-  inherit: false,
+  inherit: true,
   colors: {
     "input.background": "#DDD6C1",
 		"input.foreground": "#586E75",
   },
-  rules: [],
-  tokenColors: [{
-			settings: {
-				background: "#FDF6E3",
-				"foreground": "#657B83"
-			}
-		},
-		{
-			"scope": ["meta.embedded", "source.groovy.embedded"],
-			"settings": {
-				"background": "#FDF6E3",
-				"foreground": "#657B83"
-			}
-		},
-		{
-			"name": "Comment",
-			"scope": "comment",
-			"settings": {
-				"fontStyle": "italic",
-				"foreground": "#93A1A1"
-			}
-		},
-    {
-			"name": "Variable",
-			"scope": [
-				"variable.language",
-				"variable.other"
-			],
-			"settings": {
-				"foreground": "#268BD2"
-			}
-		},
-    {
-			"name": "Keyword",
-			"scope": "keyword",
-			"settings": {
-				"foreground": "#859900"
-			}
-		}
-  ]
+  rules: [
+    { token: "identifier", foreground: "4287f5" },
+    { token: "type.identifier", foreground: "2a7f62" },
+    { token: "keyword", foreground: "ff6600" },
+  ],
+  tokenColors: [],
 });
 
 
@@ -333,6 +299,7 @@ export default {
     editor = monaco.editor.create(document.getElementById("editor"), {
       language: "DQDmonaco",
       value: this.query,
+      theme: 'DQDTheme',
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       renderLineHighlight: "none",

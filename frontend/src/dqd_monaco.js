@@ -25,7 +25,8 @@ export default {
     'window',
     'attribute',
     'space',
-    'comment'
+    'comment',
+    'tdeps'
   ],
 
   typeKeywords: ['year', 'form', 'dep', 'head', 'from', 'pos', 'loop', 'value', 'label', 'to', 'upos', 'xpos'],
