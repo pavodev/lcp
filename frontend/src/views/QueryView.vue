@@ -714,11 +714,20 @@ myColl3 => collocation
     },
     selectedCorpora() {
       this.validate();
-      history.pushState(
-        {},
-        null,
-        `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
-      );
+      if (this.selectedCorpora) {
+        history.pushState(
+          {},
+          null,
+          `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
+        );
+      }
+      else {
+        history.pushState(
+          {},
+          null,
+          `/query/`
+        );
+      }
       if (
         this.selectedLanguages &&
         !this.availableLanguages.includes(this.selectedLanguages)
