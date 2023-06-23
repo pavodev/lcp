@@ -60,7 +60,8 @@
                 v-if="userData && userData.user && userData.user.id"
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
-                Logout <small>({{ userData.user.displayName }})</small>
+                Logout
+                <!-- <small>({{ userData.user.displayName }})</small> -->
               </router-link>
               <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />

@@ -73,7 +73,7 @@
               type="button"
               class="btn btn-secondary btn-sm"
               data-bs-toggle="modal"
-              data-bs-target="#detailsModal"
+              :data-bs-target="`#detailsModal${randInt}`"
               @click="showModal(resultIndex)"
             >
               Details
@@ -124,7 +124,7 @@
     </div>
     <div
       class="modal fade"
-      id="detailsModal"
+      :id="`detailsModal${randInt}`"
       tabindex="-1"
       aria-labelledby="detailsModalLabel"
       aria-hidden="true"
@@ -258,6 +258,7 @@ export default {
       modalIndex: null,
       currentPage: 1,
       groups: this.data ? this.getGroups(this.data[0], true) : [],
+      randInt: Math.floor(Math.random() * 1000)
     };
   },
   components: {
