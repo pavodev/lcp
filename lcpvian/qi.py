@@ -146,7 +146,11 @@ class QueryIteration:
         languages = set(langs)
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
-        first_job = "" if not request_data.get("resume") else previous
+        first_job = ""
+        if previous:
+            prev = Job.fetch(previous, connection=request.app["redis"])
+            first_job = prev.kwargs.get("first_job", prev)
+
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
