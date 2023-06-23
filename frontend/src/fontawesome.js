@@ -24,6 +24,8 @@ import {
   faUser,
   faVideo,
   faVolumeDown,
+  faVolumeHigh,
+  faVolumeLow,
   faVolumeOff,
   faVolumeUp,
   faVolumeXmark,
@@ -53,6 +55,8 @@ library.add(faTrash);
 library.add(faUser);
 library.add(faVideo);
 library.add(faVolumeDown);
+library.add(faVolumeLow);
+library.add(faVolumeHigh);
 library.add(faVolumeOff);
 library.add(faVolumeUp);
 library.add(faVolumeXmark);

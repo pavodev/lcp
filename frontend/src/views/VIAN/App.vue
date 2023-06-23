@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">VIAN</a>
+        <a class="navbar-brand" href="/">VIAN-DH</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -43,7 +43,7 @@
                   :icon="['fas', 'video']"
                   class="me-1"
                 />
-                Player
+                Viewer
               </router-link>
             </li>
           </ul>

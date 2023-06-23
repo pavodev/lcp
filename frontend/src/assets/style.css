@@ -175,3 +175,7 @@ nav a.router-link-exact-active {
 .nav-tabs {
   box-shadow: 0 5px 7px -8px #777;
 }
+
+.text-bg-primary {
+  background-color: #2a7f62 !important;
+}

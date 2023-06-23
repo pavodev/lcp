@@ -2,7 +2,7 @@ let config = null;
 if (process.env.APP_TYPE == "vian") {
   if (process.env.NODE_ENV === "production") {
     config = {
-      appName: "VIAN",
+      appName: "VIAN-DH",
       apiUrl: "https://vian.linguistik.uzh.ch/be",
       wsUrl: "wss://vian.linguistik.uzh.ch/ws",
       appDomain: "vian.linguistik.uzh.ch",
@@ -13,7 +13,7 @@ if (process.env.APP_TYPE == "vian") {
     };
   } else if (process.env.NODE_ENV === "test") {
     config = {
-      appName: "VIAN",
+      appName: "VIAN-DH",
       apiUrl: "https://vian.test.linguistik.uzh.ch/be",
       wsUrl: "wss://vian.test.linguistik.uzh.ch/ws",
       appDomain: "vian.test.linguistik.uzh.ch",
@@ -24,7 +24,7 @@ if (process.env.APP_TYPE == "vian") {
     };
   } else if (process.env.NODE_ENV === "dev") {
     config = {
-      appName: "VIAN",
+      appName: "VIAN-DH",
       apiUrl: "http://localhost:9090",
       appDomain: "vian.dev.linguistik.uzh.ch",
       environment: "development",
@@ -35,7 +35,7 @@ if (process.env.APP_TYPE == "vian") {
   } else {
     // development
     config = {
-      appName: "VIAN",
+      appName: "VIAN-DH",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
@@ -60,6 +60,7 @@ if (process.env.APP_TYPE == "vian") {
         "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
       },
       sentryDSN: null,
+      baseVideoUrl: "http://localhost:8000",
     };
   }
 }

@@ -138,8 +138,16 @@
                       )
                     }}</b>
                   </p>
-                  <p class="word-count">
+                  <p class="word-count mb-0">
                     Version: <b>{{ corpus.meta.version }}</b>
+                  </p>
+                  <p class="word-count" v-if="corpus.partitions">
+                    <span
+                      class="badge text-bg-primary me-1"
+                      v-for="language in corpus.partitions.values"
+                      v-html="language.toUpperCase()"
+                      :key="`${corpus.id}-${language}`"
+                    />
                   </p>
                   <div
                     class="details-button icon-1 tooltips"
@@ -261,6 +269,12 @@
                 </p>
                 <p class="word-count mb-0">
                   Version: {{ corpusModal.meta.version }}
+                </p>
+                <p class="word-count mb-0">
+                  URL:
+                  <a :href="corpusModal.meta.url" target="_blank">{{
+                    corpusModal.meta.url
+                  }}</a>
                 </p>
                 <p class="word-count mb-0">
                   Description: {{ corpusModal.description }}
@@ -528,7 +542,7 @@ export default {
   padding: 20px;
   cursor: pointer;
   position: relative;
-  height: 230px;
+  height: 233px;
 }
 .author {
   font-size: 70%;
@@ -568,7 +582,7 @@ export default {
   padding: 3px 10px;
   border-radius: 4px;
   color: #fff; */
-  color: #1e9989;
+  color: #2a7f62;
   opacity: 0.9;
 }
 details-button:disabled {
@@ -582,7 +596,12 @@ details-button:disabled {
   opacity: 0.7 !important;
 }
 .details-button.icon-1 {
-  right: 20px;
+  right: 0;
+  bottom: 0;
+  background-color: #2a7f62;
+  padding: 15px 10px 10px 15px;
+  color: #fff;
+  border-radius: 40px 0 0;
 }
 .details-button.icon-2 {
   right: 55px;

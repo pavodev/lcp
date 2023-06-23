@@ -154,7 +154,7 @@
           </button>
         </div>
         <div class="btn-group ms-1" role="group">
-          <button
+          <!-- <button
             type="button"
             class="btn btn-sm btn-primary"
             @click="playerVolumeDown"
@@ -167,34 +167,42 @@
             @click="playerVolumeUp"
           >
             <FontAwesomeIcon :icon="['fas', 'volume-up']" />
-          </button>
+          </button> -->
           <button
             type="button"
             class="btn btn-sm btn-primary"
             @click="playerVolumeMute"
           >
-            <FontAwesomeIcon :icon="['fas', 'volume-off']" />
+            <div style="width: 11px; text-align: left">
+              <FontAwesomeIcon v-if="volume == 0" :icon="['fas', 'volume-xmark']" />
+              <FontAwesomeIcon v-else-if="volume > 0.9" :icon="['fas', 'volume-high']" />
+              <FontAwesomeIcon v-else :icon="['fas', 'volume-low']" />
+            </div>
           </button>
 
-          <!-- <span class="btn btn-sm btn-primary">
-            <FontAwesomeIcon :icon="['fas', 'volume-off']" />
+          <span class="btn btn-sm btn-primary pt-0 pb-0">
             <input
               type="range"
-              class="form-range mt-1 ms-1"
+              class="form-range"
               v-model="volume"
               min="0"
               max="1"
               step="0.05"
+              style="height: 2px"
             />
-          </span> -->
-          <input
+          </span>
+          <span class="btn btn-sm btn-primary" style="width: 37px">
+            <small>{{ parseInt(volume*100, 10) }}</small>
+          </span>
+          <!-- <input
             type="range"
             class="form-range mt-1 ms-1"
             v-model="volume"
             min="0"
             max="1"
-            step="0.05"
+            step="0.001"
           />
+          -->
         </div>
         <div class="btn-group ms-1" role="group">
           <button
@@ -479,9 +487,11 @@
                 !query
               "
             >
+              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               Submit
             </button>
             <button
+              v-if="loading"
               type="button"
               @click="stop"
               :disabled="loading == false"
@@ -507,16 +517,16 @@
             >
               3
             </button>
-            <button
+            <!-- <button
               type="button"
               @click="setExample(4)"
               class="btn btn-sm btn-secondary ms-1"
             >
               4
-            </button>
+            </button> -->
           </div>
-          <div class="col-6" v-if="loading || WSDataResults">
-            Total progress
+          <div class="col-6" v-if="WSDataResults">
+            <!-- Total progress
             <div class="progress mb-2">
               <div
                 class="progress-bar"
@@ -532,7 +542,7 @@
               >
                 {{ percentageTotalDone.toFixed(2) }}%
               </div>
-            </div>
+            </div> -->
             <span v-if="WSDataResults">
               <ul class="list-no-bullets">
                 <li
@@ -545,7 +555,7 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(result[4][0][0])"
+                        v-html="frameNumberToTime(result[5][0][0])"
                       ></span>
                     </div>
                     <div class="col">
@@ -556,6 +566,8 @@
                     </div>
                     <div class="col-1">
                       <span v-html="documentDict[result[2]]"></span>
+                      <br>
+                      <span v-html="result[4]"></span>
                     </div>
                   </div>
                 </li>
@@ -847,7 +859,7 @@ KWIC => plain
         parseFloat(
           event.clientX - this.$refs.timeline.getBoundingClientRect().left
         ) / this.$refs.timeline.getBoundingClientRect().width;
-      let time = this.$refs.videoPlayer1.player.time * percent;
+      let time = this.$refs.videoPlayer1.duration * percent;
       if (this.$refs.videoPlayer1) {
         this.$refs.videoPlayer1.currentTime = time;
       }
@@ -965,8 +977,24 @@ KWIC => plain
         }
         else if (data["action"] === "sentences") {
           this.failedStatus = false;
-          this.WSDataResults = data;
+          if (this.WSDataResults && this.WSDataResults.first_job == data.first_job) {
+            Object.keys(this.WSDataResults.result).forEach(key => {
+              if (key > 0) {
+                this.WSDataResults.result[key] = this.WSDataResults.result[key].concat(data.result[key])
+              }
+            })
+            this.WSDataResults.result[-1] = {
+              ...this.WSDataResults.result[-1],
+              ...data.result[-1]
+            }
+          }
+          else {
+            this.WSDataResults = data;
+          }
           return;
+          // this.failedStatus = false;
+          // this.WSDataResults = data;
+          // return;
         } else if (data["action"] === "failed") {
           this.loading = false;
           useNotificationStore().add({
@@ -1018,7 +1046,7 @@ KWIC => plain
         d3,
         range: {
           start: new Date("2022-01-01T00:00:00.000"),
-          end: new Date("2022-01-01T00:20:00.000"),
+          end: new Date("2022-01-01T00:50:00.000"),
         },
         // axis: {
         //   formats: {
