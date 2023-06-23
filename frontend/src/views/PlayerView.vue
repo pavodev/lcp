@@ -76,7 +76,7 @@
     <div v-if="currentDocument">
       <div class="container mt-4 mb-4">
         <div class="video-box">
-          <div class="video-text-test" v-html="subtext"></div>
+          <div class="video-text" v-html="subtext"></div>
           <div :class="mainVideo == 1 ? 'active' : ''">
             <video ref="videoPlayer1" @timeupdate="timeupdate">
               <source
@@ -281,35 +281,35 @@
         <div class="btn-group ms-1" role="group">
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            :class="mainVideo == 1 ? 'active' : ''"
+            class="btn btn-sm btn-text-icon"
+            :class="mainVideo == 1 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainVideo(1)"
           >
             V1
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 1"
-            :class="mainVideo == 2 ? 'active' : ''"
+            :class="mainVideo == 2 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainVideo(2)"
           >
             V2
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 2"
-            :class="mainVideo == 3 ? 'active' : ''"
+            :class="mainVideo == 3 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainVideo(3)"
           >
             V3
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 3"
-            :class="mainVideo == 4 ? 'active' : ''"
+            :class="mainVideo == 4 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainVideo(4)"
           >
             V4
@@ -318,35 +318,35 @@
         <div class="btn-group ms-1" role="group">
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            :class="mainAudio == 1 ? 'active' : ''"
+            class="btn btn-sm btn-text-icon"
+            :class="mainAudio == 1 ? 'active btn-primary' : 'btn-light'"
             @click="playerMainAudio(1)"
           >
             A1
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 1"
-            :class="mainAudio == 2 ? 'active' : ''"
+            :class="mainAudio == 2 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainAudio(2)"
           >
             A2
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 2"
-            :class="mainAudio == 3 ? 'active' : ''"
+            :class="mainAudio == 3 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainAudio(3)"
           >
             A3
           </button>
           <button
             type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
+            class="btn btn-sm btn-text-icon"
             v-if="currentDocument[2].length > 3"
-            :class="mainAudio == 4 ? 'active' : ''"
+            :class="mainAudio == 4 ? 'active btn-primary' : 'btn-secondary'"
             @click="playerMainAudio(4)"
           >
             A4
@@ -715,9 +715,12 @@ KWIC => plain
     },
     resultClick(result) {
       // console.log(result, result[4][0][1], this.currentDocument)
-      let value = Utils.frameNumberToSeconds(result[4][0][1]) / 1000;
+      let minFrame = Math.min(...result[5].map(x => x[0]))
+      let value = Utils.frameNumberToSeconds(minFrame) / 1000;
       if (this.currentDocument[0] == result[2]) {
         this._playerSetTime(value);
+        window.scrollTo(0, 120);
+        this.playerPlay();
       } else {
         //   // this.currentDocument = this.corpusData[result[2] - 1];
         // this.currentDocument = this.documentDict[result[2]];
@@ -959,6 +962,7 @@ KWIC => plain
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
           this.showData(data.document[0]);
+          this._setVolume();
           return;
         }
         else if (data["action"] === "document_ids") {
@@ -1536,9 +1540,9 @@ video {
   padding-top: 6px;
 }
 
-.video-text-test {
+.video-text {
   position: absolute;
-  top: 400px;
+  bottom: 20px;
   width: 710px;
   left: 45px;
   color: #fff;
