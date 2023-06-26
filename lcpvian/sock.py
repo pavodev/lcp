@@ -259,6 +259,8 @@ async def _handle_query(
             "batches_done": f"{done}/{total_batches}",
             "simultaneous": payload.get("simultaneous", False),
         }
+        if app["_debug"] and "sql" in payload:
+            to_send["sql"] = payload["sql"]
     await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
     if to_submit is not None:
         await to_submit
