@@ -12,6 +12,7 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
+from .convert import _aggregate_results, _format_kwics
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -27,13 +28,7 @@ from .utils import (
     CustomEncoder,
     Interrupted,
     _get_status,
-    # _union_results,
     _row_to_value,
-    # _apply_filters,
-    # _trim_bundle,
-    _aggregate_results,
-    _format_kwics,
-    # _get_kwics,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob

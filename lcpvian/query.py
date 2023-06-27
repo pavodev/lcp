@@ -12,7 +12,6 @@ from typing import TypeAlias, cast
 from aiohttp import web
 from rq.job import Job
 
-# from .callbacks import _query, _sentences
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, JSONObject

@@ -3,13 +3,12 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import operator
 import os
 import re
 import traceback
 
-from collections import Counter, defaultdict
-from collections.abc import Awaitable, Callable, Coroutine, Mapping, Sequence
+from collections import Counter
+from collections.abc import Awaitable, Callable, Coroutine, Mapping
 
 from datetime import date, datetime
 
@@ -22,7 +21,6 @@ try:
 except ImportError:
     from aiohttp import web
     from aiohttp.client import ClientSession
-from redis import Redis as RedisConnection
 
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis.asyncio.connection import BaseParser
@@ -39,36 +37,18 @@ from rq.connections import get_current_connection
 from rq.job import Job
 
 from .configure import CorpusConfig, CorpusTemplate
-from .qi import QueryIteration
 from .typed import (
     Batch,
     Config,
     Headers,
-    ResultSents,
     JSON,
     JSONObject,
     MainCorpus,
-    QueryMeta,
-    Results,
-    RawSent,
     RunScript,
     Websockets,
 )
-from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
-
-
-OPS = {
-    "<": operator.lt,
-    "<=": operator.le,
-    "=": operator.eq,
-    "==": operator.eq,
-    "<>": operator.ne,
-    "!=": operator.ne,
-    ">": operator.ge,
-    ">=": operator.gt,
-}
 
 
 class Interrupted(Exception):
@@ -242,211 +222,6 @@ async def _lama_check_api_key(headers: Headers) -> JSONObject:
         async with session.post(url, headers=api_headers) as resp:
             jso: JSONObject = await resp.json()
             return jso
-
-
-def _format_kwics(
-    result: list,
-    meta_json: QueryMeta,
-    sents: list,
-    total: int,
-    is_vian: bool = False,
-    is_first: bool = False,
-) -> Results:
-
-    sen: ResultSents = {}
-    out: Results = {0: meta_json, -1: sen}
-    first_list: int | None = None
-    rs: list[dict] = meta_json["result_sets"]
-    kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
-    counts: defaultdict[int, int] = defaultdict(int)
-    stops: set[int] = set()
-
-    for sent in sents:
-        add_to = cast(ResultSents, out[-1])
-        add_to[str(sent[0])] = [sent[1], sent[2]]
-
-    for line in result:
-        key = int(line[0])
-        rest = line[1]
-        if key not in kwics:
-            continue
-        if is_first and key in stops:
-            continue
-        if total > 0 and counts.get(key, 0) >= total:
-            stops.add(key)
-            continue
-        if key not in out:
-            out[key] = []
-        if is_vian and key in kwics:
-            first_list = _first_list(first_list, rest)
-            rest = list(_format_vian(rest, first_list))
-        elif key in kwics:
-            rest = [rest[0], rest[1:]]
-
-        bit = cast(list, out[key])
-        bit.append(rest)
-        counts[key] += 1
-
-    return out
-
-
-def _first_list(first_list: int | None, rest: list) -> int:
-    """
-    Determine the first list item in a vian kwic item
-    """
-    if first_list is not None:
-        return first_list
-    return next(
-        (i for i, x in enumerate(rest) if isinstance(x, (list, tuple))),
-        len(rest),
-    )
-
-
-def _aggregate_results(
-    result: list,
-    existing: Results,
-    meta_json: QueryMeta,
-    post_processes: dict[int, Any],
-    total_requested: int,
-) -> tuple[Results, Results, int]:
-    """
-    Combine non-kwic results for storing and for sending to frontend
-    """
-    # all_results = {0: meta_json}
-    results_to_send = {0: meta_json}
-    n_results = 0
-    rs = meta_json["result_sets"]
-    kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
-    freqs = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "analysis"])
-    counts: defaultdict[int, int] = defaultdict(int)
-
-    for line in result:
-        key = int(line[0])
-        rest: list[Any] = line[1]
-        if key in kwics:
-            counts[key] += 1
-            continue
-        if key not in existing:
-            existing[key] = []
-        if key not in freqs:
-            existing[key].append(rest)
-            continue
-        body = rest[:-1]
-        total_this_batch = rest[-1]
-        preexist = sum(i[-1] for i in existing[key] if i[:-1] == body)
-        body.append(preexist + total_this_batch)
-        existing[key] = [i for i in existing[key] if i[:-1] != body]
-        existing[key].append(body)
-
-    results_to_send = _apply_filters(existing, post_processes)
-    n_results = list(counts.values())[0] if counts else -1
-
-    return existing, results_to_send, n_results
-
-
-def _get_kwics(result: dict[str, list[dict[str, Any]]]) -> set[int]:
-    """
-    Helper to get set of kwic ids
-    """
-    itt = cast(list[dict[str, Any]], result.get("result_sets", result))
-    kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
-    return set(kwics)
-
-
-def _format_vian(
-    rest: Sequence, first_list: int
-) -> tuple[int | str, list[int], int | str, str | None, str | None, list[list[int]]]:
-    """
-    Little helper to build VIAN kwic sentence data
-    """
-    seg_id = cast(str | int, rest[0])
-    tok_ids = cast(list[int], rest[1 : first_list - 3])
-    gesture = cast(str | None, rest[first_list - 2])
-    doc_id = cast(int | str, rest[first_list - 3])
-    agent_name = cast(str | None, rest[first_list - 1])
-    frame_ranges = cast(list[list[int]], rest[first_list:])
-    out = (seg_id, tok_ids, doc_id, gesture, agent_name, frame_ranges)
-    return out
-
-
-def _make_filters(
-    post: dict[int, list[dict[str, Any]]]
-) -> dict[int, list[tuple[str, str, str | int | float]]]:
-    """
-    Because we iterate over them a lot, turn the filters object into something
-    as performant as possible
-    """
-    out = {}
-    for idx, filters in post.items():
-        fixed: list[tuple[str, str, str | int | float]] = []
-        for filt in filters:
-            name, comp = cast(tuple[str, str], list(filt.items())[0])
-            if name != "comparison":
-                raise ValueError("expected comparion")
-
-            bits: Sequence[str | int | float] = comp.split()
-            last_bit = cast(str, bits[-1])
-            body = bits[:-1]
-            assert isinstance(body, list)
-            if last_bit.isnumeric():
-                body.append(int(last_bit))
-            elif last_bit.replace(".", "").isnumeric():
-                body.append(float(last_bit))
-            else:
-                body = bits
-            made = cast(tuple[str, str, int | str | float], tuple(body))
-            fixed.append(made)
-        out[idx] = fixed
-    return out
-
-
-def _apply_filters(results_so_far: Results, post_processes: dict[int, Any]) -> Results:
-    """
-    Take the unioned results and apply any post process functions
-    """
-    if not post_processes:
-        return results_so_far
-    out: Results = {}
-    post = _make_filters(post_processes)
-    for k, v in results_so_far.items():
-        for key, filters in post.items():
-            if not filters:
-                continue
-            if int(k) < 1:
-                continue
-            if int(k) != int(key):
-                continue
-            for name, op, num in filters:
-                v = _apply_filter(cast(list, v), name, op, num)
-        out[k] = v
-    return out
-
-
-def _apply_filter(result: list, name: str, op: str, num: int | str | float) -> list:
-    """
-    Apply a single filter to a group of results, returning only those that match
-    """
-    out: list = []
-    for r in result:
-        total = r[-1]
-        res = OPS[op](total, num)
-        if res and r not in out:
-            out.append(r)
-    return out
-
-
-def _fix_freq(v: list[list]) -> list[list]:
-    """
-    Sum frequency objects and remove duplicate
-    """
-    fixed = []
-    for r in v:
-        body = r[:-1]
-        total = sum(x[-1] for x in v if x[:-1] == body)
-        body.append(total)
-        if body not in fixed:
-            fixed.append(body)
-    return fixed
 
 
 async def _general_error_handler(
@@ -632,6 +407,9 @@ def _row_to_value(
     tup: MainCorpus,
     project: str | None = None,
 ) -> CorpusConfig:
+    """
+    Take a row of the main.corpus table and make a CorpusConfig dict
+    """
     (
         corpus_id,
         name,
@@ -704,8 +482,8 @@ def _get_sent_ids(associated: str | list[str]) -> list[int] | list[str]:
     prev_results = job.result
 
     seg_ids = set()
-    result_sets = job.kwargs["meta_json"]
-    kwics = _get_kwics(result_sets)
+    rs = job.kwargs["meta_json"]["result_sets"]
+    kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
 
     for res in prev_results:
@@ -716,6 +494,25 @@ def _get_sent_ids(associated: str | list[str]) -> list[int] | list[str]:
             seg_ids.add(rest[0])
 
     return list(sorted(seg_ids))
+
+
+def format_query_params(
+    query: str, params: tuple | dict[str, Any]
+) -> tuple[str, tuple]:
+    """
+    Helper to allow for sqlalchemy format query with asyncpg
+    """
+    if isinstance(params, tuple):
+        return query, params
+    out = []
+    n = 1
+    for k, v in params.items():
+        in_query = f":{k}"
+        if in_query in query:
+            query = query.replace(in_query, f"${n}")
+            n += 1
+            out.append(v)
+    return query, tuple(out)
 
 
 @final
@@ -742,25 +539,6 @@ class WorkingParser(HiredisParser):
 class WorkingPythonParser(PythonParser):
     async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
         return False
-
-
-def format_query_params(
-    query: str, params: tuple | dict[str, Any]
-) -> tuple[str, tuple]:
-    """
-    Helper to allow for sqlalchemy format query with asyncpg
-    """
-    if isinstance(params, tuple):
-        return query, params
-    out = []
-    n = 1
-    for k, v in params.items():
-        in_query = f":{k}"
-        if in_query in query:
-            query = query.replace(in_query, f"${n}")
-            n += 1
-            out.append(v)
-    return query, tuple(out)
 
 
 ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser
