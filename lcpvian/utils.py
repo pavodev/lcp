@@ -244,30 +244,97 @@ async def _lama_check_api_key(headers: Headers) -> JSONObject:
             return jso
 
 
-def _get_all_results(qi: QueryIteration) -> Results:
-    """
-    Get results from all parents -- reconstruct results from just latest batch
-    """
-    job: Job | SQLJob | str = qi.previous
-    connection: RedisConnection[bytes] = qi.app["redis"]
-    out: Results = {}
-    if isinstance(job, str):
-        job = Job.fetch(job, connection=connection)
+def _format_kwics(
+    result: list,
+    meta_json: QueryMeta,
+    sents: list,
+    total: int,
+    is_vian: bool = False,
+) -> dict[int, Any]:
 
-    # base = Job.fetch(job.kwargs["base"], connection=connection)
-    # latest = Job.fetch(base.meta["latest_sentences"], connection=connection)
-    # latest_sents = base.meta["_sentences"]
-    # out = _union_results(out, latest_sents)
+    sen: ResultSents = {}
+    out: Results = {0: meta_json, -1: sen}
+    first_list: int | None = None
+    rs = meta_json["result_sets"]
+    kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
+    # counts: defaultdict[int, int] = defaultdict(int)
 
-    while True:
-        meta = job.kwargs.get("meta_json")
-        batch, _ = _add_results(job.result, 0, True, 0, meta=meta, is_vian=qi.is_vian)
-        out = _union_results(out, batch)
-        parent = job.kwargs.get("parent", None)
-        if not parent:
-            break
-        job = Job.fetch(parent, connection=connection)
+    for sent in sents:
+        add_to = cast(ResultSents, out[-1])
+        add_to[str(sent[0])] = [sent[1], sent[2]]
+
+    for line in result:
+        key = int(line[0])
+        rest = line[1]
+        if key not in kwics:
+            continue
+        if key not in out:
+            out[key] = []
+        if is_vian and key in kwics:
+            first_list = _first_list(first_list, rest)
+            rest = list(_format_vian(rest, first_list))
+        elif key in kwics:
+            rest = [rest[0], rest[1:]]
+
+        bit = cast(list, out[key])
+        bit.append(rest)
+        # counts[key] += 1
+
     return out
+
+
+def _first_list(first_list: int | None, rest: list) -> int:
+    """
+    Determine the first list item in a vian kwic item
+    """
+    if first_list is not None:
+        return first_list
+    return next(
+        (i for i, x in enumerate(rest) if isinstance(x, (list, tuple))),
+        len(rest),
+    )
+
+
+def _aggregate_results(
+    result: list,
+    existing: Results,
+    meta_json: QueryMeta,
+    post_processes: dict[int, Any],
+    total_requested: int,
+) -> tuple[Results, Results, int]:
+    """
+    Combine non-kwic results for storing and for sending to frontend
+    """
+    # all_results = {0: meta_json}
+    results_to_send = {0: meta_json}
+    n_results = 0
+    rs = meta_json["result_sets"]
+    kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
+    freqs = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "analysis"])
+    counts: defaultdict[int, int] = defaultdict(int)
+
+    for line in result:
+        key = int(line[0])
+        rest: list[Any] = line[1]
+        if key in kwics:
+            counts[key] += 1
+            continue
+        if key not in existing:
+            existing[key] = []
+        if key not in freqs:
+            existing[key].append(rest)
+            continue
+        body = rest[:-1]
+        total_this_batch = rest[-1]
+        preexist = sum(i[-1] for i in existing[key] if i[:-1] == body)
+        body.append(preexist + total_this_batch)
+        existing[key] = [i for i in existing[key] if i[:-1] != body]
+        existing[key].append(body)
+
+    results_to_send = _apply_filters(existing, post_processes)
+    n_results = list(counts.values())[0] if counts else -1
+
+    return existing, results_to_send, n_results
 
 
 def _get_kwics(result: dict[str, list[dict[str, Any]]]) -> set[int]:
@@ -277,106 +344,6 @@ def _get_kwics(result: dict[str, list[dict[str, Any]]]) -> set[int]:
     itt = cast(list[dict[str, Any]], result.get("result_sets", result))
     kwics = [i for i, r in enumerate(itt, start=1) if r.get("type") == "plain"]
     return set(kwics)
-
-
-def _add_results(
-    result: list[tuple],
-    so_far: int,
-    unlimited: bool,
-    total_requested: int,
-    kwic: bool = False,
-    is_vian: bool = False,
-    sents: list[RawSent] | None = None,
-    meta: QueryMeta | None = None,
-) -> tuple[Results, int]:
-    """
-    Compile results of SQL query into the Results dict format
-
-    Return the Results object and an int, the number of results found
-
-    todo: check limits here?
-    """
-    met: QueryMeta = {}
-    sen: ResultSents = {}
-    bundle: Results = {0: met, -1: sen}
-    counts: defaultdict[int, int] = defaultdict(int)
-    if meta:
-        rs = meta["result_sets"]
-    else:
-        rs = next(i for i in result if not int(i[0]))[1]["result_sets"]
-
-    res_objs = [i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"]
-    kwics = set(res_objs)
-    n_skipped: Counter[int] = Counter()
-    first_list: int | None = None
-
-    if meta:
-        bundle[0] = meta
-
-    if sents:
-        for sent in sents:
-            add_to = cast(ResultSents, bundle[-1])
-            add_to[str(sent[0])] = [sent[1], sent[2]]
-
-    for line in result:
-        key = int(line[0])
-        rest: list[Any] = line[1]
-        if not key:
-            bundle[key] = rest
-            continue
-
-        if key not in bundle:
-            if kwic and key in kwics:
-                bundle[key] = []
-            elif not kwic and key not in kwics:
-                bundle[key] = []
-
-        if key in kwics and not kwic:
-            counts[key] += 1
-            continue
-        elif key not in kwics and kwic:
-            continue
-        elif key not in kwics and not kwic:
-            if key not in bundle:
-                bundle[key] = [rest]
-            else:
-                bit = cast(list, bundle[key])
-                bit.append(rest)
-            counts[key] += 1
-            continue
-
-        if False:
-            n_skipped[key] += 1
-
-        if is_vian:
-            if first_list is None:
-                first_list = next(
-                    (i for i, x in enumerate(rest) if isinstance(x, (list, tuple))),
-                    len(rest),
-                )
-            rest = list(_format_vian(rest, first_list))
-        else:
-            rest = [rest[0], rest[1:]]
-        # rest = cast(list, rest)
-        bit = cast(list, bundle[key])
-        bit.append(rest)
-        counts[key] += 1
-
-    # bundle = _trim_bundle(bundle, kwics, total_requested)
-
-    return bundle, counts[list(kwics)[0]]
-
-
-def _trim_bundle(bundle: Results, kwics: set[int], total_requested: int) -> Results:
-    """
-    Trim kwics so we don't return too many...
-    """
-    for k in kwics:
-        if k not in bundle:
-            continue
-        if len(bundle[k]) > total_requested:
-            bundle[k] = cast(list, bundle[k])[:total_requested]
-    return bundle
 
 
 def _format_vian(
@@ -459,47 +426,6 @@ def _apply_filter(result: list, name: str, op: str, num: int | str | float) -> l
         if res and r not in out:
             out.append(r)
     return out
-
-
-def _union_results(so_far: Results, incoming: Results) -> Results:
-    """
-    Join two results objects
-    """
-    met = cast(dict[str, list[dict]], incoming[0])
-    freqs = set(
-        [
-            i
-            for i, r in enumerate(met["result_sets"], start=1)
-            if r["name"] == "analysis"
-        ]
-    )
-    for k, v in incoming.items():
-        if not k:
-            if k in so_far:
-                continue
-            else:
-                so_far[k] = v
-                continue
-        elif k == -1:
-            if k not in so_far:
-                so_far[k] = v
-                continue
-            else:
-                v = cast(dict, v)
-                thus = cast(dict, so_far[k])
-                thus.update(v)
-        elif k not in so_far:
-            so_far[k] = []
-        if isinstance(so_far[k], list) and isinstance(v, list):
-            lst = cast(list, so_far[k])
-            lst += v
-            so_far[k] = lst
-
-    for k, v in so_far.items():
-        if k in freqs:
-            so_far[k] = _fix_freq(cast(list[list], v))
-
-    return so_far
 
 
 def _fix_freq(v: list[list]) -> list[list]:

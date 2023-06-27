@@ -16,7 +16,7 @@ from rq.job import Job
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, JSONObject
-from .utils import _get_all_results, ensure_authorised, push_msg
+from .utils import ensure_authorised, push_msg
 
 # from .worker import SQLJob
 
@@ -45,8 +45,8 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     qi.done_batches = done_batches
     qi.total_results_so_far = so_far
     qi.needed = needed
-    ex = _get_all_results(qi)
-    qi.existing_results = ex
+    # first = Job.fetch(qi.first_job, connection=qi.app["redis"])
+    # qi.existing_results = first.meta["all_non_kwic_results"]
     return qi
 
 
