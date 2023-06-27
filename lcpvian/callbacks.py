@@ -148,7 +148,11 @@ def _sentences(
 
     depended = Job.fetch(depends_on, connection=connection)
     meta_json = depended.kwargs["meta_json"]
-    to_send = _format_kwics(depended.result, meta_json, result, total_requested)
+    is_vian = depended.kwargs.get("is_vian", False)
+    is_first = not bool(depended.kwargs.get("first_job", ""))
+    to_send = _format_kwics(
+        depended.result, meta_json, result, total_requested, is_vian, is_first
+    )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 

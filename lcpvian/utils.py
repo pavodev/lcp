@@ -250,14 +250,16 @@ def _format_kwics(
     sents: list,
     total: int,
     is_vian: bool = False,
-) -> dict[int, Any]:
+    is_first: bool = False,
+) -> Results:
 
     sen: ResultSents = {}
     out: Results = {0: meta_json, -1: sen}
     first_list: int | None = None
-    rs = meta_json["result_sets"]
+    rs: list[dict] = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
-    # counts: defaultdict[int, int] = defaultdict(int)
+    counts: defaultdict[int, int] = defaultdict(int)
+    stops: set[int] = set()
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
@@ -267,6 +269,11 @@ def _format_kwics(
         key = int(line[0])
         rest = line[1]
         if key not in kwics:
+            continue
+        if is_first and key in stops:
+            continue
+        if total > 0 and counts.get(key, 0) >= total:
+            stops.add(key)
             continue
         if key not in out:
             out[key] = []
@@ -278,7 +285,7 @@ def _format_kwics(
 
         bit = cast(list, out[key])
         bit.append(rest)
-        # counts[key] += 1
+        counts[key] += 1
 
     return out
 

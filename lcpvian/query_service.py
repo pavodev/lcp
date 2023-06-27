@@ -184,11 +184,14 @@ class QueryService:
         """
         Get initial app configuration JSON
         """
+        job_id = "app_config"
+        job: Job | SQLJob
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
         opts = {"config": True}
-        job: Job | SQLJob = self.app["alt"].enqueue(
+        job = self.app["alt"].enqueue(
             _db_query,
             on_success=_config,
+            job_id=job_id,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
