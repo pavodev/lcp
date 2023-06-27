@@ -173,6 +173,20 @@
                 >
                   JSON
                 </button>
+                <button
+                  v-if="sqlQuery"
+                  class="nav-link"
+                  id="nav-sql-tab"
+                  data-bs-toggle="tab"
+                  data-bs-target="#nav-sql"
+                  type="button"
+                  role="tab"
+                  aria-controls="nav-sql"
+                  aria-selected="false"
+                  @click="currentTab = 'sql'"
+                >
+                  SQL
+                </button>
               </div>
             </nav>
             <div class="tab-content" id="nav-tabContent">
@@ -198,7 +212,7 @@
                 class="tab-pane fade pt-3"
                 id="nav-json"
                 role="tabpanel"
-                aria-labelledby="nav-stats-tab"
+                aria-labelledby="nav-json-tab"
               >
                 <textarea
                   class="form-control query-field"
@@ -217,6 +231,18 @@
                 >
                   {{ isQueryValidData.error }}
                 </p>
+              </div>
+              <div
+                v-if="sqlQuery"
+                class="tab-pane fade pt-3"
+                id="nav-sql"
+                role="tabpanel"
+                aria-labelledby="nav-sql-tab"
+              >
+                <textarea
+                  class="form-control query-field"
+                  v-model="sqlQuery"
+                ></textarea>
               </div>
             </div>
           </div>
@@ -666,6 +692,7 @@ myColl3 => collocation
       resultsPerPage: 100,
       failedStatus: false,
       plainType: "kwic",
+      sqlQuery: null,
       // nResults: 50,
     };
   },
@@ -899,6 +926,10 @@ myColl3 => collocation
             data.result.length < this.WSDataResults.n_results
           ) {
             return;
+          }
+          this.sqlQuery = null;
+          if (data.sql) {
+            this.sqlQuery = data.sql;
           }
           this.failedStatus = false;
           data["n_results"] = data["result"].length;
