@@ -54,6 +54,7 @@ class QueryIteration:
     previous: str = ""
     request_data: JSONObject | None = None
     current_batch: Batch | None = None
+    total_duration: float = 0.0
     done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
     existing_results: Results = field(default_factory=dict)
@@ -147,10 +148,11 @@ class QueryIteration:
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
         first_job = ""
+        total_duration = 0.0
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
             first_job = prev.kwargs.get("first_job", prev)
-
+            total_duration = prev.kwargs.get("total_duration", 0.0)
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -173,6 +175,7 @@ class QueryIteration:
             "existing_results": {},
             "total_results_requested": total_requested,
             "needed": total_requested,
+            "total_duration": total_duration,
             "first_job": first_job,
             "total_results_so_far": 0,
             "simultaneous": str(uuid4()) if sim else "",
@@ -233,6 +236,7 @@ class QueryIteration:
             post_processes=self.post_processes,
             languages=list(self.languages),
             simultaneous=self.simultaneous,
+            total_duration=self.total_duration,
             is_vian=self.is_vian,
             dqd=self.dqd,
             first_job=self.first_job,
@@ -359,6 +363,7 @@ class QueryIteration:
             "query": job.kwargs["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
+            "total_duration": manual["total_duration"],
             "current_batch": None,
             "all_batches": all_batches,
             "total_results_so_far": tot_so_far,

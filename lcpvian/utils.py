@@ -278,13 +278,18 @@ def _get_status(
     n_results: int,
     tot_req: int,
     search_all: bool = False,
+    time_so_far: float = 0.0,
     **kwargs: Batch | list[Batch],
 ) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """
+
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
+    allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
+    if allowed_time > 0.0 and search_all and time_so_far > allowed_time:
+        return "overtime"
     if search_all:
         return "partial"
     if tot_req in {-1, False, None}:

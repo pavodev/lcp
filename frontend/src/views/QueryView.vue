@@ -780,7 +780,7 @@ myColl3 => collocation
           this.percentageDone = 100;
           this.percentageTotalDone = 100;
         }
-        if (["satisfied"].includes(this.WSDataResults.status)) {
+        if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
           this.percentageDone = 100;
           this.loading = false;

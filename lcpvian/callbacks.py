@@ -45,6 +45,11 @@ def _query(
 
     This is where we need to aggregate statistics over all jobs in the group
     """
+    allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
+
+    duration = (job.ended_at - job.started_at).total_seconds()
+    total_duration = job.kwargs.get("total_duration", 0.0) + duration
+
     meta_json: QueryMeta = job.kwargs.get("meta_json")
     existing_results: Results = {0: meta_json}
     # if this job is non-first, we need to store its id on the original
@@ -67,6 +72,10 @@ def _query(
         result, existing_results, meta_json, post_processes, total_requested
     )
 
+    time_perc = 0.0
+    if allowed_time > 0.0 and search_all:
+        time_perc = total_duration * 100.0 / allowed_time
+
     first_job.meta["all_non_kwic_results"] = all_res
     first_job.save_meta()
     from_memory = kwargs.get("from_memory", False)
@@ -79,9 +88,15 @@ def _query(
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
     status = _get_status(
-        total_found, tot_req=total_requested, search_all=search_all, **job.kwargs
+        total_found,
+        tot_req=total_requested,
+        search_all=search_all,
+        time_so_far=total_duration,
+        **job.kwargs,
     )
     job.meta["_status"] = status
+    # job.meta["_job_duration"] = duration
+    # job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
     table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
     first_job = job.kwargs["first_job"] or job.id
@@ -90,8 +105,10 @@ def _query(
         projected_results = total_found if show_total else -1
         perc_words = 100.0
         perc_matches = 100.0
+        if search_all:
+            perc_matches = time_perc
         job.meta["percentage_done"] = 100.0
-    elif status in {"partial", "satisfied"}:
+    elif status in {"partial", "satisfied", "overtime"}:
         done_batches = job.kwargs["done_batches"]
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
         proportion_that_matches = total_found / total_words_processed_so_far
@@ -100,6 +117,8 @@ def _query(
             projected_results = -1
         perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
         perc_matches = min(total_found, total_requested) * 100.0 / total_requested
+        if search_all:
+            perc_matches = time_perc
         job.meta["percentage_done"] = round(perc_matches, 3)
 
     job.save_meta()  # type: ignore
@@ -120,6 +139,7 @@ def _query(
             "first_job": first_job,
             "batch_matches": n_res,
             "done_batches": done_part,
+            "total_duration": total_duration,
             "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,
         }

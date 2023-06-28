@@ -234,7 +234,7 @@ async def _handle_query(
             to_submit = query(None, manual=payload, app=app)
     to_send = payload
     n_users = len(app["websockets"].get(room, set()))
-    if status in {"finished", "satisfied", "partial"}:
+    if status in {"finished", "satisfied", "partial", "overtime"}:
         done = len(cast(Sized, payload["done_batches"]))
         total_batches = len(cast(Sized, payload["all_batches"]))
         to_send = {
@@ -249,6 +249,7 @@ async def _handle_query(
             "first_job": payload["first_job"],
             "is_vian": payload.get("is_vian", False),
             "table": payload.get("table"),
+            "total_duration": payload["total_duration"],
             "from_memory": payload.get("from_memory", False),
             "batch_matches": payload["batch_matches"],
             "total_results_so_far": payload["total_results_so_far"],
