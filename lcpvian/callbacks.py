@@ -81,10 +81,7 @@ def _query(
     from_memory = kwargs.get("from_memory", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     done_part = job.kwargs["done_batches"]
-    if search_all:
-        total_found = n_res
-    else:
-        total_found = total_before_now + n_res if show_total else -1
+    total_found = total_before_now + n_res if show_total else -1
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
     status = _get_status(

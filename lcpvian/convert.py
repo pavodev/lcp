@@ -43,6 +43,9 @@ def _aggregate_results(
     for line in result:
         key = int(line[0])
         rest: list[Any] = line[1]
+        if not key and not n_results:
+            n_results = rest[0]
+            continue
         if key in kwics:
             counts[key] += 1
             continue
@@ -61,14 +64,6 @@ def _aggregate_results(
         existing[key].append(body)
 
     results_to_send = _apply_filters(existing, post_processes)
-    if kwics and counts:
-        just_kwic = [v for k, v in counts.items() if k in kwics]
-        n_results = max(just_kwic) if just_kwic else 0
-    elif not kwics and freqs:
-        just_freq = [v for k, v in counts.items() if k in freqs]
-        n_results = max(just_freq) if just_freq else 0
-    else:
-        n_results = -1
 
     show_total = bool(kwics) or (not kwics and len(freqs) == 1)
 
