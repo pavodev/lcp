@@ -133,7 +133,10 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
-    total_requested = cast(int | None, kwargs.get("total_results_requested"))
+    trr = "total_results_requested"
+    total_requested = cast(int, kwargs.get(trr, job.kwargs[trr]))
+    if not total_requested:
+        total_requested = -1
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
 

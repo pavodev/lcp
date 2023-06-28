@@ -92,7 +92,7 @@ def _format_kwics(
             continue
         if is_first and key in stops:
             continue
-        if total > 0 and counts.get(key, 0) >= total:
+        if total is not None and total > 0 and counts.get(key, 0) >= total:
             stops.add(key)
             continue
         if key not in out:
