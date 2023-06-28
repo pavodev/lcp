@@ -63,7 +63,7 @@ def _query(
 
     post_processes = job.kwargs.get("post_processes", {})
 
-    all_results, results_to_send, n_results = _aggregate_results(
+    all_results, results_to_send, n_results, has_kwic = _aggregate_results(
         result, existing_results, meta_json, post_processes, total_requested
     )
 
@@ -75,7 +75,9 @@ def _query(
     total_found = total_before_now + n_results
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
-    status = _get_status(total_found, tot_req=total_requested, **job.kwargs)
+    status = _get_status(
+        total_found, tot_req=total_requested, has_kwic=has_kwic, **job.kwargs
+    )
     job.meta["_status"] = status
     job.meta["total_results_so_far"] = total_found
     table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"

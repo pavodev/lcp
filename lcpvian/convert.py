@@ -28,7 +28,7 @@ def _aggregate_results(
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
     total_requested: int,
-) -> tuple[Results, Results, int]:
+) -> tuple[Results, Results, int, bool]:
     """
     Combine non-kwic results for storing and for sending to frontend
     """
@@ -54,14 +54,23 @@ def _aggregate_results(
         body = rest[:-1]
         total_this_batch = rest[-1]
         preexist = sum(i[-1] for i in existing[key] if i[:-1] == body)
-        body.append(preexist + total_this_batch)
+        combined = preexist + total_this_batch
+        counts[key] = combined
         existing[key] = [i for i in existing[key] if i[:-1] != body]
+        body.append(combined)
         existing[key].append(body)
 
     results_to_send = _apply_filters(existing, post_processes)
-    n_results = list(counts.values())[0] if counts else -1
+    if kwics and counts:
+        just_kwic = [v for k, v in counts.items() if k in kwics]
+        n_results = max(just_kwic) if just_kwic else 0
+    elif not kwics and freqs:
+        just_freq = [v for k, v in counts.items() if k in freqs]
+        n_results = max(just_freq) if just_freq else 0
+    else:
+        n_results = -1
 
-    return existing, results_to_send, n_results
+    return existing, results_to_send, n_results, bool(kwics)
 
 
 def _format_kwics(

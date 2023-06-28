@@ -274,12 +274,16 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
     await _general_error_handler("unregistered", exc, request)
 
 
-def _get_status(n_results: int, tot_req: int, **kwargs: Batch | list[Batch]) -> str:
+def _get_status(
+    n_results: int, tot_req: int, has_kwic: bool = True, **kwargs: Batch | list[Batch]
+) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """
     if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
         return "finished"
+    if not has_kwic:
+        return "partial"
     if tot_req in {-1, False, None}:
         return "partial"
     if n_results >= tot_req:
