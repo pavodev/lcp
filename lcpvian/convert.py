@@ -77,6 +77,7 @@ def _format_kwics(
     total: int,
     is_vian: bool = False,
     is_first: bool = False,
+    offset: int = -1,
 ) -> Results:
 
     sen: ResultSents = {}
@@ -103,6 +104,12 @@ def _format_kwics(
             continue
         if key not in out:
             out[key] = []
+
+        counts[key] += 1
+
+        if offset is not None and offset > 0 and counts[key] - 1 < offset:
+            continue
+
         if is_vian and key in kwics:
             first_list = _first_list(first_list, rest)
             rest = list(_format_vian(rest, first_list))
@@ -111,7 +118,6 @@ def _format_kwics(
 
         bit = cast(list, out[key])
         bit.append(rest)
-        counts[key] += 1
 
     return out
 

@@ -474,7 +474,9 @@ def _row_to_value(
     return cast(CorpusConfig, together)
 
 
-def _get_sent_ids(associated: str | list[str]) -> list[int] | list[str]:
+def _get_sent_ids(
+    associated: str | list[str], total: int, offset: int = 0
+) -> list[int] | list[str]:
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
@@ -503,7 +505,11 @@ def _get_sent_ids(associated: str | list[str]) -> list[int] | list[str]:
         rest = res[1]
         if key in kwics:
             counts[key] += 1
+            if offset > 0 and counts[key] < offset:
+                continue
             seg_ids.add(rest[0])
+        if len(seg_ids) >= total:
+            break
 
     return list(sorted(seg_ids))
 

@@ -142,7 +142,7 @@ class QueryService:
     ) -> SQLJob | Job:
         depend = cast(str | list[str], kwargs["depends_on"])
         hash_dep = tuple(depend) if isinstance(depend, list) else depend
-        hashed = hash((query, hash_dep))
+        hashed = hash((query, hash_dep, kwargs["offset"], kwargs["needed"]))
         sents = self.app["memory"]["sentences"]
         exists = sents.get(hashed)
         kwargs["sentences_query"] = query

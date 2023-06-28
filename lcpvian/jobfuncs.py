@@ -110,7 +110,10 @@ async def _db_query(
     # this can only be done after the previous job finished...
     if "depends_on" in kwargs and "sentences_query" in kwargs:
         dep = cast(list[str] | str, kwargs["depends_on"])
-        params = {"ids": _get_sent_ids(dep)}
+        total = cast(int, kwargs.get("total_results_requested"))
+        offset = cast(int, kwargs.get("offset", 0))
+        needed = cast(int, kwargs.get("needed", total))
+        params = {"ids": _get_sent_ids(dep, needed, offset=offset)}
 
     name = "_upool" if store else "_pool"
     pool = getattr(get_current_job(), name)

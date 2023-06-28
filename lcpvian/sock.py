@@ -137,7 +137,6 @@ async def _handle_message(
         "store_query",
         "document",
         "document_ids",
-        "sentences",
     )
     errors = (
         "failed",
@@ -152,7 +151,11 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    if action in simples:
+    can_send = not payload.get("full", False) or payload.get("status") == "finished"
+
+    sent_allowed = action == "sentences" and can_send
+
+    if action in simples or sent_allowed:
         await push_msg(
             app["websockets"],
             room,
@@ -187,15 +190,12 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
-        await _handle_query(app, payload, user, room)
+        await _handle_query(app, payload, user, room, can_send)
         return None
 
 
 async def _handle_query(
-    app: web.Application,
-    payload: JSONObject,
-    user: str,
-    room: str,
+    app: web.Application, payload: JSONObject, user: str, room: str, can_send: bool
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -217,13 +217,15 @@ async def _handle_query(
     done_batch = len(cast(Sized, payload["done_batches"]))
     tot_batch = len(cast(Sized, payload["all_batches"]))
     to_submit: None | Coroutine = None
+    explain = "% done" if not payload.get("search_all") else " time used"
+    do_full = payload.get("full") and payload.get("status") != "finished"
 
     print(
         f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total\n"
-        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% done)"
+        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}{explain})"
     )
     if (
-        status == "partial"
+        (status == "partial" or do_full)
         and job_status not in ("stopped", "canceled")
         and job not in app["canceled"]
     ):
@@ -232,6 +234,10 @@ async def _handle_query(
             payload["first_job"] = job
         if not payload.get("simultaneous"):
             to_submit = query(None, manual=payload, app=app)
+
+    if not can_send:
+        return None
+
     to_send = payload
     n_users = len(app["websockets"].get(room, set()))
     if status in {"finished", "satisfied", "partial", "overtime"}:

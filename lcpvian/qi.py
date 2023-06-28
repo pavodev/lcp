@@ -62,8 +62,11 @@ class QueryIteration:
     job_id: str = ""
     from_memory: bool = False
     previous_job: Job | SQLJob | None = None
+    cut_short: int = -1
     dqd: str = ""
     sql: str = ""
+    full: bool = False
+    sent_id_offset: int = 0
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
     job_info: dict[str, str | bool] = field(default_factory=dict)
@@ -149,10 +152,14 @@ class QueryIteration:
         previous = request_data.get("previous", "")
         first_job = ""
         total_duration = 0.0
+        total_results_so_far = 0
+        cut_short = -1
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
-            first_job = prev.kwargs.get("first_job", prev)
+            first_job = prev.kwargs.get("first_job") or previous
             total_duration = prev.kwargs.get("total_duration", 0.0)
+            total_results_so_far = prev.meta.get("total_results_so_far", 0)
+            cut_short = prev.meta.get("cut_short", 0)
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -170,6 +177,7 @@ class QueryIteration:
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
             "languages": set(langs),
+            "full": request_data.get("full", False),
             "query": request_data["query"],
             "resuming": request_data.get("resume", False),
             "existing_results": {},
@@ -177,7 +185,8 @@ class QueryIteration:
             "needed": total_requested,
             "total_duration": total_duration,
             "first_job": first_job,
-            "total_results_so_far": 0,
+            "cut_short": cut_short,
+            "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
             "is_vian": is_vian,
@@ -213,6 +222,8 @@ class QueryIteration:
         """
         Helper to submit a query job
         """
+        if self.sent_id_offset:
+            return Job.fetch(self.previous, connection=self.app["redis"])
         parent: str | None = None
         parent = self.job_id if self.job is not None else None
 
@@ -247,8 +258,10 @@ class QueryIteration:
             parent=parent,
         )
 
+        queue = "query" if not self.full else "alt"
+
         job: Job | SQLJob = self.app["query_service"].query(
-            self.sql, depends_on=self.query_depends, **query_kwargs
+            self.sql, depends_on=self.query_depends, queue=queue, **query_kwargs
         )
         self.job = job
         self.job_id = job.id
@@ -268,18 +281,28 @@ class QueryIteration:
         elif depends_on:
             to_use = depends_on
 
+        needed = self.total_results_requested
+        if self.sent_id_offset:
+            needed = needed - self.cut_short
+
         kwargs = dict(
             user=self.user,
             room=self.room,
+            resuming=self.resuming,
             simultaneous=self.simultaneous,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
             jso=json.dumps(self.jso, indent=4),
             sql=self.sql,
+            offset=self.cut_short,
+            needed=needed,
             total_results_requested=self.total_results_requested,
         )
+        queue = "query" if not self.full else "alt"
         qs = self.app["query_service"]
-        sents_job = qs.sentences(self.sents_query(), depends_on=to_use, **kwargs)
+        sents_job = qs.sentences(
+            self.sents_query(), depends_on=to_use, queue=queue, **kwargs
+        )
         # if simultaneous:
         #    dep_chain.append(stats_job.id)
         return sents_job
@@ -353,11 +376,13 @@ class QueryIteration:
             "app": app,
             "job_id": manual["job"],
             "config": app["config"],
+            "full": manual.get("full", False),
             "word_count": manual["word_count"],
             "simultaneous": manual.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),  # comment out?
             "page_size": job.kwargs.get("page_size", 20),
+            "cut_short": -1,
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
             "query": job.kwargs["original_query"],

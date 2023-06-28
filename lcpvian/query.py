@@ -35,6 +35,8 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = prev_job.meta["total_results_so_far"]
     tot_req = qi.total_results_requested
+    if so_far >= tot_req:
+        qi.sent_id_offset = prev_job.meta.get("results_this_batch", 0)
     needed = tot_req - so_far if tot_req != -1 else -1
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
@@ -77,7 +79,8 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
     if qi.job and qi.simultaneous and it and max_jobs > 0 and not divv:
-        qi.dep_chain.append(query_job.id)
+        if query_job.id not in qi.dep_chain:
+            qi.dep_chain.append(query_job.id)
 
     if qi.current_batch is not None and qi.job is not None:
         schema_table = ".".join(qi.current_batch[1:3])

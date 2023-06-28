@@ -92,6 +92,8 @@ def _query(
         **job.kwargs,
     )
     job.meta["_status"] = status
+    job.meta["results_this_batch"] = n_res
+    job.meta["cut_short"] = total_requested if n_res > total_requested else -1
     # job.meta["_job_duration"] = duration
     # job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
@@ -118,6 +120,8 @@ def _query(
             perc_matches = time_perc
         job.meta["percentage_done"] = round(perc_matches, 3)
 
+    first_job_id = first_job.id if isinstance(first_job, (Job, SQLJob)) else first_job
+
     job.save_meta()  # type: ignore
     jso = dict(**job.kwargs)
     jso.update(
@@ -133,7 +137,8 @@ def _query(
             "from_memory": from_memory,
             "total_results_so_far": total_found,
             "table": table,
-            "first_job": first_job,
+            "first_job": first_job_id,
+            "search_all": search_all,
             "batch_matches": n_res,
             "done_batches": done_part,
             "total_duration": total_duration,
@@ -172,8 +177,10 @@ def _sentences(
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
     is_first = not bool(depended.kwargs.get("first_job", ""))
+    resuming = job.kwargs.get("resuming", False)
+    offset = depended.meta.get("cut_short", -1) if resuming else -1
     to_send = _format_kwics(
-        depended.result, meta_json, result, total_requested, is_vian, is_first
+        depended.result, meta_json, result, total_requested, is_vian, is_first, offset
     )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
