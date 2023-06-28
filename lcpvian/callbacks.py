@@ -63,20 +63,23 @@ def _query(
 
     post_processes = job.kwargs.get("post_processes", {})
 
-    all_results, results_to_send, n_results, has_kwic = _aggregate_results(
+    all_res, to_sent, n_res, search_all, show_total = _aggregate_results(
         result, existing_results, meta_json, post_processes, total_requested
     )
 
-    first_job.meta["all_non_kwic_results"] = all_results
+    first_job.meta["all_non_kwic_results"] = all_res
     first_job.save_meta()
     from_memory = kwargs.get("from_memory", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     done_part = job.kwargs["done_batches"]
-    total_found = total_before_now + n_results
+    if search_all:
+        total_found = n_res
+    else:
+        total_found = total_before_now + n_res if show_total else -1
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
     status = _get_status(
-        total_found, tot_req=total_requested, has_kwic=has_kwic, **job.kwargs
+        total_found, tot_req=total_requested, search_all=search_all, **job.kwargs
     )
     job.meta["_status"] = status
     job.meta["total_results_so_far"] = total_found
@@ -84,7 +87,7 @@ def _query(
     first_job = job.kwargs["first_job"] or job.id
 
     if status == "finished":
-        projected_results = total_found
+        projected_results = total_found if show_total else -1
         perc_words = 100.0
         perc_matches = 100.0
         job.meta["percentage_done"] = 100.0
@@ -93,6 +96,8 @@ def _query(
         total_words_processed_so_far = sum([x[-1] for x in done_batches])
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job.kwargs["word_count"] * proportion_that_matches)
+        if not show_total:
+            projected_results = -1
         perc_words = total_words_processed_so_far * 100.0 / job.kwargs["word_count"]
         perc_matches = min(total_found, total_requested) * 100.0 / total_requested
         job.meta["percentage_done"] = round(perc_matches, 3)
@@ -101,8 +106,8 @@ def _query(
     jso = dict(**job.kwargs)
     jso.update(
         {
-            "result": results_to_send,
-            "full_result": all_results,
+            "result": to_sent,
+            "full_result": all_res,
             "status": status,
             "job": job.id,
             "action": "query_result",
@@ -113,7 +118,7 @@ def _query(
             "total_results_so_far": total_found,
             "table": table,
             "first_job": first_job,
-            "batch_matches": n_results,
+            "batch_matches": n_res,
             "done_batches": done_part,
             "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,

@@ -28,7 +28,7 @@ def _aggregate_results(
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
     total_requested: int,
-) -> tuple[Results, Results, int, bool]:
+) -> tuple[Results, Results, int, bool, bool]:
     """
     Combine non-kwic results for storing and for sending to frontend
     """
@@ -70,7 +70,9 @@ def _aggregate_results(
     else:
         n_results = -1
 
-    return existing, results_to_send, n_results, bool(kwics)
+    show_total = bool(kwics) or (not kwics and len(freqs) == 1)
+
+    return existing, results_to_send, n_results, not bool(kwics), show_total
 
 
 def _format_kwics(
