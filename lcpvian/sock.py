@@ -25,7 +25,7 @@ from .utils import push_msg
 from .validate import validate
 
 from .typed import JSONObject, RedisMessage, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora
+from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
 
 
 async def _process_message(
@@ -171,13 +171,7 @@ async def _handle_message(
 
     # handle configuration message
     if action == "set_config":
-        # assert needed for mypy
-        assert isinstance(payload["config"], dict)
-        print(f"Config loaded: {len(payload['config'])} corpora")
-        app["config"].update(payload["config"])
-        payload["action"] = "update_config"
-        await push_msg(app["websockets"], "", payload)
-        return None
+        return await _set_config(payload, app)
 
     # handle uploaded data (add to config, ws message if gui mode)
     if action == "uploaded":
@@ -217,12 +211,13 @@ async def _handle_query(
     done_batch = len(cast(Sized, payload["done_batches"]))
     tot_batch = len(cast(Sized, payload["all_batches"]))
     to_submit: None | Coroutine = None
-    explain = "% done" if not payload.get("search_all") else " time used"
+    explain = "done" if not payload.get("search_all") else "time used"
     do_full = payload.get("full") and payload.get("status") != "finished"
+    pred = payload.get("projected_results", -1)
 
     print(
-        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total\n"
-        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}{explain})"
+        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total, predicted: {pred}\n"
+        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})"
     )
     if (
         (status == "partial" or do_full)

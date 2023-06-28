@@ -451,7 +451,7 @@ def _queries(
 
 def _config(
     job: SQLJob | Job, connection: RedisConnection[bytes], result: list[MainCorpus]
-) -> None:
+) -> dict[str, str | bool | Config]:
     """
     Run by worker: make config data
     """
@@ -473,3 +473,4 @@ def _config(
     }
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return jso

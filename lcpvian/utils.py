@@ -370,6 +370,19 @@ async def push_msg(
             sent_to.add((room, user_id))
 
 
+async def _set_config(payload: JSONObject, app: web.Application) -> None:
+    """
+    Helper to set the configuration on the app
+    """
+    # assert needed for mypy
+    assert isinstance(payload["config"], dict)
+    print(f"Config loaded: {len(payload['config'])} corpora")
+    app["config"].update(payload["config"])
+    payload["action"] = "update_config"
+    await push_msg(app["websockets"], "", payload)
+    return None
+
+
 def _filter_corpora(
     config: Config,
     is_vian: bool,

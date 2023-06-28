@@ -235,7 +235,7 @@ async def create_app(test: bool = False) -> web.Application:
     app["export"] = Queue(connection=app["redis"], job_timeout=-1)
     app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
-    app["query_service"].get_config()
+    await app["query_service"].get_config()
     canceled: deque[str] = deque(maxlen=99999)
     app["canceled"] = canceled
 

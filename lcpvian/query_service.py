@@ -23,6 +23,7 @@ from .callbacks import (
 )
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs
+from .utils import _set_config
 from .worker import SQLJob
 
 
@@ -180,14 +181,23 @@ class QueryService:
             sents[hashed] = job.id
         return job
 
-    def get_config(self) -> SQLJob | Job:
+    async def get_config(self) -> SQLJob | Job:
         """
         Get initial app configuration JSON
         """
-        job_id = "app_config"
         job: Job | SQLJob
+        job_id = "app_config"
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
         opts = {"config": True}
+        try:
+            already = Job.fetch(job_id, connection=self.app["redis"])
+            if already:
+                payload = _config(already, self.app["redis"], already.result)
+                await _set_config(payload, self.app)
+                print("Note: loaded config from redis!")
+                return already
+        except NoSuchJobError:
+            pass
         job = self.app["alt"].enqueue(
             _db_query,
             on_success=_config,
