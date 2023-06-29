@@ -954,6 +954,9 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
+          if (data.sql) {
+            this.sqlQuery = data.sql;
+          }
           useNotificationStore().add({
             type: "error",
             text: data.value,
@@ -1026,6 +1029,7 @@ myColl3 => collocation
         simultaneous: this.simultaneousMode,
       };
       if (resumeQuery) {
+        data["first_job"] = this.WSDataResults.job;
         data["previous"] = this.WSDataResults.job;
       }
       let retval = await useCorpusStore().fetchQuery(data);
