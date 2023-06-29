@@ -1026,6 +1026,7 @@ myColl3 => collocation
         simultaneous: this.simultaneousMode,
       };
       if (resumeQuery) {
+        data["first_job"] = this.WSDataResults.job;
         data["previous"] = this.WSDataResults.job;
       }
       let retval = await useCorpusStore().fetchQuery(data);
