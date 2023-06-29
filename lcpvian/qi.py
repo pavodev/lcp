@@ -66,6 +66,7 @@ class QueryIteration:
     dqd: str = ""
     sql: str = ""
     full: bool = False
+    do_not_send: bool = False
     sent_id_offset: int = 0
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
@@ -218,7 +219,7 @@ class QueryIteration:
         self.word_count = total
         return None
 
-    def submit_query(self) -> Job:
+    async def submit_query(self) -> Job:
         """
         Helper to submit a query job
         """
@@ -246,6 +247,7 @@ class QueryIteration:
             page_size=self.page_size,
             post_processes=self.post_processes,
             languages=list(self.languages),
+            do_not_send=self.do_not_send,
             simultaneous=self.simultaneous,
             total_duration=self.total_duration,
             is_vian=self.is_vian,
@@ -260,16 +262,19 @@ class QueryIteration:
 
         queue = "query" if not self.full else "alt"
 
-        job: Job | SQLJob = self.app["query_service"].query(
+        job: Job | SQLJob
+        from_memory: bool
+        job, from_memory = await self.app["query_service"].query(
             self.sql, depends_on=self.query_depends, queue=queue, **query_kwargs
         )
         self.job = job
         self.job_id = job.id
+        self.from_memory = from_memory
         if not self.first_job:
             self.first_job = job.id
         return job
 
-    def submit_sents(self) -> Job:
+    def submit_sents(self) -> Job | list[str]:
         """
         Helper to submit a sentences job
         """
@@ -289,6 +294,7 @@ class QueryIteration:
             user=self.user,
             room=self.room,
             resuming=self.resuming,
+            from_memory=self.from_memory,
             simultaneous=self.simultaneous,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
@@ -390,6 +396,7 @@ class QueryIteration:
             "from_memory": from_memory,
             "total_duration": manual["total_duration"],
             "current_batch": None,
+            "do_not_send": manual["do_not_send"],
             "all_batches": all_batches,
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),

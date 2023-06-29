@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import traceback
 
 from collections.abc import Coroutine
@@ -27,6 +28,9 @@ from .validate import validate
 
 from .typed import JSONObject, RedisMessage, Websockets
 from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
+
+
+MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
 
 
 async def _process_message(
@@ -151,6 +155,7 @@ async def _handle_message(
         uu = str(uuid4())
         payload["msg_id"] = uu
         app["redis"].set(uu, json.dumps(payload))
+        app["redis"].expire(uu, MESSAGE_TTL)
 
     if action == "document_ids":
         app["config"][str(payload["corpus_id"])]["doc_ids"] = [
@@ -159,6 +164,9 @@ async def _handle_message(
         ]
 
     can_send = not payload.get("full", False) or payload.get("status") == "finished"
+    # can_send false for subsequent stats
+    if payload.get("do_not_send", False):
+        can_send = False
 
     sent_allowed = action == "sentences" and can_send
 
@@ -221,10 +229,13 @@ async def _handle_query(
     explain = "done" if not payload.get("search_all") else "time used"
     do_full = payload.get("full") and payload.get("status") != "finished"
     pred = payload.get("projected_results", -1)
-
+    do_not_send_next = payload.pop("do_not_send_next", False)
+    if do_not_send_next:
+        payload["do_not_send"] = True
     print(
         f"{payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
-        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})"
+        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})\n"
+        + payload["duration_string"]
     )
     if (
         (status == "partial" or do_full)
@@ -234,43 +245,44 @@ async def _handle_query(
         payload["config"] = app["config"]
         if not payload["first_job"]:
             payload["first_job"] = job
-        if not payload.get("simultaneous"):
+        if not payload.get("simultaneous") and not payload.get("from_memory"):
             to_submit = query(None, manual=payload, app=app)
 
     if not can_send:
-        return None
+        print("Not sending WS message!")
+    else:
+        to_send = payload
+        n_users = len(app["websockets"].get(room, set()))
+        if status in {"finished", "satisfied", "partial", "overtime"}:
+            done = len(cast(Sized, payload["done_batches"]))
+            total_batches = len(cast(Sized, payload["all_batches"]))
+            to_send = {
+                "result": payload["result"],
+                "job": job,
+                "action": "query_result",
+                "user": user,
+                "room": room,
+                "n_users": n_users,
+                "status": status,
+                "word_count": payload["word_count"],
+                "first_job": payload["first_job"],
+                "is_vian": payload.get("is_vian", False),
+                "table": payload.get("table"),
+                "total_duration": payload["total_duration"],
+                "from_memory": payload.get("from_memory", False),
+                "batch_matches": payload["batch_matches"],
+                "total_results_so_far": payload["total_results_so_far"],
+                "percentage_done": payload["percentage_done"],
+                "percentage_words_done": payload["percentage_words_done"],
+                "total_results_requested": payload["total_results_requested"],
+                "projected_results": payload["projected_results"],
+                "batches_done": f"{done}/{total_batches}",
+                "simultaneous": payload.get("simultaneous", False),
+            }
+            if app["_debug"] and "sql" in payload:
+                to_send["sql"] = payload["sql"]
+        await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
 
-    to_send = payload
-    n_users = len(app["websockets"].get(room, set()))
-    if status in {"finished", "satisfied", "partial", "overtime"}:
-        done = len(cast(Sized, payload["done_batches"]))
-        total_batches = len(cast(Sized, payload["all_batches"]))
-        to_send = {
-            "result": payload["result"],
-            "job": job,
-            "action": "query_result",
-            "user": user,
-            "room": room,
-            "n_users": n_users,
-            "status": status,
-            "word_count": payload["word_count"],
-            "first_job": payload["first_job"],
-            "is_vian": payload.get("is_vian", False),
-            "table": payload.get("table"),
-            "total_duration": payload["total_duration"],
-            "from_memory": payload.get("from_memory", False),
-            "batch_matches": payload["batch_matches"],
-            "total_results_so_far": payload["total_results_so_far"],
-            "percentage_done": payload["percentage_done"],
-            "percentage_words_done": payload["percentage_words_done"],
-            "total_results_requested": payload["total_results_requested"],
-            "projected_results": payload["projected_results"],
-            "batches_done": f"{done}/{total_batches}",
-            "simultaneous": payload.get("simultaneous", False),
-        }
-        if app["_debug"] and "sql" in payload:
-            to_send["sql"] = payload["sql"]
-    await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
     if to_submit is not None:
         await to_submit
 

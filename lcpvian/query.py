@@ -74,7 +74,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
 
     # organise and submit query to rq via query service
-    query_job = qi.submit_query()
+    query_job = await qi.submit_query()
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
@@ -87,7 +87,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
 
     # prepare and submit sentences query
-    if qi.sentences and not qi.from_memory:
+    if qi.sentences:
         sents_job = qi.submit_sents()
 
     jobs = {
@@ -95,8 +95,8 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         "job": qi.job_id if qi.job else qi.previous,
     }
 
-    if qi.sentences and not qi.from_memory:
-        jobs.update({"sentences": True, "sentences_job": sents_job.id})
+    if qi.sentences:
+        jobs.update({"sentences": True, "sentences_job": sents_job})
 
     qi.job_info = jobs
 

@@ -49,37 +49,39 @@ def _query(
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
     duration = (job.ended_at - job.started_at).total_seconds()
     total_duration = job.kwargs.get("total_duration", 0.0) + duration
-    print(f"Duration: {duration} :: {total_duration}")
+    duration_string = f"Duration ({table}): {duration} :: {total_duration}"
+    from_memory = kwargs.get("from_memory", False)
 
     meta_json: QueryMeta = job.kwargs.get("meta_json")
     existing_results: Results = {0: meta_json}
-    # if this job is non-first, we need to store its id on the original
+    first_job = job
     if job.kwargs.get("first_job"):
         first_job = Job.fetch(job.kwargs["first_job"], connection=connection)
-        # group = set(first_job.meta.get("group", set()))
-        # group.add(job.id)
-        # first_job.meta["group"] = group
-        existing_results = first_job.meta["all_non_kwic_results"]
-    else:
-        first_job = job
 
+    existing_results = first_job.meta.get("all_non_kwic_results", existing_results)
     total_requested = kwargs.get(
         "total_results_requested", job.kwargs["total_results_requested"]
     )
 
     post_processes = job.kwargs.get("post_processes", {})
+    stored = first_job.meta.get("progress_info", {})
 
-    all_res, to_sent, n_res, search_all, show_total = _aggregate_results(
-        result, existing_results, meta_json, post_processes, total_requested
-    )
+    if from_memory:
+        all_res = existing_results
+        to_send = existing_results
+        n_res = stored["total_results_so_far"]
+        search_all = stored["search_all"]
+        show_total = stored["show_total"]
+    else:
+        all_res, to_send, n_res, search_all, show_total = _aggregate_results(
+            result, existing_results, meta_json, post_processes, total_requested
+        )
+        first_job.meta["all_non_kwic_results"] = all_res
 
     time_perc = 0.0
     if allowed_time > 0.0 and search_all:
         time_perc = total_duration * 100.0 / allowed_time
 
-    first_job.meta["all_non_kwic_results"] = all_res
-    first_job.save_meta()
-    from_memory = kwargs.get("from_memory", False)
     total_before_now = job.kwargs.get("total_results_so_far")
     done_part = job.kwargs["done_batches"]
     total_found = total_before_now + n_res if show_total else -1
@@ -98,7 +100,6 @@ def _query(
     # job.meta["_job_duration"] = duration
     # job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
-    first_job = job.kwargs["first_job"] or job.id
 
     if status == "finished":
         projected_results = total_found if show_total else -1
@@ -120,13 +121,35 @@ def _query(
             perc_matches = time_perc
         job.meta["percentage_done"] = round(perc_matches, 3)
 
-    first_job_id = first_job.id if isinstance(first_job, (Job, SQLJob)) else first_job
+    if from_memory:
 
+        projected_results = stored["projected_results"]
+        perc_matches = stored["percentage_done"]
+        perc_words = stored["percentage_words_done"]
+        total_found = stored["total_results_so_far"]
+        n_res = stored["batch_matches"]
+
+    progress_info = {
+        "projected_results": projected_results,
+        "percentage_done": round(perc_matches, 3),
+        "percentage_words_done": round(perc_words, 3),
+        "total_results_so_far": total_found,
+        "batch_matches": n_res,
+        "show_total": show_total,
+        "search_all": search_all,
+    }
+
+    if "_sent_jobs" not in first_job.meta:
+        first_job.meta["_sent_jobs"] = {}
+
+    first_job.meta["progress_info"] = progress_info
+
+    first_job.save_meta()  # type: ignore
     job.save_meta()  # type: ignore
     jso = dict(**job.kwargs)
     jso.update(
         {
-            "result": to_sent,
+            "result": to_send,
             "full_result": all_res,
             "status": status,
             "job": job.id,
@@ -135,11 +158,14 @@ def _query(
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "from_memory": from_memory,
+            "duration_string": duration_string,
             "total_results_so_far": total_found,
             "table": table,
-            "first_job": first_job_id,
+            "first_job": first_job.id,
             "search_all": search_all,
             "batch_matches": n_res,
+            "do_not_send": kwargs.get("do_not_send", False),
+            "do_not_send_next": from_memory,
             "done_batches": done_part,
             "total_duration": total_duration,
             "sentences": job.kwargs["sentences"],
@@ -168,12 +194,16 @@ def _sentences(
         total_requested = -1
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
+    base.meta["_sent_jobs"][job.id] = None
+    base.save_meta()
 
     depends_on = job.kwargs["depends_on"]
     if isinstance(depends_on, list):
         depends_on = depends_on[-1]
 
     depended = Job.fetch(depends_on, connection=connection)
+    if job.kwargs["first_job"] != depends_on:
+        total_requested = -1
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
     is_first = not bool(depended.kwargs.get("first_job", ""))
@@ -184,6 +214,10 @@ def _sentences(
     )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
+
+    if len(to_send) < 3:
+        print(f"No sentences found for {table} -- skipping WS message")
+        return None
 
     jso = {
         "result": to_send,
