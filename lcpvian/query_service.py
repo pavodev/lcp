@@ -5,6 +5,7 @@ import os
 from typing import final, Unpack, cast
 
 from aiohttp import web
+from redis import Redis as RedisConnection
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
@@ -22,7 +23,7 @@ from .callbacks import (
     _upload,
 )
 from .jobfuncs import _db_query, _upload_data, _create_schema
-from .typed import JSONObject, QueryArgs
+from .typed import JSONObject, QueryArgs, Config
 from .utils import _set_config
 from .worker import SQLJob
 
@@ -188,13 +189,16 @@ class QueryService:
         job: Job | SQLJob
         job_id = "app_config"
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
-        opts = {"config": True}
+        redis: RedisConnection[bytes] = self.app["redis"]
+        opts: dict[str, bool] = {"config": True}
         try:
-            already = Job.fetch(job_id, connection=self.app["redis"])
+            already = Job.fetch(job_id, connection=redis)
             if already:
-                payload = _config(already, self.app["redis"], already.result)
+                payload: dict[str, str | bool | Config] = _config(
+                    already, redis, already.result, publish=False
+                )
                 await _set_config(payload, self.app)
-                print("Note: loaded config from redis!")
+                print("Loaded config from redis (flush redis if new corpora added)")
                 return already
         except NoSuchJobError:
             pass

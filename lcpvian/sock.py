@@ -216,7 +216,7 @@ async def _handle_query(
     pred = payload.get("projected_results", -1)
 
     print(
-        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total, predicted: {pred}\n"
+        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})"
     )
     if (

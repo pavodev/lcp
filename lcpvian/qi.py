@@ -415,7 +415,10 @@ class QueryIteration:
             return None
 
         if not len(self.done_batches):
-            self.current_batch = self.all_batches[0]
+            self.current_batch = next(
+                (x for x in self.all_batches if x[-2].endswith("rest")),
+                self.all_batches[0],
+            )
             return None
 
         # set here ensures we don't double count, even though it should not happen

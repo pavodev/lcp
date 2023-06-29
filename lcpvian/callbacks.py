@@ -45,10 +45,11 @@ def _query(
 
     This is where we need to aggregate statistics over all jobs in the group
     """
+    table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
-
     duration = (job.ended_at - job.started_at).total_seconds()
     total_duration = job.kwargs.get("total_duration", 0.0) + duration
+    print(f"Duration: {duration} :: {total_duration}")
 
     meta_json: QueryMeta = job.kwargs.get("meta_json")
     existing_results: Results = {0: meta_json}
@@ -97,7 +98,6 @@ def _query(
     # job.meta["_job_duration"] = duration
     # job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
-    table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
     first_job = job.kwargs["first_job"] or job.id
 
     if status == "finished":
@@ -450,7 +450,10 @@ def _queries(
 
 
 def _config(
-    job: SQLJob | Job, connection: RedisConnection[bytes], result: list[MainCorpus]
+    job: SQLJob | Job,
+    connection: RedisConnection[bytes],
+    result: list[MainCorpus],
+    publish: bool = True,
 ) -> dict[str, str | bool | Config]:
     """
     Run by worker: make config data
@@ -471,6 +474,7 @@ def _config(
         "_is_config": True,
         "action": "set_config",
     }
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    if publish:
+        red = job._redis if hasattr(job, "_redis") else connection
+        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return jso
