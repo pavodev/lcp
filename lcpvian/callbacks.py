@@ -12,7 +12,7 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
-from .convert import _aggregate_results, _format_kwics
+from .convert import _aggregate_results, _format_kwics, _apply_filters
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -68,7 +68,7 @@ def _query(
 
     if from_memory:
         all_res = existing_results
-        to_send = existing_results
+        to_send = _apply_filters(all_res, post_processes)
         n_res = stored["total_results_so_far"]
         search_all = stored["search_all"]
         show_total = stored["show_total"]
