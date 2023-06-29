@@ -7,6 +7,7 @@ import traceback
 
 from collections.abc import Coroutine
 from typing import Sized, cast
+from uuid import uuid4
 
 try:
     from aiohttp import WSCloseCode, WSMsgType, web
@@ -145,6 +146,12 @@ async def _handle_message(
         "timeout",
         "interrupted",  # not currently used, maybe when rooms have multiple users
     )
+
+    if action not in errors:
+        uu = str(uuid4())
+        payload["msg_id"] = uu
+        app["redis"].set(uu, json.dumps(payload))
+
     if action == "document_ids":
         app["config"][str(payload["corpus_id"])]["doc_ids"] = [
             payload["job"],
@@ -216,7 +223,7 @@ async def _handle_query(
     pred = payload.get("projected_results", -1)
 
     print(
-        f"Query iteration: {job} -- {payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
+        f"{payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})"
     )
     if (
