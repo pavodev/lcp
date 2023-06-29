@@ -954,6 +954,9 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
+          if (data.sql) {
+            this.sqlQuery = data.sql;
+          }
           useNotificationStore().add({
             type: "error",
             text: data.value,
