@@ -68,7 +68,7 @@ class QueryService:
         hashed = str(hash(query))
         job: SQLJob | Job
         try:
-            raise NoSuchJobError()
+            # raise NoSuchJobError()
             job = Job.fetch(hashed, connection=self.app["redis"])
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
@@ -165,7 +165,7 @@ class QueryService:
             return dones
 
         try:
-            raise NoSuchJobError()
+            # raise NoSuchJobError()
             job = Job.fetch(hashed, connection=self.app["redis"])
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
