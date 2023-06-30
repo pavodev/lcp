@@ -950,6 +950,14 @@ myColl3 => collocation
           }
           else {
             this.WSDataSentences = data;
+            if (this.WSDataResults){
+              this.WSDataResults.result['0'].result_sets.forEach((_resultSet, index) => {
+                let resultIndex = index + 1
+                if (!(resultIndex in this.WSDataSentences.result)){
+                  this.WSDataSentences.result[resultIndex] = []
+                }
+              })
+            }
           }
           return;
         } else if (data["action"] === "failed") {

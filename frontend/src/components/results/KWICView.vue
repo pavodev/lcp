@@ -286,21 +286,23 @@ export default {
     getGroups(data, initial=false) {
       let groups = [];
       let tmpGroup = [];
-      let tokenData = JSON.parse(JSON.stringify(data));
-      tokenData = tokenData.splice(1, tokenData.length).sort();
-      if (initial === true) {
-        tokenData = tokenData[0]
-      }
-      tokenData.forEach((tokenId, idx) => {
-        if (idx > 0 && Math.abs(tokenData[idx] - tokenData[idx - 1]) > 1) {
-          if (tmpGroup.length > 0) {
-            groups.push(tmpGroup.sort());
-          }
-          tmpGroup = [];
+      if (data) {
+        let tokenData = JSON.parse(JSON.stringify(data));
+        tokenData = tokenData.splice(1, tokenData.length).sort();
+        if (initial === true) {
+          tokenData = tokenData[0]
         }
-        tmpGroup.push(tokenId);
-      });
-      groups.push(tmpGroup.sort());
+        tokenData.forEach((tokenId, idx) => {
+          if (idx > 0 && Math.abs(tokenData[idx] - tokenData[idx - 1]) > 1) {
+            if (tmpGroup.length > 0) {
+              groups.push(tmpGroup.sort());
+            }
+            tmpGroup = [];
+          }
+          tmpGroup.push(tokenId);
+        });
+        groups.push(tmpGroup.sort());
+      }
       return groups;
     },
     showPopover(token, resultIndex, event) {
@@ -347,7 +349,10 @@ export default {
         } else if (type == 3) {
           groupStartIndex = range[range.length - 1].at(-1).at(-1) + 1;
         } else if (type == 2) {
-          groupStartIndex = range[range.length - 1][groupIndex][0];
+          // console.log("RD", groupIndex, range[range.length - 1][groupIndex], range[range.length - 1])
+          if (range[range.length - 1][groupIndex]) {
+            groupStartIndex = range[range.length - 1][groupIndex][0];
+          }
         }
 
         currentTokenId = groupStartIndex + tokenIndexInResultset;
