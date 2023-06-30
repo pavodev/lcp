@@ -243,7 +243,7 @@ class QueryService:
         opts: dict[str, bool] = {"config": True}
         try:
             already = Job.fetch(job_id, connection=redis)
-            if already:
+            if already and already.result is not None:
                 payload: dict[str, str | bool | Config] = _config(
                     already, redis, already.result, publish=False
                 )
