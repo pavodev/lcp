@@ -35,8 +35,17 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = prev_job.meta["total_results_so_far"]
     tot_req = qi.total_results_requested
+    prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
+    cut_short = prev_job.meta.get("cut_short", -1)
+    # add_current_batch = True
+    qi.send_stats = True
     if so_far >= tot_req:
-        qi.sent_id_offset = prev_job.meta.get("results_this_batch", 0)
+        qi.sent_id_offset = prev_results
+    elif so_far <= tot_req:  # and so_far < prev_results:
+        qi.sent_id_offset = cut_short
+        qi.sent_id_offset = 0
+        qi.send_stats = False
+        # add_current_batch = False
     needed = tot_req - so_far if tot_req != -1 else -1
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
@@ -74,7 +83,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
 
     # organise and submit query to rq via query service
-    query_job = await qi.submit_query()
+    query_job, submitted = await qi.submit_query()
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
@@ -82,9 +91,12 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         if query_job.id not in qi.dep_chain:
             qi.dep_chain.append(query_job.id)
 
-    if qi.current_batch is not None and qi.job is not None:
-        schema_table = ".".join(qi.current_batch[1:3])
+    schema_table = ".".join(qi.current_batch[1:3])
+
+    if qi.current_batch is not None and qi.job is not None and submitted:
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
+    elif not submitted:
+        print(f"\nSkipping query but doing sents: {schema_table}")
 
     # prepare and submit sentences query
     if qi.sentences:

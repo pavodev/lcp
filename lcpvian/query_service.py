@@ -68,6 +68,7 @@ class QueryService:
         hashed = str(hash(query))
         job: SQLJob | Job
         try:
+            raise NoSuchJobError()
             job = Job.fetch(hashed, connection=self.app["redis"])
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
@@ -157,13 +158,14 @@ class QueryService:
         kwa: dict[str, int | bool | str | None] = {}
         job: SQLJob | Job
 
-        if kwargs.get("from_memory", False):
+        if kwargs.get("from_memory", False) and False:
             dones, need_to_do = self._multiple_sent_jobs(**kwargs)
             if need_to_do:
                 print(f"Warning: jobs not processed: {need_to_do}")
             return dones
 
         try:
+            raise NoSuchJobError()
             job = Job.fetch(hashed, connection=self.app["redis"])
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":

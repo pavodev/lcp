@@ -164,8 +164,14 @@ async def _handle_message(
         ]
 
     can_send = not payload.get("full", False) or payload.get("status") == "finished"
+    if not payload.get("send_stats_this_batch", True):
+        can_send = False
 
     sent_allowed = action == "sentences" and can_send
+    to_submit = None
+
+    if action == "sentences" and payload.get("submit_query"):
+        to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action in simples or sent_allowed:
         await push_msg(
@@ -175,6 +181,8 @@ async def _handle_message(
             skip=None,
             just=(room, user),
         )
+        if to_submit is not None:
+            await to_submit
         return None
 
     if action in errors:
@@ -242,7 +250,7 @@ async def _handle_query(
         if not payload.get("simultaneous") and not payload.get("from_memory"):
             to_submit = query(None, manual=payload, app=app)
 
-    if not can_send:
+    if not can_send and payload.get("send_stats", True):
         print("Not sending WS message!")
     else:
         to_send = payload

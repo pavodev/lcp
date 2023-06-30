@@ -95,6 +95,8 @@ def _query(
         **job.kwargs,
     )
     job.meta["_status"] = status
+    already_sent = job.meta.get("_already_sent", False)
+    job.meta["_already_sent"] = True
     job.meta["results_this_batch"] = n_res
     job.meta["cut_short"] = total_requested if n_res > total_requested else -1
     # job.meta["_job_duration"] = duration
@@ -149,7 +151,7 @@ def _query(
     first_job.meta["progress_info"] = progress_info
 
     first_job.save_meta()  # type: ignore
-    job.save_meta()  # type: ignore
+
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -165,6 +167,7 @@ def _query(
             "duration_string": duration_string,
             "total_results_so_far": total_found,
             "table": table,
+            "send_stats": not already_sent,
             "first_job": first_job.id,
             "search_all": search_all,
             "batches_done_string": batches_done_string,
@@ -175,9 +178,10 @@ def _query(
             "total_results_requested": total_requested,
         }
     )
+    job.meta["payload"] = jso
     jso["user"] = kwargs.get("user", jso["user"])
     jso["room"] = kwargs.get("room", jso["room"])
-
+    job.save_meta()  # type: ignore
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
@@ -212,11 +216,16 @@ def _sentences(
     is_first = not bool(depended.kwargs.get("first_job", ""))
     resuming = job.kwargs.get("resuming", False)
     offset = depended.meta.get("cut_short", -1) if resuming else -1
-    to_send = _format_kwics(
+    to_send, n_res = _format_kwics(
         depended.result, meta_json, result, total_requested, is_vian, is_first, offset
     )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
+
+    depended.meta["cut_short"] = total_requested if n_res > total_requested else -1
+    depended.save_meta()
+
+    submit_query = n_res < total_requested
 
     if len(to_send) < 3:
         print(f"No sentences found for {table} -- skipping WS message")
@@ -226,6 +235,7 @@ def _sentences(
         "result": to_send,
         "status": depended.meta["_status"],
         "action": "sentences",
+        "submit_query": depended.meta["payload"] if submit_query else False,
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,

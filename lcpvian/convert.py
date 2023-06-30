@@ -77,7 +77,7 @@ def _format_kwics(
     is_vian: bool = False,
     is_first: bool = False,
     offset: int = -1,
-) -> Results:
+) -> tuple[Results, int]:
 
     sen: ResultSents = {}
     out: Results = {0: meta_json, -1: sen}
@@ -86,6 +86,7 @@ def _format_kwics(
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
+    n_results = 0
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
@@ -94,6 +95,8 @@ def _format_kwics(
     for line in result:
         key = int(line[0])
         rest = line[1]
+        if not key and not n_results:
+            n_results = rest[0]
         if key not in kwics:
             continue
         if is_first and key in stops:
@@ -118,7 +121,7 @@ def _format_kwics(
         bit = cast(list, out[key])
         bit.append(rest)
 
-    return out
+    return out, n_results
 
 
 def _format_vian(

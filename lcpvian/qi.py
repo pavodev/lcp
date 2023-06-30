@@ -65,6 +65,7 @@ class QueryIteration:
     cut_short: int = -1
     dqd: str = ""
     sql: str = ""
+    send_stats: bool = True
     full: bool = False
     sent_id_offset: int = 0
     jso: Query = field(default_factory=dict)
@@ -218,12 +219,17 @@ class QueryIteration:
         self.word_count = total
         return None
 
-    async def submit_query(self) -> Job:
+    async def submit_query(self) -> tuple[Job, bool]:
         """
         Helper to submit a query job
         """
-        if self.sent_id_offset:
-            return Job.fetch(self.previous, connection=self.app["redis"])
+        job: Job | SQLJob
+        if self.sent_id_offset or not self.send_stats:
+            job = Job.fetch(self.previous, connection=self.app["redis"])
+            self.job = job
+            self.job_id = job.id
+            return job, False
+
         parent: str | None = None
         parent = self.job_id if self.job is not None else None
 
@@ -244,6 +250,7 @@ class QueryIteration:
             existing_results=self.existing_results,
             sentences=self.sentences,
             page_size=self.page_size,
+            send_stats=self.send_stats,
             post_processes=self.post_processes,
             languages=list(self.languages),
             simultaneous=self.simultaneous,
@@ -260,7 +267,6 @@ class QueryIteration:
 
         queue = "query" if not self.full else "alt"
 
-        job: Job | SQLJob
         from_memory: bool
         job, from_memory = await self.app["query_service"].query(
             self.sql, depends_on=self.query_depends, queue=queue, **query_kwargs
@@ -270,7 +276,7 @@ class QueryIteration:
         self.from_memory = from_memory
         if not self.first_job:
             self.first_job = job.id
-        return job
+        return job, True
 
     def submit_sents(self) -> Job | list[str]:
         """
@@ -407,6 +413,10 @@ class QueryIteration:
         Find the best next batch to query
         """
         if self.current_batch is not None:
+            return None
+
+        if self.done_batches and not self.send_stats:
+            self.current_batch = self.done_batches[-1]
             return None
 
         buffer = 0.1  # set to zero for picking smaller batches
