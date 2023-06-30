@@ -3,6 +3,7 @@
 predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                 | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
                 | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
+                | BOOLEAN _NL [_INDENT (property|predicate)+ _DEDENT]               -> boolean
                 | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
                 | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
                 | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
@@ -26,6 +27,7 @@ r_coll_prop     : "center" _NL [_INDENT (STRING _NL)+ _DEDENT]                  
 
 VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
 NOT_OPERATOR.1  : /(¬|NOT|!)\s?/
+BOOLEAN.1       : /(AND|OR)/
 OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 STRING          : /[^\n\r ].*/
 SL_COMMENT      : /#[^\r\n]+/ _NL
