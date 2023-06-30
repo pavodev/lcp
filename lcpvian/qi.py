@@ -313,9 +313,7 @@ class QueryIteration:
         sents_job = qs.sentences(
             self.sents_query(), depends_on=to_use, queue=queue, **kwargs
         )
-        # if simultaneous:
-        #    dep_chain.append(stats_job.id)
-        return sents_job
+        return getattr(sents_job, "id", sents_job)
 
     @staticmethod
     def _determine_language(batch: str) -> str | None:
