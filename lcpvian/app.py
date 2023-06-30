@@ -163,20 +163,6 @@ async def create_app(test: bool = False) -> web.Application:
     conf: dict[str, CorpusConfig] = {}
     app["config"] = conf
 
-    # here we can remember things, most likely queries, by a hash of their query string
-    # and their params. the value is the job id. if the job id is found, we can return
-    # the result without redoing the query.
-    memory: dict[str, dict[int, str]] = {}
-    app["memory"] = memory
-
-    # mapping query hash to job id
-    queries: dict[int, str] = {}
-    app["memory"]["queries"] = queries
-
-    # mapping sent job hash to job id
-    sentences: dict[int, str] = {}
-    app["memory"]["sentences"] = sentences
-
     resource = cors.add(app.router.add_resource("/corpora"))
     # cors.add(resource.add_route("GET", corpora))
     cors.add(resource.add_route("POST", corpora))

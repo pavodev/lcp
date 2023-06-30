@@ -74,7 +74,7 @@ def _query(
         show_total = stored["show_total"]
     else:
         all_res, to_send, n_res, search_all, show_total = _aggregate_results(
-            result, existing_results, meta_json, post_processes, total_requested
+            result, existing_results, meta_json, post_processes
         )
         first_job.meta["all_non_kwic_results"] = all_res
 
@@ -169,8 +169,6 @@ def _query(
             "search_all": search_all,
             "batches_done_string": batches_done_string,
             "batch_matches": n_res,
-            "do_not_send": kwargs.get("do_not_send", False),
-            "do_not_send_next": from_memory,
             "done_batches": done_part,
             "total_duration": total_duration,
             "sentences": job.kwargs["sentences"],

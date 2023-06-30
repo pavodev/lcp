@@ -66,7 +66,6 @@ class QueryIteration:
     dqd: str = ""
     sql: str = ""
     full: bool = False
-    do_not_send: bool = False
     sent_id_offset: int = 0
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
@@ -247,7 +246,6 @@ class QueryIteration:
             page_size=self.page_size,
             post_processes=self.post_processes,
             languages=list(self.languages),
-            do_not_send=self.do_not_send,
             simultaneous=self.simultaneous,
             total_duration=self.total_duration,
             is_vian=self.is_vian,
@@ -396,7 +394,6 @@ class QueryIteration:
             "from_memory": from_memory,
             "total_duration": manual["total_duration"],
             "current_batch": None,
-            "do_not_send": manual["do_not_send"],
             "all_batches": all_batches,
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),

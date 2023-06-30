@@ -65,27 +65,24 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        hashed = hash((query, kwargs["sentences"]))
-        queries = self.app["memory"]["queries"]
-
-        exists = queries.get(hashed)
-        if exists:
-            try:
-                job = await self._fetch_job(exists)
-                if job.get_status() == "finished":
-                    print("Query found in redis memory. Retrieving...")
-                    _query(
-                        job,
-                        self.app["redis"],
-                        job.result,
-                        user=kwargs["user"],
-                        room=kwargs["room"],
-                        from_memory=True,
-                        do_not_send=kwargs.get("do_not_send", False),
-                    )
-                    return job, True
-            except NoSuchJobError:
-                queries.pop(hashed)
+        hashed = str(hash(query))
+        job: SQLJob | Job
+        try:
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            self.app["redis"].expire(job.id, self.query_ttl)
+            if job.get_status() == "finished":
+                print("Query found in redis memory. Retrieving...")
+                _query(
+                    job,
+                    self.app["redis"],
+                    job.result,
+                    user=kwargs["user"],
+                    room=kwargs["room"],
+                    from_memory=True,
+                )
+                return job, True
+        except NoSuchJobError:
+            pass
 
         job = self.app[queue].enqueue(
             _db_query,
@@ -93,14 +90,10 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
+            job_id=hashed,
             args=(query,),
             kwargs=kwargs,
         )
-        if self.remembered_queries > 0 and len(queries) >= self.remembered_queries:
-            first = list(queries)[0]
-            queries.pop(first)
-        if self.remembered_queries:
-            queries[hashed] = job.id
         return job, False
 
     def document_ids(
@@ -159,52 +152,45 @@ class QueryService:
     ) -> SQLJob | Job:
         depend = cast(str | list[str], kwargs["depends_on"])
         hash_dep = tuple(depend) if isinstance(depend, list) else depend
-        hashed = hash((query, hash_dep, kwargs["offset"], kwargs["needed"]))
-        sents = self.app["memory"]["sentences"]
-        exists = sents.get(hashed)
+        hashed = str(hash((query, hash_dep, kwargs["offset"], kwargs["needed"])))
         kwargs["sentences_query"] = query
         kwa: dict[str, int | bool | str | None] = {}
+        job: SQLJob | Job
 
         if kwargs.get("from_memory", False):
-            print("SENT FROM MEMORY")
             dones, need_to_do = self._multiple_sent_jobs(**kwargs)
             if need_to_do:
                 print(f"Warning: jobs not processed: {need_to_do}")
             return dones
 
-        if exists:
-            try:
-                sjob: Job | SQLJob = Job.fetch(exists, connection=self.app["redis"])
-                self.app["redis"].expire(sjob.id, self.query_ttl)
-                if sjob.get_status() == "finished":
-                    print("Sentences found in redis memory. Retrieving...")
-                    kwa = {
-                        "user": cast(str, kwargs["user"]),
-                        "room": cast(str | None, kwargs["room"]),
-                        "total_results_requested": cast(
-                            int, kwargs["total_results_requested"]
-                        ),
-                    }
-                    _sentences(sjob, self.app["redis"], sjob.result, **kwa)
-                    return sjob
-            except NoSuchJobError:
-                sents.pop(hashed)
+        try:
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            self.app["redis"].expire(job.id, self.query_ttl)
+            if job.get_status() == "finished":
+                print("Sentences found in redis memory. Retrieving...")
+                kwa = {
+                    "user": cast(str, kwargs["user"]),
+                    "room": cast(str | None, kwargs["room"]),
+                    "total_results_requested": cast(
+                        int, kwargs["total_results_requested"]
+                    ),
+                }
+                _sentences(job, self.app["redis"], job.result, **kwa)
+                return job
+        except NoSuchJobError:
+            pass
 
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job = self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             depends_on=kwargs["depends_on"],
             job_timeout=self.timeout,
+            job_id=hashed,
             args=(query,),
             kwargs=kwargs,
         )
-        if self.remembered_queries > 0 and len(sents) >= self.remembered_queries:
-            first = list(sents)[0]
-            sents.pop(first)
-        if self.remembered_queries:
-            sents[hashed] = job.id
         return job.id
 
     def _multiple_sent_jobs(self, **kwargs) -> tuple[list[str], list[str]]:
@@ -214,9 +200,9 @@ class QueryService:
         need_to_do: list[str] = []
         dones: list[str] = []
         for i, sent_job in enumerate(sent_jobs):
-            total = cast(int, kwargs["total_results_requested"])
-            if i:
-                total = -1
+            # total = cast(int, kwargs["total_results_requested"])
+            # if i:
+            #    total = -1
             job = Job.fetch(sent_job, connection=self.app["redis"])
             self.app["redis"].expire(sent_job, self.query_ttl)
             if job.get_status() == "finished":
@@ -224,7 +210,7 @@ class QueryService:
                 kwa = {
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
-                    "total_results_requested": total,
+                    # "total_results_requested": total,
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 dones.append(sent_job)

@@ -27,7 +27,6 @@ def _aggregate_results(
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
-    total_requested: int,
 ) -> tuple[Results, Results, int, bool, bool]:
     """
     Combine non-kwic results for storing and for sending to frontend

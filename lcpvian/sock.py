@@ -164,9 +164,6 @@ async def _handle_message(
         ]
 
     can_send = not payload.get("full", False) or payload.get("status") == "finished"
-    # can_send false for subsequent stats
-    if payload.get("do_not_send", False):
-        can_send = False
 
     sent_allowed = action == "sentences" and can_send
 
@@ -229,9 +226,6 @@ async def _handle_query(
     explain = "done" if not payload.get("search_all") else "time used"
     do_full = payload.get("full") and payload.get("status") != "finished"
     pred = payload.get("projected_results", -1)
-    do_not_send_next = payload.pop("do_not_send_next", False)
-    if do_not_send_next:
-        payload["do_not_send"] = True
     print(
         f"{payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})\n"
