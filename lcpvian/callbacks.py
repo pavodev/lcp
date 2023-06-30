@@ -101,6 +101,8 @@ def _query(
     # job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
 
+    batches_done_string = f"{len(done_part)}/{len(job.kwargs['all_batches'])}"
+
     if status == "finished":
         projected_results = total_found if show_total else -1
         perc_words = 100.0
@@ -128,6 +130,7 @@ def _query(
         perc_words = stored["percentage_words_done"]
         total_found = stored["total_results_so_far"]
         n_res = stored["batch_matches"]
+        batches_done_string = stored["batches_done_string"]
 
     progress_info = {
         "projected_results": projected_results,
@@ -137,6 +140,7 @@ def _query(
         "batch_matches": n_res,
         "show_total": show_total,
         "search_all": search_all,
+        "batches_done_string": batches_done_string,
     }
 
     if "_sent_jobs" not in first_job.meta:
@@ -163,6 +167,7 @@ def _query(
             "table": table,
             "first_job": first_job.id,
             "search_all": search_all,
+            "batches_done_string": batches_done_string,
             "batch_matches": n_res,
             "do_not_send": kwargs.get("do_not_send", False),
             "do_not_send_next": from_memory,

@@ -254,8 +254,6 @@ async def _handle_query(
         to_send = payload
         n_users = len(app["websockets"].get(room, set()))
         if status in {"finished", "satisfied", "partial", "overtime"}:
-            done = len(cast(Sized, payload["done_batches"]))
-            total_batches = len(cast(Sized, payload["all_batches"]))
             to_send = {
                 "result": payload["result"],
                 "job": job,
@@ -276,7 +274,7 @@ async def _handle_query(
                 "percentage_words_done": payload["percentage_words_done"],
                 "total_results_requested": payload["total_results_requested"],
                 "projected_results": payload["projected_results"],
-                "batches_done": f"{done}/{total_batches}",
+                "batches_done": payload["batches_done_string"],
                 "simultaneous": payload.get("simultaneous", False),
             }
             if app["_debug"] and "sql" in payload:
