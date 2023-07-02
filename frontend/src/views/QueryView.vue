@@ -338,17 +338,12 @@
     </div>
     <div class="container-fluid">
       <div class="row">
-        <div
-          class="col-12"
-          v-if="
-            WSDataResults &&
-            WSDataResults.result
-          "
-        >
+        <div class="col-12" v-if="WSDataResults && WSDataResults.result">
           <nav>
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
               <template
-                v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+                v-for="(resultSet, index) in WSDataResults.result['0']
+                  .result_sets"
               >
                 <button
                   class="nav-link"
@@ -361,25 +356,38 @@
                   :aria-controls="`nav-results-${index}`"
                   aria-selected="true"
                   :key="`result-btn-${index}`"
-                  v-if="resultSet.type == 'plain' && WSDataSentences && WSDataSentences.result || resultSet.type != 'plain'"
+                  v-if="
+                    (resultSet.type == 'plain' &&
+                      WSDataSentences &&
+                      WSDataSentences.result) ||
+                    resultSet.type != 'plain'
+                  "
                 >
-                  <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
-                  <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'" :icon="['fas', 'circle-nodes']" />
+                  <FontAwesomeIcon
+                    v-if="resultSet.type == 'plain'"
+                    :icon="['fas', 'barcode']"
+                  />
+                  <FontAwesomeIcon
+                    v-else-if="resultSet.type == 'collocation'"
+                    :icon="['fas', 'circle-nodes']"
+                  />
                   <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
                   {{ resultSet.name }}
-                  <small>(<span v-if="resultSet.type == 'plain'">
-                    {{
-                      WSDataSentences && WSDataSentences.result[index + 1]
-                        ? WSDataSentences.result[index + 1].length
+                  <small
+                    >(<span v-if="resultSet.type == 'plain'">
+                      {{
+                        WSDataSentences && WSDataSentences.result[index + 1]
+                          ? WSDataSentences.result[index + 1].length
+                          : 0
+                      }}</span
+                    >
+                    <span v-else>{{
+                      WSDataResults && WSDataResults.result[index + 1]
+                        ? WSDataResults.result[index + 1].length
                         : 0
-                    }}</span
+                    }}</span>
+                    )</small
                   >
-                  <span v-else>{{
-                    WSDataResults && WSDataResults.result[index + 1]
-                      ? WSDataResults.result[index + 1].length
-                      : 0
-                  }}</span>
-                  )</small>
                 </button>
               </template>
             </div>
@@ -391,16 +399,25 @@
               :id="`nav-results-${index}`"
               role="tabpanel"
               :aria-labelledby="`nav-results-${index}-tab`"
-              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
+              v-for="(resultSet, index) in WSDataResults.result['0']
+                .result_sets"
               :key="`result-tab-${index}`"
             >
-              <span v-if="resultSet.type == 'plain' && WSDataSentences">
+              <span
+                v-if="
+                  resultSet.type == 'plain' &&
+                  WSDataSentences &&
+                  WSDataSentences.result
+                "
+              >
                 <div class="btn-group mt-2 btn-group-sm mb-3">
                   <a
                     href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
-                    :class="plainType != 'table' ? 'active btn-primary' : 'btn-light'"
+                    :class="
+                      plainType != 'table' ? 'active btn-primary' : 'btn-light'
+                    "
                     aria-current="page"
                   >
                     <FontAwesomeIcon :icon="['fas', 'barcode']" />
@@ -410,7 +427,9 @@
                     href="#"
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
-                    :class="plainType == 'table' ? 'active btn-primary' : 'btn-light'"
+                    :class="
+                      plainType == 'table' ? 'active btn-primary' : 'btn-light'
+                    "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
                     Table
@@ -437,43 +456,13 @@
                   :loading="loading"
                 />
               </span>
-              <!-- <ResultsAnalysisView
-                v-else-if="resultSet.type == 'analysis'"
-                v-else-if="resultSet.type == 'collocation'"
-                :data="WSDataResults.result[index + 1]"
-                :attributes="resultSet.attributes"
-              /> -->
               <ResultsTableView
-                v-else
+                v-else-if="resultSet.type != 'plain'"
                 :data="WSDataResults.result[index + 1]"
                 :attributes="resultSet.attributes"
                 :resultsPerPage="resultsPerPage"
               />
             </div>
-            <!-- <div
-              class="tab-pane fade"
-              id="nav-stats"
-              role="tabpanel"
-              aria-labelledby="nav-stats-tab"
-            >
-              <table v-if="stats" class="table">
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(statsKey, index) in Object.keys(stats.result)"
-                    :key="index"
-                  >
-                    <td>{{ statsKey }}</td>
-                    <td>{{ stats.result[statsKey] }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div> -->
           </div>
         </div>
       </div>
@@ -666,8 +655,8 @@ myColl3 => collocation
       isQueryValidData: null,
       WSDataResults: "",
       WSDataSentences: "",
-      nResults: 200,
       pageSize: 100,
+      nResults: 200,
       selectedLanguages: "en",
       queryName: "",
       currentTab: "dqd",
@@ -689,9 +678,6 @@ myColl3 => collocation
     ResultsKWICView,
     ResultsPlainTableView,
     ResultsTableView,
-    // ResultsAnalysisView,
-    // KWICTable,
-    // DetailsTableView,
     EditorView,
   },
   watch: {
@@ -719,7 +705,6 @@ myColl3 => collocation
       handler() {
         let _messages = this.messages;
         if (_messages.length > 0) {
-          console.log("WSM", _messages);
           _messages.forEach((message) => this.onSocketMessage(message));
           useWsStore().clear();
         }
@@ -735,13 +720,8 @@ myColl3 => collocation
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
-      }
-      else {
-        history.pushState(
-          {},
-          null,
-          `/query/`
-        );
+      } else {
+        history.pushState({}, null, `/query/`);
       }
       if (
         this.selectedLanguages &&
@@ -1006,21 +986,17 @@ myColl3 => collocation
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
-        this.nResults = 200;
+        this.nResults = this.pageSize * 2; // We want load 2 pages at first
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
         }
       }
       let data = {
-        // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
         query: this.query,
         user: this.userData.user.id,
         room: this.roomId,
-        // room: null,
-        // page_size: this.pageSize,
-        // page_size: this.nResults,
         page_size: this.resultsPerPage,
         languages: [this.selectedLanguages],
         total_results_requested: this.nResults,

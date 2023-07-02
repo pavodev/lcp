@@ -7,6 +7,23 @@
         </li>
         <li
           class="page-item"
+          v-if="pages[0] > 0"
+        >
+          <button
+            class="page-link"
+            @click="setPage(1)"
+          >
+            1
+          </button>
+        </li>
+        <li
+          class="page-item disabled"
+          v-if="pages[0] > 1"
+        >
+          <span class="page-link">...</span>
+        </li>
+        <li
+          class="page-item"
           v-for="pageNumber in pages"
           :key="`page-${pageNumber}`"
         >
@@ -58,6 +75,23 @@
           </span>
         </li>
         <li
+          class="page-item disabled"
+          v-if="pages.at(-1) < maxPages"
+        >
+          <span class="page-link">...</span>
+        </li>
+        <li
+          class="page-item"
+          v-if="pages.at(-1) < maxPages - 1"
+        >
+          <button
+            class="page-link"
+            @click="setPage(maxPages)"
+          >
+            {{ maxPages }}
+          </button>
+        </li>
+        <li
           class="page-item"
           :class="currentPage >= maxPages ? 'disabled' : ''"
         >
@@ -88,6 +122,7 @@ export default {
     return {
       currentPageTmp: this.currentPage,
       maxPages: Math.ceil(parseFloat(this.resultCount) / this.resultsPerPage),
+      pageWindow: 2,
     };
   },
   methods: {
@@ -113,14 +148,14 @@ export default {
   computed: {
     pages() {
       let pages = Array.from(Array(this.maxPages).keys());
-      let windowSize = 3;
+      let windowSize = this.pageWindow*2 + 1;
 
       let currentPage = Math.min(
         Math.max(this.currentPage - 1, 0),
         this.maxPages - 1
       );
-      let start = Math.min(Math.max(currentPage - 1, 0), this.maxPages - 1);
-      let end = Math.max(Math.min(currentPage + 2, this.maxPages - 1), 0);
+      let start = Math.min(Math.max(currentPage - windowSize + 3, 0), this.maxPages - 1);
+      let end = Math.max(Math.min(currentPage + windowSize - 2, this.maxPages - 1), 0);
 
       if (end - start < windowSize && end == this.maxPages - 1 && start > 0) {
         start = Math.max(end - windowSize + 1, 0);
