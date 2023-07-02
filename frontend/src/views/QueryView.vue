@@ -342,57 +342,46 @@
           class="col-12"
           v-if="
             WSDataResults &&
-            WSDataResults.result &&
-            WSDataSentences &&
-            WSDataSentences.result
+            WSDataResults.result
           "
         >
           <nav>
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
-              <button
-                class="nav-link"
-                :class="index == 0 ? 'active' : ''"
-                :id="`nav-results-tab-${index}`"
-                data-bs-toggle="tab"
-                :data-bs-target="`#nav-results-${index}`"
-                type="button"
-                role="tab"
-                :aria-controls="`nav-results-${index}`"
-                aria-selected="true"
-                v-for="(resultSet, index) in WSDataResults.result['0']
-                  .result_sets"
-                :key="`result-btn-${index}`"
+              <template
+                v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
               >
-                <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
-                <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'" :icon="['fas', 'circle-nodes']" />
-                <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
-                {{ resultSet.name }}
-                <small>(<span v-if="resultSet.type == 'plain'">
-                  {{
-                    WSDataSentences && WSDataSentences.result[index + 1]
-                      ? WSDataSentences.result[index + 1].length
-                      : 0
-                  }}</span
+                <button
+                  class="nav-link"
+                  :class="index == 0 ? 'active' : ''"
+                  :id="`nav-results-tab-${index}`"
+                  data-bs-toggle="tab"
+                  :data-bs-target="`#nav-results-${index}`"
+                  type="button"
+                  role="tab"
+                  :aria-controls="`nav-results-${index}`"
+                  aria-selected="true"
+                  :key="`result-btn-${index}`"
+                  v-if="resultSet.type == 'plain' && WSDataSentences && WSDataSentences.result || resultSet.type != 'plain'"
                 >
-                <span v-else>{{
-                  WSDataResults && WSDataResults.result[index + 1]
-                    ? WSDataResults.result[index + 1].length
-                    : 0
-                }}</span>
-                )</small>
-              </button>
-              <!-- <button
-                class="nav-link"
-                id="nav-stats-tab"
-                data-bs-toggle="tab"
-                data-bs-target="#nav-stats"
-                type="button"
-                role="tab"
-                aria-controls="nav-stats"
-                aria-selected="false"
-              >
-                Statistics
-              </button> -->
+                  <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
+                  <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'" :icon="['fas', 'circle-nodes']" />
+                  <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
+                  {{ resultSet.name }}
+                  <small>(<span v-if="resultSet.type == 'plain'">
+                    {{
+                      WSDataSentences && WSDataSentences.result[index + 1]
+                        ? WSDataSentences.result[index + 1].length
+                        : 0
+                    }}</span
+                  >
+                  <span v-else>{{
+                    WSDataResults && WSDataResults.result[index + 1]
+                      ? WSDataResults.result[index + 1].length
+                      : 0
+                  }}</span>
+                  )</small>
+                </button>
+              </template>
             </div>
           </nav>
           <div class="tab-content" id="nav-tabContent">
@@ -402,8 +391,7 @@
               :id="`nav-results-${index}`"
               role="tabpanel"
               :aria-labelledby="`nav-results-${index}-tab`"
-              v-for="(resultSet, index) in WSDataResults.result['0']
-                .result_sets"
+              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
               :key="`result-tab-${index}`"
             >
               <span v-if="resultSet.type == 'plain' && WSDataSentences">
@@ -959,6 +947,9 @@ myColl3 => collocation
               })
             }
           }
+          if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
+            this.loading = false
+          }
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
@@ -1015,6 +1006,7 @@ myColl3 => collocation
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
+        this.nResults = 200;
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
