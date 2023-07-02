@@ -70,7 +70,7 @@ class QueryIteration:
     sent_id_offset: int = 0
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
-    job_info: dict[str, str | bool] = field(default_factory=dict)
+    job_info: dict[str, str | bool | list[str]] = field(default_factory=dict)
     word_count: int = 0
     iteration: int = 0
     first_job: str = ""
@@ -278,7 +278,7 @@ class QueryIteration:
             self.first_job = job.id
         return job, True
 
-    def submit_sents(self) -> Job | list[str]:
+    def submit_sents(self) -> list[str]:
         """
         Helper to submit a sentences job
         """
@@ -312,10 +312,10 @@ class QueryIteration:
         )
         queue = "query" if not self.full else "alt"
         qs = self.app["query_service"]
-        sents_job = qs.sentences(
+        sents_jobs = qs.sentences(
             self.sents_query(), depends_on=to_use, queue=queue, **kwargs
         )
-        return getattr(sents_job, "id", sents_job)
+        return sents_jobs
 
     @staticmethod
     def _determine_language(batch: str) -> str | None:

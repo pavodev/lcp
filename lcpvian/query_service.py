@@ -43,19 +43,6 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
-    async def _fetch_job(self, job: Job | SQLJob) -> Job | SQLJob:
-        try:
-            job = Job.fetch(job, connection=self.app["redis"])
-            self.app["redis"].expire(job.id, self.query_ttl)
-            return job
-        except NoSuchJobError:
-            try:
-                job = Job.fetch(job, connection=self.app["aredis"])
-                await self.app["aredis"].expire(job.id, self.query_ttl)
-                return job
-            except NoSuchJobError as e:
-                raise e
-
     async def query(
         self,
         query: str,
@@ -150,7 +137,7 @@ class QueryService:
         query: str,
         queue: str = "query",
         **kwargs: int | bool | str | None | list[str],
-    ) -> SQLJob | Job:
+    ) -> list[str]:
         depend = cast(str | list[str], kwargs["depends_on"])
         hash_dep = tuple(depend) if isinstance(depend, list) else depend
         hashed = str(hash((query, hash_dep, kwargs["offset"], kwargs["needed"])))
@@ -178,7 +165,7 @@ class QueryService:
                     ),
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
-                return job
+                return [job.id]
         except NoSuchJobError:
             pass
 
@@ -193,7 +180,7 @@ class QueryService:
             args=(query,),
             kwargs=kwargs,
         )
-        return job.id
+        return [job.id]
 
     def _multiple_sent_jobs(self, **kwargs) -> tuple[list[str], list[str]]:
         first_job = kwargs["first_job"]
@@ -235,7 +222,7 @@ class QueryService:
                 payload: dict[str, str | bool | Config] = _config(
                     already, redis, already.result, publish=False
                 )
-                await _set_config(payload, self.app)
+                await _set_config(cast(JSONObject, payload), self.app)
                 print("Loaded config from redis (flush redis if new corpora added)")
                 return already
         except NoSuchJobError:

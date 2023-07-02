@@ -276,25 +276,27 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
 
 def _get_status(
     n_results: int,
-    tot_req: int,
+    total_results_requested: int,
+    done_batches: list[Batch],
+    all_batches: list[Batch],
     search_all: bool = False,
+    full: bool = False,
     time_so_far: float = 0.0,
-    **kwargs: Batch | list[Batch],
 ) -> str:
     """
     Is a query finished, or do we need to do another iteration?
     """
-
-    if len(kwargs["done_batches"]) == len(kwargs["all_batches"]):
+    if len(done_batches) == len(all_batches):
         return "finished"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
-    if allowed_time > 0.0 and search_all and time_so_far > allowed_time:
+    too_long: bool = time_so_far > allowed_time
+    if allowed_time > 0.0 and search_all and too_long and not full:
         return "overtime"
     if search_all:
         return "partial"
-    if tot_req in {-1, False, None}:
+    if total_results_requested in {-1, False, None}:
         return "partial"
-    if n_results >= tot_req:
+    if n_results >= total_results_requested and not full:
         return "satisfied"
     return "partial"
 

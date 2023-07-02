@@ -1,3 +1,15 @@
+"""
+Websocket utilities, both sending and receiving
+
+Each message should have `action`, which is how we know
+how to handle the message, plus `user` and `room`, which
+tell us where the message should be sent.
+
+Message sending is always ultimately done by utils.push_msg,
+which can send a message to all users in a room, a specific user,
+all users, etc. as required for a given `action`.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -36,6 +48,10 @@ MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
 async def _process_message(
     message: RedisMessage, channel: PubSub, app: web.Application
 ) -> None:
+    """
+    Check that a WS message contains data, and is not a subscribe message,
+    then handle it if so.
+    """
     await asyncio.sleep(0.1)
     if not message or not isinstance(message, dict):
         return
@@ -151,24 +167,28 @@ async def _handle_message(
         "interrupted",  # not currently used, maybe when rooms have multiple users
     )
 
+    # for non-errors, we attach a msg_id to all messages, and store the message with
+    # this key in redis so that the FE can retrieve it by /get_message endpoint anytime
     if action not in errors:
         uu = str(uuid4())
         payload["msg_id"] = uu
         app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
 
+    # for document ids request, we also add this information to config
+    # so that on subsequent requests we can just fetch it from there
     if action == "document_ids":
         app["config"][str(payload["corpus_id"])]["doc_ids"] = [
             payload["job"],
             payload["document_ids"],
         ]
 
+    # if full is True, we are querying every batch and don't need to send results
+    # till it's all done (i.e. status is 'finished')
     can_send = not payload.get("full", False) or payload.get("status") == "finished"
-    if not payload.get("send_stats_this_batch", True):
-        can_send = False
 
     sent_allowed = action == "sentences" and can_send
-    to_submit = None
+    to_submit: None | Coroutine = None
 
     if action == "sentences" and payload.get("submit_query"):
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
@@ -183,6 +203,7 @@ async def _handle_message(
         )
         if to_submit is not None:
             await to_submit
+            to_submit = None
         return None
 
     if action in errors:
@@ -193,7 +214,10 @@ async def _handle_message(
     if action == "set_config":
         return await _set_config(payload, app)
 
-    # handle uploaded data (add to config, ws message if gui mode)
+    # handle the final stage of a corpus being uploaded.
+    # - add the corpus to config
+    # - if corpus was uploaded via gui mode, send a ws message
+    #   to all users with the latest config so the FE can show it
     if action == "uploaded":
         vian = cast(bool, payload["is_vian"])
         user_data = cast(JSONObject | None, payload["user_data"])
@@ -205,7 +229,31 @@ async def _handle_message(
 
     if action == "query_result":
         await _handle_query(app, payload, user, room, can_send)
-        return None
+
+    if to_submit is not None:
+        await to_submit
+
+    return None
+
+
+def _print_status_message(payload: JSONObject, status: str) -> None:
+    """
+    Helper to print query status to console
+    """
+    total: int | str | None
+    total = cast(int, payload.get("total_results_requested", -1))
+    if not total or total == -1:
+        total = "all"
+    so_far = cast(int, payload.get("total_results_so_far", -1))
+    done_batch = len(cast(Sized, payload["done_batches"]))
+    tot_batch = len(cast(Sized, payload["all_batches"]))
+    explain = "done" if not payload.get("search_all") else "time used"
+    pred = cast(int, payload.get("projected_results", -1))
+    print(
+        f"{payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
+        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})\n"
+        + cast(str, payload["duration_string"])
+    )
 
 
 async def _handle_query(
@@ -215,7 +263,7 @@ async def _handle_query(
     Our subscribe listener has picked up a message, and it's about
     a query iteration. Create a websocket message to send to correct frontends
     """
-    status = payload.get("status", "unknown")
+    status = cast(str, payload.get("status", "unknown"))
     job = cast(str, payload["job"])
     the_job = Job.fetch(job, connection=app["redis"])
     job_status = the_job.get_status(refresh=True)
@@ -224,31 +272,21 @@ async def _handle_query(
             app["canceled"].append(job)
         print(f"Query was stopped: {job} -- preventing update")
         return
-    total = payload.get("total_results_requested")
-    if not total or total == -1:
-        total = "all"
-    so_far = payload.get("total_results_so_far", -1)
-    done_batch = len(cast(Sized, payload["done_batches"]))
-    tot_batch = len(cast(Sized, payload["all_batches"]))
+
+    _print_status_message(payload, status)
+
     to_submit: None | Coroutine = None
-    explain = "done" if not payload.get("search_all") else "time used"
     do_full = payload.get("full") and payload.get("status") != "finished"
-    pred = payload.get("projected_results", -1)
-    print(
-        f"{payload['batch_matches']} results found -- {so_far}/{total} total, projected: {pred}\n"
-        + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})\n"
-        + payload["duration_string"]
-    )
+
     if (
         (status == "partial" or do_full)
         and job_status not in ("stopped", "canceled")
         and job not in app["canceled"]
+        and not payload.get("simultaneous")
+        and not payload.get("from_memory")
     ):
         payload["config"] = app["config"]
-        if not payload["first_job"]:
-            payload["first_job"] = job
-        if not payload.get("simultaneous") and not payload.get("from_memory"):
-            to_submit = query(None, manual=payload, app=app)
+        to_submit = query(None, manual=payload, app=app)
 
     if not can_send and payload.get("send_stats", True):
         print("Not sending WS message!")
@@ -325,6 +363,13 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 async def _handle_sock(
     ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService
 ) -> None:
+    """
+    Handle an incoming message based on its `action`
+
+    * validate queries
+    * query has enough results, so stop it (in simultaneous mode only)
+    * user joins/leaves room
+    """
     if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
         try:
             await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")

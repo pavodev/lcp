@@ -1,6 +1,33 @@
 """
 Functions used in the conversion of SQL to JSON results
+
+The role of these functions is to work together to create the Results
+object, which holds kwic, collocation and frequency results, plus query
+metadata and prepared_segment objects.
+
+If a query has res1=kwic, res2=collocation, res3=freq, two objects would
+be created. First, the non-kwic data would be made by _aggregate_results
+via callbacks._query:
+
+{0: query_metadata, 2: collocation_data, 3: freq_data}
+
+and after that, _format_kwics via callbacks._sentences would produce:
+
+{-1: prepared_segment_data, 0: query_metadata, 1: kwic_data}
+
+the dicts could therefore be combined without losing any info if need be
+
+Once non-kwic results are created, they need to be filtered with _apply_filters
+so that certain transformations not possible to do in SQL can be applied.
+Most commonly, this is when there is a "frequency > 10" type filter: we cannot
+apply it in postgres because a given match could have 5 matches in one batch,
+and 5 in another...
+
+KWIC results need the results of queries over the prepared_segment table, which
+is inserted as the -1 key in the Results object. FE does the job of formatting
+the kwic line from matching token ids plus the relevant prepared_segment.
 """
+
 import operator
 
 from collections import defaultdict
@@ -32,7 +59,7 @@ def _aggregate_results(
     Combine non-kwic results for storing and for sending to frontend
     """
     # all_results = {0: meta_json}
-    results_to_send = {0: meta_json}
+    results_to_send: Results = {0: meta_json}
     n_results = 0
     rs = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
@@ -51,16 +78,17 @@ def _aggregate_results(
         if key not in existing:
             existing[key] = []
         if key not in freqs:
-            existing[key].append(rest)
+            current = cast(list, existing[key])
+            current.append(rest)
             continue
-        body = rest[:-1]
+        body = cast(list, rest[:-1])
         total_this_batch = rest[-1]
-        preexist = sum(i[-1] for i in existing[key] if i[:-1] == body)
+        preexist = sum(i[-1] for i in cast(list, existing[key]) if i[:-1] == body)
         combined = preexist + total_this_batch
         counts[key] = combined
-        existing[key] = [i for i in existing[key] if i[:-1] != body]
+        existing[key] = [i for i in cast(list, existing[key]) if i[:-1] != body]
         body.append(combined)
-        existing[key].append(body)
+        cast(list, existing[key]).append(body)
 
     results_to_send = _apply_filters(existing, post_processes)
 
@@ -128,7 +156,8 @@ def _format_vian(
     rest: Sequence, first_list: int
 ) -> tuple[int | str, list[int], int | str, str | None, str | None, list[list[int]]]:
     """
-    Little helper to build VIAN kwic sentence data
+    Little helper to build VIAN kwic sentence data, which has time,
+    document and gesture information added to the KWIC data
     """
     seg_id = cast(str | int, rest[0])
     tok_ids = cast(list[int], rest[1 : first_list - 3])

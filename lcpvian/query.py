@@ -69,7 +69,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     if qi.resuming:
         qi = await _do_resume(qi)
 
-    jobs: dict[str, str | bool] = {}
+    jobs: dict[str, str | list[str] | bool] = {}
 
     qi.decide_batch()
     qi.make_query()
@@ -90,6 +90,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         if query_job.id not in qi.dep_chain:
             qi.dep_chain.append(query_job.id)
 
+    assert qi.current_batch is not None
     schema_table = ".".join(qi.current_batch[1:3])
 
     if qi.current_batch is not None and qi.job is not None and submitted:
@@ -99,7 +100,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
 
     # prepare and submit sentences query
     if qi.sentences:
-        sents_job = qi.submit_sents()
+        sents_jobs = qi.submit_sents()
 
     jobs = {
         "status": "started",
@@ -107,7 +108,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     }
 
     if qi.sentences:
-        jobs.update({"sentences": True, "sentences_job": sents_job})
+        jobs.update({"sentences": True, "sentences_jobs": sents_jobs})
 
     qi.job_info = jobs
 
@@ -146,7 +147,7 @@ async def query(
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
-    http_response: list[dict[str, str | bool]] = []
+    http_response: list[dict[str, str | bool | list[str]]] = []
     out: Iteration
 
     try:

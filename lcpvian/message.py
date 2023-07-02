@@ -1,6 +1,8 @@
 import json
 import os
 
+from typing import cast
+
 from aiohttp import web
 
 from .typed import JSONObject
@@ -28,8 +30,8 @@ async def get_message(request: web.Request) -> web.Response:
         response = {"action": "fetch", "msg_id": uu, "status": "failed"}
         return web.json_response(response)
     jso: JSONObject = json.loads(data)
-    room: None | str = jso.get("room", None)
-    user: str = jso.get("user", "")
+    room = cast(str, jso.get("room", ""))
+    user = cast(str, jso.get("user", ""))
     await push_msg(request.app["websockets"], room or "", jso, just=(room, user))
     response = {"action": "fetch", "user": user, "room": room, "msg_id": uu}
     return web.json_response(response)
