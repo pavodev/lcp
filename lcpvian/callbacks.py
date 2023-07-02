@@ -196,7 +196,9 @@ def _sentences(
     Create KWIC data and send via websocket
     """
     trr = "total_results_requested"
-    total_requested = cast(int, kwargs.get(trr, job.kwargs[trr]))
+    total_requested = cast(int, kwargs.get(trr, -1))
+    if total_requested < 1:
+        total_requested = job.kwargs.get(trr, -1)
     if not total_requested:
         total_requested = -1
 
@@ -213,19 +215,28 @@ def _sentences(
         total_requested = -1
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
-    is_first = not bool(depended.kwargs.get("first_job", ""))
+    # todo: are we really doing this thing about only first batch being limited?
+    # is_first = not bool(depended.kwargs.get("first_job", ""))
+    is_first = True
     resuming = job.kwargs.get("resuming", False)
-    offset = depended.meta.get("cut_short", -1) if resuming else -1
+    # offset = depended.meta.get("cut_short", -1) if resuming else -1
+    offset = job.kwargs.get("offset", 0) if resuming else -1
+
+    total_to_get = job.kwargs.get("needed", total_requested)
+
     to_send, n_res = _format_kwics(
-        depended.result, meta_json, result, total_requested, is_vian, is_first, offset
+        depended.result, meta_json, result, total_to_get, is_vian, is_first, offset
     )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
-    depended.meta["cut_short"] = total_requested if n_res > total_requested else -1
-    depended.save_meta()
+    new_cut_short = total_requested if n_res > total_requested else -1
+    if new_cut_short > depended.meta.get("cut_short", -1):
+        depended.meta["cut_short"] = new_cut_short
+        depended.save_meta()
 
-    submit_query = n_res < total_requested
+    not_otherwise_started = depended.kwargs.get("send_stats", True) is False
+    submit_query = n_res < total_requested and not_otherwise_started
 
     if len(to_send) < 3:
         print(f"No sentences found for {table} -- skipping WS message")

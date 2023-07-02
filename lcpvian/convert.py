@@ -87,6 +87,7 @@ def _format_kwics(
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
     n_results = 0
+    skipped: defaultdict[int, int] = defaultdict(int)
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
@@ -95,31 +96,30 @@ def _format_kwics(
     for line in result:
         key = int(line[0])
         rest = line[1]
+        # we should have one 0: n_results key always
         if not key and not n_results:
             n_results = rest[0]
+            continue
         if key not in kwics:
             continue
-        if is_first and key in stops:
+        if key in stops:
             continue
-        if total is not None and total > 0 and counts.get(key, 0) >= total:
+        if total is not None and total > 0 and counts[key] >= total:
             stops.add(key)
+            continue
+        if offset is not None and offset > 0 and skipped[key] < offset:
+            skipped[key] += 1
             continue
         if key not in out:
             out[key] = []
-
-        counts[key] += 1
-
-        if offset is not None and offset > 0 and counts[key] - 1 < offset:
-            continue
-
         if is_vian and key in kwics:
             first_list = _first_list(first_list, rest)
             rest = list(_format_vian(rest, first_list))
         elif key in kwics:
             rest = [rest[0], rest[1:]]
-
         bit = cast(list, out[key])
         bit.append(rest)
+        counts[key] += 1
 
     return out, n_results
 

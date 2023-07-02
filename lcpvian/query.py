@@ -35,18 +35,18 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = prev_job.meta["total_results_so_far"]
     tot_req = qi.total_results_requested
-    prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
+    # prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
     cut_short = prev_job.meta.get("cut_short", -1)
-    # add_current_batch = True
+    offset = cut_short - prev_job.kwargs.get("total_results_so_far", 0)
     qi.send_stats = True
     if so_far >= tot_req:
-        qi.sent_id_offset = prev_results
-    elif so_far <= tot_req:  # and so_far < prev_results:
-        qi.sent_id_offset = cut_short
-        qi.sent_id_offset = 0
+        qi.sent_id_offset = offset
         qi.send_stats = False
-        # add_current_batch = False
-    needed = tot_req - so_far if tot_req != -1 else -1
+        qi.needed = tot_req - cut_short
+    elif so_far <= tot_req:  # and so_far < prev_results:
+        qi.sent_id_offset = 0
+        qi.send_stats = True
+        qi.needed = tot_req - so_far if tot_req != -1 else -1
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
@@ -54,7 +54,6 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     # qi.all_batches = all_batches
     qi.done_batches = done_batches
     qi.total_results_so_far = so_far
-    qi.needed = needed
     # first = Job.fetch(qi.first_job, connection=qi.app["redis"])
     # qi.existing_results = first.meta["all_non_kwic_results"]
     return qi

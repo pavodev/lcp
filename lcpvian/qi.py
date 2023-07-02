@@ -290,9 +290,11 @@ class QueryIteration:
         elif depends_on:
             to_use = depends_on
 
-        needed = self.total_results_requested
-        if self.sent_id_offset:
-            needed = needed - self.cut_short
+        # needed = self.total_results_requested
+        offset = self.sent_id_offset if self.sent_id_offset > 0 else self.cut_short
+        # if self.sent_id_offset:
+        #    needed = self.needed
+        needed = self.needed
 
         kwargs = dict(
             user=self.user,
@@ -304,7 +306,7 @@ class QueryIteration:
             dqd=self.dqd,
             jso=json.dumps(self.jso, indent=4),
             sql=self.sql,
-            offset=self.cut_short,
+            offset=offset,
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
