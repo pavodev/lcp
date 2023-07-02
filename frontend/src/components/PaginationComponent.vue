@@ -76,13 +76,13 @@
         </li>
         <li
           class="page-item disabled"
-          v-if="pages.at(-1) < maxPages"
+          v-if="pages.at(-1) < (maxPages - 2)"
         >
           <span class="page-link">...</span>
         </li>
         <li
           class="page-item"
-          v-if="pages.at(-1) < maxPages - 1"
+          v-if="pages.at(-1) < (maxPages - 1)"
         >
           <button
             class="page-link"
