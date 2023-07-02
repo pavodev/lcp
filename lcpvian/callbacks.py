@@ -322,11 +322,11 @@ def _sentences(
         print(f"No results found for {table} -- skipping WS message", to_send)
         return None
 
-    perc_done = round(depended.meta["percentage_done"], 3)
+    perc_done = round(base.meta["progress_info"]["percentage_done"], 3)
     perc_done_base = base.meta.get("progress_info", {}).get("percentage_done", 0)
     perc_done = max(perc_done, perc_done_base)
 
-    words_done = round(depended.meta["percentage_words_done"], 3)
+    words_done = round(base.meta["progress_info"]["percentage_words_done"], 3)
     words_done_base = base.meta.get("progress_info", {}).get("percentage_words_done", 0)
     words_done = max(words_done, words_done_base)
 
