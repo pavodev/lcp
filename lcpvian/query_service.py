@@ -66,6 +66,7 @@ class QueryService:
                     job.result,
                     user=kwargs["user"],
                     room=kwargs["room"],
+                    full=kwargs["full"],
                     from_memory=True,
                 )
                 return job, True
@@ -140,12 +141,14 @@ class QueryService:
     ) -> list[str]:
         depend = cast(str | list[str], kwargs["depends_on"])
         hash_dep = tuple(depend) if isinstance(depend, list) else depend
-        hashed = str(hash((query, hash_dep, kwargs["offset"], kwargs["needed"])))
+        hashed = str(
+            hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
+        )
         kwargs["sentences_query"] = query
         kwa: dict[str, int | bool | str | None] = {}
         job: SQLJob | Job
 
-        if kwargs.get("from_memory", False):
+        if kwargs.get("from_memory", False) and not kwargs["full"]:
             dones, need_to_do = self._multiple_sent_jobs(**kwargs)
             if need_to_do:
                 print(f"Warning: jobs not processed: {need_to_do}")
@@ -158,6 +161,7 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Sentences found in redis memory. Retrieving...")
                 kwa = {
+                    "full": cast(bool, kwargs["full"]),
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
                     "total_results_requested": cast(
@@ -199,6 +203,7 @@ class QueryService:
                 kwa = {
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
+                    "full": cast(bool, kwargs["full"])
                     # "total_results_requested": total,
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)

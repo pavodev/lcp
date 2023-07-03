@@ -277,6 +277,8 @@ async def _handle_query(
 
     to_submit: None | Coroutine = None
     do_full = payload.get("full") and payload.get("status") != "finished"
+    if do_full:
+        can_send = False
 
     if (
         (status == "partial" or do_full)

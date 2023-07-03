@@ -86,6 +86,7 @@ def _query(
     is_base = not bool(job.kwargs.get("first_job"))
     total_before_now = job.kwargs["total_results_so_far"]
     done_part = job.kwargs["done_batches"]
+    is_full = kwargs.get("full", job.kwargs["full"])
 
     first_job = _get_first_job(job, connection)
     stored = first_job.meta.get("progress_info", {})
@@ -131,6 +132,7 @@ def _query(
         time_so_far=total_duration,
     )
     job.meta["_status"] = status
+    job.meta["_full"] = is_full
     job.meta["results_this_batch"] = n_res
     job.meta["_search_all"] = search_all
     job.meta["cut_short"] = total_requested if n_res > total_requested else -1
@@ -215,6 +217,7 @@ def _query(
             "search_all": search_all,
             "batches_done_string": batches_done_string,
             "batch_matches": n_res,
+            "full": is_full,
             "done_batches": done_part,
             "total_duration": total_duration,
             "sentences": job.kwargs["sentences"],
@@ -274,6 +277,7 @@ def _sentences(
 
     depended = _get_associated_query_job(job, connection)
 
+    full = kwargs.get("full", job.kwargs.get("full", depended.meta.get("_full", False)))
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
     # todo: are we really doing this thing about only first batch being limited?
@@ -322,7 +326,9 @@ def _sentences(
     # so that we can submit a new query for the next batch from the sentences
     # action in sock.py
     not_otherwise_started = depended.kwargs.get("send_stats", True) is False
-    submit_query = n_res < total_requested and not_otherwise_started
+    if not not_otherwise_started and job.kwargs.get("query_submitted", True) is False:
+        not_otherwise_started = True
+    submit_query = (n_res < total_requested or full) and not_otherwise_started
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
@@ -337,11 +343,15 @@ def _sentences(
     words_done_base = base.meta.get("progress_info", {}).get("percentage_words_done", 0)
     words_done = max(words_done, words_done_base)
 
+    submit_payload = depended.meta["payload"]
+    submit_payload["full"] = full
+
     jso = {
         "result": to_send,
         "status": status,
         "action": "sentences",
-        "submit_query": depended.meta["payload"] if submit_query else False,
+        "full": full,
+        "submit_query": submit_payload if submit_query else False,
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,

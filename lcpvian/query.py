@@ -42,7 +42,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     if so_far >= tot_req:
         qi.sent_id_offset = offset
         qi.send_stats = False
-        qi.needed = tot_req - cut_short
+        needed = tot_req - cut_short
+        if needed < 0:
+            needed = -1
+        qi.needed = needed
     elif so_far <= tot_req:  # and so_far < prev_results:
         qi.sent_id_offset = 0
         qi.send_stats = True
@@ -100,7 +103,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
 
     # prepare and submit sentences query
     if qi.sentences:
-        sents_jobs = qi.submit_sents()
+        sents_jobs = qi.submit_sents(submitted)
 
     jobs = {
         "status": "started",

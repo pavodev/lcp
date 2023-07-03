@@ -254,6 +254,7 @@ class QueryIteration:
             post_processes=self.post_processes,
             languages=list(self.languages),
             simultaneous=self.simultaneous,
+            full=self.full,
             total_duration=self.total_duration,
             is_vian=self.is_vian,
             dqd=self.dqd,
@@ -265,7 +266,7 @@ class QueryIteration:
             parent=parent,
         )
 
-        queue = "query" if not self.full else "alt"
+        queue = "query" if not self.full else "query"
 
         from_memory: bool
         job, from_memory = await self.app["query_service"].query(
@@ -278,7 +279,7 @@ class QueryIteration:
             self.first_job = job.id
         return job, True
 
-    def submit_sents(self) -> list[str]:
+    def submit_sents(self, query_submitted) -> list[str]:
         """
         Helper to submit a sentences job
         """
@@ -299,7 +300,9 @@ class QueryIteration:
         kwargs = dict(
             user=self.user,
             room=self.room,
+            full=self.full,
             resuming=self.resuming,
+            query_submitted=query_submitted,
             from_memory=self.from_memory,
             simultaneous=self.simultaneous,
             first_job=self.first_job or self.job_id,
@@ -310,7 +313,7 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
-        queue = "query" if not self.full else "alt"
+        queue = "query" if not self.full else "query"
         qs = self.app["query_service"]
         sents_jobs = qs.sentences(
             self.sents_query(), depends_on=to_use, queue=queue, **kwargs
@@ -443,6 +446,11 @@ class QueryIteration:
         for batch in self.all_batches:
             if batch in self.done_batches:
                 continue
+
+            if self.full:
+                self.current_batch = batch
+                return None
+
             if not first_not_done:
                 first_not_done = batch
                 if self.needed == -1:
