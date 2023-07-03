@@ -921,17 +921,19 @@ myColl3 => collocation
             this.WSDataSentences.full == false
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
-              if (key > 0) {
+              if (key > 0 && key in data.result) {
                 this.WSDataSentences.result[key] = this.WSDataSentences.result[
                   key
                 ].concat(data.result[key]);
                 this.nResults = this.WSDataSentences.result[key].length;
               }
             });
-            this.WSDataSentences.result[-1] = {
-              ...this.WSDataSentences.result[-1],
-              ...data.result[-1],
-            };
+            if (-1 in data.result) {
+              this.WSDataSentences.result[-1] = {
+                ...this.WSDataSentences.result[-1],
+                ...data.result[-1],
+              };
+            }
           } else {
             this.WSDataSentences = data;
             if (this.WSDataResults) {
