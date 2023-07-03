@@ -333,66 +333,72 @@
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            v-if="WSDataResults && WSDataResults.status == 'satisfied' && !loading"
+            @click="submitFullSearch"
+            class="btn btn-primary me-1 mb-5"
+          >
+            <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+            Search whole corpus
+          </button>
         </div>
       </div>
     </div>
     <div class="container-fluid">
       <div class="row">
-        <div
-          class="col-12"
-          v-if="
-            WSDataResults &&
-            WSDataResults.result &&
-            WSDataSentences &&
-            WSDataSentences.result
-          "
-        >
+        <div class="col-12" v-if="WSDataResults && WSDataResults.result">
           <nav>
             <div class="nav nav-tabs" id="nav-tab" role="tablist">
-              <button
-                class="nav-link"
-                :class="index == 0 ? 'active' : ''"
-                :id="`nav-results-tab-${index}`"
-                data-bs-toggle="tab"
-                :data-bs-target="`#nav-results-${index}`"
-                type="button"
-                role="tab"
-                :aria-controls="`nav-results-${index}`"
-                aria-selected="true"
+              <template
                 v-for="(resultSet, index) in WSDataResults.result['0']
                   .result_sets"
-                :key="`result-btn-${index}`"
               >
-                <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
-                <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'" :icon="['fas', 'circle-nodes']" />
-                <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
-                {{ resultSet.name }}
-                <small>(<span v-if="resultSet.type == 'plain'">
-                  {{
-                    WSDataSentences && WSDataSentences.result[index + 1]
-                      ? WSDataSentences.result[index + 1].length
-                      : 0
-                  }}</span
+                <button
+                  class="nav-link"
+                  :class="index == 0 ? 'active' : ''"
+                  :id="`nav-results-tab-${index}`"
+                  data-bs-toggle="tab"
+                  :data-bs-target="`#nav-results-${index}`"
+                  type="button"
+                  role="tab"
+                  :aria-controls="`nav-results-${index}`"
+                  aria-selected="true"
+                  :key="`result-btn-${index}`"
+                  v-if="
+                    (resultSet.type == 'plain' &&
+                      WSDataSentences &&
+                      WSDataSentences.result) ||
+                    resultSet.type != 'plain'
+                  "
                 >
-                <span v-else>{{
-                  WSDataResults && WSDataResults.result[index + 1]
-                    ? WSDataResults.result[index + 1].length
-                    : 0
-                }}</span>
-                )</small>
-              </button>
-              <!-- <button
-                class="nav-link"
-                id="nav-stats-tab"
-                data-bs-toggle="tab"
-                data-bs-target="#nav-stats"
-                type="button"
-                role="tab"
-                aria-controls="nav-stats"
-                aria-selected="false"
-              >
-                Statistics
-              </button> -->
+                  <FontAwesomeIcon
+                    v-if="resultSet.type == 'plain'"
+                    :icon="['fas', 'barcode']"
+                  />
+                  <FontAwesomeIcon
+                    v-else-if="resultSet.type == 'collocation'"
+                    :icon="['fas', 'circle-nodes']"
+                  />
+                  <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
+                  {{ resultSet.name }}
+                  <small
+                    >(<span v-if="resultSet.type == 'plain'">
+                      {{
+                        WSDataSentences && WSDataSentences.result[index + 1]
+                          ? WSDataSentences.result[index + 1].length
+                          : 0
+                      }}</span
+                    >
+                    <span v-else>{{
+                      WSDataResults && WSDataResults.result[index + 1]
+                        ? WSDataResults.result[index + 1].length
+                        : 0
+                    }}</span>
+                    )</small
+                  >
+                </button>
+              </template>
             </div>
           </nav>
           <div class="tab-content" id="nav-tabContent">
@@ -406,13 +412,21 @@
                 .result_sets"
               :key="`result-tab-${index}`"
             >
-              <span v-if="resultSet.type == 'plain' && WSDataSentences">
+              <span
+                v-if="
+                  resultSet.type == 'plain' &&
+                  WSDataSentences &&
+                  WSDataSentences.result
+                "
+              >
                 <div class="btn-group mt-2 btn-group-sm mb-3">
                   <a
                     href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
-                    :class="plainType != 'table' ? 'active btn-primary' : 'btn-light'"
+                    :class="
+                      plainType != 'table' ? 'active btn-primary' : 'btn-light'
+                    "
                     aria-current="page"
                   >
                     <FontAwesomeIcon :icon="['fas', 'barcode']" />
@@ -422,7 +436,9 @@
                     href="#"
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
-                    :class="plainType == 'table' ? 'active btn-primary' : 'btn-light'"
+                    :class="
+                      plainType == 'table' ? 'active btn-primary' : 'btn-light'
+                    "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
                     Table
@@ -449,43 +465,13 @@
                   :loading="loading"
                 />
               </span>
-              <!-- <ResultsAnalysisView
-                v-else-if="resultSet.type == 'analysis'"
-                v-else-if="resultSet.type == 'collocation'"
-                :data="WSDataResults.result[index + 1]"
-                :attributes="resultSet.attributes"
-              /> -->
               <ResultsTableView
-                v-else
+                v-else-if="resultSet.type != 'plain'"
                 :data="WSDataResults.result[index + 1]"
                 :attributes="resultSet.attributes"
                 :resultsPerPage="resultsPerPage"
               />
             </div>
-            <!-- <div
-              class="tab-pane fade"
-              id="nav-stats"
-              role="tabpanel"
-              aria-labelledby="nav-stats-tab"
-            >
-              <table v-if="stats" class="table">
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Count</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="(statsKey, index) in Object.keys(stats.result)"
-                    :key="index"
-                  >
-                    <td>{{ statsKey }}</td>
-                    <td>{{ stats.result[statsKey] }}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div> -->
           </div>
         </div>
       </div>
@@ -678,8 +664,8 @@ myColl3 => collocation
       isQueryValidData: null,
       WSDataResults: "",
       WSDataSentences: "",
-      nResults: 200,
       pageSize: 100,
+      nResults: 200,
       selectedLanguages: "en",
       queryName: "",
       currentTab: "dqd",
@@ -701,9 +687,6 @@ myColl3 => collocation
     ResultsKWICView,
     ResultsPlainTableView,
     ResultsTableView,
-    // ResultsAnalysisView,
-    // KWICTable,
-    // DetailsTableView,
     EditorView,
   },
   watch: {
@@ -731,7 +714,6 @@ myColl3 => collocation
       handler() {
         let _messages = this.messages;
         if (_messages.length > 0) {
-          console.log("WSM", _messages);
           _messages.forEach((message) => this.onSocketMessage(message));
           useWsStore().clear();
         }
@@ -747,13 +729,8 @@ myColl3 => collocation
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
-      }
-      else {
-        history.pushState(
-          {},
-          null,
-          `/query/`
-        );
+      } else {
+        history.pushState({}, null, `/query/`);
       }
       if (
         this.selectedLanguages &&
@@ -779,6 +756,7 @@ myColl3 => collocation
         if (["finished"].includes(this.WSDataResults.status)) {
           this.percentageDone = 100;
           this.percentageTotalDone = 100;
+          this.loading = false;
         }
         if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
@@ -959,6 +937,9 @@ myColl3 => collocation
               })
             }
           }
+          if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
+            this.loading = false
+          }
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
@@ -1011,24 +992,24 @@ myColl3 => collocation
         this.WSDataResults = data;
       }
     },
-    async submit(event, resumeQuery = false, cleanResults = true) {
+    submitFullSearch() {
+      this.submit(null, true, false, true);
+    },
+    async submit(event, resumeQuery = false, cleanResults = true, fullSearch = false) {
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
+        this.nResults = this.pageSize * 2; // We want load 2 pages at first
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
         }
       }
       let data = {
-        // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
         query: this.query,
         user: this.userData.user.id,
         room: this.roomId,
-        // room: null,
-        // page_size: this.pageSize,
-        // page_size: this.nResults,
         page_size: this.resultsPerPage,
         languages: [this.selectedLanguages],
         total_results_requested: this.nResults,
@@ -1039,6 +1020,9 @@ myColl3 => collocation
       if (resumeQuery) {
         data["first_job"] = this.WSDataResults.job;
         data["previous"] = this.WSDataResults.job;
+      }
+      if (fullSearch) {
+        data["full"] = true;
       }
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
