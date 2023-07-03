@@ -25,7 +25,7 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
-from .convert import _aggregate_results, _format_kwics, _apply_filters
+from .convert import _aggregate_results, _format_kwics, _apply_filters, _get_all_sents
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -42,6 +42,7 @@ from .utils import (
     Interrupted,
     _get_status,
     _row_to_value,
+    _get_associated_query_job,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
@@ -245,24 +246,10 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
     return -1
 
 
-def _get_associated_query_job(
-    job: SQLJob | Job,
-    connection: RedisConnection[bytes],
-) -> SQLJob | Job:
-    """
-    Helper to find the query job associated with sent job
-    """
-    depends_on = job.kwargs["depends_on"]
-    if isinstance(depends_on, list):
-        depends_on = depends_on[-1]
-    depended = Job.fetch(depends_on, connection=connection)
-    return depended
-
-
 def _sentences(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],
-    result: list[RawSent],
+    result: list[RawSent] | None,
     **kwargs: int | bool | str | None,
 ) -> None:
     """
@@ -272,10 +259,18 @@ def _sentences(
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
     # _sents_job is a dict of {job_id: None} (so the keys are an ordered set)
-    base.meta["_sent_jobs"][job.id] = None
-    base.save_meta()
 
-    depended = _get_associated_query_job(job, connection)
+    depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
+
+    if result:
+        base.meta["_sent_jobs"][job.id] = None
+        base.save_meta()
+    else:
+        print(
+            "no result",
+            depended.kwargs["current_batch"],
+            job.kwargs.get("offset", "no offset?"),
+        )
 
     full = kwargs.get("full", job.kwargs.get("full", depended.meta.get("_full", False)))
     meta_json = depended.kwargs["meta_json"]
@@ -292,9 +287,6 @@ def _sentences(
     offset = job.kwargs.get("offset", 0) if resuming else -1
     total_to_get = job.kwargs.get("needed", total_requested)
 
-    to_send, n_res = _format_kwics(
-        depended.result, meta_json, result, total_to_get, is_vian, is_first, offset
-    )
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
     total_so_far = depended.meta["total_results_so_far"]
@@ -314,6 +306,15 @@ def _sentences(
         time_so_far=depended.meta["_total_duration"],
     )
     depended.meta["_status"] = status
+
+    # in full mode, we need to combine all the sentences into one message when finished
+    get_all_sents = full and status == "finished"
+    if get_all_sents:
+        to_send, n_res = _get_all_sents(job, base, is_vian, meta_json, connection)
+    else:
+        to_send, n_res = _format_kwics(
+            depended.result, meta_json, result, total_to_get, is_vian, is_first, offset
+        )
 
     new_cut_short = total_requested if n_res > total_requested else -1
     if new_cut_short > depended.meta.get("cut_short", -1):

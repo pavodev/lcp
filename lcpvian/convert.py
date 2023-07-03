@@ -34,8 +34,10 @@ from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, cast
 
-from .typed import QueryMeta, ResultSents, Results
+from rq.job import Job
 
+from .typed import QueryMeta, ResultSents, Results
+from .utils import _get_associated_query_job
 
 OPS = {
     "<": operator.lt,
@@ -100,7 +102,7 @@ def _aggregate_results(
 def _format_kwics(
     result: list,
     meta_json: QueryMeta,
-    sents: list,
+    sents: list | None,
     total: int,
     is_vian: bool = False,
     is_first: bool = False,
@@ -116,6 +118,9 @@ def _format_kwics(
     stops: set[int] = set()
     n_results = 0
     skipped: defaultdict[int, int] = defaultdict(int)
+    if sents is None:
+        print("Sentences is None!?")
+        sents = []
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
@@ -145,9 +150,54 @@ def _format_kwics(
             rest = list(_format_vian(rest, first_list))
         elif key in kwics:
             rest = [rest[0], rest[1:]]
+        if rest[0] not in out[-1]:
+            print("PROBLEM: MISSING SENT", rest)
+            continue
         bit = cast(list, out[key])
         bit.append(rest)
         counts[key] += 1
+
+    return out, n_results
+
+
+def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, int]:
+    """
+    Combine all sent jobs into one
+    """
+    n_results = 0
+    sen: ResultSents = {}
+    out: Results = {0: meta_json, -1: sen}
+    is_first = True
+    done_batches: set[tuple] = set()
+    for jid in base.meta["_sent_jobs"]:
+        if job.id == jid:
+            j = job
+        else:
+            j = Job.fetch(jid, connection=connection)
+        dep = _get_associated_query_job(j.kwargs["depends_on"], connection)
+        batch = dep.kwargs["current_batch"]
+        if batch not in done_batches:
+            n_results += dep.meta["results_this_batch"]
+            done_batches.add(batch)
+        resuming = j.kwargs.get("resuming", False)
+        offset = j.kwargs.get("offset", 0) if resuming else -1
+        needed = j.kwargs.get("needed", -1)
+        print("RESUMING?", jid, resuming, offset, needed)
+        # offset = -1
+        # needed = -1
+        got, n = _format_kwics(
+            dep.result, meta_json, j.result, needed, is_vian, is_first, offset
+        )
+        print("JID", jid, n, offset, needed, len(got.get(-1)))
+        # n_results += n # maybe wrong if multiple jobs have same batch??
+        if got.get(-1):
+            out[-1].update(got[-1])
+        for k, v in got.items():
+            if k < 1:
+                continue
+            if k not in out:
+                out[k] = []
+            out[k] += v
 
     return out, n_results
 

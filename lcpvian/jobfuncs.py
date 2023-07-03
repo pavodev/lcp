@@ -111,8 +111,9 @@ async def _db_query(
     if "depends_on" in kwargs and "sentences_query" in kwargs:
         dep = cast(list[str] | str, kwargs["depends_on"])
         total = cast(int, kwargs.get("total_results_requested"))
-        offset = cast(int, kwargs.get("offset", 0))
+        offset = cast(int, kwargs.get("offset", -1))
         needed = cast(int, kwargs.get("needed", total))
+        needed = max(-1, needed)  # todo: fix this earlier?
         params = {"ids": _get_sent_ids(dep, needed, offset=offset)}
 
     name = "_upool" if store else "_pool"

@@ -23,6 +23,7 @@ except ImportError:
     from aiohttp.client import ClientSession
 
 # here we remove __slots__ from these superclasses because mypy can't handle them...
+from redis import Redis as RedisConnection
 from redis.asyncio.connection import BaseParser
 
 del BaseParser.__slots__  # type: ignore
@@ -47,6 +48,7 @@ from .typed import (
     RunScript,
     Websockets,
 )
+from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
 
@@ -497,11 +499,7 @@ def _get_sent_ids(
     """
     out: list[int] = []
     conn = get_current_connection()
-    if isinstance(associated, list):
-        associated = associated[-1]
-    if associated is None:
-        return []
-    job = Job.fetch(associated, connection=conn)
+    job = _get_associated_query_job(associated, conn)
     if job.get_status(refresh=True) in ("stopped", "canceled"):
         raise Interrupted()
     if job.result is None:
@@ -509,7 +507,6 @@ def _get_sent_ids(
     if not job.result:
         return out
     prev_results = job.result
-
     seg_ids = set()
     rs = job.kwargs["meta_json"]["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
@@ -523,10 +520,23 @@ def _get_sent_ids(
             if offset > 0 and counts[key] < offset:
                 continue
             seg_ids.add(rest[0])
-        if len(seg_ids) >= total:
+        if total >= 0 and len(seg_ids) >= total:
             break
 
     return list(sorted(seg_ids))
+
+
+def _get_associated_query_job(
+    depends_on: str | list[str],
+    connection: RedisConnection,
+) -> SQLJob | Job:
+    """
+    Helper to find the query job associated with sent job
+    """
+    if isinstance(depends_on, list):
+        depends_on = depends_on[-1]
+    depended = Job.fetch(depends_on, connection=connection)
+    return depended
 
 
 def format_query_params(

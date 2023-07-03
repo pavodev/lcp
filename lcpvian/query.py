@@ -43,7 +43,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         qi.sent_id_offset = offset
         qi.send_stats = False
         needed = tot_req - cut_short
-        if needed < 0:
+        if needed <= 0:
             needed = -1
         qi.needed = needed
     elif so_far <= tot_req:  # and so_far < prev_results:

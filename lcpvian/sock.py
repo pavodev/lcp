@@ -290,7 +290,7 @@ async def _handle_query(
         payload["config"] = app["config"]
         to_submit = query(None, manual=payload, app=app)
 
-    if not can_send and payload.get("send_stats", True):
+    if not can_send and (payload.get("send_stats", True) or do_full):
         print("Not sending WS message!")
     else:
         to_send = payload
@@ -305,6 +305,7 @@ async def _handle_query(
                 "n_users": n_users,
                 "status": status,
                 "word_count": payload["word_count"],
+                "full": payload.get("full", False),
                 "first_job": payload["first_job"],
                 "is_vian": payload.get("is_vian", False),
                 "table": payload.get("table"),
