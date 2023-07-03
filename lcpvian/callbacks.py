@@ -346,6 +346,7 @@ def _sentences(
 
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
+    submit_payload["total_results_requested"] = total_requested
 
     jso = {
         "result": to_send,

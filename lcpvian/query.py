@@ -38,6 +38,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     # prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
     cut_short = prev_job.meta.get("cut_short", -1)
     offset = cut_short - prev_job.kwargs.get("total_results_so_far", 0)
+    prev_batch_results = prev_job.meta["results_this_batch"]
+    need_now = tot_req - cut_short
+    left_in_batch = prev_batch_results - offset
+    not_enough = left_in_batch < need_now
     qi.send_stats = True
     if so_far >= tot_req:
         qi.sent_id_offset = offset
@@ -46,6 +50,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         if needed <= 0:
             needed = -1
         qi.needed = needed
+    elif not_enough:
+        qi.needed = need_now
+        qi.sent_id_offset = offset
+        qi.send_stats = False
     elif so_far <= tot_req:  # and so_far < prev_results:
         qi.sent_id_offset = 0
         qi.send_stats = True

@@ -203,8 +203,8 @@ class QueryService:
                 kwa = {
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
-                    "full": cast(bool, kwargs["full"])
-                    # "total_results_requested": total,
+                    "full": cast(bool, kwargs["full"]),
+                    "total_results_requested": kwargs["total_results_requested"],
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 dones.append(sent_job)
