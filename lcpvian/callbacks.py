@@ -123,7 +123,7 @@ def _query(
     done_part.append(just_finished)
     status = _get_status(
         total_found,
-        done_batches=job.kwargs["done_batches"],
+        done_batches=done_part,
         all_batches=job.kwargs["all_batches"],
         total_results_requested=total_requested,
         search_all=search_all,
@@ -293,9 +293,12 @@ def _sentences(
 
     # status is calculated here on the offchance it is possible for a sent
     # job to have a different status from its associated query result?
+    done_batches = depended.kwargs["done_batches"]
+    if depended.kwargs["current_batch"] not in done_batches:
+        done_batches.append(depended.kwargs["current_batch"])
     status = _get_status(
         total_so_far,
-        done_batches=depended.kwargs["done_batches"],
+        done_batches=done_batches,
         all_batches=depended.kwargs["all_batches"],
         total_results_requested=total_requested,
         search_all=depended.meta["_search_all"],
