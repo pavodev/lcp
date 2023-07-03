@@ -511,17 +511,21 @@ def _get_sent_ids(
     rs = job.kwargs["meta_json"]["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
+    to_use = next(int(i[0]) for i in prev_results if int(i[0]) in kwics)
+    added: Counter[int] = Counter()
 
     for res in prev_results:
         key = int(res[0])
         rest = res[1]
-        if key in kwics:
-            counts[key] += 1
-            if offset > 0 and counts[key] < offset:
-                continue
-            seg_ids.add(rest[0])
-        if total >= 0 and len(seg_ids) >= total:
-            break
+        if key != to_use:
+            continue
+        counts[key] += 1
+        if offset > 0 and counts[key] - 1 < offset:
+            continue
+        if total >= 0 and added[key] >= total:
+            continue
+        seg_ids.add(rest[0])
+        added[key] += 1
 
     return list(sorted(seg_ids))
 

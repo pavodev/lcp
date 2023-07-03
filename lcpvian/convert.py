@@ -151,7 +151,6 @@ def _format_kwics(
         elif key in kwics:
             rest = [rest[0], rest[1:]]
         if rest[0] not in out[-1]:
-            print("PROBLEM: MISSING SENT", rest)
             continue
         bit = cast(list, out[key])
         bit.append(rest)
@@ -182,13 +181,9 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, 
         resuming = j.kwargs.get("resuming", False)
         offset = j.kwargs.get("offset", 0) if resuming else -1
         needed = j.kwargs.get("needed", -1)
-        print("RESUMING?", jid, resuming, offset, needed)
-        # offset = -1
-        # needed = -1
         got, n = _format_kwics(
             dep.result, meta_json, j.result, needed, is_vian, is_first, offset
         )
-        print("JID", jid, n, offset, needed, len(got.get(-1)))
         # n_results += n # maybe wrong if multiple jobs have same batch??
         if got.get(-1):
             out[-1].update(got[-1])
