@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 
 from typing import final, Unpack, cast
@@ -24,7 +25,7 @@ from .callbacks import (
 )
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs, Config
-from .utils import _set_config, PUBSUB_CHANNEL
+from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
 from .worker import SQLJob
 
 
@@ -43,23 +44,33 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
-    async def send_all_data(self, job):
+    async def send_all_data(self, job, **kwargs):
         """
         Get the stored messages related to a query and send them to frontend
         """
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
+        payload = json.loads(jso)
+        payload["user"] = kwargs["user"]
+        payload["room"] = kwargs["room"]
         self.app["redis"].expire(msg, self.query_ttl)
-        self.app["redis"].publish(PUBSUB_CHANNEL, jso)
+        self.app["redis"].publish(
+            PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
+        )
 
         for msg in job.meta.get("all_sent_jobs", {}):
             print(f"Retrieving sentences message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
                 continue
+            payload = json.loads(jso)
+            payload["user"] = kwargs["user"]
+            payload["room"] = kwargs["room"]
             self.app["redis"].expire(msg, self.query_ttl)
-            self.app["redis"].publish(PUBSUB_CHANNEL, jso)
+            self.app["redis"].publish(
+                PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
+            )
 
     async def query(
         self,
@@ -79,7 +90,7 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Query found in redis memory. Retrieving...")
                 if not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id:
-                    await self.send_all_data(job)
+                    await self.send_all_data(job, **kwargs)
                     return job, None
                 else:
                     _query(
