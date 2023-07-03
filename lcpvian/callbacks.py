@@ -135,6 +135,7 @@ def _query(
     job.meta["_status"] = status
     job.meta["_full"] = is_full
     job.meta["results_this_batch"] = n_res
+    job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
     job.meta["cut_short"] = total_requested if n_res > total_requested else -1
     # job.meta["_job_duration"] = duration
@@ -283,8 +284,11 @@ def _sentences(
     is_first = True
 
     # get the offset/limit for kwic lines
-    resuming = job.kwargs.get("resuming", False)
-    offset = job.kwargs.get("offset", 0) if resuming else -1
+    resume = cast(bool, job.kwargs.get("resume", False))
+    offset = cast(int, job.kwargs.get("offset", 0) if resume else -1)
+    prev_offset = cast(int, depended.meta.get("latest_offset", -1))
+    if prev_offset > offset:
+        offset = prev_offset
     total_to_get = job.kwargs.get("needed", total_requested)
 
     cb: Batch = depended.kwargs["current_batch"]
@@ -307,6 +311,8 @@ def _sentences(
     )
     depended.meta["_status"] = status
 
+    depended.meta["latest_offset"] = max(offset, 0) + total_to_get
+
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
     if get_all_sents:
@@ -319,7 +325,8 @@ def _sentences(
     new_cut_short = total_requested if n_res > total_requested else -1
     if new_cut_short > depended.meta.get("cut_short", -1):
         depended.meta["cut_short"] = new_cut_short
-        depended.save_meta()
+
+    depended.save_meta()
 
     # if send_stats is False, the previous query was a kwic pagination
     # query where only kwic results were needed. if this is the case, and if
@@ -347,6 +354,7 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
+    # submit_payload["total_results_so_far"] = total_so_far
 
     jso = {
         "result": to_send,

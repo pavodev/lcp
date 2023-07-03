@@ -178,8 +178,8 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, 
         if batch not in done_batches:
             n_results += dep.meta["results_this_batch"]
             done_batches.add(batch)
-        resuming = j.kwargs.get("resuming", False)
-        offset = j.kwargs.get("offset", 0) if resuming else -1
+        resume = j.kwargs.get("resume", False)
+        offset = j.kwargs.get("offset", 0) if resume else -1
         needed = j.kwargs.get("needed", -1)
         got, n = _format_kwics(
             dep.result, meta_json, j.result, needed, is_vian, is_first, offset

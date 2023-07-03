@@ -37,7 +37,8 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     tot_req = qi.total_results_requested
     # prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
     cut_short = prev_job.meta.get("cut_short", -1)
-    offset = cut_short - prev_job.kwargs.get("total_results_so_far", 0)
+    prev_so_far = prev_job.kwargs.get("total_results_so_far", 0)
+    offset = cut_short - prev_so_far
     prev_batch_results = prev_job.meta["results_this_batch"]
     need_now = tot_req - cut_short
     left_in_batch = prev_batch_results - offset
@@ -52,7 +53,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         qi.needed = needed
     elif not_enough:
         qi.needed = need_now
-        qi.sent_id_offset = offset
+        qi.sent_id_offset = offset if offset > -1 else 0
         qi.send_stats = False
     elif so_far <= tot_req:  # and so_far < prev_results:
         qi.sent_id_offset = 0
@@ -77,7 +78,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
 
     # handle resumed queries -- figure out if we need to query new batch
-    if qi.resuming:
+    if qi.resume:
         qi = await _do_resume(qi)
 
     jobs: dict[str, str | list[str] | bool] = {}

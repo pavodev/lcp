@@ -50,7 +50,7 @@ class QueryIteration:
     sentences: bool
     is_vian: bool
     app: Application
-    resuming: bool = False
+    resume: bool = False
     previous: str = ""
     request_data: JSONObject | None = None
     current_batch: Batch | None = None
@@ -180,7 +180,7 @@ class QueryIteration:
             "languages": set(langs),
             "full": request_data.get("full", False),
             "query": request_data["query"],
-            "resuming": request_data.get("resume", False),
+            "resume": request_data.get("resume", False),
             "existing_results": {},
             "total_results_requested": total_requested,
             "needed": total_requested,
@@ -233,7 +233,7 @@ class QueryIteration:
         parent: str | None = None
         parent = self.job_id if self.job is not None else None
 
-        # elif self.resuming:
+        # elif self.resume:
         # parent = self.previous
 
         query_kwargs = dict(
@@ -252,6 +252,7 @@ class QueryIteration:
             page_size=self.page_size,
             send_stats=self.send_stats,
             post_processes=self.post_processes,
+            resume=self.resume,
             languages=list(self.languages),
             simultaneous=self.simultaneous,
             full=self.full,
@@ -301,7 +302,7 @@ class QueryIteration:
             user=self.user,
             room=self.room,
             full=self.full,
-            resuming=self.resuming,
+            resume=self.resume,
             query_submitted=query_submitted,
             from_memory=self.from_memory,
             simultaneous=self.simultaneous,
@@ -396,6 +397,7 @@ class QueryIteration:
             "previous": manual.get("previous", ""),  # comment out?
             "page_size": job.kwargs.get("page_size", 20),
             "cut_short": -1,
+            "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
             "query": job.kwargs["original_query"],
