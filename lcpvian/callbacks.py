@@ -169,6 +169,7 @@ def _query(
         n_res = stored["batch_matches"]
         batches_done_string = stored["batches_done_string"]
         status = stored["status"]
+        total_duration = stored["total_duration"]
 
     progress_info = {
         "projected_results": projected_results,
@@ -179,6 +180,7 @@ def _query(
         "show_total": show_total,
         "search_all": search_all,
         "batches_done_string": batches_done_string,
+        "total_duration": total_duration,
         "status": status,
     }
 
