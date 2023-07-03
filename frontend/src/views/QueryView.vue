@@ -333,6 +333,15 @@
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            v-if="WSDataResults && WSDataResults.status == 'satisfied' && !loading"
+            @click="submitFullSearch"
+            class="btn btn-primary me-1 mb-5"
+          >
+            <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+            Search whole corpus
+          </button>
         </div>
       </div>
     </div>
@@ -747,6 +756,7 @@ myColl3 => collocation
         if (["finished"].includes(this.WSDataResults.status)) {
           this.percentageDone = 100;
           this.percentageTotalDone = 100;
+          this.loading = false;
         }
         if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
@@ -982,7 +992,10 @@ myColl3 => collocation
         this.WSDataResults = data;
       }
     },
-    async submit(event, resumeQuery = false, cleanResults = true) {
+    submitFullSearch() {
+      this.submit(null, true, false, true);
+    },
+    async submit(event, resumeQuery = false, cleanResults = true, fullSearch = false) {
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
@@ -1007,6 +1020,9 @@ myColl3 => collocation
       if (resumeQuery) {
         data["first_job"] = this.WSDataResults.job;
         data["previous"] = this.WSDataResults.job;
+      }
+      if (fullSearch) {
+        data["full"] = true;
       }
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
