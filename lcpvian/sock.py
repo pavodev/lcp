@@ -20,7 +20,6 @@ import traceback
 
 from collections.abc import Coroutine
 from typing import Sized, cast
-from uuid import uuid4
 
 try:
     from aiohttp import WSCloseCode, WSMsgType, web
@@ -169,11 +168,12 @@ async def _handle_message(
 
     # for non-errors, we attach a msg_id to all messages, and store the message with
     # this key in redis so that the FE can retrieve it by /get_message endpoint anytime
-    if action not in errors:
-        uu = str(uuid4())
-        payload["msg_id"] = uu
+    if action not in errors and "msg_id" in payload and "no_restart" not in payload:
+        uu = payload["msg_id"]
+        payload["no_restart"] = True
         app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
+        payload.pop("no_restart", None)
 
     # for document ids request, we also add this information to config
     # so that on subsequent requests we can just fetch it from there
@@ -183,14 +183,16 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    # if full is True, we are querying every batch and don't need to send results
-    # till it's all done (i.e. status is 'finished')
-    can_send = not payload.get("full", False) or payload.get("status") == "finished"
+    can_send = payload.get("can_send", True)
 
     sent_allowed = action == "sentences" and can_send
     to_submit: None | Coroutine = None
 
-    if action == "sentences" and payload.get("submit_query"):
+    if (
+        action == "sentences"
+        and payload.get("submit_query")
+        and not payload.get("no_restart")
+    ):
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action in simples or sent_allowed:
@@ -228,7 +230,7 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
-        await _handle_query(app, payload, user, room, can_send)
+        await _handle_query(app, payload, user, room)
 
     if to_submit is not None:
         await to_submit
@@ -257,7 +259,7 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
 
 
 async def _handle_query(
-    app: web.Application, payload: JSONObject, user: str, room: str, can_send: bool
+    app: web.Application, payload: JSONObject, user: str, room: str
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -276,6 +278,7 @@ async def _handle_query(
     _print_status_message(payload, status)
 
     to_submit: None | Coroutine = None
+    can_send = payload["can_send"]
     do_full = payload.get("full") and payload.get("status") != "finished"
     if do_full:
         can_send = False
@@ -286,6 +289,7 @@ async def _handle_query(
         and job not in app["canceled"]
         and not payload.get("simultaneous")
         and not payload.get("from_memory")
+        and not payload.get("no_restart")
     ):
         payload["config"] = app["config"]
         to_submit = query(None, manual=payload, app=app)
@@ -293,36 +297,32 @@ async def _handle_query(
     if not can_send and (payload.get("send_stats", True) or do_full):
         print("Not sending WS message!")
     else:
-        to_send = payload
-        n_users = len(app["websockets"].get(room, set()))
-        if status in {"finished", "satisfied", "partial", "overtime"}:
-            to_send = {
-                "result": payload["result"],
-                "job": job,
-                "action": "query_result",
-                "user": user,
-                "room": room,
-                "n_users": n_users,
-                "status": status,
-                "word_count": payload["word_count"],
-                "full": payload.get("full", False),
-                "first_job": payload["first_job"],
-                "is_vian": payload.get("is_vian", False),
-                "table": payload.get("table"),
-                "total_duration": payload["total_duration"],
-                "from_memory": payload.get("from_memory", False),
-                "batch_matches": payload["batch_matches"],
-                "total_results_so_far": payload["total_results_so_far"],
-                "percentage_done": payload["percentage_done"],
-                "percentage_words_done": payload["percentage_words_done"],
-                "total_results_requested": payload["total_results_requested"],
-                "projected_results": payload["projected_results"],
-                "batches_done": payload["batches_done_string"],
-                "simultaneous": payload.get("simultaneous", False),
-            }
-            if app["_debug"] and "sql" in payload:
-                to_send["sql"] = payload["sql"]
-        await push_msg(app["websockets"], room, to_send, skip=None, just=(room, user))
+        keys = [
+            "result",
+            "job",
+            "action",
+            "user",
+            "room",
+            "n_users",
+            "status",
+            "word_count",
+            "full",
+            "first_job",
+            "is_vian",
+            "table",
+            "total_duration",
+            "from_memory",
+            "batch_matches",
+            "total_results_so_far",
+            "percentage_done",
+            "percentage_words_done",
+            "total_results_requested",
+            "projected_results",
+            "batches_done",
+            "simultaneous",
+        ]
+        payload = {k: v for k, v in payload.items() if k in keys}
+        await push_msg(app["websockets"], room, payload, skip=None, just=(room, user))
 
     if to_submit is not None:
         await to_submit

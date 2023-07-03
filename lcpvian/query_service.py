@@ -24,7 +24,7 @@ from .callbacks import (
 )
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs, Config
-from .utils import _set_config
+from .utils import _set_config, PUBSUB_CHANNEL
 from .worker import SQLJob
 
 
@@ -43,12 +43,30 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
+    async def send_all_data(self, job):
+        """
+        Get the stored messages related to a query and send them to frontend
+        """
+        msg = job.meta["latest_stats_message"]
+        print(f"Retrieving stats message: {msg}")
+        jso = self.app["redis"].get(msg)
+        self.app["redis"].expire(msg, self.query_ttl)
+        self.app["redis"].publish(PUBSUB_CHANNEL, jso)
+
+        for msg in job.meta.get("all_sent_jobs", {}):
+            print(f"Retrieving sentences message: {msg}")
+            jso = self.app["redis"].get(msg)
+            if jso is None:
+                continue
+            self.app["redis"].expire(msg, self.query_ttl)
+            self.app["redis"].publish(PUBSUB_CHANNEL, jso)
+
     async def query(
         self,
         query: str,
         queue: str = "query",
         **kwargs: Unpack[QueryArgs],  # type: ignore
-    ) -> tuple[SQLJob | Job, bool]:
+    ) -> tuple[SQLJob | Job, bool | None]:
         """
         Here we send the query to RQ and therefore to redis
         """
@@ -60,15 +78,19 @@ class QueryService:
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
                 print("Query found in redis memory. Retrieving...")
-                _query(
-                    job,
-                    self.app["redis"],
-                    job.result,
-                    user=kwargs["user"],
-                    room=kwargs["room"],
-                    full=kwargs["full"],
-                    from_memory=True,
-                )
+                if not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id:
+                    await self.send_all_data(job)
+                    return job, None
+                else:
+                    _query(
+                        job,
+                        self.app["redis"],
+                        job.result,
+                        user=kwargs["user"],
+                        room=kwargs["room"],
+                        full=kwargs["full"],
+                        from_memory=True,
+                    )
                 return job, True
         except NoSuchJobError:
             pass
@@ -83,7 +105,7 @@ class QueryService:
             args=(query,),
             kwargs=kwargs,
         )
-        return job, False
+        return job, True
 
     def document_ids(
         self,
@@ -164,6 +186,7 @@ class QueryService:
                     "full": cast(bool, kwargs["full"]),
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
+                    "from_memory": True,
                     "total_results_requested": cast(
                         int, kwargs["total_results_requested"]
                     ),
@@ -199,12 +222,13 @@ class QueryService:
             job = Job.fetch(sent_job, connection=self.app["redis"])
             self.app["redis"].expire(sent_job, self.query_ttl)
             if job.get_status() == "finished":
-                print("Sentences found in redis memory. Retrieving...")
+                print(f"Sentences found in redis memory. Retrieving: {sent_job}")
                 kwa = {
                     "user": cast(str, kwargs["user"]),
                     "room": cast(str | None, kwargs["room"]),
                     "full": cast(bool, kwargs["full"]),
                     "total_results_requested": kwargs["total_results_requested"],
+                    "from_memory": True,
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 dones.append(sent_job)

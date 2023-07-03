@@ -20,6 +20,7 @@ import traceback
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Unpack, cast
+from uuid import uuid4
 
 from redis import Redis as RedisConnection
 from rq.job import Job
@@ -197,6 +198,20 @@ def _query(
     if is_latest:
         first_job.meta["progress_info"] = progress_info
 
+    can_send = not is_full or status == "finished"
+
+    msg_id = str(uuid4())  # todo: hash instead
+
+    if "all_messages" not in first_job.meta:
+        first_job.meta["all_messages"] = {msg_id: None}
+    else:
+        first_job.meta["all_messages"][msg_id] = None
+
+    if "latest_stats_message" not in first_job.meta:
+        first_job.meta["latest_stats_message"] = msg_id
+    if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
+        first_job.meta["latest_stats_message"] = msg_id
+
     first_job.save_meta()  # type: ignore
 
     jso = dict(**job.kwargs)
@@ -204,8 +219,11 @@ def _query(
         {
             "result": to_send,
             "full_result": all_res,
+            "user": kwargs.get("user", job.kwargs["user"]),
+            "room": kwargs.get("room", job.kwargs["room"]),
             "status": status,
             "job": job.id,
+            "is_vian": job.kwargs["is_vian"],
             "action": "query_result",
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
@@ -217,18 +235,23 @@ def _query(
             "send_stats": send_stats,
             "first_job": first_job.id,
             "search_all": search_all,
-            "batches_done_string": batches_done_string,
+            "simultaneous": job.kwargs["simultaneous"],
+            "batches_done": batches_done_string,
             "batch_matches": n_res,
             "full": is_full,
+            "can_send": can_send,
             "done_batches": done_part,
+            "msg_id": msg_id,
             "total_duration": total_duration,
             "sentences": job.kwargs["sentences"],
             "total_results_requested": total_requested,
         }
     )
+
+    if job.kwargs["debug"] and job.kwargs["sql"]:
+        jso["sql"] = job.kwargs["sql"]
+
     job.meta["payload"] = jso
-    jso["user"] = kwargs.get("user", jso["user"])
-    jso["room"] = kwargs.get("room", jso["room"])
     job.save_meta()  # type: ignore
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
@@ -265,7 +288,6 @@ def _sentences(
 
     if result:
         base.meta["_sent_jobs"][job.id] = None
-        base.save_meta()
     else:
         print(
             "no result",
@@ -287,7 +309,7 @@ def _sentences(
     resume = cast(bool, job.kwargs.get("resume", False))
     offset = cast(int, job.kwargs.get("offset", 0) if resume else -1)
     prev_offset = cast(int, depended.meta.get("latest_offset", -1))
-    if prev_offset > offset:
+    if prev_offset > offset and not kwargs.get("from_memory"):
         offset = prev_offset
     total_to_get = job.kwargs.get("needed", total_requested)
 
@@ -334,13 +356,13 @@ def _sentences(
     # so that we can submit a new query for the next batch from the sentences
     # action in sock.py
     not_otherwise_started = depended.kwargs.get("send_stats", True) is False
-    if not not_otherwise_started and job.kwargs.get("query_submitted", True) is False:
+    if not job.kwargs["send_stats"] and job.kwargs["offset"] > 0:
         not_otherwise_started = True
     submit_query = (n_res < total_requested or full) and not_otherwise_started
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
-        print(f"No results found for {table} -- skipping WS message", to_send)
+        print(f"No results found for {table} -- skipping WS message")
         return None
 
     perc_done = round(base.meta["progress_info"]["percentage_done"], 3)
@@ -354,6 +376,12 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
+    can_send = not full or status == "finished"
+    msg_id = str(uuid4())  # todo: hash instead!
+    if "all_sent_jobs" not in base.meta:
+        base.meta["all_sent_jobs"] = {}
+    base.meta["all_sent_jobs"][msg_id] = None
+    base.save_meta()
     # submit_payload["total_results_so_far"] = total_so_far
 
     jso = {
@@ -367,6 +395,8 @@ def _sentences(
         "query": depended.id,
         "table": table,
         "first_job": base.id,
+        "msg_id": msg_id,
+        "can_send": can_send,
         "percentage_done": perc_done,
         "percentage_words_done": words_done,
     }

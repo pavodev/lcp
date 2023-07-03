@@ -219,7 +219,7 @@ class QueryIteration:
         self.word_count = total
         return None
 
-    async def submit_query(self) -> tuple[Job, bool]:
+    async def submit_query(self) -> tuple[Job, bool | None]:
         """
         Helper to submit a query job
         """
@@ -252,6 +252,7 @@ class QueryIteration:
             page_size=self.page_size,
             send_stats=self.send_stats,
             post_processes=self.post_processes,
+            debug=self.app["_debug"],
             resume=self.resume,
             languages=list(self.languages),
             simultaneous=self.simultaneous,
@@ -269,18 +270,18 @@ class QueryIteration:
 
         queue = "query" if not self.full else "query"
 
-        from_memory: bool
-        job, from_memory = await self.app["query_service"].query(
+        do_sents: bool | None
+        job, do_sents = await self.app["query_service"].query(
             self.sql, depends_on=self.query_depends, queue=queue, **query_kwargs
         )
         self.job = job
         self.job_id = job.id
-        self.from_memory = from_memory
+        # self.from_memory = from_memory
         if not self.first_job:
             self.first_job = job.id
-        return job, True
+        return job, do_sents
 
-    def submit_sents(self, query_submitted) -> list[str]:
+    def submit_sents(self) -> list[str]:
         """
         Helper to submit a sentences job
         """
@@ -303,9 +304,11 @@ class QueryIteration:
             room=self.room,
             full=self.full,
             resume=self.resume,
-            query_submitted=query_submitted,
+            # query_submitted=query_submitted,
             from_memory=self.from_memory,
             simultaneous=self.simultaneous,
+            debug=self.app["_debug"],
+            send_stats=self.send_stats,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
             jso=json.dumps(self.jso, indent=4),

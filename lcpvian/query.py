@@ -94,7 +94,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
 
     # organise and submit query to rq via query service
-    query_job, submitted = await qi.submit_query()
+    query_job, do_sents = await qi.submit_query()
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
@@ -105,21 +105,25 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     assert qi.current_batch is not None
     schema_table = ".".join(qi.current_batch[1:3])
 
-    if qi.current_batch is not None and qi.job is not None and submitted:
+    if (
+        qi.current_batch is not None
+        and qi.job is not None
+        and qi.send_stats
+        and do_sents is not None
+    ):
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
-    elif not submitted:
-        print(f"\nSkipping query but doing sents: {schema_table}")
 
     # prepare and submit sentences query
-    if qi.sentences:
-        sents_jobs = qi.submit_sents(submitted)
+    if do_sents is not None:
+        if qi.sentences or qi.send_stats:
+            sents_jobs = qi.submit_sents()
 
     jobs = {
         "status": "started",
         "job": qi.job_id if qi.job else qi.previous,
     }
 
-    if qi.sentences:
+    if qi.sentences and do_sents:
         jobs.update({"sentences": True, "sentences_jobs": sents_jobs})
 
     qi.job_info = jobs
