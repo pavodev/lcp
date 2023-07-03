@@ -91,7 +91,7 @@ class QueryService:
                         full=kwargs["full"],
                         from_memory=True,
                     )
-                return job, True
+                return job, False
         except NoSuchJobError:
             pass
 

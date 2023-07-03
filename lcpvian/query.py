@@ -116,7 +116,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     # prepare and submit sentences query
     if do_sents is not None:
         if qi.sentences or qi.send_stats:
-            sents_jobs = qi.submit_sents()
+            sents_jobs = qi.submit_sents(do_sents)
 
     jobs = {
         "status": "started",

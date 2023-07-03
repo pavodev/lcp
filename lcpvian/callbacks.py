@@ -355,8 +355,11 @@ def _sentences(
     # this batch didn't contain enough kwic results, we set submit_query to true
     # so that we can submit a new query for the next batch from the sentences
     # action in sock.py
+    not_enough = depended.meta["total_results_so_far"] < total_requested
     not_otherwise_started = depended.kwargs.get("send_stats", True) is False
     if not job.kwargs["send_stats"] and job.kwargs["offset"] > 0:
+        not_otherwise_started = True
+    if not_enough and job.kwargs["query_started"] is False:
         not_otherwise_started = True
     submit_query = (n_res < total_requested or full) and not_otherwise_started
 

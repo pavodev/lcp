@@ -281,7 +281,7 @@ class QueryIteration:
             self.first_job = job.id
         return job, do_sents
 
-    def submit_sents(self) -> list[str]:
+    def submit_sents(self, query_started) -> list[str]:
         """
         Helper to submit a sentences job
         """
@@ -304,7 +304,7 @@ class QueryIteration:
             room=self.room,
             full=self.full,
             resume=self.resume,
-            # query_submitted=query_submitted,
+            query_started=query_started,
             from_memory=self.from_memory,
             simultaneous=self.simultaneous,
             debug=self.app["_debug"],
