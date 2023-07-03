@@ -168,6 +168,7 @@ def _query(
         total_found = stored["total_results_so_far"]
         n_res = stored["batch_matches"]
         batches_done_string = stored["batches_done_string"]
+        status = stored["status"]
 
     progress_info = {
         "projected_results": projected_results,
@@ -178,6 +179,7 @@ def _query(
         "show_total": show_total,
         "search_all": search_all,
         "batches_done_string": batches_done_string,
+        "status": status,
     }
 
     # so we do not override newer data with older data?
