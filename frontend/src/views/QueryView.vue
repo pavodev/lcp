@@ -915,30 +915,41 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "sentences") {
           // console.log("sentences", data);
-          if (this.WSDataSentences && this.WSDataSentences.first_job == data.first_job) {
-            Object.keys(this.WSDataSentences.result).forEach(key => {
+          if (
+            this.WSDataSentences &&
+            this.WSDataSentences.first_job == data.first_job &&
+            this.WSDataSentences.full == false
+          ) {
+            Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0) {
-                this.WSDataSentences.result[key] = this.WSDataSentences.result[key].concat(data.result[key])
+                this.WSDataSentences.result[key] = this.WSDataSentences.result[
+                  key
+                ].concat(data.result[key]);
+                this.nResults = this.WSDataSentences.result[key].length;
               }
-            })
+            });
             this.WSDataSentences.result[-1] = {
               ...this.WSDataSentences.result[-1],
-              ...data.result[-1]
-            }
-          }
-          else {
+              ...data.result[-1],
+            };
+          } else {
             this.WSDataSentences = data;
-            if (this.WSDataResults){
-              this.WSDataResults.result['0'].result_sets.forEach((_resultSet, index) => {
-                let resultIndex = index + 1
-                if (!(resultIndex in this.WSDataSentences.result)){
-                  this.WSDataSentences.result[resultIndex] = []
+            if (this.WSDataResults) {
+              this.WSDataResults.result["0"].result_sets.forEach(
+                (_resultSet, index) => {
+                  if (_resultSet.type == "plain") {
+                    let resultIndex = index + 1;
+                    if (!(resultIndex in this.WSDataSentences.result)) {
+                      this.WSDataSentences.result[resultIndex] = [];
+                    }
+                    this.nResults = this.WSDataSentences.result[resultIndex].length;
+                  }
                 }
-              })
+              );
             }
           }
           if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
-            this.loading = false
+            this.loading = false;
           }
           return;
         } else if (data["action"] === "failed") {
