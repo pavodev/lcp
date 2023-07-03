@@ -202,11 +202,6 @@ def _query(
 
     msg_id = str(uuid4())  # todo: hash instead
 
-    if "all_messages" not in first_job.meta:
-        first_job.meta["all_messages"] = {msg_id: None}
-    else:
-        first_job.meta["all_messages"][msg_id] = None
-
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
@@ -214,16 +209,25 @@ def _query(
 
     first_job.save_meta()  # type: ignore
 
+    if status != "finished":
+        use = perc_words if search_all or is_full else perc_matches
+        timed = (total_duration * (100.0 / use)) - total_duration
+        time_remaining = max(0.0, timed)
+    else:
+        time_remaining = 0.0
+
+    user = kwargs.get("user", job.kwargs["user"])
+    room = kwargs.get("room", job.kwargs["room"])
+
     jso = dict(**job.kwargs)
     jso.update(
         {
             "result": to_send,
             "full_result": all_res,
-            "user": kwargs.get("user", job.kwargs["user"]),
-            "room": kwargs.get("room", job.kwargs["room"]),
+            "user": user,
+            "room": room,
             "status": status,
             "job": job.id,
-            "is_vian": job.kwargs["is_vian"],
             "action": "query_result",
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
@@ -235,15 +239,15 @@ def _query(
             "send_stats": send_stats,
             "first_job": first_job.id,
             "search_all": search_all,
-            "simultaneous": job.kwargs["simultaneous"],
             "batches_done": batches_done_string,
             "batch_matches": n_res,
             "full": is_full,
             "can_send": can_send,
             "done_batches": done_part,
             "msg_id": msg_id,
+            "duration": duration,
             "total_duration": total_duration,
-            "sentences": job.kwargs["sentences"],
+            "remaining": time_remaining,
             "total_results_requested": total_requested,
         }
     )
@@ -251,8 +255,25 @@ def _query(
     if job.kwargs["debug"] and job.kwargs["sql"]:
         jso["sql"] = job.kwargs["sql"]
 
+    if is_full and status != "finished":
+        jso["progress"] = {
+            "remaining": time_remaining,
+            "first_job": first_job.id,
+            "job": job.id,
+            "user": user,
+            "room": room,
+            "duration": duration,
+            "total_duration": total_duration,
+            "projected_results": projected_results,
+            "percentage_done": round(perc_matches, 3),
+            "percentage_words_done": round(perc_words, 3),
+            "total_results_so_far": total_found,
+            "action": "background_job_progress",
+        }
+
     job.meta["payload"] = jso
     job.save_meta()  # type: ignore
+
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
@@ -422,11 +443,14 @@ def _document(
         return
     if isinstance(result, list) and len(result) == 1:
         result = result[0]
+
+    msg_id = str(uuid4())
     jso = {
         "document": result,
         "action": "document",
         "user": user,
         "room": room,
+        "msg_id": msg_id,
         "corpus": job.kwargs["corpus"],
         "doc_id": job.kwargs["doc"],
     }
@@ -447,11 +471,13 @@ def _document_ids(
     room = job.kwargs["room"]
     if not room:
         return
+    msg_id = str(uuid4())
     formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
     jso = {
         "document_ids": formatted,
         "action": "document_ids",
         "user": user,
+        "msg_id": msg_id,
         "room": room,
         "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
@@ -474,6 +500,7 @@ def _schema(
     room = job.kwargs.get("room")
     if not room:
         return
+    msg_id = str(uuid4())
     jso = {
         "user": user,
         "status": "success" if not result else "error",
@@ -482,6 +509,7 @@ def _schema(
         "action": "uploaded",
         "gui": job.kwargs.get("gui", False),
         "room": room,
+        "msg_id": msg_id,
     }
     if result:
         jso["error"] = result
@@ -507,6 +535,7 @@ def _upload(
     user_data: JSONObject = job.kwargs["user_data"]
     is_vian: bool = job.kwargs["is_vian"]
     gui: bool = job.kwargs["gui"]
+    msg_id = str(uuid4())
 
     if not room or not result:
         return
@@ -521,6 +550,7 @@ def _upload(
         "project": project,
         "action": "uploaded",
         "gui": gui,
+        "msg_id": msg_id,
     }
     if result:
         jso["error"] = result
@@ -634,12 +664,14 @@ def _queries(
     is_store: bool = job.kwargs.get("store", False)
     action = "store_query" if is_store else "fetch_queries"
     room: str | None = job.kwargs.get("room")
+    msg_id = str(uuid4())
     jso: dict[str, Any] = {
         "user": str(job.kwargs["user"]),
         "room": room,
         "status": "success",
         "action": action,
         "queries": [],
+        "msg_id": msg_id,
     }
     if is_store:
         jso["query_id"] = str(job.kwargs["query_id"])
@@ -666,6 +698,7 @@ def _config(
     Run by worker: make config data
     """
     fixed: Config = {}
+    msg_id = str(uuid4())
     for tup in result:
         made = _row_to_value(tup)
         if not made["enabled"]:
@@ -680,6 +713,7 @@ def _config(
         "config": fixed,
         "_is_config": True,
         "action": "set_config",
+        "msg_id": msg_id,
     }
     if publish:
         red = job._redis if hasattr(job, "_redis") else connection

@@ -155,6 +155,7 @@ async def _handle_message(
     simples = (
         "fetch_queries",
         "store_query",
+        "background_job_progress",
         "document",
         "document_ids",
     )
@@ -170,10 +171,8 @@ async def _handle_message(
     # this key in redis so that the FE can retrieve it by /get_message endpoint anytime
     if action not in errors and "msg_id" in payload and "no_restart" not in payload:
         uu = payload["msg_id"]
-        payload["no_restart"] = True
         app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
-        payload.pop("no_restart", None)
 
     # for document ids request, we also add this information to config
     # so that on subsequent requests we can just fetch it from there
@@ -196,13 +195,16 @@ async def _handle_message(
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action in simples or sent_allowed:
-        await push_msg(
-            app["websockets"],
-            room,
-            payload,
-            skip=None,
-            just=(room, user),
-        )
+        if action == "sentences" and len(payload["result"]) < 3:
+            pass
+        else:
+            await push_msg(
+                app["websockets"],
+                room,
+                payload,
+                skip=None,
+                just=(room, user),
+            )
         if to_submit is not None:
             await to_submit
             to_submit = None
@@ -279,6 +281,7 @@ async def _handle_query(
 
     to_submit: None | Coroutine = None
     can_send = payload["can_send"]
+    # todo: this should no longer happen, as we send a progress update message instead?
     do_full = payload.get("full") and payload.get("status") != "finished"
     if do_full:
         can_send = False
@@ -293,6 +296,11 @@ async def _handle_query(
     ):
         payload["config"] = app["config"]
         to_submit = query(None, manual=payload, app=app)
+
+    if do_full:
+        await push_msg(
+            app["websockets"], room, payload["progress"], skip=None, just=(room, user)
+        )
 
     if not can_send and (payload.get("send_stats", True) or do_full):
         print("Not sending WS message!")
@@ -316,6 +324,8 @@ async def _handle_query(
             "total_results_so_far",
             "percentage_done",
             "percentage_words_done",
+            "total_duration",
+            "duration",
             "total_results_requested",
             "projected_results",
             "batches_done",

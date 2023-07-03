@@ -54,6 +54,7 @@ class QueryService:
         payload = json.loads(jso)
         payload["user"] = kwargs["user"]
         payload["room"] = kwargs["room"]
+        payload["no_restart"] = True
         self.app["redis"].expire(msg, self.query_ttl)
         self.app["redis"].publish(
             PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
@@ -67,6 +68,7 @@ class QueryService:
             payload = json.loads(jso)
             payload["user"] = kwargs["user"]
             payload["room"] = kwargs["room"]
+            payload["no_restart"] = True
             self.app["redis"].expire(msg, self.query_ttl)
             self.app["redis"].publish(
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
