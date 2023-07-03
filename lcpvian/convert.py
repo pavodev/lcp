@@ -44,8 +44,8 @@ OPS = {
     "==": operator.eq,
     "<>": operator.ne,
     "!=": operator.ne,
-    ">": operator.ge,
-    ">=": operator.gt,
+    ">": operator.gt,
+    ">=": operator.ge,
 }
 
 
