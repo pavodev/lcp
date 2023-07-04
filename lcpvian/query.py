@@ -60,10 +60,12 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     elif not_enough:
         qi.needed = left_in_batch
-
         qi.start_query_from_sents = True
     else:
         raise ValueError("Backend error. Please debug")
+
+    if qi.full:
+        qi.start_query_from_sents = True
 
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])

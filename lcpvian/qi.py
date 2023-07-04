@@ -300,7 +300,7 @@ class QueryIteration:
             to_use = depends_on
 
         offset = max(0, self.offset)
-        needed = self.needed
+        needed = self.needed if not self.full else -1
 
         kwargs = dict(
             user=self.user,
