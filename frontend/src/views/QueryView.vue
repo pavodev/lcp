@@ -953,6 +953,7 @@ myColl3 => collocation
               );
             }
           }
+          this.percentageDone = data.percentage_done;
           if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
             this.loading = false;
           }
