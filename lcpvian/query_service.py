@@ -60,7 +60,7 @@ class QueryService:
             PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
         )
 
-        for msg in job.meta.get("all_sent_jobs", {}):
+        for msg in job.meta.get("sent_job_ws_messages", {}):
             print(f"Retrieving sentences message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:

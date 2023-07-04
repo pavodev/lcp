@@ -103,6 +103,11 @@ class QueryIteration:
             json_query = convert(self.query)
             self.dqd = self.query
 
+        res = json_query.get("results", [])
+        has_kwic = any("plain" in r for r in res)
+        if not has_kwic:
+            self.sentences = False
+
         sql_query, meta_json, post_processes = json_to_sql(json_query, **kwa)
         self.jso = json_query
         self.sql = sql_query

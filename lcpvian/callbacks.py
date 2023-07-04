@@ -220,15 +220,8 @@ def _query(
 
     first_job.save_meta()  # type: ignore
 
-    if status != "finished":
-        use = perc_words if search_all or is_full else perc_matches
-        if use <= 0.0:
-            time_remaining = 0.0
-        else:
-            timed = (total_duration * (100.0 / use)) - total_duration
-            time_remaining = max(0.0, timed)
-    else:
-        time_remaining = 0.0
+    use = perc_words if search_all or is_full else perc_matches
+    time_remaining = _time_remaining(status, total_duration, use)
 
     user = kwargs.get("user", job.kwargs["user"])
     room = kwargs.get("room", job.kwargs["room"])
@@ -294,6 +287,18 @@ def _query(
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
 
 
+def _time_remaining(status, total_duration, use):
+    """
+    Helper to estimate remaining time for a job
+    """
+    if status == "finished":
+        return 0.0
+    if use <= 0.0:
+        return 0.0
+    timed = (total_duration * (100.0 / use)) - total_duration
+    return max(0.0, timed)
+
+
 def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
     """
     A helper to find the total requested -- remove this after cleanup ideally
@@ -320,7 +325,6 @@ def _sentences(
     total_requested = _get_total_requested(kwargs, job)
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
-    # _sents_job is a dict of {job_id: None} (so the keys are an ordered set)
 
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
 
@@ -328,6 +332,7 @@ def _sentences(
         depended.meta["highest_requested"] = total_requested
 
     if result:
+        # _sents_job is a dict of {job_id: None} (so the keys are an ordered set)
         base.meta["_sent_jobs"][job.id] = None
 
     full = kwargs.get("full", job.kwargs.get("full", depended.meta.get("_full", False)))
@@ -403,9 +408,9 @@ def _sentences(
 
     can_send = not full or status == "finished"
     msg_id = str(uuid4())  # todo: hash instead!
-    if "all_sent_jobs" not in base.meta:
-        base.meta["all_sent_jobs"] = {}
-    base.meta["all_sent_jobs"][msg_id] = None
+    if "sent_job_ws_messages" not in base.meta:
+        base.meta["sent_job_ws_messages"] = {}
+    base.meta["sent_job_ws_messages"][msg_id] = None
     base.save_meta()
 
     jso = {

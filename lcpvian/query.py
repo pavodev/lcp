@@ -29,7 +29,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     """
     Resume a query, or decide that we need to query the next batch
 
-    When resuming, there are two or three few possible situations we could be in:
+    When resuming, there are two or three possible situations we could be in:
 
     1. we have already got enough results via previous sql queries to fill
        the request, we just haven't sent them yet
@@ -55,9 +55,8 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     not_enough = left_in_batch < need_now
     qi.send_stats = False
 
-    if qi.total_results_so_far >= qi.total_results_requested:
-        qi.needed = qi.total_results_requested - prev_total
-
+    if qi.total_results_so_far >= tot_req:
+        qi.needed = tot_req - prev_total
     elif not_enough:
         qi.needed = left_in_batch
         qi.start_query_from_sents = True
@@ -123,7 +122,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
 
     # prepare and submit sentences query
     if do_sents is not None:
-        if qi.sentences or qi.send_stats:
+        if qi.sentences and qi.send_stats:
             sents_jobs = qi.submit_sents(do_sents)
 
     jobs = {

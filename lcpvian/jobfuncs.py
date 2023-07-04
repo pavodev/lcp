@@ -114,7 +114,10 @@ async def _db_query(
         offset = cast(int, kwargs.get("offset", -1))
         needed = cast(int, kwargs.get("needed", total))
         needed = max(-1, needed)  # todo: fix this earlier?
-        params = {"ids": _get_sent_ids(dep, needed, offset=offset)}
+        ids: list[str] | list[int] | None = _get_sent_ids(dep, needed, offset=offset)
+        if not ids:
+            return []
+        params = {"ids": ids}
 
     name = "_upool" if store else "_pool"
     pool = getattr(get_current_job(), name)

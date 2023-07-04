@@ -497,7 +497,6 @@ def _get_sent_ids(
     """
     Helper to format the query to retrieve sentences: add sent ids
     """
-    out: list[int] = []
     conn = get_current_connection()
     job = _get_associated_query_job(associated, conn)
     if job.get_status(refresh=True) in ("stopped", "canceled"):
@@ -505,13 +504,14 @@ def _get_sent_ids(
     if job.result is None:
         raise Interrupted()
     if not job.result:
+        out: list[int] = []
         return out
     prev_results = job.result
-    seg_ids = set()
+    seg_ids: set[str | int] = set()
     rs = job.kwargs["meta_json"]["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
-    to_use = next(int(i[0]) for i in prev_results if int(i[0]) in kwics)
+    to_use: int = next(int(i[0]) for i in prev_results if int(i[0]) in kwics)
     added: Counter[int] = Counter()
 
     for res in prev_results:
@@ -527,7 +527,7 @@ def _get_sent_ids(
         seg_ids.add(rest[0])
         added[key] += 1
 
-    return list(sorted(seg_ids))
+    return cast(list[str] | list[int], list(sorted(seg_ids)))
 
 
 def _get_associated_query_job(

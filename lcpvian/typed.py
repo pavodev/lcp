@@ -102,7 +102,13 @@ Task: TypeAlias = asyncio.Task
 
 # params for db_query execute
 DBQueryParams: TypeAlias = dict[
-    str, list[str] | list[int] | str | dict[str, Any] | None
+    str,
+    list[str]
+    | list[int]
+    | str
+    | dict[str, Any]
+    | dict[str, list[int] | list[str]]  # sentences job
+    | None,
 ]
 
 # todo: finish this one
