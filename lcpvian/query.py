@@ -120,9 +120,9 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     ):
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
 
-    # prepare and submit sentences query
+    # prepare and submit sentences query -- todo: improve this!
     if do_sents is not None:
-        if qi.sentences and qi.send_stats:
+        if qi.sentences or (qi.send_stats or qi.start_query_from_sents):
             sents_jobs = qi.submit_sents(do_sents)
 
     jobs = {
