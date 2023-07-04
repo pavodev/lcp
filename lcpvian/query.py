@@ -87,7 +87,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     qi.make_query()
 
     # print query info to terminal for first batch only
-    if not it and not qi.job:
+    if not it and not qi.job and not qi.resume and qi.send_stats:
         query_type = "DQD" if qi.dqd else "JSON"
         form = json.dumps(qi.jso, indent=4)
         print(f"Detected query type: {query_type}")

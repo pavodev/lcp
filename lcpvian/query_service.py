@@ -88,13 +88,14 @@ class QueryService:
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
+            is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
                 print("Query found in redis memory. Retrieving...")
-                if not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id:
+                if is_first and not kwargs["full"]:
                     await self.send_all_data(job, **kwargs)
                     return job, None
-                else:
+                elif not kwargs["full"]:
                     _query(
                         job,
                         self.app["redis"],
