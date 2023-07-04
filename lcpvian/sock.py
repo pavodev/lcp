@@ -321,6 +321,8 @@ async def _handle_query(
             "total_duration",
             "from_memory",
             "batch_matches",
+            "offset",
+            "current_kwic_lines",
             "total_results_so_far",
             "percentage_done",
             "percentage_words_done",

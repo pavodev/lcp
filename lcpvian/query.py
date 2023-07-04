@@ -28,46 +28,50 @@ Iteration: TypeAlias = tuple[
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
     """
     Resume a query, or decide that we need to query the next batch
+
+    When resuming, there are two or three few possible situations we could be in:
+
+    1. we have already got enough results via previous sql queries to fill
+       the request, we just haven't sent them yet
+    2. we have not got enough results, so we need to query this batch and the next one
+    3? we had exactly the right number of results ... edge case
+
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    # all_batches = prev_job.kwargs["all_batches"]
     dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = prev_job.meta["total_results_so_far"]
     tot_req = qi.total_results_requested
-    # prev_results = cast(int, prev_job.meta.get("results_this_batch", 0))
-    cut_short = prev_job.meta.get("cut_short", -1)
-    prev_so_far = prev_job.kwargs.get("total_results_so_far", 0)
-    offset = cut_short - prev_so_far
+    prev_total = qi.current_kwic_lines
+
     prev_batch_results = prev_job.meta["results_this_batch"]
-    need_now = tot_req - cut_short
-    left_in_batch = prev_batch_results - offset
+    need_now = tot_req - prev_total
+
+    next_offset = prev_job.meta["offset_for_next_time"]
+    latest_offset = prev_job.meta.get("latest_offset", 0)
+    qi.offset = max(latest_offset, next_offset)
+
+    left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
-    qi.send_stats = True
-    if so_far >= tot_req:
-        qi.sent_id_offset = offset
-        qi.send_stats = False
-        needed = tot_req - cut_short
-        if needed <= 0:
-            needed = -1
-        qi.needed = needed
+    qi.send_stats = False
+
+    if qi.total_results_so_far >= qi.total_results_requested:
+        qi.needed = qi.total_results_requested - prev_total
+
     elif not_enough:
-        qi.needed = need_now
-        qi.sent_id_offset = offset if offset > -1 else 0
-        qi.send_stats = False
-    elif so_far <= tot_req:  # and so_far < prev_results:
-        qi.sent_id_offset = 0
-        qi.send_stats = True
-        qi.needed = tot_req - so_far if tot_req != -1 else -1
+        qi.needed = left_in_batch
+
+        qi.start_query_from_sents = True
+    else:
+        raise ValueError("Backend error. Please debug")
+
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)
-    # qi.all_batches = all_batches
     qi.done_batches = done_batches
     qi.total_results_so_far = so_far
-    # first = Job.fetch(qi.first_job, connection=qi.app["redis"])
-    # qi.existing_results = first.meta["all_non_kwic_results"]
+
     return qi
 
 
@@ -80,6 +84,8 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     # handle resumed queries -- figure out if we need to query new batch
     if qi.resume:
         qi = await _do_resume(qi)
+    else:
+        qi.offset = 0
 
     jobs: dict[str, str | list[str] | bool] = {}
 

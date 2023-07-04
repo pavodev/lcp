@@ -97,6 +97,9 @@ def _query(
         "total_results_requested", job.kwargs["total_results_requested"]
     )
 
+    if total_requested > job.meta.get("highest_requested", 0):
+        job.meta["highest_requested"] = total_requested
+
     # ensure we don't send this same result again later if we don't need to
     send_stats = job.meta.get("_already_sent", False) and not (is_base and from_memory)
     job.meta["_already_sent"] = True
@@ -122,6 +125,13 @@ def _query(
         time_perc = total_duration * 100.0 / allowed_time
 
     total_found = total_before_now + n_res if show_total else -1
+
+    offset_for_next_time = 0
+    if total_before_now + n_res > total_requested:
+        offset_for_next_time = total_requested - total_before_now
+
+    job.meta["offset_for_next_time"] = offset_for_next_time
+
     just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
     status = _get_status(
@@ -138,6 +148,7 @@ def _query(
     job.meta["results_this_batch"] = n_res
     job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
+    # this is incorrect: we need the offset for next time.
     job.meta["cut_short"] = total_requested if n_res > total_requested else -1
     # job.meta["_job_duration"] = duration
     job.meta["_total_duration"] = total_duration
@@ -248,7 +259,9 @@ def _query(
             "can_send": can_send,
             "done_batches": done_part,
             "msg_id": msg_id,
+            "resume": False,
             "duration": duration,
+            "offset": offset_for_next_time,
             "total_duration": total_duration,
             "remaining": time_remaining,
             "total_results_requested": total_requested,
@@ -303,6 +316,7 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
+
     total_requested = _get_total_requested(kwargs, job)
 
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
@@ -310,14 +324,11 @@ def _sentences(
 
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
 
+    if total_requested > depended.meta.get("highest_requested", 0):
+        depended.meta["highest_requested"] = total_requested
+
     if result:
         base.meta["_sent_jobs"][job.id] = None
-    else:
-        print(
-            "no result",
-            depended.kwargs["current_batch"],
-            job.kwargs.get("offset", "no offset?"),
-        )
 
     full = kwargs.get("full", job.kwargs.get("full", depended.meta.get("_full", False)))
     meta_json = depended.kwargs["meta_json"]
@@ -357,7 +368,8 @@ def _sentences(
     )
     depended.meta["_status"] = status
 
-    depended.meta["latest_offset"] = max(offset, 0) + total_to_get
+    latest_offset = max(offset, 0) + total_to_get
+    depended.meta["latest_offset"] = latest_offset
 
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
@@ -368,23 +380,9 @@ def _sentences(
             depended.result, meta_json, result, total_to_get, is_vian, is_first, offset
         )
 
-    new_cut_short = total_requested if n_res > total_requested else -1
-    if new_cut_short > depended.meta.get("cut_short", -1):
-        depended.meta["cut_short"] = new_cut_short
-
     depended.save_meta()
 
-    # if send_stats is False, the previous query was a kwic pagination
-    # query where only kwic results were needed. if this is the case, and if
-    # this batch didn't contain enough kwic results, we set submit_query to true
-    # so that we can submit a new query for the next batch from the sentences
-    # action in sock.py
-    not_otherwise_started = depended.kwargs.get("send_stats", True) is False
-    if not job.kwargs["send_stats"] and job.kwargs["offset"] > 0:
-        not_otherwise_started = True
-    if job.kwargs["query_started"] is False:
-        not_otherwise_started = True
-    submit_query = (n_res < total_requested or full) and not_otherwise_started
+    submit_query = job.kwargs["start_query_from_sents"]
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
@@ -402,13 +400,13 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
+
     can_send = not full or status == "finished"
     msg_id = str(uuid4())  # todo: hash instead!
     if "all_sent_jobs" not in base.meta:
         base.meta["all_sent_jobs"] = {}
     base.meta["all_sent_jobs"][msg_id] = None
     base.save_meta()
-    # submit_payload["total_results_so_far"] = total_so_far
 
     jso = {
         "result": to_send,

@@ -52,6 +52,7 @@ class QueryIteration:
     app: Application
     resume: bool = False
     previous: str = ""
+    current_kwic_lines: int = 0
     request_data: JSONObject | None = None
     current_batch: Batch | None = None
     total_duration: float = 0.0
@@ -62,12 +63,14 @@ class QueryIteration:
     job_id: str = ""
     from_memory: bool = False
     previous_job: Job | SQLJob | None = None
-    cut_short: int = -1
+    # cut_short: int = -1
     dqd: str = ""
     sql: str = ""
+    start_query_from_sents: bool = False
     send_stats: bool = True
     full: bool = False
-    sent_id_offset: int = 0
+    offset: int = 0
+    _from_request: bool = True
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
     job_info: dict[str, str | bool | list[str]] = field(default_factory=dict)
@@ -154,13 +157,14 @@ class QueryIteration:
         first_job = ""
         total_duration = 0.0
         total_results_so_far = 0
-        cut_short = -1
+        # cut_short = -1
+        needed = total_requested
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
             first_job = prev.kwargs.get("first_job") or previous
             total_duration = prev.kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
-            cut_short = prev.meta.get("cut_short", 0)
+            needed = -1  # to be figured out later
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -183,10 +187,11 @@ class QueryIteration:
             "resume": request_data.get("resume", False),
             "existing_results": {},
             "total_results_requested": total_requested,
-            "needed": total_requested,
+            "needed": needed,
+            "current_kwic_lines": request_data.get("current_kwic_lines", 0),
             "total_duration": total_duration,
             "first_job": first_job,
-            "cut_short": cut_short,
+            # "cut_short": cut_short,
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
@@ -224,7 +229,7 @@ class QueryIteration:
         Helper to submit a query job
         """
         job: Job | SQLJob
-        if self.sent_id_offset or not self.send_stats:
+        if self.offset or not self.send_stats:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
@@ -259,6 +264,7 @@ class QueryIteration:
             full=self.full,
             total_duration=self.total_duration,
             is_vian=self.is_vian,
+            current_kwic_lines=self.current_kwic_lines,
             dqd=self.dqd,
             first_job=self.first_job,
             jso=json.dumps(self.jso, indent=4),
@@ -293,10 +299,7 @@ class QueryIteration:
         elif depends_on:
             to_use = depends_on
 
-        # needed = self.total_results_requested
-        offset = self.sent_id_offset if self.sent_id_offset > 0 else self.cut_short
-        # if self.sent_id_offset:
-        #    needed = self.needed
+        offset = max(0, self.offset)
         needed = self.needed
 
         kwargs = dict(
@@ -311,6 +314,8 @@ class QueryIteration:
             send_stats=self.send_stats,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
+            current_kwic_lines=self.current_kwic_lines,
+            start_query_from_sents=self.start_query_from_sents,
             jso=json.dumps(self.jso, indent=4),
             sql=self.sql,
             offset=offset,
@@ -394,21 +399,24 @@ class QueryIteration:
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
+            "_from_request": False,
             "word_count": manual["word_count"],
             "simultaneous": manual.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),  # comment out?
             "page_size": job.kwargs.get("page_size", 20),
-            "cut_short": -1,
+            # "cut_short": -1,
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
             "query": job.kwargs["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
+            "offset": manual["offset"],
             "total_duration": manual["total_duration"],
             "current_batch": None,
             "all_batches": all_batches,
+            "current_kwic_lines": manual["current_kwic_lines"],
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
