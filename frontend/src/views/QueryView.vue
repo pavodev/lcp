@@ -918,7 +918,7 @@ myColl3 => collocation
           if (
             this.WSDataSentences &&
             this.WSDataSentences.first_job == data.first_job &&
-            this.WSDataSentences.full == false
+            data.full == false
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0 && key in data.result) {
