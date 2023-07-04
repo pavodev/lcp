@@ -666,6 +666,7 @@ myColl3 => collocation
       WSDataSentences: "",
       pageSize: 100,
       nResults: 200,
+      currentResults: 0,
       selectedLanguages: "en",
       queryName: "",
       currentTab: "dqd",
@@ -926,6 +927,7 @@ myColl3 => collocation
                   key
                 ].concat(data.result[key]);
                 this.nResults = this.WSDataSentences.result[key].length;
+                this.currentResults = this.WSDataSentences.result[key].length;
               }
             });
             if (-1 in data.result) {
@@ -945,6 +947,7 @@ myColl3 => collocation
                       this.WSDataSentences.result[resultIndex] = [];
                     }
                     this.nResults = this.WSDataSentences.result[resultIndex].length;
+                    this.currentResults = this.WSDataSentences.result[resultIndex].length;
                   }
                 }
               );
@@ -1033,6 +1036,7 @@ myColl3 => collocation
       if (resumeQuery) {
         data["first_job"] = this.WSDataResults.job;
         data["previous"] = this.WSDataResults.job;
+        data["current_kwic_lines"] = this.currentResults;
       }
       if (fullSearch) {
         data["full"] = true;
