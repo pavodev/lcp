@@ -184,7 +184,8 @@ class QueryService:
         kwa: dict[str, int | bool | str | None] = {}
         job: SQLJob | Job
 
-        if kwargs.get("from_memory", False) and not kwargs["full"]:
+        # never do this, right now...
+        if kwargs.get("from_memory", False) and not kwargs["full"] and False:
             dones, need_to_do = self._multiple_sent_jobs(**kwargs)
             if need_to_do:
                 print(f"Warning: jobs not processed: {need_to_do}")
