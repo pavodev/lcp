@@ -211,8 +211,11 @@ def _query(
 
     if status != "finished":
         use = perc_words if search_all or is_full else perc_matches
-        timed = (total_duration * (100.0 / use)) - total_duration
-        time_remaining = max(0.0, timed)
+        if use <= 0.0:
+            time_remaining = 0.0
+        else:
+            timed = (total_duration * (100.0 / use)) - total_duration
+            time_remaining = max(0.0, timed)
     else:
         time_remaining = 0.0
 
