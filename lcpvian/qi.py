@@ -268,7 +268,7 @@ class QueryIteration:
             parent=parent,
         )
 
-        queue = "query" if not self.full else "query"
+        queue = "query" if not self.full else "alt"
 
         do_sents: bool | None
         job, do_sents = await self.app["query_service"].query(
@@ -317,7 +317,7 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
-        queue = "query" if not self.full else "query"
+        queue = "query" if not self.full else "alt"
         qs = self.app["query_service"]
         sents_jobs = qs.sentences(
             self.sents_query(), depends_on=to_use, queue=queue, **kwargs

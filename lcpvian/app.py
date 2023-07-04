@@ -221,9 +221,9 @@ async def create_app(test: bool = False) -> web.Application:
     app["redis"] = Redis.from_url(redis_url)
 
     # different queues for different kinds of jobs
-    app["query"] = Queue(connection=app["redis"])
-    app["export"] = Queue(connection=app["redis"], job_timeout=-1)
-    app["alt"] = Queue(connection=app["redis"], job_timeout=-1)
+    app["query"] = Queue("query", connection=app["redis"])
+    app["export"] = Queue("export", connection=app["redis"], job_timeout=-1)
+    app["alt"] = Queue("alt", connection=app["redis"], job_timeout=-1)
     app["query_service"] = QueryService(app)
     await app["query_service"].get_config()
     canceled: deque[str] = deque(maxlen=99999)

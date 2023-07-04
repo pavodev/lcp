@@ -138,7 +138,7 @@ class MyWorker(Worker):
 async def work() -> None:
 
     with Connection():
-        w = MyWorker(["default"])
+        w = MyWorker(["query", "alt", "export"])
         w.work()
 
 

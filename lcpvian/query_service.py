@@ -269,7 +269,7 @@ class QueryService:
                 return already
         except NoSuchJobError:
             pass
-        job = self.app["alt"].enqueue(
+        job = self.app["query"].enqueue(
             _db_query,
             on_success=_config,
             job_id=job_id,
