@@ -29,7 +29,7 @@ export default {
     'tdeps'
   ],
 
-  typeKeywords: ['year', 'form', 'dep', 'head', 'from', 'pos', 'loop', 'value', 'label', 'to', 'upos', 'xpos'],
+  typeKeywords: ['year', 'form', 'dep', 'head', 'from', 'pos', 'loop', 'value', 'label', 'to', 'upos', 'xpos', 'lemma'],
 
   operators: [
     '!',

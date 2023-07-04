@@ -99,59 +99,12 @@ export default {
     useCorpusStore().fetchCorpora();
   },
   unmounted() {
-    this.sendLeft();
+    useWsStore().sendLeft();
   },
   methods: {
     addActionClass(e) {
       e.currentTarget.querySelector(".nav-link").classList.add("active");
     },
-    sendLeft() {
-      this.$socket.sendObj({
-        room: this.roomId,
-        action: "left",
-        user: this.userData.user.id,
-      });
-      console.log("Left WS")
-    },
-    waitForConnection(callback, interval) {
-      if (this.$socket.readyState === 1) {
-        callback();
-      } else {
-        setTimeout(() => {
-          this.waitForConnection(callback, interval);
-        }, interval);
-      }
-    },
-    connectToRoom() {
-      console.log("Connect to WS room", this.$socket.readyState, this.roomId, this.userData.user.id)
-      // if (this.$socket.readyState != 1){
-      // console.log("Connect to WS")
-      this.waitForConnection(() => {
-        this.$socket.sendObj({
-          room: this.roomId,
-          action: "joined",
-          user: this.userData.user.id,
-        });
-        this.$socket.onmessage = this.onSocketMessage;
-        this.$socket.onclose = (e) => {
-          console.log('Socket is closed. Reconnect will be attempted in 1 second.', e.reason);
-          setTimeout(() => {
-            this.connectToRoom();
-          }, 1000);
-        };
-        this.$socket.onerror = (err) => {
-          console.error('Socket encountered error: ', err.message, 'Closing socket');
-          this.$socket.close();
-        };
-        console.log("Connected to WS")
-      }, 500);
-      // }
-    },
-    onSocketMessage(event) {
-      let data = JSON.parse(event.data);
-      console.log("Rec", data)
-      useWsStore().add(data)
-    }
   },
   components: {
     LoadingView,
@@ -162,7 +115,7 @@ export default {
   },
   watch: {
     userData() {
-      this.connectToRoom();
+      useWsStore().connectToRoom(this.$socket, this.userData.user.id, this.roomId)
     },
   },
 };
