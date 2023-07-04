@@ -18,13 +18,17 @@ import "@/assets/multiselect.css";
 
 const pinia = createPinia();
 
-createApp(App).use(
-  VueNativeSock, config.wsUrl, {
-    reconnection: true,
-    reconnectionAttempts: 5,
-    format: 'json',
-    reconnectionDelay: 1000
-})
+createApp(App)
+  .use(
+    VueNativeSock,
+    config.wsUrl,
+    {
+      reconnection: true,
+      reconnectionAttempts: 5,
+      format: 'json',
+      reconnectionDelay: 1000,
+    }
+  )
   .component('multiselect', Multiselect)
   .component('DatePicker', DatePicker)
   .component('FontAwesomeIcon', FontAwesomeIcon)

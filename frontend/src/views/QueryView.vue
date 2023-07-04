@@ -792,16 +792,16 @@ myColl3 => collocation
       this.queryDQD = queryDQD;
       this.validate();
     },
-    sendLeft() {
-      this.$socket.sendObj({
-        room: this.roomId,
-        // room: null,
-        action: "left",
-        user: this.userData.user.id,
-      });
-      this.wsConnected = false;
-      console.log("Left WS");
-    },
+    // sendLeft() {
+    //   this.$socket.sendObj({
+    //     room: this.roomId,
+    //     // room: null,
+    //     action: "left",
+    //     user: this.userData.user.id,
+    //   });
+    //   this.wsConnected = false;
+    //   console.log("Left WS");
+    // },
     // connectToRoom() {
     //   console.log("Connect to WS room", this.wsConnected, this.$socket.readyState)
     //   if (this.$socket.readyState != 1 || this.wsConnected == false){
@@ -918,7 +918,7 @@ myColl3 => collocation
           if (
             this.WSDataSentences &&
             this.WSDataSentences.first_job == data.first_job &&
-            this.WSDataSentences.full == false
+            data.full == false
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0 && key in data.result) {
@@ -1050,34 +1050,21 @@ myColl3 => collocation
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
-      this.$socket.sendObj({
-        room: this.roomId,
-        // room: null,
+      useWsStore().sendWSMessage({
         action: "stop",
-        user: this.userData.user.id,
       });
       this.loading = false;
-      // if (this.WSData) {
-      //   this.WSData.percentage_done = 100;
-      // }
     },
     enough(job) {
-      this.$socket.sendObj({
-        room: this.roomId,
-        // room: null,
+      useWsStore().sendWSMessage({
         action: "enough_results",
-        user: this.userData.user.id,
         job: job,
       });
     },
     validate() {
-      this.$socket.sendObj({
-        room: this.roomId,
-        // room: null,
+      useWsStore().sendWSMessage({
         action: "validate",
-        user: this.userData.user.id,
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
-        // query_name: this.queryName,
       });
     },
     saveQuery() {
