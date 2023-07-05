@@ -104,7 +104,32 @@ class QueryService:
         Here we send the query to RQ and therefore to redis
         """
         hashed = str(hash(query))
-        job: SQLJob | Job
+        job: SQLJob | Job | None
+
+        job, submitted = await self._attempt_query_from_cache(hashed, **kwargs)
+        if job is not None:
+            return job, submitted
+
+        job = self.app[queue].enqueue(
+            _db_query,
+            on_success=_query,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            job_id=hashed,
+            args=(query,),
+            kwargs=kwargs,
+        )
+        return job, True
+
+    async def _attempt_query_from_cache(
+        self, hashed: str, **kwargs
+    ) -> tuple[Job | SQLJob | None, bool | None]:
+        """
+        Try to get a query from cache. Return the job and an indicator of
+        whether or not a job was submitted
+        """
+        job: SQLJob | Job | None
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -128,18 +153,7 @@ class QueryService:
                 return job, False
         except NoSuchJobError:
             pass
-
-        job = self.app[queue].enqueue(
-            _db_query,
-            on_success=_query,
-            on_failure=_general_failure,
-            result_ttl=self.query_ttl,
-            job_timeout=self.timeout,
-            job_id=hashed,
-            args=(query,),
-            kwargs=kwargs,
-        )
-        return job, True
+        return None, None
 
     def document_ids(
         self,
@@ -232,7 +246,6 @@ class QueryService:
             hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
         )
         kwargs["sentences_query"] = query
-        kwa: dict[str, int | bool | str | None] = {}
         job: SQLJob | Job
 
         # never do this, right now...
@@ -242,6 +255,30 @@ class QueryService:
                 print(f"Warning: jobs not processed: {need_to_do}")
             return dones
 
+        ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
+        if ids:
+            return ids
+
+        job = self.app[queue].enqueue(
+            _db_query,
+            on_success=_sentences,
+            on_failure=_general_failure,
+            result_ttl=self.query_ttl,
+            depends_on=kwargs["depends_on"],
+            job_timeout=self.timeout,
+            job_id=hashed,
+            args=(query,),
+            kwargs=kwargs,
+        )
+        return [job.id]
+
+    def _attempt_sent_from_cache(self, hashed: str, **kwargs) -> list[str]:
+        """
+        Try to return sentences from redis cache, instead of doing a new query
+        """
+        jobs: list[str] = []
+        kwa: dict[str, int | bool | str | None] = {}
+        job: SQLJob | Job
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -261,19 +298,7 @@ class QueryService:
                 return [job.id]
         except NoSuchJobError:
             pass
-
-        job = self.app[queue].enqueue(
-            _db_query,
-            on_success=_sentences,
-            on_failure=_general_failure,
-            result_ttl=self.query_ttl,
-            depends_on=kwargs["depends_on"],
-            job_timeout=self.timeout,
-            job_id=hashed,
-            args=(query,),
-            kwargs=kwargs,
-        )
-        return [job.id]
+        return jobs
 
     def _multiple_sent_jobs(self, **kwargs) -> tuple[list[str], list[str]]:
         """

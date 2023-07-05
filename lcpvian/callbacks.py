@@ -87,8 +87,8 @@ def _query(
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
     ended_at = cast(datetime, job.ended_at)
     started_at = cast(datetime, job.started_at)
-    duration: float = (ended_at - started_at).total_seconds()
-    total_duration = job.kwargs.get("total_duration", 0.0) + duration
+    duration: float = round((ended_at - started_at).total_seconds(), 3)
+    total_duration = round(job.kwargs.get("total_duration", 0.0) + duration, 3)
     duration_string = f"Duration ({table}): {duration} :: {total_duration}"
     from_memory = kwargs.get("from_memory", False)
     meta_json: QueryMeta = job.kwargs.get("meta_json")
@@ -207,17 +207,14 @@ def _query(
     }
 
     # so we do not override newer data with older data?
-    is_latest = not first_job.meta.get(
-        "progress_info"
-    ) or total_found > first_job.meta.get("progress_info", {}).get(
-        "total_results_so_far", -1
-    )
+    info: dict[str, str | bool | int | float] = first_job.meta.get("progress_info", {})
+    latest_total = cast(int, info.get("total_results_so_far", -1))
+    is_latest = not info or total_found > latest_total
     if is_latest:
         first_job.meta["progress_info"] = progress_info
 
     can_send = not is_full or status == "finished"
-
-    msg_id = str(uuid4())  # todo: hash instead
+    msg_id = str(uuid4())  # todo: hash instead?
 
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
