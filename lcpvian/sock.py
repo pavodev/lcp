@@ -1,13 +1,19 @@
 """
-Websocket utilities, both sending and receiving
+sock.py: websocket utilities, both sending and receiving
 
-Each message should have `action`, which is how we know
-how to handle the message, plus `user` and `room`, which
-tell us where the message should be sent.
+Each message should have `action`, which is how we know how to handle the
+message, plus `user` and `room`, which tell us where the message should be sent.
 
-Message sending is always ultimately done by utils.push_msg,
-which can send a message to all users in a room, a specific user,
-all users, etc. as required for a given `action`.
+Message sending is always ultimately done by utils.push_msg, which can send a
+message to all users in a room, a specific user, all users, etc. as required
+for a given `action`.
+
+The /ws endpoint is connected to sock().
+
+`listen_to_redis()` is running on a loop as a background job in the main process.
+When the worker process finishes processing DB data, it publishes the data to
+the Redis channel we are listening to. The main thread gets the message and
+broadcasts it to the correct user/room via websocket.
 """
 
 from __future__ import annotations
@@ -107,7 +113,7 @@ async def handle_redis_response(
 async def listen_to_redis(app: web.Application) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
-    and delegate to the sender
+    and delegate to the sender, All the try/except logic is shutdown logic only
     """
     async with app["aredis"].pubsub() as channel:
         await channel.subscribe(PUBSUB_CHANNEL)
@@ -192,6 +198,7 @@ async def _handle_message(
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):
+        # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action in simples or sent_allowed:
@@ -258,6 +265,7 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
         + f"Status: {status} -- done {done_batch}/{tot_batch} batches ({payload['percentage_done']}% {explain})\n"
         + cast(str, payload["duration_string"])
     )
+    return None
 
 
 async def _handle_query(
@@ -409,6 +417,7 @@ async def _handle_sock(
     ident: tuple[str, str] = (session_id, user_id)
     response: JSONObject
 
+    # user opens the query page/joins a room
     if action == "joined":
         originally = len(sockets[session_id])
         sockets[session_id].add((ws, user_id))
@@ -417,6 +426,7 @@ async def _handle_sock(
             response = {"joined": user_id, "room": session_id, "n_users": currently}
             await push_msg(sockets, session_id, response, skip=ident)
 
+    # user closes page or leaves a room
     elif action == "left":
         await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
         try:
@@ -432,6 +442,7 @@ async def _handle_sock(
             response = {"left": user_id, "room": session_id, "n_users": currently}
             await push_msg(sockets, session_id, response, skip=ident)
 
+    # query is stopped, automatically or manually
     elif action == "stop":
         jobs = qs.cancel_running_jobs(user_id, session_id)
         jobs = list(set(jobs))
@@ -444,6 +455,7 @@ async def _handle_sock(
             }
             await push_msg(sockets, session_id, response, just=ident)
 
+    # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":
         payload["_ws"] = True
         resp = await validate(**payload)
@@ -452,6 +464,8 @@ async def _handle_sock(
             return None
         await push_msg(sockets, session_id, resp, just=ident)
 
+    # used in simultaneous mode only: once FE sees enough results, cancel
+    # any other ongoing jobs
     elif action == "enough_results":
         job = payload["job"]
         jobs = qs.cancel_running_jobs(user_id, session_id, base=job)

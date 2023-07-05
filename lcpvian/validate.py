@@ -19,7 +19,9 @@ async def validate(
     **kwargs: bool | None,
 ) -> web.Response | JSONObject:
     """
-    Validate user query?
+    Validate a JSON/DQD query. This is called either as a GET endpoint,
+    or inside sock.py's WS handler. Thus, we need to return either JSON
+    or an HTTP response
     """
     is_websocket: bool = cast(bool, kwargs.get("_ws", False))
     result: JSONObject = {}
@@ -45,7 +47,7 @@ async def validate(
                 "action": "validate",
                 "error": str(err),
                 "status": 400,
-                "trace": tb,  # todo: remove from prod
+                "traceback": tb,
             }
     if is_websocket:
         return result

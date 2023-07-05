@@ -1,3 +1,7 @@
+"""
+Tools used on the command line for showing corpora, running queries etc.
+"""
+
 import json
 import os
 

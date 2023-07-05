@@ -1,5 +1,6 @@
 """
-Fetch a dict of corpora available for a given user and app
+Fetch a dict of corpora available for a given user and app,
+and return it as a JSON HTTP response
 """
 
 from json.decoder import JSONDecodeError

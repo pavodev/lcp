@@ -1,3 +1,23 @@
+"""
+query_service.py: control submission of RQ jobs
+
+We use RQ/Redis for long-running DB queries. The QueryService class has a method
+for each type of DB query that we need to run (query, sentence-query, upload,
+create schema, store query, fetch query, etc.). Jobs are run by a dedicated
+worker process.
+
+After the job is complete, callback functions can be run by worker for success and
+failure. Typically, these callbacks will post-process the data and publish it
+to Redis PubSub, which we listen on in the main process so we can send
+the data to user via websocket.
+
+Before submitting jobs to RQ/Redis, we can often hash the incoming job data to
+create an identifier for the job. If identical input data is provided in a
+subsequent job, the same hash will be generated, So, we can check in Redis for
+this job ID; if it's available, we can trigger the callback manually, and thus
+save ourselves from running duplicate DB queries.
+"""
+
 from __future__ import annotations
 
 import json
@@ -129,9 +149,25 @@ class QueryService:
         room: str | None,
         queue: str = "query",
     ) -> SQLJob | Job:
+        """
+        Fetch document id: name data from DB.
+
+        The fetch from cache should not be needed, as on subsequent jobs
+        we can get the data from app["config"]
+        """
         query = f"SELECT document_id, name FROM {schema}.document;"
         kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
-        job: Job | SQLJob = self.app[queue].enqueue(
+        hashed = str(hash((query, corpus_id)))
+        job: SQLJob | Job
+        try:
+            # raise NoSuchJobError()  # uncomment to not use cache
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            if job and job.get_status(refresh=True) == "finished":
+                _document_ids(job, self.app["redis"], job.result, **kwargs)
+                return job
+        except NoSuchJobError:
+            pass
+        job = self.app[queue].enqueue(
             _db_query,
             on_success=_document_ids,
             on_failure=_general_failure,
@@ -149,8 +185,23 @@ class QueryService:
         room: str | None,
         queue: str = "query",
     ) -> SQLJob | Job:
+        """
+        Fetch info about a document from DB/cache
+        """
         query = f"SELECT {schema}.doc_export(:doc_id);"
         params = {"doc_id": doc_id}
+        hashed = str(hash((query, doc_id)))
+        job: SQLJob | Job
+        try:
+            # raise NoSuchJobError()  # uncomment to not use cache
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            if job and job.get_status(refresh=True) == "finished":
+                kwa: dict[str, str | None] = {"user": user, "room": room}
+                _document(job, self.app["redis"], job.result, **kwa)
+                return job
+        except NoSuchJobError:
+            pass
+
         kwargs = {
             "document": True,
             "corpus": corpus,
@@ -158,7 +209,7 @@ class QueryService:
             "room": room,
             "doc": doc_id,
         }
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job = self.app[queue].enqueue(
             _db_query,
             on_success=_document,
             on_failure=_general_failure,
@@ -225,6 +276,11 @@ class QueryService:
         return [job.id]
 
     def _multiple_sent_jobs(self, **kwargs) -> tuple[list[str], list[str]]:
+        """
+        All sentence job ids are stored on the associated base query job. This
+        method gets all those ids and iterates over them, fetching their data
+        and triggering their callbacks.
+        """
         first_job = kwargs["first_job"]
         base = Job.fetch(first_job, connection=self.app["redis"])
         sent_jobs = base.meta.get("_sent_jobs", {})
@@ -310,7 +366,7 @@ class QueryService:
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
-            args=(query, params),
+            args=(query.strip(), params),
             kwargs=opts,
         )
         return job
@@ -375,7 +431,7 @@ class QueryService:
             on_failure=_upload_failure,
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
-            args=(project, user, room),
+            args=(project, user, room, self.app["_debug"]),
             kwargs=kwargs,
         )
         return job
@@ -435,6 +491,11 @@ class QueryService:
         specific_job: str | None = None,
         base: str | None = None,
     ) -> list[str]:
+        """
+        Cancel all running jobs for a user/room, or a `specific_job`.
+
+        Return the ids of canceled jobs in a list.
+        """
         if specific_job:
             rel_jobs = [str(specific_job)]
         else:

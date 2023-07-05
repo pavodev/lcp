@@ -1,3 +1,7 @@
+"""
+Endpoints for multimodal document/document ids fetching
+"""
+
 from typing import Sequence, cast
 
 from aiohttp import web

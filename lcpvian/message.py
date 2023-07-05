@@ -1,3 +1,20 @@
+"""
+message.py: endpoint for accessing redis data directly
+
+Non-trival websocket messages, like query results, are assigned a `msg_id` and
+stored in Redis. These ids are also in the messages themselves, so the frontend
+can keep a record of them.
+
+Frontend can *forget* a WS message to save memory, but remember the msg_id in
+case the data might be needed. If frontend GETs `/get_message/<id>`, we fetch
+the associated data from Redis and send it back to the user/room via WS again.
+
+When a message is accessed, its time-to-live (TTL) is renewed to the value of
+`REDIS_WS_MESSAGE_TTL` in `.env`.s
+
+This is not yet used by the frontend, but might come in handy soon!
+"""
+
 import json
 import os
 

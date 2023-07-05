@@ -1,3 +1,29 @@
+"""
+QueryIteration: an object representing a linguistic query and possibly a second
+query that fetches accompanying prepared_segment data that a frontend can use
+to display query results as KWIC or similar
+
+The object is created in one of two ways:
+
+cls.from_request(): when a new query is created by the frontend, an existing
+query is resumed (i.e. for pagination), or user does 'Search entire corpus'.
+In this case, the data is given as HTTP POST JSON data via the /query endpoint.
+
+cls.from_manual(): when an existing query does not yet have enough results, or
+when a query is for all batches in a corpus and there are unqueried batches. In
+this case, we are *almost* simulating a new HTTP request. The process is
+started in sock.py when the query status is `partial`.
+
+Once the object is made, it can be used to decide the batch to query next, as
+well as whether or not a sentences query is also needed, and so on.
+
+Most of the object's attributes are passed on to the Query Service in the query
+and/or sentences query. The job's callback, usually running in a worker thread,
+publishes a Redis message containing query results as well as most of the qi's
+attributes. This message is heard by a listener in the main thread (sock.py),
+which can broadcast it to frontends via websockets, and trigger new jobs if need
+be. Then the process repeats...
+"""
 import json
 import sys
 
@@ -62,15 +88,12 @@ class QueryIteration:
     job: Job | SQLJob | None = None
     job_id: str = ""
     from_memory: bool = False
-    previous_job: Job | SQLJob | None = None
-    # cut_short: int = -1
     dqd: str = ""
     sql: str = ""
     start_query_from_sents: bool = False
     send_stats: bool = True
     full: bool = False
     offset: int = 0
-    _from_request: bool = True
     jso: Query = field(default_factory=dict)
     meta: dict[str, list[JSONObject]] = field(default_factory=dict)
     job_info: dict[str, str | bool | list[str]] = field(default_factory=dict)
@@ -150,6 +173,8 @@ class QueryIteration:
         The first time we encounter the data, it's an aiohttp request
 
         Normalise it into this dataclass.
+
+        Also used when query is resumed, or when user does `Search entire corpus`
         """
         request_data = await request.json()
         corp = request_data["corpora"]
@@ -163,7 +188,6 @@ class QueryIteration:
         first_job = ""
         total_duration = 0.0
         total_results_so_far = 0
-        # cut_short = -1
         needed = total_requested
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
@@ -184,20 +208,18 @@ class QueryIteration:
             "app": request.app,
             "room": request_data["room"],
             "config": request.app["config"],
-            "page_size": request_data.get("page_size", 10),
+            "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
             "languages": set(langs),
             "full": request_data.get("full", False),
             "query": request_data["query"],
             "resume": request_data.get("resume", False),
-            "existing_results": {},
             "total_results_requested": total_requested,
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
             "total_duration": total_duration,
             "first_job": first_job,
-            # "cut_short": cut_short,
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
@@ -211,6 +233,8 @@ class QueryIteration:
         """
         Sum the word counts for corpora being searched
         """
+        if self.word_count:
+            return None
         total = 0
         for corpus in self.corpora:
             conf = self.app["config"][str(corpus)]
@@ -232,7 +256,7 @@ class QueryIteration:
 
     async def submit_query(self) -> tuple[Job, bool | None]:
         """
-        Helper to submit a query job
+        Helper to submit a query job to the Query Service
         """
         job: Job | SQLJob
         if self.offset or not self.send_stats:
@@ -243,9 +267,6 @@ class QueryIteration:
 
         parent: str | None = None
         parent = self.job_id if self.job is not None else None
-
-        # elif self.resume:
-        # parent = self.previous
 
         query_kwargs = dict(
             original_query=self.query,
@@ -288,14 +309,13 @@ class QueryIteration:
         )
         self.job = job
         self.job_id = job.id
-        # self.from_memory = from_memory
         if not self.first_job:
             self.first_job = job.id
         return job, do_sents
 
     def submit_sents(self, query_started) -> list[str]:
         """
-        Helper to submit a sentences job
+        Helper to submit a sentences job to the Query Service
         """
         depends_on = self.job_id if self.job_id else self.previous
         to_use: list[str] | str = []
@@ -350,7 +370,10 @@ class QueryIteration:
 
     def sents_query(self) -> str:
         """
-        Build a query to fetch sentences (uuids to be filled in as params)
+        Build a query to fetch sentences, with a placeholder param :ids
+
+        The placeholder cannot be calculated until the associated query job
+        has finished, so we get those in jobfuncs._db_query with _get_sent_ids
         """
         if not self.current_batch:
             raise ValueError("Need batch")
@@ -370,7 +393,7 @@ class QueryIteration:
         For subsequent queries (i.e. over non-initial batches), there is no request;
         the request handler is manually called with JSON data instead of a request object.
 
-        The non-serialisable app is passed in separately.
+        The non-serialisable `app` is passed in separately.
         """
         job_id = cast(str, manual["job"])
         job = Job.fetch(job_id, connection=app["redis"])
@@ -405,13 +428,11 @@ class QueryIteration:
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
-            "_from_request": False,
             "word_count": manual["word_count"],
             "simultaneous": manual.get("simultaneous", ""),
             "needed": needed,
-            "previous": manual.get("previous", ""),  # comment out?
+            "previous": manual.get("previous", ""),
             "page_size": job.kwargs.get("page_size", 20),
-            # "cut_short": -1,
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
@@ -420,7 +441,6 @@ class QueryIteration:
             "from_memory": from_memory,
             "offset": manual["offset"],
             "total_duration": manual["total_duration"],
-            "current_batch": None,
             "all_batches": all_batches,
             "current_kwic_lines": manual["current_kwic_lines"],
             "total_results_so_far": tot_so_far,
@@ -430,16 +450,23 @@ class QueryIteration:
         }
         return cls(**details)
 
-    def decide_batch(self) -> None:
+    def decide_batch(self) -> Batch | None:
         """
-        Find the best next batch to query
+        Find the best next batch to query.
+
+        Pick the smallest batch first. Query the smallest available result until
+        `page_size` results are collected. Then, using the result count of the
+        queried batches and the word counts of the remaining batches, predict the
+        smallest next batch that's likely to yield enough results and return it.
+
+        If no batch is predicted to have enough results, pick the smallest
+        available (so more results go to the frontend faster).
         """
         if self.current_batch is not None:
             return None
 
         if self.done_batches and not self.send_stats:
-            self.current_batch = self.done_batches[-1]
-            return None
+            return self.done_batches[-1]
 
         buffer = 0.1  # set to zero for picking smaller batches
 
@@ -447,15 +474,14 @@ class QueryIteration:
         if self.is_vian:
             if self.done_batches:
                 raise ValueError("VIAN corpora have only one batch!?")
-            self.current_batch = self.all_batches[0]
-            return None
+            return self.all_batches[0]
 
         if not len(self.done_batches):
-            self.current_batch = next(
+            # return the "rest" batch or the next smallest
+            return next(
                 (x for x in self.all_batches if x[-2].endswith("rest")),
                 self.all_batches[0],
             )
-            return None
 
         # set here ensures we don't double count, even though it should not happen
         total_words_processed_so_far = sum([x[-1] for x in set(self.done_batches)])
@@ -466,26 +492,19 @@ class QueryIteration:
             if batch in self.done_batches:
                 continue
 
-            if self.full:
-                self.current_batch = batch
-                return None
+            if self.full or self.needed == -1:
+                return batch
 
             if not first_not_done:
                 first_not_done = batch
-                if self.needed == -1:
-                    self.current_batch = batch
-                    return None
 
             # todo: should we do this? next-smallest for low number of matches?
             if self.page_size > 0 and so_far < min(self.page_size, 25):
-                self.current_batch = batch
-                return None
+                return batch
             expected = batch[-1] * proportion_that_matches
             if float(expected) >= float(self.needed + (self.needed * buffer)):
-                self.current_batch = batch
-                return None
+                return batch
 
         if not first_not_done:
             raise ValueError("Could not find batch")
-        self.current_batch = first_not_done
-        return None
+        return first_not_done

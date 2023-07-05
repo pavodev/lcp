@@ -1,3 +1,40 @@
+"""
+Importer class: add corpora to our Postgres DB, as well as a relevant entry
+in the main.corpus table where config is stored.
+
+This code is as async as possible, so we can run multiple operations concurrently,
+with concurrency settings stored in .env
+
+Basically, the whole process is already heavily optimised, it will be hard
+to improve performance except by tweaking .env settings and/or adding compute.
+
+Users upload data by a command-line tool, `lcp-upload`, a submodule of this repo.
+
+Eventually they can also upload corpora through the web-app frontend.
+
+This all happens as one long pipeline. To provide the user with feedback, we
+don't just print progress info, but also write it to file in a special format.
+
+The CLI tool polls the /create and /upload endpoints to check progress; the
+code in upload.py reads the temporary file and calculates progress info to
+return to the user based on its contents.
+
+A parseable line in the file, <project-uuid>/.progress.txt looks like:
+
+    `:progress:<bytes_done>:<total_bytes>:<filename>:`
+
+There are many of these lines -- the bytes_done from all of them are summed,
+to provide a percentage total via tqdm progress bar
+
+In the last stages of the upload process, the corpus is indexed in the DB. For
+that, progress looks like:
+
+    `:progress:1:<num_jobs>:extras:`
+
+This can be used to show the user how many indexing jobs are done and left to go
+
+"""
+
 from __future__ import annotations
 
 import importlib
@@ -73,10 +110,7 @@ class Table:
 
 class Importer:
     def __init__(
-        self,
-        pool: AsyncEngine,
-        data: JSONObject,
-        project_dir: str,
+        self, pool: AsyncEngine, data: JSONObject, project_dir: str, debug: bool = False
     ) -> None:
         """
         Manage the import of a corpus into the DB via async postgres connection
@@ -106,6 +140,7 @@ class Importer:
         self.max_gb = int(os.getenv("IMPORT_MAX_MEMORY_GB", "1"))
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
+        self.debug = debug
         return None
 
     def update_progress(self, msg: str) -> None:
@@ -438,7 +473,8 @@ class Importer:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
-        await self.drop_similar()
+        if self.debug:
+            await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"

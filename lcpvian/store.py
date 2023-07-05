@@ -14,6 +14,8 @@ from .worker import SQLJob
 async def fetch_queries(request: web.Request) -> web.Response:
     """
     User wants to retrieve their stored queries from the DB
+
+    Currently these buttons are not shown in the frontend, so these are unused
     """
     request_data: dict[str, str] = await request.json()
     user = request_data["user"]
@@ -27,6 +29,8 @@ async def fetch_queries(request: web.Request) -> web.Response:
 async def store_query(request: web.Request) -> web.Response:
     """
     User wants to store one or more queries in the DB
+
+    Currently these buttons are not shown in the frontend, so these are unused
     """
     request_data: JSONObject = await request.json()
     user = cast(str, request_data["user"])

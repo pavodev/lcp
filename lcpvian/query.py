@@ -1,3 +1,20 @@
+"""
+query.py: The /query POST endpoint
+
+When user submits a new query or resumes an existing one, the /query endpoint
+calls the `query()` async function.
+
+The logic is basically:
+
+    1. Create a QueryIteration object from the POST data (qi.py)
+    2. Submit a query and/or sentences query
+    3. The callbacks for these queries publish the result as JSON (callbacks.py)
+    4. Listener hears these messages, sends them to relevant users (sock.py)
+    5. If query is not finished, the query() function is called again, but with
+       data passed in manually rather than through HTTP request.
+    6. Process repeats until query is satisfied/finished
+
+"""
 from __future__ import annotations
 
 import json
@@ -7,22 +24,17 @@ import traceback
 
 from collections.abc import Sequence
 
-from typing import TypeAlias, cast
+from typing import cast
 
 from aiohttp import web
 from rq.job import Job
 
 from .log import logged
 from .qi import QueryIteration
-from .typed import Batch, JSONObject
+from .typed import Batch, Iteration, JSONObject
 from .utils import ensure_authorised, push_msg
 
 # from .worker import SQLJob
-
-
-Iteration: TypeAlias = tuple[
-    Job | None, str | None, dict[str, str | bool | None], list[str]
-]
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -78,7 +90,13 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
 async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     """
-    Oversee the querying of a single batch
+    Oversee the querying of a single batch:
+
+        * Set up data needed for resumed queries
+        * Decide batch to query this time
+        * Submit actual query
+        * Optionally, submit sentences query
+        * Prepare for next iteration if need be
     """
     max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
 
@@ -90,7 +108,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
 
     jobs: dict[str, str | list[str] | bool] = {}
 
-    qi.decide_batch()
+    qi.current_batch = qi.decide_batch()
     qi.make_query()
 
     # print query info to terminal for first batch only
@@ -151,13 +169,24 @@ async def query(
     """
     Main query endpoint: generate and queue up corpus queries
 
+    Actual DB queries are done in the worker process, managed by RQ/Redis. Once
+    these jobs are submitted, we return an HTTP response with the job id,
+    so that the frontend knows the query has started and its job id.
+
     This endpoint can be manually triggered for queries over multiple batches. When
-    that happpens, manual is a dict with the needed data and the app is passed in
+    that happpens, `manual` is a dict with the needed data and the app is passed in
     as a kwarg.
 
     Because data can come in either through a request or through a dict, we normalise
     by creating a utils.QueryIteration dataclass. Use this to keep the namespace of this
     function from growing any larger...
+
+    On any serious error, we send a failure message to the user and log the
+    error to sentry if configured.
+
+    Simultaneous mode is currently not used, but can be enabled in .env . In
+    this mode, multiple query requests can be sent simultaneously, rather than
+    one at a time. This is experimental, it will probably remain unused.
     """
     # Turn request or manual dict into a QueryIteration object
     if manual is not None and isinstance(app, web.Application):

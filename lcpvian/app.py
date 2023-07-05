@@ -1,3 +1,9 @@
+"""
+The main setup for the aiohttp backend.
+
+Register URLs and endpoints, add redis, query_service, websockets, etc.
+"""
+
 from __future__ import annotations
 
 import importlib

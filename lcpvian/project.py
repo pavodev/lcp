@@ -1,3 +1,7 @@
+"""
+project.py: endpoints for project management
+"""
+
 from aiohttp import web
 
 from .utils import (

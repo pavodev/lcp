@@ -1,5 +1,5 @@
 """
-Do not add type annotations yet
+log.py: logging utilities
 """
 
 import logging
@@ -15,7 +15,7 @@ R = TypeVar("R")
 
 def logged(f: Callable[..., R]) -> Callable[..., R]:
     """
-    Decorator that logs start and end of function call
+    Decorator that logs start and end/error of function call
     """
 
     @wraps(f)

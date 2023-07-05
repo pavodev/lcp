@@ -63,7 +63,7 @@ class Interrupted(Exception):
 
 class CustomEncoder(json.JSONEncoder):
     """
-    UUID and time to string
+    UUID and time to string, otherwise normal serialisation
     """
 
     def default(self, obj: Any) -> JSON:
@@ -143,7 +143,7 @@ def _check_email(email: str) -> bool:
 
 def get_user_identifier(headers: dict[str, str | None]) -> str | None:
     """
-    Get best possible identifier
+    Get best possible identifier from LAMa headers
     """
     persistent_id: str | None = headers.get("X-Persistent-Id")
     persistent_name: str | None = headers.get("X-Principal-Name")
@@ -287,6 +287,11 @@ def _get_status(
 ) -> str:
     """
     Is a query finished, or do we need to do another iteration?
+
+        finished: no more batches available
+        overtime: query with time limitation ran out of time
+        partial: currently fewer than total_results_requested
+        satisfied: >= total_results_requested
     """
     if len(done_batches) == len(all_batches):
         return "finished"
@@ -319,6 +324,13 @@ async def gather(
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
+
+    Used exclusively during upload/import right now
+
+    Like asyncio.gather, it returns a list containing the results from the
+    coroutine `tasks`,
+
+    If there is an error, we try to cancel all jobs of the same type (name)
     """
     if n > 0:
         semaphore = asyncio.Semaphore(n)
@@ -353,7 +365,9 @@ async def push_msg(
     just: tuple[str | None, str] | None = None,
 ) -> None:
     """
-    Send JSON websocket message to one or more users
+    Send JSON websocket message to one or more users/rooms
+
+    A message can be sent to all users by passing an empty string as session_id
     """
     sent_to: set[tuple[str | None, str]] = set()
     for room, users in sockets.items():
@@ -495,7 +509,8 @@ def _get_sent_ids(
     associated: str | list[str], total: int, offset: int = 0
 ) -> list[int] | list[str]:
     """
-    Helper to format the query to retrieve sentences: add sent ids
+    Helper to format the query to retrieve sentences: get a list of unique sent
+    ids needed in order to create KWIC results
     """
     out: list[int] = []
     conn = get_current_connection()
@@ -567,6 +582,10 @@ def format_query_params(
 
 @final
 class WorkingParser(HiredisParser):
+    """
+    This is just a hack that allows mypy to work with async redis-py
+    """
+
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         return super().__init__(*args, **kwargs)
 
@@ -587,6 +606,10 @@ class WorkingParser(HiredisParser):
 
 @final
 class WorkingPythonParser(PythonParser):
+    """
+    This is also just a hack that allows mypy to work with async redis-py
+    """
+
     async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
         return False
 

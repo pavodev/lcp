@@ -20,7 +20,11 @@ from .utils import _get_sent_ids
 
 
 async def _upload_data(
-    project: str, user: str, room: str | None, **kwargs: dict[str, JSONObject]
+    project: str,
+    user: str,
+    room: str | None,
+    debug: bool,
+    **kwargs: dict[str, JSONObject | bool],
 ) -> MainCorpus | None:
     """
     Script to be run by rq worker, convert data and upload to postgres
@@ -42,7 +46,7 @@ async def _upload_data(
 
     upool = get_current_job()._upool  # type: ignore
 
-    importer = Importer(upool, data, corpus)
+    importer = Importer(upool, data, corpus, kwargs["debug"])
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
     try:
@@ -70,7 +74,7 @@ async def _create_schema(
     **kwargs: str | None,
 ) -> None:
     """
-    To be run by rq worker, create schema
+    To be run by rq worker, create schema in DB for a new corpus
     """
     extra = {"user": user, "room": room, "drops": drops, "schema": schema_name}
 

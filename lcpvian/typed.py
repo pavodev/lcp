@@ -11,6 +11,7 @@ from typing import Any, Mapping, TypeAlias
 from uuid import UUID
 
 from aiohttp import web
+from rq.job import Job
 
 from .configure import CorpusConfig
 
@@ -109,6 +110,11 @@ DBQueryParams: TypeAlias = dict[
     | dict[str, Any]
     | dict[str, list[int] | list[str]]  # sentences job
     | None,
+]
+
+# model a query iteration result
+Iteration: TypeAlias = tuple[
+    Job | None, str | None, dict[str, str | bool | None], list[str]
 ]
 
 # todo: finish this one

@@ -73,6 +73,15 @@ def _query(
     Job callback, publishes a redis message containing the results
 
     This is where we need to aggregate statistics over all jobs in the group
+
+    This callback can be run either in the worker or the main thread, and needs
+    to handle normal queries, as well as queries fetched from redis memory
+
+    When a new query is submitted, the QueryIteration object and the RQ Job
+    object have an empty string as the `first_job` attribute/key. For subsequent
+    batches, `first_job` is the initial job id. On this job's `meta`, we store
+    the aggregated results that are calculated during this callback. Then we
+    apply post_processes filters and send the result as a WS message.
     """
     table = f"{job.kwargs['current_batch'][1]}.{job.kwargs['current_batch'][2]}"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
@@ -148,9 +157,6 @@ def _query(
     job.meta["results_this_batch"] = n_res
     job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
-    # this is incorrect: we need the offset for next time.
-    job.meta["cut_short"] = total_requested if n_res > total_requested else -1
-    # job.meta["_job_duration"] = duration
     job.meta["_total_duration"] = total_duration
     job.meta["total_results_so_far"] = total_found
 
@@ -223,8 +229,8 @@ def _query(
     use = perc_words if search_all or is_full else perc_matches
     time_remaining = _time_remaining(status, total_duration, use)
 
-    user = kwargs.get("user", job.kwargs["user"])
-    room = kwargs.get("room", job.kwargs["room"])
+    user = cast(str, kwargs.get("user", job.kwargs["user"]))
+    room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
 
     jso = dict(**job.kwargs)
     jso.update(
@@ -285,9 +291,10 @@ def _query(
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
-def _time_remaining(status, total_duration, use):
+def _time_remaining(status: str, total_duration: float, use: float) -> float:
     """
     Helper to estimate remaining time for a job
     """
@@ -432,18 +439,20 @@ def _sentences(
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 def _document(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
+    **kwargs,
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
     """
-    user = job.kwargs["user"]
-    room = job.kwargs["room"]
+    user = cast(str, kwargs.get("user", job.kwargs["user"]))
+    room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
     if not room:
         return
     if isinstance(result, list) and len(result) == 1:
@@ -468,14 +477,15 @@ def _document_ids(
     job: SQLJob | Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
+    **kwargs,
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
     """
-    user = job.kwargs["user"]
-    room = job.kwargs["room"]
+    user = cast(str, kwargs.get("user", job.kwargs["user"]))
+    room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
     if not room:
-        return
+        return None
     msg_id = str(uuid4())
     formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
     jso = {
@@ -504,7 +514,7 @@ def _schema(
     user = job.kwargs.get("user")
     room = job.kwargs.get("room")
     if not room:
-        return
+        return None
     msg_id = str(uuid4())
     jso = {
         "user": user,
@@ -521,6 +531,7 @@ def _schema(
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 def _upload(
@@ -543,7 +554,7 @@ def _upload(
     msg_id = str(uuid4())
 
     if not room or not result:
-        return
+        return None
     jso = {
         "user": user,
         "room": room,
@@ -562,6 +573,7 @@ def _upload(
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 def _upload_failure(
@@ -638,7 +650,7 @@ def _general_failure(
     if isinstance(typ, Interrupted) or typ == Interrupted:
         # no need to send a message to the user for interrupts
         # jso = {"status": "interrupted", "action": "interrupted", "job": job.id}
-        return
+        return None
     else:
         jso = {
             "status": "failed",
@@ -656,6 +668,7 @@ def _general_failure(
 
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    return None
 
 
 def _queries(
@@ -691,6 +704,7 @@ def _queries(
     made = json.dumps(jso, cls=CustomEncoder)
     red = job._redis if hasattr(job, "_redis") else connection
     red.publish(PUBSUB_CHANNEL, made)
+    return None
 
 
 def _config(

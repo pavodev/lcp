@@ -60,7 +60,6 @@ def _aggregate_results(
     """
     Combine non-kwic results for storing and for sending to frontend
     """
-    # all_results = {0: meta_json}
     results_to_send: Results = {0: meta_json}
     n_results = 0
     rs = meta_json["result_sets"]
@@ -108,7 +107,18 @@ def _format_kwics(
     is_first: bool = False,
     offset: int = -1,
 ) -> tuple[Results, int]:
+    """
+    Take a DB query result, plus `sents`, the result of the query on the
+    prepared_segment table, and create the data needed by frontend to display
+    KWIC lines.
 
+    {0: meta_json, -1: {sent_id: [sent_offset, sent_data]}, 1: [token_ids, ...]}
+
+    For VIAN, the token_ids also include document_id, gesture info, etc.
+
+    Often we don't want all the sentences, we use `offset` and `total` to get
+    only a certain subset of them...
+    """
     sen: ResultSents = {}
     out: Results = {0: meta_json, -1: sen}
     first_list: int | None = None
@@ -118,6 +128,7 @@ def _format_kwics(
     stops: set[int] = set()
     n_results = 0
     skipped: defaultdict[int, int] = defaultdict(int)
+
     if sents is None:
         print("Sentences is None!?")
         sents = []
@@ -161,7 +172,7 @@ def _format_kwics(
 
 def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, int]:
     """
-    Combine all sent jobs into one
+    Combine all sent jobs into one -- only done at the end of a `full` query
     """
     n_results = 0
     sen: ResultSents = {}

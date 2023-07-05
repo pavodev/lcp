@@ -1,3 +1,7 @@
+"""
+ddl_gen.py: create SQL code for corpus creation based on uploaded metadata JSON
+"""
+
 from __future__ import annotations
 
 import argparse
@@ -17,6 +21,11 @@ from .typed import JSONObject
 
 @dataclass
 class DataNeededLater:
+    """
+    Everything that generate_ddl needs to return to upload.create function,
+    which has been called by the /create endpoint.
+    """
+
     create: str = ""
     constraints: list[str] = field(default_factory=list)
     prep_seg_create: str = ""

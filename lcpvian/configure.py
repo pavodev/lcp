@@ -1,3 +1,9 @@
+"""
+Model the various parts of the corpus template/corpus config
+
+Code for generating batches is also in here
+"""
+
 from typing import Any, NotRequired, Sequence, TypedDict
 
 
