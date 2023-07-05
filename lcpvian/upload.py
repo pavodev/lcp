@@ -18,7 +18,7 @@ from typing import cast
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
-from aiohttp import web, MultipartReader
+from aiohttp import web, BodyPartReader
 from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
@@ -209,7 +209,7 @@ async def upload(request: web.Request) -> web.Response:
 
     data = await request.multipart()
     has_file = False
-    bit: MultipartReader
+    bit: BodyPartReader
     async for bit in data:
         if not isinstance(bit.filename, str):
             continue
@@ -263,7 +263,7 @@ async def upload(request: web.Request) -> web.Response:
     return web.json_response(return_data)
 
 
-async def _save_file(path: str, bit: MultipartReader, has_file: bool) -> bool:
+async def _save_file(path: str, bit: BodyPartReader, has_file: bool) -> bool:
     """
     Helper to save file sent by FE to server
     """

@@ -186,13 +186,15 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> Results:
             dep.result, meta_json, j.result, needed, is_vian, is_first, offset
         )
         if got.get(-1):
-            out[-1].update(got[-1])
+            sents = cast(dict, out[-1])
+            sents.update(cast(dict, got[-1]))
         for k, v in got.items():
             if k < 1:
                 continue
             if k not in out:
                 out[k] = []
-            out[k] += v
+            add_to = cast(list, out[k])
+            add_to += cast(list, v)
 
     return out
 

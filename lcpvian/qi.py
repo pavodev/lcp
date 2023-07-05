@@ -132,7 +132,7 @@ class QueryIteration:
                 json_query = convert(self.query)
                 self.dqd = self.query
 
-        res: list[dict[str, dict[str, Any]]] = json_query.get("results", [])
+        res = cast(list[dict[str, dict[str, Any]]], json_query.get("results", []))
         has_kwic = any("plain" in r for r in res)
 
         if not has_kwic:

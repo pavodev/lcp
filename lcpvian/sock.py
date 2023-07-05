@@ -25,7 +25,7 @@ import os
 import traceback
 
 from collections.abc import Coroutine
-from typing import Sized, cast
+from typing import Any, Sized, cast
 
 try:
     from aiohttp import WSCloseCode, WSMsgType, web
@@ -43,7 +43,7 @@ from .query_service import QueryService
 from .utils import push_msg
 from .validate import validate
 
-from .typed import JSONObject, RedisMessage, Websockets
+from .typed import JSONObject, RedisMessage, Results, Websockets
 from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
 
 
@@ -202,7 +202,7 @@ async def _handle_message(
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action in simples or sent_allowed:
-        if action == "sentences" and len(payload["result"]) < 3:
+        if action == "sentences" and len(cast(Results, payload["result"])) < 3:
             pass
         else:
             await push_msg(
@@ -306,9 +306,8 @@ async def _handle_query(
         to_submit = query(None, manual=payload, app=app)
 
     if do_full:
-        await push_msg(
-            app["websockets"], room, payload["progress"], skip=None, just=(room, user)
-        )
+        prog = cast(dict[str, Any], payload["progress"])
+        await push_msg(app["websockets"], room, prog, skip=None, just=(room, user))
 
     if not can_send:
         print("Not sending WS message!")

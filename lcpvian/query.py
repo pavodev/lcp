@@ -92,7 +92,9 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     return qi
 
 
-async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
+async def _query_iteration(
+    qi: QueryIteration, it: int
+) -> QueryIteration | web.Response:
     """
     Oversee the querying of a single batch:
 
@@ -219,6 +221,7 @@ async def query(
                 return qi
             http_response.append(qi.job_info)
     except Exception as err:
+        qi = cast(QueryIteration, qi)
         tb = traceback.format_exc()
         fail: dict[str, str] = {
             "status": "error",

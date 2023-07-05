@@ -46,7 +46,9 @@ async def _upload_data(
 
     upool = get_current_job()._upool  # type: ignore
 
-    importer = Importer(upool, data, corpus, kwargs["debug"])
+    debug = cast(bool, kwargs["debug"])
+
+    importer = Importer(upool, data, corpus, debug)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
     try:
@@ -120,7 +122,7 @@ async def _db_query(
         needed = max(-1, needed)  # todo: fix this earlier?
         ids: list[str] | list[int] | None = _get_sent_ids(dep, needed, offset=offset)
         if not ids:
-            return []
+            return None
         params = {"ids": ids}
 
     name = "_upool" if store else "_pool"
