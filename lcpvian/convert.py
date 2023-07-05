@@ -106,7 +106,7 @@ def _format_kwics(
     is_vian: bool = False,
     is_first: bool = False,
     offset: int = -1,
-) -> tuple[Results, int]:
+) -> Results:
     """
     Take a DB query result, plus `sents`, the result of the query on the
     prepared_segment table, and create the data needed by frontend to display
@@ -126,7 +126,6 @@ def _format_kwics(
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
-    n_results = 0
     skipped: defaultdict[int, int] = defaultdict(int)
 
     if sents is None:
@@ -141,8 +140,7 @@ def _format_kwics(
         key = int(line[0])
         rest = line[1]
         # we should have one 0: n_results key always
-        if not key and not n_results:
-            n_results = rest[0]
+        if not key:
             continue
         if key not in kwics:
             continue
@@ -167,35 +165,26 @@ def _format_kwics(
         bit.append(rest)
         counts[key] += 1
 
-    return out, n_results
+    return out
 
 
-def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, int]:
+def _get_all_sents(job, base, is_vian, meta_json, connection) -> Results:
     """
     Combine all sent jobs into one -- only done at the end of a `full` query
     """
-    n_results = 0
     sen: ResultSents = {}
     out: Results = {0: meta_json, -1: sen}
     is_first = True
-    done_batches: set[tuple] = set()
+    got: Results
     for jid in base.meta["_sent_jobs"]:
-        if job.id == jid:
-            j = job
-        else:
-            j = Job.fetch(jid, connection=connection)
+        j = job if job.id == jid else Job.fetch(jid, connection=connection)
         dep = _get_associated_query_job(j.kwargs["depends_on"], connection)
-        batch = dep.kwargs["current_batch"]
-        if batch not in done_batches:
-            n_results += dep.meta["results_this_batch"]
-            done_batches.add(batch)
         resume = j.kwargs.get("resume", False)
         offset = j.kwargs.get("offset", 0) if resume else -1
         needed = j.kwargs.get("needed", -1)
-        got, n = _format_kwics(
+        got = _format_kwics(
             dep.result, meta_json, j.result, needed, is_vian, is_first, offset
         )
-        # n_results += n # maybe wrong if multiple jobs have same batch??
         if got.get(-1):
             out[-1].update(got[-1])
         for k, v in got.items():
@@ -205,7 +194,7 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> tuple[Results, 
                 out[k] = []
             out[k] += v
 
-    return out, n_results
+    return out
 
 
 def _format_vian(

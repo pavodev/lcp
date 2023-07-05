@@ -310,7 +310,7 @@ async def _handle_query(
             app["websockets"], room, payload["progress"], skip=None, just=(room, user)
         )
 
-    if not can_send and (payload.get("send_stats", True) or do_full):
+    if not can_send:
         print("Not sending WS message!")
     else:
         keys = [
@@ -327,6 +327,7 @@ async def _handle_query(
             "is_vian",
             "table",
             "total_duration",
+            "jso",
             "from_memory",
             "batch_matches",
             "offset",

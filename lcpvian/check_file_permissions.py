@@ -1,3 +1,8 @@
+"""
+check-file-permissions.py: endpoint for telling FE whether user has permission
+for a given resource
+"""
+
 from typing import Any, cast
 
 from aiohttp import web

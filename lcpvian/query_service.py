@@ -161,7 +161,7 @@ class QueryService:
         corpus_id: int,
         user: str,
         room: str | None,
-        queue: str = "query",
+        queue: str = "internal",
     ) -> SQLJob | Job:
         """
         Fetch document id: name data from DB.
@@ -197,7 +197,7 @@ class QueryService:
         doc_id: int,
         user: str,
         room: str | None,
-        queue: str = "query",
+        queue: str = "internal",
     ) -> SQLJob | Job:
         """
         Fetch info about a document from DB/cache
@@ -352,7 +352,7 @@ class QueryService:
                 return already
         except NoSuchJobError:
             pass
-        job = self.app["query"].enqueue(
+        job = self.app["internal"].enqueue(
             _db_query,
             on_success=_config,
             job_id=job_id,
@@ -365,7 +365,7 @@ class QueryService:
         return job
 
     def fetch_queries(
-        self, user: str, room: str, queue: str = "alt", limit: int = 10
+        self, user: str, room: str, queue: str = "internal", limit: int = 10
     ) -> SQLJob | Job:
         """
         Get previous saved queries for this user/room
@@ -402,7 +402,7 @@ class QueryService:
         idx: int,
         user: str,
         room: str,
-        queue: str = "alt",
+        queue: str = "internal",
     ) -> SQLJob | Job:
         """
         Add a saved query to the db
@@ -437,7 +437,7 @@ class QueryService:
         user: str,
         project: str,
         room: str | None = None,
-        queue: str = "alt",
+        queue: str = "background",
         gui: bool = False,
         user_data: JSONObject | None = None,
         is_vian: bool = False,
@@ -470,7 +470,7 @@ class QueryService:
         user: str | None,
         room: str | None,
         project_name: str,
-        queue: str = "alt",
+        queue: str = "background",
         drops: list[str] | None = None,
         gui: bool = False,
     ) -> SQLJob | Job:

@@ -70,7 +70,7 @@ PORT = int(os.getenv("SQL_PORT", 25432))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
-tunnel: SSHTunnelForwarder | None
+tunnel: SSHTunnelForwarder
 if os.getenv("SSH_HOST"):
     tunnel = SSHTunnelForwarder(
         os.environ["SSH_HOST"],
@@ -80,20 +80,16 @@ if os.getenv("SSH_HOST"):
         remote_bind_address=(HOST, PORT),
     )
     tunnel.start()
-else:
-    tunnel = None
+    HOST = "localhost"
+    PORT = tunnel.local_bind_port
 
 
-if tunnel:
-    upload_connstr = f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}?prepared_statement_cache_size=1"
-    query_connstr = f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@localhost:{tunnel.local_bind_port}/{DBNAME}?prepared_statement_cache_size=1"
-else:
-    upload_connstr = (
-        f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
-    )
-    query_connstr = (
-        f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
-    )
+upload_connstr = (
+    f"postgresql+asyncpg://{UPLOAD_USER}:{UPLOAD_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+)
+query_connstr = (
+    f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+)
 
 
 query_kwargs = dict(
@@ -138,7 +134,7 @@ class MyWorker(Worker):
 async def work() -> None:
 
     with Connection():
-        w = MyWorker(["query", "alt", "export"])
+        w = MyWorker(["internal", "query", "background"])
         w.work()
 
 

@@ -33,6 +33,8 @@ that, progress looks like:
 
 This can be used to show the user how many indexing jobs are done and left to go
 
+Look at upload._get_progress to understand how the pgoress info is parsed
+
 """
 
 from __future__ import annotations

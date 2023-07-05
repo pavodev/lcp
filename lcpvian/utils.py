@@ -1,3 +1,7 @@
+"""
+utils.py: all miscellaneous helpers and tools used by backend
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -50,7 +54,7 @@ from .typed import (
 )
 from .worker import SQLJob
 
-PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
+PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
 
 class Interrupted(Exception):

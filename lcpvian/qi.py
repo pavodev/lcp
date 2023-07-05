@@ -25,6 +25,8 @@ which can broadcast it to frontends via websockets, and trigger new jobs if need
 be. Then the process repeats...
 """
 import json
+
+# import logging
 import sys
 
 from collections.abc import Sequence
@@ -48,6 +50,7 @@ else:
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
+from .utils import push_msg
 from .worker import SQLJob
 
 if sys.version_info <= (3, 9):
@@ -79,7 +82,6 @@ class QueryIteration:
     resume: bool = False
     previous: str = ""
     current_kwic_lines: int = 0
-    request_data: JSONObject | None = None
     current_batch: Batch | None = None
     total_duration: float = 0.0
     done_batches: list[Batch] = field(default_factory=list)
@@ -91,7 +93,7 @@ class QueryIteration:
     dqd: str = ""
     sql: str = ""
     start_query_from_sents: bool = False
-    send_stats: bool = True
+    no_more_data: bool = False
     full: bool = False
     offset: int = 0
     jso: Query = field(default_factory=dict)
@@ -120,11 +122,15 @@ class QueryIteration:
             lang=self._determine_language(self.current_batch[2]),
             vian=self.is_vian,
         )
-        try:
-            json_query = json.loads(self.query)
-        except json.JSONDecodeError:
-            json_query = convert(self.query)
-            self.dqd = self.query
+        if self.jso:
+            json_query = self.jso
+        else:
+            try:
+                json_query = json.loads(self.query)
+                json_query = json.loads(json.dumps(json_query, sort_keys=True))
+            except json.JSONDecodeError:
+                json_query = convert(self.query)
+                self.dqd = self.query
 
         res: list[dict[str, dict[str, Any]]] = json_query.get("results", [])
         has_kwic = any("plain" in r for r in res)
@@ -177,7 +183,7 @@ class QueryIteration:
         Also used when query is resumed, or when user does `Search entire corpus`
         """
         request_data = await request.json()
-        corp = request_data["corpora"]
+        corp = request_data.get("corpora", [])
         if not isinstance(corp, list):
             corp = [corp]
         corpora_to_use = [int(i) for i in corp]
@@ -203,7 +209,6 @@ class QueryIteration:
 
         details = {
             "corpora": corpora_to_use,
-            "request_data": request_data,
             "user": request_data["user"],
             "app": request.app,
             "room": request_data["room"],
@@ -259,7 +264,7 @@ class QueryIteration:
         Helper to submit a query job to the Query Service
         """
         job: Job | SQLJob
-        if self.offset or not self.send_stats:
+        if self.offset > 0:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
@@ -282,7 +287,6 @@ class QueryIteration:
             existing_results=self.existing_results,
             sentences=self.sentences,
             page_size=self.page_size,
-            send_stats=self.send_stats,
             post_processes=self.post_processes,
             debug=self.app["_debug"],
             resume=self.resume,
@@ -294,14 +298,14 @@ class QueryIteration:
             current_kwic_lines=self.current_kwic_lines,
             dqd=self.dqd,
             first_job=self.first_job,
-            jso=json.dumps(self.jso, indent=4),
+            jso=self.jso,
             sql=self.sql,
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
         )
 
-        queue = "query" if not self.full else "alt"
+        queue = "query" if not self.full else "background"
 
         do_sents: bool | None
         job, do_sents = await self.app["query_service"].query(
@@ -336,8 +340,8 @@ class QueryIteration:
             query_started=query_started,
             from_memory=self.from_memory,
             simultaneous=self.simultaneous,
+            no_more_data=self.no_more_data,
             debug=self.app["_debug"],
-            send_stats=self.send_stats,
             first_job=self.first_job or self.job_id,
             dqd=self.dqd,
             current_kwic_lines=self.current_kwic_lines,
@@ -348,7 +352,7 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
-        queue = "query" if not self.full else "alt"
+        queue = "query" if not self.full else "background"
         qs = self.app["query_service"]
         sents_jobs = qs.sentences(
             self.sents_query(), depends_on=to_use, queue=queue, **kwargs
@@ -425,6 +429,7 @@ class QueryIteration:
             "room": manual["room"],
             "job": job,
             "app": app,
+            "jso": job.kwargs["jso"],
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
@@ -465,8 +470,15 @@ class QueryIteration:
         if self.current_batch is not None:
             return None
 
-        if self.done_batches and not self.send_stats:
+        if self.done_batches and self.resume:
+            if len(self.done_batches) == len(self.all_batches):
+                self.start_query_from_sents = False
+                self.no_more_data = True
             return self.done_batches[-1]
+
+        if not self.resume and len(self.done_batches) == len(self.all_batches):
+            self.no_more_data = True
+            return None
 
         buffer = 0.1  # set to zero for picking smaller batches
 
@@ -508,3 +520,25 @@ class QueryIteration:
         if not first_not_done:
             raise ValueError("Could not find batch")
         return first_not_done
+
+    async def no_batch(self) -> web.Response:
+        """
+        What we do when there is no available batch
+        """
+        info = "Could not create query: no batches"
+        msg: dict[str, str] = {
+            "status": "error",
+            "action": "no_batch",
+            "user": self.user,
+            "room": self.room or "",
+            "info": info,
+        }
+        err = f"Error: {info} ({self.user}/{self.room})"
+        # alert everyone possible about this problem:
+        print(f"{err}: {info}")
+        # logging.error(err, extra=msg)
+        payload = cast(JSONObject, msg)
+        room: str = self.room or ""
+        just: tuple[str, str] = (room, self.user)
+        await push_msg(self.app["websockets"], room, payload, just=just)
+        return web.json_response(msg)

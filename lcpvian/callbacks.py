@@ -90,6 +90,7 @@ def _query(
     duration: float = round((ended_at - started_at).total_seconds(), 3)
     total_duration = round(job.kwargs.get("total_duration", 0.0) + duration, 3)
     duration_string = f"Duration ({table}): {duration} :: {total_duration}"
+
     from_memory = kwargs.get("from_memory", False)
     meta_json: QueryMeta = job.kwargs.get("meta_json")
     existing_results: Results = {0: meta_json}
@@ -98,20 +99,12 @@ def _query(
     total_before_now = job.kwargs["total_results_so_far"]
     done_part = job.kwargs["done_batches"]
     is_full = kwargs.get("full", job.kwargs["full"])
-
     first_job = _get_first_job(job, connection)
     stored = first_job.meta.get("progress_info", {})
     existing_results = first_job.meta.get("all_non_kwic_results", existing_results)
     total_requested = kwargs.get(
         "total_results_requested", job.kwargs["total_results_requested"]
     )
-
-    if total_requested > job.meta.get("highest_requested", 0):
-        job.meta["highest_requested"] = total_requested
-
-    # ensure we don't send this same result again later if we don't need to
-    send_stats = job.meta.get("_already_sent", False) and not (is_base and from_memory)
-    job.meta["_already_sent"] = True
 
     # if from memory, we had this result cached, we just need to apply filters
     if from_memory:
@@ -153,7 +146,6 @@ def _query(
         time_so_far=total_duration,
     )
     job.meta["_status"] = status
-    job.meta["_full"] = is_full
     job.meta["results_this_batch"] = n_res
     job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
@@ -213,7 +205,9 @@ def _query(
     if is_latest:
         first_job.meta["progress_info"] = progress_info
 
-    can_send = not is_full or status == "finished"
+    # can_send controls whether or not the FE gets a message with the stats...
+    can_send = _decide_can_send(status, is_full, is_base, from_memory)
+
     msg_id = str(uuid4())  # todo: hash instead?
 
     if "latest_stats_message" not in first_job.meta:
@@ -246,7 +240,6 @@ def _query(
             "duration_string": duration_string,
             "total_results_so_far": total_found,
             "table": table,
-            "send_stats": send_stats,
             "first_job": first_job.id,
             "search_all": search_all,
             "batches_done": batches_done_string,
@@ -300,7 +293,25 @@ def _time_remaining(status: str, total_duration: float, use: float) -> float:
     if use <= 0.0:
         return 0.0
     timed = (total_duration * (100.0 / use)) - total_duration
-    return max(0.0, timed)
+    return max(0.0, round(timed, 3))
+
+
+def _decide_can_send(
+    status: str, is_full: bool, is_base: bool, from_memory: bool
+) -> bool:
+    """
+    Helper to figure out if we can send query message to the user or not
+
+    We don't exit early if we can't send, because we still need to store the
+    message and potentially trigger a new job
+    """
+    if not is_full or status == "finished":
+        return True
+    elif is_base and from_memory:
+        return True
+    elif not is_base and not from_memory:
+        return True
+    return False
 
 
 def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
@@ -327,29 +338,16 @@ def _sentences(
     """
 
     total_requested = _get_total_requested(kwargs, job)
-
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
-
-    depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
-
-    if total_requested > depended.meta.get("highest_requested", 0):
-        depended.meta["highest_requested"] = total_requested
 
     if result:
         # _sents_job is a dict of {job_id: None} (so the keys are an ordered set)
         base.meta["_sent_jobs"][job.id] = None
 
-    full = kwargs.get("full", job.kwargs.get("full", depended.meta.get("_full", False)))
+    depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
+    full = kwargs.get("full", job.kwargs.get("full", False))
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
-    # todo: are we really doing this thing about only first batch being limited?
-    # if job.kwargs["first_job"] != depends_on:
-    #    total_requested = -1
-    # is_first = not bool(depended.kwargs.get("first_job", ""))
-    # if is_first is False, it can trigger the 'get all kwic for non-first batch' idea
-    is_first = True
-
-    # get the offset/limit for kwic lines
     resume = cast(bool, job.kwargs.get("resume", False))
     offset = cast(int, job.kwargs.get("offset", 0) if resume else -1)
     prev_offset = cast(int, depended.meta.get("latest_offset", -1))
@@ -359,34 +357,20 @@ def _sentences(
 
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
-    total_so_far = depended.meta["total_results_so_far"]
 
-    # status is calculated here on the offchance it is possible for a sent
-    # job to have a different status from its associated query result?
-    done_batches = depended.kwargs["done_batches"]
-    if depended.kwargs["current_batch"] not in done_batches:
-        done_batches.append(depended.kwargs["current_batch"])
-    status = _get_status(
-        total_so_far,
-        done_batches=done_batches,
-        all_batches=depended.kwargs["all_batches"],
-        total_results_requested=total_requested,
-        search_all=depended.meta["_search_all"],
-        full=depended.kwargs.get("full", False),
-        time_so_far=depended.meta["_total_duration"],
-    )
+    status = depended.meta["_status"]
     depended.meta["_status"] = status
-
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
 
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
+    to_send: Results
     if get_all_sents:
-        to_send, n_res = _get_all_sents(job, base, is_vian, meta_json, connection)
+        to_send = _get_all_sents(job, base, is_vian, meta_json, connection)
     else:
-        to_send, n_res = _format_kwics(
-            depended.result, meta_json, result, total_to_get, is_vian, is_first, offset
+        to_send = _format_kwics(
+            depended.result, meta_json, result, total_to_get, is_vian, True, offset
         )
 
     depended.save_meta()
@@ -417,11 +401,16 @@ def _sentences(
     base.meta["sent_job_ws_messages"][msg_id] = None
     base.save_meta()
 
+    more_data = not job.kwargs["no_more_data"]
+    if status == "finished" and more_data:
+        more_data = base.meta["total_results_so_far"] >= total_requested
+
     jso = {
         "result": to_send,
         "status": status,
         "action": "sentences",
         "full": full,
+        "more_data_available": more_data,
         "submit_query": submit_payload if submit_query else False,
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),

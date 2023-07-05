@@ -129,11 +129,6 @@ async def _db_query(
 
     params = params or {}
 
-    n = 1
-    while "%s" in query:
-        query = query.replace("%s", f"${n}", 1)
-        n += 1
-
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)

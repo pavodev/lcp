@@ -34,8 +34,6 @@ from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
 from .utils import ensure_authorised, push_msg
 
-# from .worker import SQLJob
-
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
     """
@@ -65,24 +63,30 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
-    qi.send_stats = False
-
-    if qi.total_results_so_far >= tot_req:
-        qi.needed = tot_req - prev_total
-    elif not_enough:
-        qi.needed = left_in_batch
-        qi.start_query_from_sents = True
-    else:
-        raise ValueError("Backend error. Please debug")
-
-    if qi.full:
-        qi.start_query_from_sents = True
 
     prev = cast(Sequence, prev_job.kwargs["current_batch"])
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)
     qi.done_batches = done_batches
+
+    all_batches_queried = len(done_batches) >= len(qi.all_batches)
+
+    if qi.total_results_so_far >= tot_req:
+        qi.needed = tot_req - prev_total
+    elif not_enough and not all_batches_queried:
+        qi.needed = left_in_batch
+        qi.start_query_from_sents = True
+    elif not_enough and all_batches_queried:
+        qi.needed = left_in_batch
+        qi.no_more_data = True
+        return qi
+    else:
+        raise ValueError("Backend error. Please debug")
+
+    if qi.full:
+        qi.start_query_from_sents = True
+
     qi.total_results_so_far = so_far
 
     return qi
@@ -103,16 +107,22 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     # handle resumed queries -- figure out if we need to query new batch
     if qi.resume:
         qi = await _do_resume(qi)
+        if qi.needed < 0 and qi.no_more_data:
+            return await qi.no_batch()
     else:
         qi.offset = 0
 
     jobs: dict[str, str | list[str] | bool] = {}
 
     qi.current_batch = qi.decide_batch()
+
+    if not qi.current_batch and qi.no_more_data:
+        return await qi.no_batch()
+
     qi.make_query()
 
     # print query info to terminal for first batch only
-    if not it and not qi.job and not qi.resume and qi.send_stats:
+    if not it and not qi.job and not qi.resume:
         query_type = "DQD" if qi.dqd else "JSON"
         form = json.dumps(qi.jso, indent=4)
         print(f"Detected query type: {query_type}")
@@ -133,8 +143,8 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
     if (
         qi.current_batch is not None
         and qi.job is not None
-        and qi.send_stats
         and do_sents is not None
+        and not qi.resume
     ):
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
 
@@ -156,7 +166,7 @@ async def _query_iteration(qi: QueryIteration, it: int) -> QueryIteration:
         qi.done_batches.append(qi.current_batch)
         qi.current_batch = None
 
-    return qi  # job, depend, jobs, dep_chain
+    return qi
 
 
 @ensure_authorised
@@ -188,6 +198,7 @@ async def query(
     this mode, multiple query requests can be sent simultaneously, rather than
     one at a time. This is experimental, it will probably remain unused.
     """
+    qi: QueryIteration | web.Response
     # Turn request or manual dict into a QueryIteration object
     if manual is not None and isinstance(app, web.Application):
         # 'request' comes from sock.py, it is a non-first iteration
@@ -204,6 +215,8 @@ async def query(
     try:
         for it in range(iterations):
             qi = await _query_iteration(qi, it)
+            if not isinstance(qi, QueryIteration):
+                return qi
             http_response.append(qi.job_info)
     except Exception as err:
         tb = traceback.format_exc()

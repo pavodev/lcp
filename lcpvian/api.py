@@ -1,5 +1,5 @@
 """
-Tools used on the command line for showing corpora, running queries etc.
+api.py: tools used on the command line for showing corpora, running queries etc.
 """
 
 import json

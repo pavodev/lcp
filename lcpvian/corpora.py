@@ -1,6 +1,9 @@
 """
-Fetch a dict of corpora available for a given user and app,
-and return it as a JSON HTTP response
+corpora.py: /corpora endpoint, returns a dict of corpora available for a given
+user and app, and return it as a JSON HTTP response
+
+We use the complete version of this dict as app["config"], so no DB requests
+are needed for this reques.
 """
 
 from json.decoder import JSONDecodeError
@@ -13,7 +16,7 @@ from .utils import _filter_corpora, _lama_user_details, ensure_authorised
 @ensure_authorised
 async def corpora(request: web.Request) -> web.Response:
     """
-    Return config to frontend
+    Return config to frontend (as HTTP response, not WS message!)
     """
     request_data: dict[str, str | bool] = {}
     try:

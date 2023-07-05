@@ -1,19 +1,24 @@
+"""
+upload.py: /create and /upload endpoints, for creating new db schemata and for
+importing data into them. These endpoints can also be polled, which returns
+status information about the current task
+"""
+
 from __future__ import annotations
 
 import json
-
-# import logging
 import os
 import re
 import traceback
 
+from collections.abc import Callable
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
 from typing import cast
 from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
-from aiohttp import web
+from aiohttp import web, MultipartReader
 from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
@@ -188,6 +193,14 @@ async def upload(request: web.Request) -> web.Response:
     project_name = job.kwargs["project_name"]
     cpath = job.kwargs["path"]
 
+    ziptar = [
+        (".zip", is_zipfile, ZipFile, "namelist"),
+        (".tar", is_tarfile, TarFile, "getnames"),
+        (".tar.gz", is_tarfile, TarFile, "getnames"),
+        (".tar.xz", is_tarfile, TarFile, "getnames"),
+        (".7z", is_7zfile, SevenZipFile, "getnames"),
+    ]
+
     # username = request.rel_url.query.get("user_id", "")
     # room = request.rel_url.query.get("room", None)
 
@@ -196,53 +209,20 @@ async def upload(request: web.Request) -> web.Response:
 
     data = await request.multipart()
     has_file = False
+    bit: MultipartReader
     async for bit in data:
         if not isinstance(bit.filename, str):
             continue
-
         if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
             continue
         ext = os.path.splitext(bit.filename)[-1]
-        # filename = str(project) + ext
         path = os.path.join("uploads", cpath, bit.filename)
-        with open(path, "ba") as f:
-            while True:
-                chunk = await bit.read_chunk()
-                if not chunk:
-                    break
-                f.write(chunk)
-                has_file = True
-        ziptar = [
-            (".zip", is_zipfile, ZipFile, "namelist"),
-            (".tar", is_tarfile, TarFile, "getnames"),
-            (".tar.gz", is_tarfile, TarFile, "getnames"),
-            (".tar.xz", is_tarfile, TarFile, "getnames"),
-            (".7z", is_7zfile, SevenZipFile, "getnames"),
-        ]
+
+        has_file = await _save_file(path, bit, has_file)
+
         for ext, check, opener, method in ziptar:
             if path.endswith(ext) and check(path):
-                print(f"Extracting {ext} file: {bit.filename}")
-                with opener(path, "r") as compressed:
-                    for f in getattr(compressed, method)():
-                        basef = os.path.basename(str(f))
-                        if not str(f).endswith(VALID_EXTENSIONS):
-                            continue
-                        just_f = os.path.join("uploads", cpath, basef)
-                        dest = os.path.join("uploads", cpath)
-                        print(f"Uncompressing {basef}")
-                        if ext != ".7z":
-                            compressed.extract(f, dest)
-                        else:
-                            compressed.extract(dest, [f])
-                        try:
-                            os.rename(os.path.join(dest, str(f)), just_f)
-                        except Exception as err:
-                            print(f"Warning: {err}")
-                            pass
-                        print(f"Extracted: {basef}")
-                print(f"Extracting {ext} done!")
-                os.remove(path)  # todo: should we do this now?
-                print(f"Deleted: {path}")
+                _extract_file(bit, path, cpath, ext, opener, method)
             elif path.endswith(ext) and not check(path):
                 print(f"Something wrong with {path}. Ignoring...")
                 os.remove(path)
@@ -283,10 +263,51 @@ async def upload(request: web.Request) -> web.Response:
     return web.json_response(return_data)
 
 
+async def _save_file(path: str, bit: MultipartReader, has_file: bool) -> bool:
+    """
+    Helper to save file sent by FE to server
+    """
+    with open(path, "ba") as f:
+        while True:
+            chunk = await bit.read_chunk()
+            if not chunk:
+                break
+            f.write(chunk)
+            has_file = True
+    return has_file
+
+
+def _extract_file(
+    bit, path: str, cpath: str, ext: str, opener: Callable, method: str
+) -> None:
+    print(f"Extracting {ext} file: {bit.filename}")
+    with opener(path, "r") as compressed:
+        for f in getattr(compressed, method)():
+            basef = os.path.basename(str(f))
+            if not str(f).endswith(VALID_EXTENSIONS):
+                continue
+            just_f = os.path.join("uploads", cpath, basef)
+            dest = os.path.join("uploads", cpath)
+            print(f"Uncompressing {basef}")
+            if ext != ".7z":
+                compressed.extract(f, dest)
+            else:
+                compressed.extract(dest, [f])
+            try:
+                os.rename(os.path.join(dest, str(f)), just_f)
+            except Exception as err:
+                print(f"Warning: {err}")
+                pass
+            print(f"Extracted: {basef}")
+    print(f"Extracting {ext} done!")
+    os.remove(path)  # todo: should we do this now?
+    print(f"Deleted: {path}")
+
+
 @ensure_authorised
 async def make_schema(request: web.Request) -> web.Response:
     """
-    What happens when a user goes to /create and POSTS JSON
+    What happens when a user goes to /create and POSTs JSON
     """
     exists = request.rel_url.query.get("job")
     if exists:
@@ -377,8 +398,8 @@ async def make_schema(request: web.Request) -> web.Response:
     # which is on the borderline of being too high in prod.
     # becomes 1/4.3b chance if we use [0] instead of [1]
     # but the schema name gets noticeably uglier, so ...
-    prefix = corpus_folder.split("-", 2)[1]
-    schema_name = f"{corpus_name}__{prefix}"
+    suffix = corpus_folder.split("-", 2)[1]
+    schema_name = f"{corpus_name}__{suffix}"
 
     sames = [
         i["schema_name"]
@@ -386,7 +407,7 @@ async def make_schema(request: web.Request) -> web.Response:
         if "meta" in i
         and "schema_name" in i
         and i["meta"]["name"] == corpus_name
-        and i["meta"]["version"] == corpus_version
+        and str(i["meta"]["version"]) == str(corpus_version)
     ]
     drops = [f"DROP SCHEMA IF EXISTS {i} CASCADE;" for i in set(sames)]
 
