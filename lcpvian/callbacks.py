@@ -94,7 +94,7 @@ def _query(
     from_memory = kwargs.get("from_memory", False)
     meta_json: QueryMeta = job.kwargs.get("meta_json")
     existing_results: Results = {0: meta_json}
-    post_processes = job.kwargs.get("post_processes", {})
+    post_processes = kwargs.get("post_processes", job.kwargs.get("post_processes", {}))
     is_base = not bool(job.kwargs.get("first_job"))
     total_before_now = job.kwargs["total_results_so_far"]
     done_part = job.kwargs["done_batches"]

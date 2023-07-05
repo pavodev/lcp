@@ -135,9 +135,10 @@ class QueryService:
             job = Job.fetch(hashed, connection=self.app["redis"])
             is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
+            same_pp = job.kwargs["post_processes"] == kwargs["post_processes"]
             if job.get_status() == "finished":
                 print("Query found in redis memory. Retrieving...")
-                if is_first and not kwargs["full"]:
+                if is_first and not kwargs["full"] and same_pp:
                     await self.send_all_data(job, **kwargs)
                     return job, None
                 elif not kwargs["full"]:
@@ -148,6 +149,7 @@ class QueryService:
                         user=kwargs["user"],
                         room=kwargs["room"],
                         full=kwargs["full"],
+                        post_processes=kwargs["post_processes"],
                         from_memory=True,
                     )
                 return job, False
