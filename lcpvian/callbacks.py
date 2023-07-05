@@ -241,6 +241,7 @@ def _query(
             "total_results_so_far": total_found,
             "table": table,
             "first_job": first_job.id,
+            "post_processes": post_processes,
             "search_all": search_all,
             "batches_done": batches_done_string,
             "batch_matches": n_res,

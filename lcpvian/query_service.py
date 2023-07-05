@@ -43,6 +43,7 @@ from .callbacks import (
     _sentences,
     _upload,
 )
+from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs, Config
 from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
@@ -64,21 +65,24 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
-    async def send_all_data(self, job, **kwargs):
+    async def send_all_data(self, job: Job | SQLJob, **kwargs) -> None:
         """
         Get the stored messages related to a query and send them to frontend
         """
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
-        payload = json.loads(jso)
+        payload: JSONObject = json.loads(jso)
         payload["user"] = kwargs["user"]
         payload["room"] = kwargs["room"]
+        # we may have to apply the latest post-processes...
+        pps = cast(dict, kwargs["post_processes"] or payload["post_processes"])
+        if pps and pps != payload["post_processes"]:
+            payload["result"] = _apply_filters(payload["full_result"], pps)
         payload["no_restart"] = True
         self.app["redis"].expire(msg, self.query_ttl)
-        self.app["redis"].publish(
-            PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
-        )
+        strung: str = json.dumps(payload, cls=CustomEncoder)
+        self.app["redis"].publish(PUBSUB_CHANNEL, strung)
 
         for msg in job.meta.get("sent_job_ws_messages", {}):
             print(f"Retrieving sentences message: {msg}")
@@ -135,10 +139,9 @@ class QueryService:
             job = Job.fetch(hashed, connection=self.app["redis"])
             is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
-            same_pp = job.kwargs["post_processes"] == kwargs["post_processes"]
             if job.get_status() == "finished":
                 print("Query found in redis memory. Retrieving...")
-                if is_first and not kwargs["full"] and same_pp:
+                if is_first and not kwargs["full"]:
                     await self.send_all_data(job, **kwargs)
                     return job, None
                 elif not kwargs["full"]:
