@@ -781,13 +781,10 @@ myColl3 => collocation
   methods: {
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      // console.log("Page updated 1", currentPage, this.nResults, newNResults);
-      if (newNResults > this.nResults) {
+      if (newNResults >= this.nResults && this.WSDataResults.status != "finished") {
         this.nResults = newNResults;
         this.submit(null, true);
-        // console.log("Submit", newNResults);
       }
-      // console.log("Page updated 2", currentPage, this.nResults, newNResults);
     },
     updateQueryDQD(queryDQD) {
       this.queryDQD = queryDQD;
