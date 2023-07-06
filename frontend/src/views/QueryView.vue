@@ -335,7 +335,9 @@
           </div>
           <button
             type="button"
-            v-if="WSDataResults && WSDataResults.status == 'satisfied' && !loading"
+            v-if="
+              WSDataResults && WSDataResults.status == 'satisfied' && !loading
+            "
             @click="submitFullSearch"
             class="btn btn-primary me-1 mb-5"
           >
@@ -781,7 +783,10 @@ myColl3 => collocation
   methods: {
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      if (newNResults >= this.nResults && this.WSDataResults.status != "finished") {
+      if (
+        (newNResults >= this.nResults && !this.WSDataSentences) ||
+        (this.WSDataSentences && this.WSDataSentences.more_data_available)
+      ) {
         this.nResults = newNResults;
         this.submit(null, true);
       }
@@ -943,8 +948,10 @@ myColl3 => collocation
                     if (!(resultIndex in this.WSDataSentences.result)) {
                       this.WSDataSentences.result[resultIndex] = [];
                     }
-                    this.nResults = this.WSDataSentences.result[resultIndex].length;
-                    this.currentResults = this.WSDataSentences.result[resultIndex].length;
+                    this.nResults =
+                      this.WSDataSentences.result[resultIndex].length;
+                    this.currentResults =
+                      this.WSDataSentences.result[resultIndex].length;
                   }
                 }
               );
@@ -1009,7 +1016,12 @@ myColl3 => collocation
     submitFullSearch() {
       this.submit(null, true, false, true);
     },
-    async submit(event, resumeQuery = false, cleanResults = true, fullSearch = false) {
+    async submit(
+      event,
+      resumeQuery = false,
+      cleanResults = true,
+      fullSearch = false
+    ) {
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
