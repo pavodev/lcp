@@ -22,6 +22,9 @@ from sshtunnel import SSHTunnelForwarder
 
 load_dotenv(override=True)
 
+if os.getenv("CUSTOM_DOTENV"):
+    load_dotenv(os.getenv("CUSTOM_DOTENV"), override=True)
+
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
