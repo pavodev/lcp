@@ -45,7 +45,7 @@ from .callbacks import (
 )
 from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema
-from .typed import JSONObject, QueryArgs, Config, Results
+from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
 from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
 from .worker import SQLJob
 
@@ -77,8 +77,12 @@ class QueryService:
         payload["room"] = kwargs["room"]
         # we may have to apply the latest post-processes...
         pps = cast(dict, kwargs["post_processes"] or payload["post_processes"])
+        # json serialises the Results keys to strings, so we have to convert
+        # them back into int for the Results object to be correctly typed:
+        full_res = cast(dict[str, ResultsValue], payload["full_result"])
+        res = cast(Results, {int(k): v for k, v in full_res.items()})
         if pps and pps != payload["post_processes"]:
-            filtered = _apply_filters(cast(Results, payload["full_result"]), pps)
+            filtered = _apply_filters(res, pps)
             payload["result"] = cast(JSONObject, filtered)
         payload["no_restart"] = True
         self.app["redis"].expire(msg, self.query_ttl)

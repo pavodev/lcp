@@ -92,10 +92,13 @@ ResultSents: TypeAlias = dict[SentKey, Sentence]
 # kwic, collocation, freqdist data
 Analysis: TypeAlias = list[list[str | float | int | list[int]]]
 
+# -1, 0 and 1+ values in the Results object
+ResultsValue: TypeAlias = ResultSents | QueryMeta | Analysis
+
 # all the results put together into a single object
 Results: TypeAlias = dict[
     int,  # -1 is sentences, 0 is metadata, more is kwic/freq/collocates
-    ResultSents | QueryMeta | Analysis,
+    ResultsValue,
 ]
 
 # todo: figure this out -- eternally running background jobs
