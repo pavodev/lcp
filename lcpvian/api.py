@@ -21,9 +21,6 @@ async def corpora(app_type: str = "all") -> JSONObject:
 
     load_dotenv(override=True)
 
-    if os.getenv("CUSTOM_DOTENV"):
-        load_dotenv(os.getenv("CUSTOM_DOTENV"), override=True)
-
     headers: JSONObject = {}
     jso = {"appType": app_type, "all": True}
 

@@ -6,5 +6,6 @@ build/
 worker.cpython*
 uploads/*
 .coverage
+.env
 *.so
 *.c

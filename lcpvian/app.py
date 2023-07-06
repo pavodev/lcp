@@ -21,9 +21,6 @@ from dotenv import load_dotenv
 
 load_dotenv(override=True)
 
-if os.getenv("CUSTOM_DOTENV"):
-    load_dotenv(os.getenv("CUSTOM_DOTENV"), override=True)
-
 
 SENTRY_DSN: str | None = os.getenv("SENTRY_DSN", None)
 
