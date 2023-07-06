@@ -1,7 +1,4 @@
-# This file is a template, and might need editing before it works on your project.
-# To contribute improvements to CI/CD templates, please follow the Development guide at:
-# https://docs.gitlab.com/ee/development/cicd/templates.html
-# This specific template is located at:
+# This file derived from template located at:
 # https://gitlab.com/gitlab-org/gitlab/-/blob/master/lib/gitlab/ci/templates/Python.gitlab-ci.yml
 
 # Official language image. Look for the different tagged releases at:
@@ -16,51 +13,33 @@ services:
 variables:
   PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
   GIT_SUBMODULE_STRATEGY: recursive
-# Pip's cache doesn't store the python packages
-# https://pip.pypa.io/en/stable/reference/pip_install/#caching
-#
-# If you want to also cache the installed packages, you have to install
-# them in a virtualenv and cache it as well.
+
 cache:
   paths:
     - .cache/pip
     - venv/
 
 before_script:
-  - python -V  # Print out python version for debugging
+  - python -V
   - pip install virtualenv
   - virtualenv venv
   - source venv/bin/activate
-  #- apt-get update -y
-  #- apt-get install git -y
-  #- git submodule sync --recursive
-  #- git submodule update --init --recursive --remote
 
 test:
   script:
     - apt-get update -y
     - apt-get install git -y
     - apt-get install build-essential -y
-    # - git submodule update --init
-    # - apt-get -y install systemctl
-    # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query.git
-    # - git clone https://gitlab-ci-token:${CI_JOB_TOKEN}@gitlab.uzh.ch/LiRI/projects/abstract-query
     - pip install -r requirements.txt
     - pip install coverage mypy
-    - pwd
-    - ls -al
-    - ls -al abstract-query
     - sleep 5
     - cd abstract-query && python setup.py develop
     - pip install -r requirements.txt
     # - apt-get install redis -y
     - apt-get install redis-server -y
     - redis-cli -h redis ping
-    - pwd
-    - ls -al
     - cd /builds/LiRI/projects/lcpvian
-    - mypy lcpvian/app.py
-    # building c is not ready yet, mypy bugs most likely
+    - mypy lcpvian
     - python setup.py build_ext --inplace
     # unit tests will not work until db access exists
     # - coverage run -m unittest
