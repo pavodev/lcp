@@ -17,6 +17,12 @@ cd lcpvian
 
 This will also clone the `abstract-query` and `lcp-upload` submodules. If they are not available in the `lcpvian` directory, you should remove the first two lines from `requirements.txt` before installing.
 
+You will also need to copy the `.env` config template to the path it needs to be at in order to be read:
+
+```bash
+cp .env.dev .env
+```
+
 ## Things that need to be running for lcpvian to work
 
 * The backend (`./lcpvian`)
@@ -42,7 +48,7 @@ python setup.py build_ext --inplace
 cd ..
 python setup.py build_ext --inplace
 ```
-￼
+
 To start backend for development, first edit `.env` so that it contains the correct config.
 
 Then, start as many RQ workers as you want. To start one:
