@@ -345,7 +345,10 @@ def _sentences(
             full,
         )
 
+    more_data = not job.kwargs["no_more_data"]
     submit_query = job.kwargs["start_query_from_sents"]
+    if submit_query and more_data:
+        status = "partial"
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
@@ -373,7 +376,6 @@ def _sentences(
     base.meta["_sent_jobs"][job.id] = None
     base.save_meta()
 
-    more_data = not job.kwargs["no_more_data"]
     if status == "finished" and more_data:
         more_data = base.meta["total_results_so_far"] >= total_requested
 
