@@ -210,6 +210,11 @@ async def _handle_message(
         # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
+    if action == "sentences":
+        drops = ["can_send", "submit_query"]
+        for drop in drops:
+            payload.pop(drop, None)
+
     if action in simples or sent_allowed:
         if action == "sentences" and len(cast(Results, payload["result"])) < 3:
             pass
