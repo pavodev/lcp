@@ -7,7 +7,6 @@ from rq.job import Job
 
 from .typed import JSONObject
 from .utils import ensure_authorised
-from .worker import SQLJob
 
 
 @ensure_authorised
@@ -20,7 +19,7 @@ async def fetch_queries(request: web.Request) -> web.Response:
     request_data: dict[str, str] = await request.json()
     user = request_data["user"]
     room = request_data.get("room")
-    job: Job | SQLJob = request.app["query_service"].fetch_queries(user, room)
+    job: Job = request.app["query_service"].fetch_queries(user, room)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
 
@@ -46,6 +45,6 @@ async def store_query(request: web.Request) -> web.Response:
     )
     idx = uuid4()
     args = (to_store, idx, user, room)
-    job: Job | SQLJob = request.app["query_service"].store_query(*args)
+    job: Job = request.app["query_service"].store_query(*args)
     info: dict[str, str] = {"status": "started", "job": job.id, "query_id": str(idx)}
     return web.json_response(info)

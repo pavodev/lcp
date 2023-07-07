@@ -52,7 +52,6 @@ from .typed import (
     RunScript,
     Websockets,
 )
-from .worker import SQLJob
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
@@ -556,7 +555,7 @@ def _get_sent_ids(
 def _get_associated_query_job(
     depends_on: str | list[str],
     connection: RedisConnection,
-) -> SQLJob | Job:
+) -> Job:
     """
     Helper to find the query job associated with sent job
     """
@@ -585,9 +584,7 @@ def format_query_params(
     return query, tuple(out)
 
 
-def _get_first_job(
-    job: SQLJob | Job, connection: RedisConnection[bytes]
-) -> SQLJob | Job:
+def _get_first_job(job: Job, connection: RedisConnection[bytes]) -> Job:
     """
     Helper to get the base job from a group of query jobs
     """
@@ -629,7 +626,7 @@ def _decide_can_send(
     return False
 
 
-def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
+def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     """
     Helper to find the total requested -- remove this after cleanup ideally
     """

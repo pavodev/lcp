@@ -47,7 +47,6 @@ from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
 from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
-from .worker import SQLJob
 
 
 @final
@@ -65,7 +64,7 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
-    async def send_all_data(self, job: Job | SQLJob, **kwargs) -> None:
+    async def send_all_data(self, job: Job, **kwargs) -> None:
         """
         Get the stored messages related to a query and send them to frontend
         """
@@ -108,12 +107,12 @@ class QueryService:
         query: str,
         queue: str = "query",
         **kwargs: Unpack[QueryArgs],  # type: ignore
-    ) -> tuple[SQLJob | Job, bool | None]:
+    ) -> tuple[Job, bool | None]:
         """
         Here we send the query to RQ and therefore to redis
         """
         hashed = str(hash(query))
-        job: SQLJob | Job | None
+        job: Job | None
 
         job, submitted = await self._attempt_query_from_cache(hashed, **kwargs)
         if job is not None:
@@ -133,12 +132,12 @@ class QueryService:
 
     async def _attempt_query_from_cache(
         self, hashed: str, **kwargs
-    ) -> tuple[Job | SQLJob | None, bool | None]:
+    ) -> tuple[Job | None, bool | None]:
         """
         Try to get a query from cache. Return the job and an indicator of
         whether or not a job was submitted
         """
-        job: SQLJob | Job | None
+        job: Job | None
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -172,7 +171,7 @@ class QueryService:
         user: str,
         room: str | None,
         queue: str = "internal",
-    ) -> SQLJob | Job:
+    ) -> Job:
         """
         Fetch document id: name data from DB.
 
@@ -182,7 +181,7 @@ class QueryService:
         query = f"SELECT document_id, name FROM {schema}.document;"
         kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
         hashed = str(hash((query, corpus_id)))
-        job: SQLJob | Job
+        job: Job
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -208,14 +207,14 @@ class QueryService:
         user: str,
         room: str | None,
         queue: str = "internal",
-    ) -> SQLJob | Job:
+    ) -> Job:
         """
         Fetch info about a document from DB/cache
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
-        job: SQLJob | Job
+        job: Job
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -256,7 +255,7 @@ class QueryService:
             hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
         )
         kwargs["sentences_query"] = query
-        job: SQLJob | Job
+        job: Job
 
         # never do this, right now...
         if kwargs.get("from_memory", False) and not kwargs["full"] and False:
@@ -288,7 +287,7 @@ class QueryService:
         """
         jobs: list[str] = []
         kwa: dict[str, int | bool | str | None] = {}
-        job: SQLJob | Job
+        job: Job
         try:
             # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -342,11 +341,11 @@ class QueryService:
                 need_to_do.append(sent_job)
         return dones, need_to_do
 
-    async def get_config(self) -> SQLJob | Job:
+    async def get_config(self) -> Job:
         """
         Get initial app configuration JSON
         """
-        job: Job | SQLJob
+        job: Job
         job_id = "app_config"
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
         redis: RedisConnection[bytes] = self.app["redis"]
@@ -376,7 +375,7 @@ class QueryService:
 
     def fetch_queries(
         self, user: str, room: str, queue: str = "internal", limit: int = 10
-    ) -> SQLJob | Job:
+    ) -> Job:
         """
         Get previous saved queries for this user/room
         """
@@ -395,7 +394,7 @@ class QueryService:
             "room": room,
             "config": True,
         }
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job: Job = self.app[queue].enqueue(
             _db_query,
             on_success=_queries,
             on_failure=_general_failure,
@@ -413,7 +412,7 @@ class QueryService:
         user: str,
         room: str,
         queue: str = "internal",
-    ) -> SQLJob | Job:
+    ) -> Job:
         """
         Add a saved query to the db
         """
@@ -431,7 +430,7 @@ class QueryService:
             "user": user,
             "room": room,
         }
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
             on_success=_queries,
@@ -451,7 +450,7 @@ class QueryService:
         gui: bool = False,
         user_data: JSONObject | None = None,
         is_vian: bool = False,
-    ) -> SQLJob | Job:
+    ) -> Job:
         """
         Upload a new corpus to the system
         """
@@ -460,7 +459,7 @@ class QueryService:
             "user_data": user_data,
             "is_vian": is_vian,
         }
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job: Job = self.app[queue].enqueue(
             _upload_data,
             on_success=_upload,
             on_failure=_upload_failure,
@@ -483,7 +482,7 @@ class QueryService:
         queue: str = "background",
         drops: list[str] | None = None,
         gui: bool = False,
-    ) -> SQLJob | Job:
+    ) -> Job:
         kwargs = {
             "project": project,
             "user": user,
@@ -492,7 +491,7 @@ class QueryService:
             "project_name": project_name,
             "gui": gui,
         }
-        job: Job | SQLJob = self.app[queue].enqueue(
+        job: Job = self.app[queue].enqueue(
             _create_schema,
             # schema job remembered for one day?
             result_ttl=60 * 60 * 24,
@@ -504,7 +503,7 @@ class QueryService:
         )
         return job
 
-    def cancel(self, job: SQLJob | Job | str) -> str:
+    def cancel(self, job: Job | str) -> str:
         """
         Cancel a running job
         """
@@ -561,7 +560,7 @@ class QueryService:
                 print("Unknown error, please debug", err, job)
         return ids
 
-    def get(self, job_id: str) -> Job | SQLJob | None:
+    def get(self, job_id: str) -> Job | None:
         try:
             job = Job.fetch(job_id, connection=self.app["redis"])
             return job

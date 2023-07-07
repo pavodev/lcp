@@ -55,11 +55,10 @@ from .utils import (
     _time_remaining,
     PUBSUB_CHANNEL,
 )
-from .worker import SQLJob
 
 
 def _query(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[tuple],
     **kwargs: Unpack[QueryArgs],  # type: ignore
@@ -285,7 +284,7 @@ def _query(
 
 
 def _sentences(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[RawSent] | None,
     **kwargs: int | bool | str | None,
@@ -398,7 +397,7 @@ def _sentences(
 
 
 def _document(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
     **kwargs,
@@ -428,7 +427,7 @@ def _document(
 
 
 def _document_ids(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
     **kwargs,
@@ -456,7 +455,7 @@ def _document_ids(
 
 
 def _schema(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: bool | None = None,
 ) -> None:
@@ -487,7 +486,7 @@ def _schema(
 
 
 def _upload(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: MainCorpus | None,
 ) -> None:
@@ -528,7 +527,7 @@ def _upload(
 
 
 def _upload_failure(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     typ: type,
     value: BaseException,
@@ -581,7 +580,7 @@ def _upload_failure(
 
 
 def _general_failure(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     typ: type,
     value: BaseException,
@@ -621,7 +620,7 @@ def _general_failure(
 
 
 def _queries(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[UserQuery] | None,
 ) -> None:
@@ -656,7 +655,7 @@ def _queries(
 
 
 def _config(
-    job: SQLJob | Job,
+    job: Job,
     connection: RedisConnection[bytes],
     result: list[MainCorpus],
     publish: bool = True,

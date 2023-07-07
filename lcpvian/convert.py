@@ -29,7 +29,6 @@ the kwic line from matching token ids plus the relevant prepared_segment.
 """
 
 import operator
-import os
 
 from collections import defaultdict
 from collections.abc import Sequence
@@ -40,7 +39,6 @@ from rq.job import Job
 
 from .typed import QueryMeta, ResultSents, Results
 from .utils import _get_associated_query_job
-from .worker import SQLJob
 
 OPS = {
     "<": operator.lt,
@@ -179,8 +177,8 @@ def _format_kwics(
 
 
 def _get_all_sents(
-    job: Job | SQLJob,
-    base: Job | SQLJob,
+    job: Job,
+    base: Job,
     is_vian: bool,
     meta_json: QueryMeta,
     max_kwic: int,
@@ -257,10 +255,11 @@ def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> R
                 most_allowed = max_kwic - current_lines
                 if not too_many and len(v) > most_allowed:
                     too_many = True
-                to_send[k] = v[:most_allowed]
-                allowed.update(set(i[0] for i in to_send[k]))
+                assert isinstance(to_send[k], list)
+                to_send[k] = cast(list, v)[:most_allowed]
+                allowed.update(set(i[0] for i in cast(list, to_send[k])))
     if too_many:
-        to_send[-1] = {k: v for k, v in to_send[-1].items() if k in allowed}
+        to_send[-1] = {k: v for k, v in cast(dict, to_send[-1]).items() if k in allowed}
 
     return to_send
 

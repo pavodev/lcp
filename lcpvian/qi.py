@@ -52,7 +52,6 @@ from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
 from .utils import push_msg
-from .worker import SQLJob
 
 if sys.version_info <= (3, 9):
     QI_KWARGS = dict()
@@ -88,7 +87,7 @@ class QueryIteration:
     done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
     existing_results: Results = field(default_factory=dict)
-    job: Job | SQLJob | None = None
+    job: Job | None = None
     job_id: str = ""
     from_memory: bool = False
     dqd: str = ""
@@ -264,7 +263,7 @@ class QueryIteration:
         """
         Helper to submit a query job to the Query Service
         """
-        job: Job | SQLJob
+        job: Job
         if self.offset > 0:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job

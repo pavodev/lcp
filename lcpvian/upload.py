@@ -30,7 +30,6 @@ from .utils import (
     ensure_authorised,
     _lama_user_details,
 )
-from .worker import SQLJob
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
@@ -44,7 +43,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     short_url = str(request.url).split("?", 1)[0]
     whole_url = f"{short_url}?job={job_id}"
     qs = request.app["query_service"]
-    job: Job | SQLJob | None = qs.get(job_id)
+    job: Job | None = qs.get(job_id)
     if not job:
         ret = {"job": job_id, "status": "failed", "error": "Job not found."}
         return web.json_response(ret)
