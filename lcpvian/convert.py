@@ -29,15 +29,18 @@ the kwic line from matching token ids plus the relevant prepared_segment.
 """
 
 import operator
+import os
 
 from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any, cast
 
+from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .typed import QueryMeta, ResultSents, Results
 from .utils import _get_associated_query_job
+from .worker import SQLJob
 
 OPS = {
     "<": operator.lt,
@@ -103,9 +106,11 @@ def _format_kwics(
     meta_json: QueryMeta,
     sents: list | None,
     total: int,
-    is_vian: bool = False,
-    is_first: bool = False,
-    offset: int = -1,
+    is_vian: bool,
+    is_first: bool,
+    offset: int,
+    max_kwic: int,
+    current_lines: int,
 ) -> Results:
     """
     Take a DB query result, plus `sents`, the result of the query on the
@@ -139,6 +144,8 @@ def _format_kwics(
     for line in result:
         key = int(line[0])
         rest = line[1]
+        if max_kwic and counts.get(key, 0) > max_kwic:
+            continue
         # we should have one 0: n_results key always
         if not key:
             continue
@@ -165,10 +172,21 @@ def _format_kwics(
         bit.append(rest)
         counts[key] += 1
 
+    if max_kwic:
+        out = _limit_kwic_to_max(out, current_lines, max_kwic)
+
     return out
 
 
-def _get_all_sents(job, base, is_vian, meta_json, connection) -> Results:
+def _get_all_sents(
+    job: Job | SQLJob,
+    base: Job | SQLJob,
+    is_vian: bool,
+    meta_json: QueryMeta,
+    max_kwic: int,
+    current_lines: int,
+    connection: RedisConnection,
+) -> Results:
     """
     Combine all sent jobs into one -- only done at the end of a `full` query
     """
@@ -183,7 +201,15 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> Results:
         offset = j.kwargs.get("offset", 0) if resume else -1
         needed = j.kwargs.get("needed", -1)
         got = _format_kwics(
-            dep.result, meta_json, j.result, needed, is_vian, is_first, offset
+            dep.result,
+            meta_json,
+            j.result,
+            needed,
+            is_vian,
+            is_first,
+            offset,
+            0,
+            0,
         )
         if got.get(-1):
             sents = cast(dict, out[-1])
@@ -195,6 +221,8 @@ def _get_all_sents(job, base, is_vian, meta_json, connection) -> Results:
                 out[k] = []
             add_to = cast(list, out[k])
             add_to += cast(list, v)
+
+    out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
 
@@ -214,6 +242,27 @@ def _format_vian(
     frame_ranges = cast(list[list[int]], rest[first_list:])
     out = (seg_id, tok_ids, doc_id, gesture, agent_name, frame_ranges)
     return out
+
+
+def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> Results:
+    """
+    Do not allow too many KWIC results to go to FE
+    """
+    too_many = False
+    allowed: set[str | int] = set()
+    for k, v in to_send.items():
+        if k > 0:
+            size = len(v)
+            if size + current_lines > max_kwic:
+                most_allowed = max_kwic - current_lines
+                if not too_many and len(v) > most_allowed:
+                    too_many = True
+                to_send[k] = v[:most_allowed]
+                allowed.update(set(i[0] for i in to_send[k]))
+    if too_many:
+        to_send[-1] = {k: v for k, v in to_send[-1].items() if k in allowed}
+
+    return to_send
 
 
 def _make_filters(

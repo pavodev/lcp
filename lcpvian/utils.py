@@ -173,6 +173,7 @@ async def _lama_user_details(headers: Headers) -> JSONObject:
     async with ClientSession() as session:
         async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
             jso: JSONObject = await resp.json()
+            jso["max_kwic"] = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
             return jso
 
 
@@ -582,6 +583,63 @@ def format_query_params(
             n += 1
             out.append(v)
     return query, tuple(out)
+
+
+def _get_first_job(
+    job: SQLJob | Job, connection: RedisConnection[bytes]
+) -> SQLJob | Job:
+    """
+    Helper to get the base job from a group of query jobs
+    """
+    first_job = job
+    if job.kwargs.get("first_job"):
+        first_job = Job.fetch(job.kwargs["first_job"], connection=connection)
+    if "_sent_jobs" not in first_job.meta:
+        first_job.meta["_sent_jobs"] = {}
+    return first_job
+
+
+def _time_remaining(status: str, total_duration: float, use: float) -> float:
+    """
+    Helper to estimate remaining time for a job
+    """
+    if status == "finished":
+        return 0.0
+    if use <= 0.0:
+        return 0.0
+    timed = (total_duration * (100.0 / use)) - total_duration
+    return max(0.0, round(timed, 3))
+
+
+def _decide_can_send(
+    status: str, is_full: bool, is_base: bool, from_memory: bool
+) -> bool:
+    """
+    Helper to figure out if we can send query message to the user or not
+
+    We don't exit early if we can't send, because we still need to store the
+    message and potentially trigger a new job
+    """
+    if not is_full or status == "finished":
+        return True
+    elif is_base and from_memory:
+        return True
+    elif not is_base and not from_memory:
+        return True
+    return False
+
+
+def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
+    """
+    Helper to find the total requested -- remove this after cleanup ideally
+    """
+    total_requested = cast(int, kwargs.get("total_results_requested", -1))
+    if total_requested > 0:
+        return total_requested
+    total_requested = job.kwargs.get("total_results_requested", -1)
+    if total_requested > 0:
+        return total_requested
+    return -1
 
 
 @final

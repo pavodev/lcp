@@ -40,15 +40,6 @@ To install backend (and `abstract-query`, which is also required):
 pip install -e abstract-query -e .
 ```
 
-To build optional `c` extensions for both repos:
-
-```bash
-cd abstract-query
-python setup.py build_ext --inplace
-cd ..
-python setup.py build_ext --inplace
-```
-
 To start backend for development, first edit `.env` so that it contains the correct config.
 
 Then, start as many RQ workers as you want. To start one:
@@ -123,6 +114,26 @@ git config --global push.recurseSubmodules "on-demand"
 To check that typing is correct (do before commit/push/c-extension building):
 ```bash
 mypy lcpvian
+```
+
+### C extensions
+
+To build optional `c` extensions for both `abstract-query` and `lcpvian` repos:
+
+```bash
+cd abstract-query
+python setup.py build_ext --inplace
+cd ..
+python setup.py build_ext --inplace
+```
+
+When these are built, the C code will be used instead of the Python, so changes to the repos won't be reflected in your development version until you rebuild or delete the C data with:
+
+```bash
+cd abstract-query
+rm *.so; rm abstract_query/*.so; rm -r -f build
+cd ..
+rm *.so; rm lcpvian/*.so; rm -r -f build
 ```
 
 ## Configuration

@@ -72,6 +72,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     all_batches_queried = len(done_batches) >= len(qi.all_batches)
 
+    if prev_total >= int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999)) and not qi.full:
+        qi.needed = 0
+        qi.no_more_data = True
+        return qi
     if qi.total_results_so_far >= tot_req:
         qi.needed = tot_req - prev_total
     elif not_enough and not all_batches_queried:
@@ -109,7 +113,7 @@ async def _query_iteration(
     # handle resumed queries -- figure out if we need to query new batch
     if qi.resume:
         qi = await _do_resume(qi)
-        if qi.needed < 0 and qi.no_more_data:
+        if qi.needed <= 0 and qi.no_more_data:
             return await qi.no_batch()
     else:
         qi.offset = 0

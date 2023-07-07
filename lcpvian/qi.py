@@ -25,6 +25,7 @@ which can broadcast it to frontends via websockets, and trigger new jobs if need
 be. Then the process repeats...
 """
 import json
+import os
 
 # import logging
 import sys
@@ -525,10 +526,18 @@ class QueryIteration:
         """
         What we do when there is no available batch
         """
-        info = "Could not create query: no batches"
+        max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+        reached_kwic_limit = self.current_kwic_lines >= max_kwic
+        if reached_kwic_limit and not self.full:
+            info = "Could not create query: hit kwic limit"
+            action = "kwic_limit"
+        else:
+            info = "Could not create query: no batches"
+            action = "no_batch"
+
         msg: dict[str, str] = {
             "status": "error",
-            "action": "no_batch",
+            "action": action,
             "user": self.user,
             "room": self.room or "",
             "info": info,

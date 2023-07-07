@@ -1,5 +1,5 @@
 """
-RQ Callbacks: post-process the result of an SQL query and broadcast
+callbacks.py: post-process the result of an SQL query and broadcast
 it to the relevant websockets
 
 These jobs are usually run in the worker process, but in exceptional
@@ -26,7 +26,12 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 
 from .configure import _get_batches
-from .convert import _aggregate_results, _format_kwics, _apply_filters, _get_all_sents
+from .convert import (
+    _aggregate_results,
+    _format_kwics,
+    _apply_filters,
+    _get_all_sents,
+)
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -44,23 +49,13 @@ from .utils import (
     _get_status,
     _row_to_value,
     _get_associated_query_job,
+    _get_first_job,
+    _get_total_requested,
+    _decide_can_send,
+    _time_remaining,
     PUBSUB_CHANNEL,
 )
 from .worker import SQLJob
-
-
-def _get_first_job(
-    job: SQLJob | Job, connection: RedisConnection[bytes]
-) -> SQLJob | Job:
-    """
-    Helper to get the base job from a group of query jobs
-    """
-    first_job = job
-    if job.kwargs.get("first_job"):
-        first_job = Job.fetch(job.kwargs["first_job"], connection=connection)
-    if "_sent_jobs" not in first_job.meta:
-        first_job.meta["_sent_jobs"] = {}
-    return first_job
 
 
 def _query(
@@ -107,6 +102,7 @@ def _query(
     )
 
     # if from memory, we had this result cached, we just need to apply filters
+    print("FROM MEMORY", from_memory)
     if from_memory:
         all_res = existing_results
         to_send = _apply_filters(all_res, post_processes)
@@ -223,6 +219,9 @@ def _query(
     user = cast(str, kwargs.get("user", job.kwargs["user"]))
     room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
 
+    max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+    current_kwic_lines = min(max_kwic, total_found)
+
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -248,6 +247,7 @@ def _query(
             "full": is_full,
             "can_send": can_send,
             "done_batches": done_part,
+            "current_kwic_lines": current_kwic_lines,
             "msg_id": msg_id,
             "resume": False,
             "duration": duration,
@@ -280,52 +280,8 @@ def _query(
     job.meta["payload"] = jso
     job.save_meta()  # type: ignore
 
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
-
-
-def _time_remaining(status: str, total_duration: float, use: float) -> float:
-    """
-    Helper to estimate remaining time for a job
-    """
-    if status == "finished":
-        return 0.0
-    if use <= 0.0:
-        return 0.0
-    timed = (total_duration * (100.0 / use)) - total_duration
-    return max(0.0, round(timed, 3))
-
-
-def _decide_can_send(
-    status: str, is_full: bool, is_base: bool, from_memory: bool
-) -> bool:
-    """
-    Helper to figure out if we can send query message to the user or not
-
-    We don't exit early if we can't send, because we still need to store the
-    message and potentially trigger a new job
-    """
-    if not is_full or status == "finished":
-        return True
-    elif is_base and from_memory:
-        return True
-    elif not is_base and not from_memory:
-        return True
-    return False
-
-
-def _get_total_requested(kwargs: dict[str, Any], job: Job | SQLJob) -> int:
-    """
-    A helper to find the total requested -- remove this after cleanup ideally
-    """
-    total_requested = cast(int, kwargs.get("total_results_requested", -1))
-    if total_requested > 0:
-        return total_requested
-    total_requested = job.kwargs.get("total_results_requested", -1)
-    if total_requested > 0:
-        return total_requested
-    return -1
 
 
 def _sentences(
@@ -337,7 +293,6 @@ def _sentences(
     """
     Create KWIC data and send via websocket
     """
-
     total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
 
@@ -352,6 +307,11 @@ def _sentences(
     resume = cast(bool, job.kwargs.get("resume", False))
     offset = cast(int, job.kwargs.get("offset", 0) if resume else -1)
     prev_offset = cast(int, depended.meta.get("latest_offset", -1))
+    max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+    current_lines = cast(
+        int, kwargs.get("current_kwic_lines", job.kwargs["current_kwic_lines"])
+    )
+
     if prev_offset > offset and not kwargs.get("from_memory"):
         offset = prev_offset
     total_to_get = job.kwargs.get("needed", total_requested)
@@ -360,21 +320,29 @@ def _sentences(
     table = f"{cb[1]}.{cb[2]}"
 
     status = depended.meta["_status"]
-    depended.meta["_status"] = status
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
+    depended.save_meta()
 
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
     to_send: Results
     if get_all_sents:
-        to_send = _get_all_sents(job, base, is_vian, meta_json, connection)
+        to_send = _get_all_sents(
+            job, base, is_vian, meta_json, max_kwic, current_lines, connection
+        )
     else:
         to_send = _format_kwics(
-            depended.result, meta_json, result, total_to_get, is_vian, True, offset
+            depended.result,
+            meta_json,
+            result,
+            total_to_get,
+            is_vian,
+            True,
+            offset,
+            max_kwic,
+            current_lines,
         )
-
-    depended.save_meta()
 
     submit_query = job.kwargs["start_query_from_sents"]
 
@@ -396,6 +364,7 @@ def _sentences(
     submit_payload["total_results_requested"] = total_requested
 
     can_send = not full or status == "finished"
+
     msg_id = str(uuid4())  # todo: hash instead!
     if "sent_job_ws_messages" not in base.meta:
         base.meta["sent_job_ws_messages"] = {}
@@ -424,8 +393,7 @@ def _sentences(
         "percentage_words_done": words_done,
     }
 
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -455,8 +423,7 @@ def _document(
         "corpus": job.kwargs["corpus"],
         "doc_id": job.kwargs["doc"],
     }
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -484,8 +451,7 @@ def _document_ids(
         "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
     }
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -516,8 +482,7 @@ def _schema(
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -558,8 +523,7 @@ def _upload(
     if result:
         jso["error"] = result
 
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -568,7 +532,7 @@ def _upload_failure(
     connection: RedisConnection[bytes],
     typ: type,
     value: BaseException,
-    trace: Any,
+    trace: TracebackType,
 ) -> None:
     """
     Cleanup on upload fail, and maybe send ws message
@@ -593,7 +557,7 @@ def _upload_failure(
         shutil.rmtree(path)
         print(f"Deleted: {path}")
 
-    form_error: str = str(trace)
+    form_error = str(trace)
 
     try:
         form_error = "".join(traceback.format_tb(trace))
@@ -612,8 +576,7 @@ def _upload_failure(
             "kind": str(typ),
             "value": str(value),
         }
-        red = job._redis if hasattr(job, "_redis") else connection
-        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -627,7 +590,7 @@ def _general_failure(
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
-    form_error: str = str(trace)
+    form_error = str(trace)
     try:
         form_error = "".join(traceback.format_tb(trace))
     except Exception as err:
@@ -653,8 +616,7 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return None
 
 
@@ -689,8 +651,7 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     made = json.dumps(jso, cls=CustomEncoder)
-    red = job._redis if hasattr(job, "_redis") else connection
-    red.publish(PUBSUB_CHANNEL, made)
+    connection.publish(PUBSUB_CHANNEL, made)
     return None
 
 
@@ -722,6 +683,6 @@ def _config(
         "msg_id": msg_id,
     }
     if publish:
-        red = job._redis if hasattr(job, "_redis") else connection
-        red.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+
+        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return jso

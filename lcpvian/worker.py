@@ -11,7 +11,6 @@ from typing import Any
 import uvloop
 
 from dotenv import load_dotenv
-from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
 from rq.worker import Worker
@@ -53,7 +52,6 @@ DBNAME = os.environ["SQL_DATABASE"]
 _UPLOAD_POOL = os.getenv("UPLOAD_USE_POOL", "false")
 UPLOAD_POOL = _UPLOAD_POOL.strip().lower() not in ("false", "no", "0", "")
 MAX_CONCURRENT = int(os.getenv("IMPORT_MAX_CONCURRENT", 1))
-REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 
 QUERY_MIN_NUM_CONNS = int(os.getenv("QUERY_MIN_NUM_CONNECTIONS", 8))
 UPLOAD_MIN_NUM_CONNS = int(os.getenv("UPLOAD_MIN_NUM_CONNECTIONS", 8))
@@ -67,7 +65,6 @@ UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 43200))
 
 POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
 
 tunnel: SSHTunnelForwarder
@@ -119,8 +116,6 @@ if not UPLOAD_POOL:
 class SQLJob(Job):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args)
-        self._redis: Redis[bytes] = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}")
-        self._redis.pubsub()
         self._pool = create_async_engine(query_connstr, **query_kwargs)
         self._upool = create_async_engine(upload_connstr, **upload_kwargs)
 
