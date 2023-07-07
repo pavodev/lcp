@@ -10,7 +10,7 @@ case the data might be needed. If frontend GETs `/get_message/<id>`, we fetch
 the associated data from Redis and send it back to the user/room via WS again.
 
 When a message is accessed, its time-to-live (TTL) is renewed to the value of
-`REDIS_WS_MESSAGE_TTL` in `.env`.s
+`REDIS_WS_MESSAGE_TTL` in `.env`
 
 This is not yet used by the frontend, but might come in handy soon!
 """

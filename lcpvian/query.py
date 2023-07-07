@@ -70,18 +70,22 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
         done_batches.append(previous_batch)
     qi.done_batches = done_batches
 
+    max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+
     all_batches_queried = len(done_batches) >= len(qi.all_batches)
 
-    if prev_total >= int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999)) and not qi.full:
+    is_last = prev_total + left_in_batch > max_kwic
+
+    if prev_total >= max_kwic and not qi.full:
         qi.needed = 0
         qi.no_more_data = True
         return qi
     if qi.total_results_so_far >= tot_req:
         qi.needed = tot_req - prev_total
-    elif not_enough and not all_batches_queried:
+    elif not_enough and not all_batches_queried and not is_last:
         qi.needed = left_in_batch
         qi.start_query_from_sents = True
-    elif not_enough and all_batches_queried:
+    elif not_enough and (all_batches_queried or is_last):
         qi.needed = left_in_batch
         qi.no_more_data = True
         return qi

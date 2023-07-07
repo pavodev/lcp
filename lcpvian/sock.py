@@ -48,6 +48,7 @@ from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
+QUERY_TTL = os.getenv("QUERY_TTL", 5000)
 
 
 async def _process_message(
@@ -179,6 +180,14 @@ async def _handle_message(
         uu = payload["msg_id"]
         app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
+
+    if action == "sentences":
+        base = "rq:job:"
+        first_id = payload["first_job"]
+        query_id = payload["query"]
+        app["redis"].expire(base + query_id, QUERY_TTL)
+        if query_id != first_id:
+            app["redis"].expire(base + first_id, QUERY_TTL)
 
     # for document ids request, we also add this information to config
     # so that on subsequent requests we can just fetch it from there

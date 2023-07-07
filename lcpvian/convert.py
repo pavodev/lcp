@@ -100,7 +100,7 @@ def _aggregate_results(
 
 
 def _format_kwics(
-    result: list,
+    result: list | None,
     meta_json: QueryMeta,
     sents: list | None,
     total: int,
@@ -109,6 +109,7 @@ def _format_kwics(
     offset: int,
     max_kwic: int,
     current_lines: int,
+    full: bool,
 ) -> Results:
     """
     Take a DB query result, plus `sents`, the result of the query on the
@@ -132,8 +133,12 @@ def _format_kwics(
     skipped: defaultdict[int, int] = defaultdict(int)
 
     if sents is None:
-        print("Sentences is None!?")
+        print("Sentences is None: expired?")
         sents = []
+
+    if result is None:
+        print("Result is None: expired?")
+        result = []
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
@@ -170,7 +175,7 @@ def _format_kwics(
         bit.append(rest)
         counts[key] += 1
 
-    if max_kwic:
+    if max_kwic and not full:
         out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
@@ -183,6 +188,7 @@ def _get_all_sents(
     meta_json: QueryMeta,
     max_kwic: int,
     current_lines: int,
+    full: bool,
     connection: RedisConnection,
 ) -> Results:
     """
@@ -208,6 +214,7 @@ def _get_all_sents(
             offset,
             0,
             0,
+            full,
         )
         if got.get(-1):
             sents = cast(dict, out[-1])
@@ -220,7 +227,8 @@ def _get_all_sents(
             add_to = cast(list, out[k])
             add_to += cast(list, v)
 
-    out = _limit_kwic_to_max(out, current_lines, max_kwic)
+    if max_kwic > 0:
+        out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
 

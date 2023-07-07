@@ -101,7 +101,6 @@ def _query(
     )
 
     # if from memory, we had this result cached, we just need to apply filters
-    print("FROM MEMORY", from_memory)
     if from_memory:
         all_res = existing_results
         to_send = _apply_filters(all_res, post_processes)
@@ -210,6 +209,9 @@ def _query(
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
         first_job.meta["latest_stats_message"] = msg_id
 
+    if "_sent_jobs" not in first_job.meta:
+        first_job.meta["_sent_jobs"] = {}
+
     first_job.save_meta()  # type: ignore
 
     use = perc_words if search_all or is_full else perc_matches
@@ -294,11 +296,6 @@ def _sentences(
     """
     total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
-
-    if result:
-        # _sents_job is a dict of {job_id: None} (so the keys are an ordered set)
-        base.meta["_sent_jobs"][job.id] = None
-
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
     full = kwargs.get("full", job.kwargs.get("full", False))
     meta_json = depended.kwargs["meta_json"]
@@ -326,9 +323,13 @@ def _sentences(
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
     to_send: Results
+
+    if full:
+        current_lines = 0
+
     if get_all_sents:
         to_send = _get_all_sents(
-            job, base, is_vian, meta_json, max_kwic, current_lines, connection
+            job, base, is_vian, meta_json, max_kwic, current_lines, full, connection
         )
     else:
         to_send = _format_kwics(
@@ -341,13 +342,14 @@ def _sentences(
             offset,
             max_kwic,
             current_lines,
+            full,
         )
 
     submit_query = job.kwargs["start_query_from_sents"]
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
-        print(f"No results found for {table} -- skipping WS message")
+        print(f"No results found for {table} kwic -- skipping WS message")
         return None
 
     perc_done = round(base.meta["progress_info"]["percentage_done"], 3)
@@ -368,6 +370,7 @@ def _sentences(
     if "sent_job_ws_messages" not in base.meta:
         base.meta["sent_job_ws_messages"] = {}
     base.meta["sent_job_ws_messages"][msg_id] = None
+    base.meta["_sent_jobs"][job.id] = None
     base.save_meta()
 
     more_data = not job.kwargs["no_more_data"]

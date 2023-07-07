@@ -23,6 +23,7 @@ from __future__ import annotations
 import json
 import os
 
+from collections.abc import Coroutine
 from typing import final, Unpack, cast
 
 from aiohttp import web
@@ -62,15 +63,16 @@ class QueryService:
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
-        self.remembered_queries = int(os.getenv("MAX_REMEMBERED_QUERIES", 999))
 
-    async def send_all_data(self, job: Job, **kwargs) -> None:
+    async def send_all_data(self, job: Job, **kwargs) -> bool:
         """
         Get the stored messages related to a query and send them to frontend
         """
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
+        if jso is None:
+            return False
         payload: JSONObject = json.loads(jso)
         payload["user"] = kwargs["user"]
         payload["room"] = kwargs["room"]
@@ -86,21 +88,30 @@ class QueryService:
         payload["no_restart"] = True
         self.app["redis"].expire(msg, self.query_ttl)
         strung: str = json.dumps(payload, cls=CustomEncoder)
-        self.app["redis"].publish(PUBSUB_CHANNEL, strung)
+
+        failed = False
+        tasks: list[Coroutine] = [self.app["aredis"].publish(PUBSUB_CHANNEL, strung)]
 
         for msg in job.meta.get("sent_job_ws_messages", {}):
             print(f"Retrieving sentences message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
+                failed = True
                 continue
             payload = json.loads(jso)
             payload["user"] = kwargs["user"]
             payload["room"] = kwargs["room"]
             payload["no_restart"] = True
             self.app["redis"].expire(msg, self.query_ttl)
-            self.app["redis"].publish(
+            task = self.app["aredis"].publish(
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
             )
+            tasks.append(task)
+        if not failed:
+            for task in tasks:
+                await task
+            return True
+        return False
 
     async def query(
         self,
@@ -144,11 +155,11 @@ class QueryService:
             is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
-                print("Query found in redis memory. Retrieving...")
                 if is_first and not kwargs["full"]:
-                    await self.send_all_data(job, **kwargs)
-                    return job, None
-                elif not kwargs["full"]:
+                    success = await self.send_all_data(job, **kwargs)
+                    if success:
+                        return job, None
+                if not kwargs["full"]:
                     _query(
                         job,
                         self.app["redis"],
@@ -157,6 +168,7 @@ class QueryService:
                         room=kwargs["room"],
                         full=kwargs["full"],
                         post_processes=kwargs["post_processes"],
+                        current_kwic_lines=kwargs["current_kwic_lines"],
                         from_memory=True,
                     )
                 return job, False

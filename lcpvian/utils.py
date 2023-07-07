@@ -591,8 +591,6 @@ def _get_first_job(job: Job, connection: RedisConnection[bytes]) -> Job:
     first_job = job
     if job.kwargs.get("first_job"):
         first_job = Job.fetch(job.kwargs["first_job"], connection=connection)
-    if "_sent_jobs" not in first_job.meta:
-        first_job.meta["_sent_jobs"] = {}
     return first_job
 
 
