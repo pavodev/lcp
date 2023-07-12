@@ -23,7 +23,7 @@
             <multiselect
               v-model="selectedLanguages"
               :options="availableLanguages"
-              :multiple="false"
+              :multiple="true"
             ></multiselect>
           </div>
           <!-- <div class="mb-3">
@@ -670,7 +670,7 @@ myColl3 => collocation
       pageSize: 100,
       nResults: 200,
       currentResults: 0,
-      selectedLanguages: "en",
+      selectedLanguages: ["en"],
       queryName: "",
       currentTab: "dqd",
       simultaneousMode: false,
@@ -741,7 +741,7 @@ myColl3 => collocation
         this.selectedLanguages &&
         !this.availableLanguages.includes(this.selectedLanguages)
       ) {
-        this.selectedLanguages = this.availableLanguages[0];
+        this.selectedLanguages = [this.availableLanguages[0]];
       }
     },
     WSDataResults() {
@@ -1054,7 +1054,7 @@ myColl3 => collocation
         user: this.userData.user.id,
         room: this.roomId,
         page_size: this.resultsPerPage,
-        languages: [this.selectedLanguages],
+        languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         stats: true,
         resume: resumeQuery,
@@ -1107,7 +1107,7 @@ myColl3 => collocation
         room: this.roomId,
         // room: null,
         page_size: this.pageSize,
-        languages: [this.selectedLanguages],
+        languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         query_name: this.queryName,
       };
