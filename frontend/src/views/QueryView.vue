@@ -329,14 +329,15 @@
             <div class="col">
               <p class="mb-1">
                 Status:
-                <span class="text-bold" v-html="WSDataResults.status"></span>
+                <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
+                <span class="text-bold" v-html="queryStatus"></span>
               </p>
             </div>
           </div>
           <button
             type="button"
             v-if="
-              WSDataResults && WSDataResults.status == 'satisfied' && !loading
+              queryStatus == 'satisfied' && !loading
             "
             @click="submitFullSearch"
             class="btn btn-primary me-1 mb-5"
@@ -682,7 +683,8 @@ myColl3 => collocation
       failedStatus: false,
       plainType: "kwic",
       sqlQuery: null,
-      // nResults: 50,
+      isDebug: false,
+      queryStatus: null,
     };
   },
   components: {
@@ -756,16 +758,16 @@ myColl3 => collocation
               this.WSDataResults.projected_results) *
             100;
         }
-        if (["finished"].includes(this.WSDataResults.status)) {
-          this.percentageDone = 100;
-          this.percentageTotalDone = 100;
-          this.loading = false;
-        }
-        if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
-          // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
-          this.percentageDone = 100;
-          this.loading = false;
-        }
+        // if (["finished"].includes(this.WSDataResults.status)) {
+        //   this.percentageDone = 100;
+        //   this.percentageTotalDone = 100;
+        //   this.loading = false;
+        // }
+        // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
+        //   // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
+        //   this.percentageDone = 100;
+        //   this.loading = false;
+        // }
         // console.log("XXX", this.percentageTotalDone, this.percentageDone);
       }
 
@@ -781,12 +783,25 @@ myColl3 => collocation
     },
   },
   methods: {
+    updateLoading(status) {
+      this.queryStatus = status;
+      if (["finished"].includes(status)) {
+        this.percentageDone = 100;
+        this.percentageTotalDone = 100;
+        this.loading = false;
+      }
+      if (["satisfied", "overtime"].includes(status)) {
+        this.percentageDone = 100;
+        this.loading = false;
+      }
+    },
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      if (
-        (newNResults >= this.nResults && !this.WSDataSentences) ||
-        (this.WSDataSentences && this.WSDataSentences.more_data_available)
-      ) {
+      console.log("PageUpdate", newNResults, this.nResults, this.WSDataSentences)
+      if (newNResults > this.nResults && (
+        !this.WSDataSentences || (this.WSDataSentences && this.WSDataSentences.more_data_available)
+      )) {
+        console.log("Submit")
         this.nResults = newNResults;
         this.submit(null, true);
       }
@@ -902,6 +917,7 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "query_result") {
           // console.log("query_result", data);
+          this.updateLoading(data.status)
           if (
             this.failedStatus &&
             data.result.length < this.WSDataResults.n_results
@@ -918,6 +934,7 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "sentences") {
           // console.log("sentences", data);
+          this.updateLoading(data.status)
           if (
             this.WSDataSentences &&
             this.WSDataSentences.first_job == data.first_job &&
@@ -958,9 +975,9 @@ myColl3 => collocation
             }
           }
           this.percentageDone = data.percentage_done;
-          if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
-            this.loading = false;
-          }
+          // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
+          //   this.loading = false;
+          // }
           return;
         } else if (data["action"] === "failed") {
           this.loading = false;
