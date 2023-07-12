@@ -37,7 +37,7 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import QueryMeta, ResultSents, Results
+from .typed import QueryMeta, RawSent, ResultSents, Results
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -53,7 +53,7 @@ OPS = {
 
 
 def _aggregate_results(
-    result: list,
+    result: list[list],
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
@@ -102,7 +102,7 @@ def _aggregate_results(
 def _format_kwics(
     result: list | None,
     meta_json: QueryMeta,
-    sents: list | None,
+    sents: list[RawSent] | None,
     total: int,
     is_vian: bool,
     is_first: bool,
