@@ -587,7 +587,7 @@ sequence seq
     Token@s t2
         upos = ADJ
     Token@s t3
-        lemma = ^fr.*
+        lemma = ^Fr.*
         lemma.length > 5
         upos = NOUN
 
