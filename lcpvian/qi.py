@@ -120,7 +120,7 @@ class QueryIteration:
             batch=self.current_batch[2],
             config=self.app["config"][str(self.current_batch[0])],
             lang=self._determine_language(self.current_batch[2]),
-            vian=self.is_vian,
+            vian=self.is_vian or "tangram" in self.current_batch[1].lower(),
         )
         if self.jso:
             json_query = self.jso

@@ -169,7 +169,10 @@ def _format_kwics(
             rest = list(_format_vian(rest, first_list))
         elif key in kwics:
             rest = [rest[0], rest[1:]]
-        if rest[0] not in out[-1]:
+            # fix for vian inside lcp:
+            if any(isinstance(i, list) for i in rest[1]):
+                rest = [rest[0], rest[1][:-7]]
+        if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
         bit.append(rest)
