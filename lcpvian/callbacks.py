@@ -60,7 +60,7 @@ from .utils import (
 def _query(
     job: Job,
     connection: RedisConnection[bytes],
-    result: list[tuple],
+    result: list,
     **kwargs: Unpack[QueryArgs],  # type: ignore
 ) -> None:
     """
@@ -297,7 +297,7 @@ def _sentences(
     total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
-    full = kwargs.get("full", job.kwargs.get("full", False))
+    full = cast(bool, kwargs.get("full", job.kwargs.get("full", False)))
     meta_json = depended.kwargs["meta_json"]
     is_vian = depended.kwargs.get("is_vian", False)
     resume = cast(bool, job.kwargs.get("resume", False))

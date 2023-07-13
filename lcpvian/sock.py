@@ -183,8 +183,8 @@ async def _handle_message(
 
     if action == "sentences":
         base = "rq:job:"
-        first_id = payload["first_job"]
-        query_id = payload["query"]
+        first_id = cast(str, payload["first_job"])
+        query_id: str = str(payload["query"])
         app["redis"].expire(base + query_id, QUERY_TTL)
         if query_id != first_id:
             app["redis"].expire(base + first_id, QUERY_TTL)

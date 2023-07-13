@@ -53,7 +53,7 @@ OPS = {
 
 
 def _aggregate_results(
-    result: list[list],
+    result: list,
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
