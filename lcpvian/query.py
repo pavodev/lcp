@@ -50,15 +50,15 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
     dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
-    so_far = prev_job.meta["total_results_so_far"]
+    so_far = cast(int, prev_job.meta["total_results_so_far"])
     tot_req = qi.total_results_requested
     prev_total = qi.current_kwic_lines
 
-    prev_batch_results = prev_job.meta["results_this_batch"]
+    prev_batch_results = cast(int, prev_job.meta["results_this_batch"])
     need_now = tot_req - prev_total
 
-    next_offset = prev_job.meta["offset_for_next_time"]
-    latest_offset = prev_job.meta.get("latest_offset", 0)
+    next_offset = cast(int, prev_job.meta["offset_for_next_time"])
+    latest_offset = cast(int, prev_job.meta.get("latest_offset", 0))
     qi.offset = max(latest_offset, next_offset)
 
     left_in_batch = prev_batch_results - qi.offset

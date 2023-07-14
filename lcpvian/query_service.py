@@ -101,6 +101,7 @@ class QueryService:
             payload = json.loads(jso)
             payload["user"] = kwargs["user"]
             payload["room"] = kwargs["room"]
+            payload["no_update_progress"] = True
             payload["no_restart"] = True
             self.app["redis"].expire(msg, self.query_ttl)
             task = self.app["aredis"].publish(
