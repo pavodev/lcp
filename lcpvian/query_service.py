@@ -63,6 +63,8 @@ class QueryService:
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
+        trues = {"true", "1", "y", "yes"}
+        self.use_cache = os.getenv("USE_CACHE", "true").lower() in trues
 
     async def send_all_data(self, job: Job, **kwargs) -> bool:
         """
@@ -126,9 +128,10 @@ class QueryService:
         hashed = str(hash(query))
         job: Job | None
 
-        job, submitted = await self._attempt_query_from_cache(hashed, **kwargs)
-        if job is not None:
-            return job, submitted
+        if self.use_cache:
+            job, submitted = await self._attempt_query_from_cache(hashed, **kwargs)
+            if job is not None:
+                return job, submitted
 
         job = self.app[queue].enqueue(
             _db_query,
@@ -151,7 +154,7 @@ class QueryService:
         """
         job: Job | None
         try:
-            # raise NoSuchJobError()  # uncomment to not use cache
+
             job = Job.fetch(hashed, connection=self.app["redis"])
             is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
@@ -195,14 +198,14 @@ class QueryService:
         kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
         hashed = str(hash((query, corpus_id)))
         job: Job
-        try:
-            # raise NoSuchJobError()  # uncomment to not use cache
-            job = Job.fetch(hashed, connection=self.app["redis"])
-            if job and job.get_status(refresh=True) == "finished":
-                _document_ids(job, self.app["redis"], job.result, **kwargs)
-                return job
-        except NoSuchJobError:
-            pass
+        if self.use_cache:
+            try:
+                job = Job.fetch(hashed, connection=self.app["redis"])
+                if job and job.get_status(refresh=True) == "finished":
+                    _document_ids(job, self.app["redis"], job.result, **kwargs)
+                    return job
+            except NoSuchJobError:
+                pass
         job = self.app[queue].enqueue(
             _db_query,
             on_success=_document_ids,
@@ -228,15 +231,15 @@ class QueryService:
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
         job: Job
-        try:
-            # raise NoSuchJobError()  # uncomment to not use cache
-            job = Job.fetch(hashed, connection=self.app["redis"])
-            if job and job.get_status(refresh=True) == "finished":
-                kwa: dict[str, str | None] = {"user": user, "room": room}
-                _document(job, self.app["redis"], job.result, **kwa)
-                return job
-        except NoSuchJobError:
-            pass
+        if self.use_cache:
+            try:
+                job = Job.fetch(hashed, connection=self.app["redis"])
+                if job and job.get_status(refresh=True) == "finished":
+                    kwa: dict[str, str | None] = {"user": user, "room": room}
+                    _document(job, self.app["redis"], job.result, **kwa)
+                    return job
+            except NoSuchJobError:
+                pass
 
         kwargs = {
             "document": True,
@@ -270,16 +273,10 @@ class QueryService:
         kwargs["sentences_query"] = query
         job: Job
 
-        # never do this, right now...
-        if kwargs.get("from_memory", False) and not kwargs["full"] and False:
-            dones, need_to_do = self._multiple_sent_jobs(**kwargs)
-            if need_to_do:
-                print(f"Warning: jobs not processed: {need_to_do}")
-            return dones
-
-        ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
-        if ids:
-            return ids
+        if self.use_cache:
+            ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
+            if ids:
+                return ids
 
         job = self.app[queue].enqueue(
             _db_query,
@@ -302,7 +299,6 @@ class QueryService:
         kwa: dict[str, int | bool | str | None] = {}
         job: Job
         try:
-            # raise NoSuchJobError()  # uncomment to not use cache
             job = Job.fetch(hashed, connection=self.app["redis"])
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
@@ -322,38 +318,6 @@ class QueryService:
             pass
         return jobs
 
-    def _multiple_sent_jobs(self, **kwargs) -> tuple[list[str], list[str]]:
-        """
-        All sentence job ids are stored on the associated base query job. This
-        method gets all those ids and iterates over them, fetching their data
-        and triggering their callbacks.
-        """
-        first_job = kwargs["first_job"]
-        base = Job.fetch(first_job, connection=self.app["redis"])
-        sent_jobs = base.meta.get("_sent_jobs", {})
-        need_to_do: list[str] = []
-        dones: list[str] = []
-        for i, sent_job in enumerate(sent_jobs):
-            # total = cast(int, kwargs["total_results_requested"])
-            # if i:
-            #    total = -1
-            job = Job.fetch(sent_job, connection=self.app["redis"])
-            self.app["redis"].expire(sent_job, self.query_ttl)
-            if job.get_status() == "finished":
-                print(f"Sentences found in redis memory. Retrieving: {sent_job}")
-                kwa = {
-                    "user": cast(str, kwargs["user"]),
-                    "room": cast(str | None, kwargs["room"]),
-                    "full": cast(bool, kwargs["full"]),
-                    "total_results_requested": kwargs["total_results_requested"],
-                    "from_memory": True,
-                }
-                _sentences(job, self.app["redis"], job.result, **kwa)
-                dones.append(sent_job)
-            else:
-                need_to_do.append(sent_job)
-        return dones, need_to_do
-
     async def get_config(self) -> Job:
         """
         Get initial app configuration JSON
@@ -363,17 +327,18 @@ class QueryService:
         query = "SELECT * FROM main.corpus WHERE enabled = true;"
         redis: RedisConnection[bytes] = self.app["redis"]
         opts: dict[str, bool] = {"config": True}
-        try:
-            already = Job.fetch(job_id, connection=redis)
-            if already and already.result is not None:
-                payload: dict[str, str | bool | Config] = _config(
-                    already, redis, already.result, publish=False
-                )
-                await _set_config(cast(JSONObject, payload), self.app)
-                print("Loaded config from redis (flush redis if new corpora added)")
-                return already
-        except NoSuchJobError:
-            pass
+        if self.use_cache:
+            try:
+                already = Job.fetch(job_id, connection=redis)
+                if already and already.result is not None:
+                    payload: dict[str, str | bool | Config] = _config(
+                        already, redis, already.result, publish=False
+                    )
+                    await _set_config(cast(JSONObject, payload), self.app)
+                    print("Loaded config from redis (flush redis if new corpora added)")
+                    return already
+            except NoSuchJobError:
+                pass
         job = self.app["internal"].enqueue(
             _db_query,
             on_success=_config,

@@ -355,13 +355,15 @@ def _sentences(
         print(f"No results found for {table} kwic -- skipping WS message")
         return None
 
-    perc_done = round(base.meta["progress_info"]["percentage_done"], 3)
-    perc_done_base = base.meta.get("progress_info", {}).get("percentage_done", 0)
-    perc_done = max(perc_done, perc_done_base)
+    trues = {"true", "1", "y", "yes"}
+    use_cache = os.getenv("USE_CACHE", "true").lower() in trues
 
-    words_done = round(base.meta["progress_info"]["percentage_words_done"], 3)
-    words_done_base = base.meta.get("progress_info", {}).get("percentage_words_done", 0)
-    words_done = max(words_done, words_done_base)
+    if not use_cache:
+        perc_done = depended.meta["payload"]["percentage_done"]
+        words_done = depended.meta["payload"]["percentage_words_done"]
+    else:
+        perc_done = base.meta["progress_info"]["percentage_done"]
+        words_done = base.meta["progress_info"]["percentage_words_done"]
 
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
