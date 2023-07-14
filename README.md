@@ -166,9 +166,9 @@ In seconds, how long can an upload job be running until it gets stopped (should 
 
 In seconds, how long should query data stay in Redis? If a user tries to change pages on a query older than this, the query needs to be rerun from the start. It should work, but the UX is much worse than fetching from Redis.
 
-> `MAX_REMEMBERED_QUERIES`
+> `USE_CACHE`
 
-We keep a `dict` of `{query_hash: job_id}`, with `MAX_REMEMBERED_QUERIES` as the max size of the `dict`. When a user prepares to submit a query/sentences job, we compare the hashes to see if the query/sentence query is already done, and then look it up in Redis. If the data is still there, we return it quickly. Because we hash the query, this object doesn't take up much memory space, so a large value is fine here, but the setting prevents the app from growing in size over time. Set to `-1` for no limit.
+Queries are stored by a key in Redis, and this key is a hash of the data needed to generate the query. Therefore, when a new query is created, we hash it to check that it hasn't already been performed. If it has, and if `USE_CACHE` is truthy, we retrieve the earlier data from Redis and send that to the user (whio may be different from the one who generated the original query). You can disable this for debugging if the cache doesn't seem to be working correctly, but ideally it is switched on in production, as it provides a lot of performance benefit for common queries!
 
 > `SQL_(QUERY|UPLOAD)_(USERNAME|PASSWORD)`
 
