@@ -46,7 +46,7 @@ async def _upload_data(
 
     upool = get_current_job()._upool  # type: ignore
 
-    debug = cast(bool, kwargs["debug"])
+    # debug = cast(bool, kwargs.get("debug",False) # Not needed as debug is already a keyword argument
 
     importer = Importer(upool, data, corpus, debug)
     extra = {"user": user, "room": room, "project": project}

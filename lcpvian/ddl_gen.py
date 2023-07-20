@@ -133,16 +133,16 @@ class DDL:
     def create_str(self) -> None:
         raise NotImplementedError
 
-    def __lt__(self, other: object) -> bool:
-        o = cast(Table, other)
-        assert hasattr(o, "name") and hasattr(self, "name")
-        return bool(self.name < o.name)
+    # These will be implemented in each child class instead
+    # def __lt__(self, other: object) -> bool:
+    #     o = cast(DDL, other)
+    #     assert hasattr(o, "name") and hasattr(self, "name")
+    #     return bool(self.name < o.name)
 
-    def __eq__(self, other: object) -> bool:
-        o = cast(Table, other)
-        assert hasattr(o, "name")
-        assert hasattr(o, "name") and hasattr(self, "name")
-        return bool(self.name == o.name)
+    # def __eq__(self, other: object) -> bool:
+    #     o = cast(DDL, other)
+    #     assert hasattr(o, "name") and hasattr(self, "name")
+    #     return bool(self.name == o.name)
 
     @staticmethod
     def fmt(string: str, quote: bool = True, comma: bool = False) -> str:
@@ -310,7 +310,6 @@ class Table(DDL):
 
     def __eq__(self, other: object) -> bool:
         o = cast(Table, other)
-        assert hasattr(o, "name")
         assert hasattr(o, "name") and hasattr(self, "name")
         return bool(self.name == o.name)
 
@@ -430,6 +429,16 @@ class Type(DDL):
             + self.inlined([self.fmt(x) for x in self.values])
             + self.end
         )
+
+    def __lt__(self, other: object) -> bool:
+        o = cast(Type, other)
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name < o.name)
+
+    def __eq__(self, other: object) -> bool:
+        o = cast(Type, other)
+        assert hasattr(o, "name") and hasattr(self, "name")
+        return bool(self.name == o.name)
 
 
 class CTProcessor:
