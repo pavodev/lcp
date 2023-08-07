@@ -559,6 +559,11 @@ export default {
       this.showGraph = false;
     });
     this.setTooltips();
+    // Add a keyboard shortcut to open the query page
+    document.addEventListener("keydown", (event) => {
+      if (event.key == "Enter" && event.ctrlKey)
+        router.push('/query');
+    });
   },
   updated() {
     this.setTooltips();
