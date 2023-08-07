@@ -479,13 +479,15 @@ export default {
         {
           id: "1",
           text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, ""),
-          next: Object.keys(corpus.layer).map(
+          next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "")}`
           ),
         },
       ];
+      let partOfs = {};
       Object.keys(corpus.layer).forEach((layer, index) => {
-        let next = [];
+        console.log("Layer", layer, corpus.layer[layer], Object.keys(corpus.layer[layer]));
+        let next = [], link = [];
         if ("attributes" in corpus.layer[layer]) {
           Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
@@ -495,6 +497,7 @@ export default {
               edgeType: "circle",
             });
             next.push(attributeId);
+            link.push("---")
           });
         }
         if ("meta" in corpus.layer[layer]) {
@@ -506,14 +509,45 @@ export default {
               edgeType: "circle",
             });
             next.push(metaId);
+            link.push("---")
           });
         }
-        data.push({
+        if ("contains" in corpus.layer[layer]) {
+          let containedId = `l-${corpus.layer[layer].contains.toLowerCase().replace(/@/gi, "")}`;
+          next.push(containedId);
+          link.push("-->|contains|")
+          data[0].next = data[0].next.filter( (layerId) => layerId != containedId );
+        }
+        let layerData = {
           id: `l-${layer.toLowerCase().replace(/@/gi, "")}`,
           text: layer.replace(/@/gi, ""),
           next: next,
-        });
+          link: link
+        };
+        if ("partOf" in corpus.layer[layer]) {
+          let parentLayerId = `l-${corpus.layer[layer].partOf.toLowerCase().replace(/@/g,"")}`;
+          partOfs[parentLayerId] = [...(partOfs[parentLayerId]||[]), layerData];
+        }
+        data.push(layerData);
       });
+      // Handle the partOfs after adding their parents to the structure
+      for (let parentLayerId in partOfs) {
+        let parentLayer = data.find( (layer) => layer.id==parentLayerId );
+        if (parentLayer===undefined) continue;
+        // Remove the attributes from the parent: they will be inherited by the children
+        // let parentAttributes = [];
+        // parentLayer.next = parentLayer.next.filter( (layerId) => 
+        //   !String.prototype.startsWith.call(layerId,'a-') || (parentAttributes.push(layerId) && false)
+        // );
+        for (let childLayerData of partOfs[parentLayerId]) {
+          // Inherit the attributes
+          // childLayerData.next.push(...parentAttributes);
+          // childLayerData.link.push(...parentAttributes.map( (_) => `-->|via ${parentLayer.text}|` ))
+          // Add and flag the layer as "part of" the parent
+          parentLayer.next.push(childLayerData);
+          parentLayer.link.push("---|part of|");
+        }
+      }
       return data;
     },
   },
