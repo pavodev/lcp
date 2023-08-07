@@ -933,6 +933,11 @@ myColl3 => collocation
           this.WSDataResults = data;
           return;
         } else if (data["action"] === "sentences") {
+          // Ensure that each data point at least references the sentence
+          Object.keys(data.result).forEach((key) => {
+            if (key <= 0) return;
+            data.result[key].forEach( ([id,range]) => range.length==0 && (range[0] = null) );
+          });
           // console.log("sentences", data);
           this.updateLoading(data.status)
           if (
