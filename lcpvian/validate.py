@@ -3,10 +3,6 @@ from __future__ import annotations
 import json
 import traceback
 
-from typing import cast
-
-from aiohttp import web
-
 from .dqd_parser import convert
 from .typed import JSONObject
 
@@ -17,13 +13,10 @@ async def validate(
     query: str = "",
     query_name: str | None = None,
     **kwargs: bool | None,
-) -> web.Response | JSONObject:
+) -> JSONObject:
     """
-    Validate a JSON/DQD query. This is called either as a GET endpoint,
-    or inside sock.py's WS handler. Thus, we need to return either JSON
-    or an HTTP response
+    Validate a JSON/DQD query. This is not an endpoint, it is called by sock.py
     """
-    is_websocket: bool = cast(bool, kwargs.get("_ws", False))
     result: JSONObject = {}
     try:
         json.loads(query)
@@ -49,6 +42,4 @@ async def validate(
                 "status": 400,
                 "traceback": tb,
             }
-    if is_websocket:
-        return result
-    return web.json_response(result)
+    return result

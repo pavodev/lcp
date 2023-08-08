@@ -260,15 +260,16 @@ def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> R
     too_many = False
     allowed: set[str | int] = set()
     for k, v in to_send.items():
-        if k > 0:
-            size = len(v)
-            if size + current_lines > max_kwic:
-                most_allowed = max_kwic - current_lines
-                if not too_many and len(v) > most_allowed:
-                    too_many = True
-                assert isinstance(to_send[k], list)
-                to_send[k] = cast(list, v)[:most_allowed]
-                allowed.update(set(i[0] for i in cast(list, to_send[k])))
+        if k <= 0:
+            continue
+        size = len(v)
+        if size + current_lines > max_kwic:
+            most_allowed = max_kwic - current_lines
+            if not too_many and len(v) > most_allowed:
+                too_many = True
+            assert isinstance(to_send[k], list)
+            to_send[k] = cast(list, v)[:most_allowed]
+            allowed.update(set(i[0] for i in cast(list, to_send[k])))
     if too_many:
         to_send[-1] = {k: v for k, v in cast(dict, to_send[-1]).items() if k in allowed}
 

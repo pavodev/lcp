@@ -471,11 +471,7 @@ async def _handle_sock(
 
     # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":
-        payload["_ws"] = True
         resp = await validate(**payload)
-        # should never be a response type, we do this for type check
-        if isinstance(resp, web.Response):
-            return None
         await push_msg(sockets, session_id, resp, just=ident)
 
     # used in simultaneous mode only: once FE sees enough results, cancel

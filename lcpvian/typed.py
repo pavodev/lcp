@@ -6,6 +6,7 @@ TypedDicts for CorpusConfig and CorpusTemplate are in configure.py
 import asyncio
 
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any, Mapping, TypeAlias
 from uuid import UUID
@@ -122,3 +123,8 @@ Iteration: TypeAlias = tuple[
 
 # todo: finish this one
 QueryArgs: TypeAlias = Any
+
+
+Endpoint: TypeAlias = Callable[
+    [web.Request], Awaitable[web.Response | web.WebSocketResponse]
+]
