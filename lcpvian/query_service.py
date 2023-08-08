@@ -121,7 +121,7 @@ class QueryService:
         query: str,
         queue: str = "query",
         **kwargs: Unpack[QueryArgs],  # type: ignore
-    ) -> tuple[Job, bool | None]:
+    ) -> tuple[Job | None, bool | None]:
         """
         Here we send the query to RQ and therefore to redis
         """

@@ -1,6 +1,7 @@
 __pycache__/
 .DS_Store
 .idea/
+lcpvian.egg-info/
 run.cpython*
 build/
 worker.cpython*

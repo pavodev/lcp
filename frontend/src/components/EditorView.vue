@@ -303,6 +303,7 @@ export default {
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       renderLineHighlight: "none",
+      automaticLayout: true,
       folding: false,
     });
 

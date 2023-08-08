@@ -45,7 +45,6 @@ async def _upload_data(
         template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
-
     importer = Importer(upool, data, corpus, debug)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
