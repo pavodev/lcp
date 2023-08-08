@@ -48,8 +48,7 @@ from io import BytesIO
 from textwrap import dedent
 from typing import Any, cast
 
-import aiofiles
-
+from aiofiles import open as aopen
 from aiofiles.threadpool.binary import AsyncBufferedReader
 
 from sqlalchemy.engine.row import Row
@@ -208,7 +207,7 @@ class Importer:
         plus potentially the remainder of a line
         """
         base = os.path.basename(csv_path)
-        async with aiofiles.open(csv_path, "rb") as f:
+        async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
                 await f.seek(start)
@@ -233,7 +232,7 @@ class Importer:
         Import csv_path to the DB, with or without concurrency
         """
         base = os.path.basename(csv_path)
-        async with aiofiles.open(csv_path, "rb") as fop:
+        async with aopen(csv_path, "rb") as fop:
             headers = await fop.readline()
             headlen = len(headers)
             positions = await self._get_positions(fop, fsize)
@@ -259,7 +258,7 @@ class Importer:
             return None
 
         # no concurrency:
-        async with aiofiles.open(csv_path, "rb") as f:
+        async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
                 for start, chunk in positions:

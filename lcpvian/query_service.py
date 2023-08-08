@@ -143,7 +143,7 @@ class QueryService:
             args=(query,),
             kwargs=kwargs,
         )
-        return job, True
+        return cast(Job, job), True
 
     async def _attempt_query_from_cache(
         self, hashed: str, **kwargs

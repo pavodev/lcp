@@ -134,12 +134,12 @@ class DDL:
         raise NotImplementedError
 
     def __lt__(self, other: object) -> bool:
-        o = cast(Table, other)
+        o = cast(Table | Type, other)
         assert hasattr(o, "name") and hasattr(self, "name")
         return bool(self.name < o.name)
 
     def __eq__(self, other: object) -> bool:
-        o = cast(Table, other)
+        o = cast(Table | Type, other)
         assert hasattr(o, "name")
         assert hasattr(o, "name") and hasattr(self, "name")
         return bool(self.name == o.name)

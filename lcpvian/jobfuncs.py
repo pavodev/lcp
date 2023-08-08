@@ -46,8 +46,6 @@ async def _upload_data(
 
     upool = get_current_job()._upool  # type: ignore
 
-    debug = cast(bool, kwargs["debug"])
-
     importer = Importer(upool, data, corpus, debug)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
