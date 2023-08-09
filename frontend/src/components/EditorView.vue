@@ -320,6 +320,8 @@ export default {
     //   editor.layout()
     // })
 
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, ()=>this.$emit("submit"));
+    
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
     }, true);

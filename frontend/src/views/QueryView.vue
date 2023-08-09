@@ -199,6 +199,7 @@
                 <EditorView
                   :query="queryDQD"
                   :corpora="selectedCorpora"
+                  @submit="submit"
                   @update="updateQueryDQD"
                 />
                 <p
