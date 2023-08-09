@@ -17,6 +17,13 @@
               label="name"
               track-by="value"
             ></multiselect>
+            <div
+              class="details-button icon-3 tooltips"
+              @click.stop="openGraph()"
+              title="Corpus details"
+            >
+              <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+            </div>
           </div>
           <div class="mb-3">
             <label class="form-label">Languages</label>
@@ -141,6 +148,11 @@
           <div class="lds-ripple" v-if="loading">
             <div></div>
             <div></div>
+          </div>
+          <div v-if="corpusModal">
+            <CorpusGraphView
+              :corpus="corpusModal"
+            />
           </div>
         </div>
         <div class="col-8">
@@ -570,6 +582,7 @@ import ResultsTableView from "@/components/results/TableView.vue";
 import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
+import CorpusGraphView from "@/components/CorpusGraphView.vue";
 
 export default {
   name: "QueryTestView",
@@ -686,6 +699,7 @@ myColl3 => collocation
       sqlQuery: null,
       isDebug: false,
       queryStatus: null,
+      corpusModal: null
     };
   },
   components: {
@@ -694,7 +708,8 @@ myColl3 => collocation
     ResultsPlainTableView,
     ResultsTableView,
     EditorView,
-  },
+    CorpusGraphView
+},
   watch: {
     corpora: {
       handler() {
@@ -1030,6 +1045,9 @@ myColl3 => collocation
         data["percentage_done"] += this.percentageDone;
         this.WSDataResults = data;
       }
+    },
+    openGraph() {
+      this.corpusModal = this.selectedCorpora.corpus;
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
