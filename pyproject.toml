@@ -32,7 +32,7 @@ classifiers = [
     "Programming Language :: Python :: 3",
 ]
 dependencies = [
-    "backports.zoneinfo @ git+https://github.com/morganwahl/zoneinfo",
+    "backports.zoneinfo @ http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1",
     "asyncpg >= 0.27.0",
     "SQLAlchemy >= 2.0.15",
     "greenlet >= 2.0.2",

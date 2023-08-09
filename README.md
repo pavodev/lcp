@@ -23,6 +23,30 @@ You will also need to copy the `.env` config template to the path it needs to be
 cp .env.dev .env
 ```
 
+## Virtual Environment
+
+Skip this section if you don't want/need to set up a virtual environment for Python 3.11
+
+Install `virtualenv` for Python:
+
+```bash
+pip install virtualenv
+```
+
+Create a virtual environment for lcpvian:
+
+```bash
+# Make sure you are out of lcpvian so you don't include the virtual environment as part of your commits
+cd ~
+virtualenv -p $(which python3.11) lcpvian-environment
+```
+
+Finally set your session to run commands from that environment:
+
+```bash
+source ~/lcpvian-environment/bin/activate
+```
+
 ## Things that need to be running for lcpvian to work
 
 * The backend (`./lcpvian`)
@@ -40,7 +64,10 @@ To install backend (and `abstract-query`, which is also required):
 pip install -e abstract-query -e .
 ```
 
-To start backend for development, first edit `.env` so that it contains the correct config.
+If you get an error saying that site-packages is not writeable, it probably means that you are not running in a virtual environment; see [Virtual Environment](#virtual-environment) for instructions on how to set up a virtual environment for Python
+
+
+To start backend for development, first edit `.env` so that it contains the correct config. Comment out the `SSH_` variables if not using, or you'll get an SSH gateway error
 
 Then, start as many RQ workers as you want. To start one:
 
@@ -72,6 +99,25 @@ sudo apt update
 sudo apt install nodejs
 sudo apt install npm
 npm install --global yarn
+```
+
+You might need to install a specific version of node for compatibility concerns. As of August 9, 2023 the module `node-ipc` is incompatible with node 20+, so a sensible target version is 19. If you don't have `nvm` installed yet, you can install it from the `nvm-sh` github repo:
+
+```bash
+wget -qO- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.4/install.sh | bash
+```
+
+Close then reopen the terminal to install node 19:
+
+```bash
+nvm install 19
+```
+
+You can now go back to lcpvian and use node 19:
+
+```bash
+cd lcpvian
+nvm use 0.10
 ```
 
 Then, if you haven't before, install the frontend:
