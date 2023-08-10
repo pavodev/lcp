@@ -24,6 +24,7 @@ attributes. This message is heard by a listener in the main thread (sock.py),
 which can broadcast it to frontends via websockets, and trigger new jobs if need
 be. Then the process repeats...
 """
+
 import json
 import os
 

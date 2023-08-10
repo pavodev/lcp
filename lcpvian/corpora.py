@@ -3,7 +3,7 @@ corpora.py: /corpora endpoint, returns a dict of corpora available for a given
 user and app, and return it as a JSON HTTP response
 
 We use the complete version of this dict as app["config"], so no DB requests
-are needed for this reques.
+are needed for this request.
 """
 
 from json.decoder import JSONDecodeError

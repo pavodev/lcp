@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 from __future__ import annotations
 
 import asyncio
@@ -63,7 +64,6 @@ UPLOAD_MAX_NUM_CONNS = int(os.getenv("UPLOAD_MAX_NUM_CONNECTIONS", 8))
 UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT) if UPLOAD_POOL else 0
 UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 43200))
 
-POOL_WORKERS = int(os.getenv("POOL_NUM_WORKERS", 3))
 PORT = int(os.getenv("SQL_PORT", 25432))
 
 

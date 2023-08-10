@@ -37,7 +37,7 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import QueryMeta, RawSent, ResultSents, Results
+from .typed import QueryMeta, RawSent, ResultSents, Results, VianKWIC
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -125,12 +125,12 @@ def _format_kwics(
     """
     sen: ResultSents = {}
     out: Results = {0: meta_json, -1: sen}
-    first_list: int | None = None
     rs: list[dict] = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
     skipped: defaultdict[int, int] = defaultdict(int)
+    vian_in_lcp: bool | None = None
 
     if sents is None:
         print("Sentences is None: expired?")
@@ -144,7 +144,7 @@ def _format_kwics(
         add_to = cast(ResultSents, out[-1])
         add_to[str(sent[0])] = [sent[1], sent[2]]
 
-    for line in result:
+    for a, line in enumerate(result):
         key = int(line[0])
         rest = line[1]
         if max_kwic and counts.get(key, 0) > max_kwic:
@@ -165,13 +165,12 @@ def _format_kwics(
         if key not in out:
             out[key] = []
         if is_vian and key in kwics:
-            first_list = _first_list(first_list, rest)
-            rest = list(_format_vian(rest, first_list))
+            rest = list(_format_vian(rest))
         elif key in kwics:
-            rest = [rest[0], rest[1:]]
-            # fix for vian inside lcp:
-            if any(isinstance(i, list) for i in rest[1]):
-                rest = [rest[0], rest[1][:-7]]
+            if vian_in_lcp is None:
+                vian_in_lcp = len(rest) > 2
+            if vian_in_lcp:
+                rest = rest[:2]
         if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
@@ -182,6 +181,21 @@ def _format_kwics(
         out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
+
+
+def _vian_inside_lcp(rest: Sequence) -> bool:
+    for i in rest[1:]:
+        if not isinstance(i, list):
+            continue
+        if not i:
+            continue
+        if len(i) < 6:
+            continue
+        if any(
+            isinstance(x, list) for x in i
+        ):  # and len(x) == 2 and isinstance(x[0], int)
+            return True
+    return False
 
 
 def _get_all_sents(
@@ -237,18 +251,18 @@ def _get_all_sents(
 
 
 def _format_vian(
-    rest: Sequence, first_list: int
-) -> tuple[int | str, list[int], int | str, str | None, str | None, list[list[int]]]:
+    rest: Sequence,
+) -> VianKWIC:
     """
     Little helper to build VIAN kwic sentence data, which has time,
     document and gesture information added to the KWIC data
     """
     seg_id = cast(str | int, rest[0])
-    tok_ids = cast(list[int], rest[1 : first_list - 3])
-    gesture = cast(str | None, rest[first_list - 2])
-    doc_id = cast(int | str, rest[first_list - 3])
-    agent_name = cast(str | None, rest[first_list - 1])
-    frame_ranges = cast(list[list[int]], rest[first_list:])
+    tok_ids = cast(list[int], rest[1])
+    doc_id = cast(int | str, rest[2])
+    gesture = cast(str | None, rest[3])
+    agent_name = cast(str | None, rest[4])
+    frame_ranges = cast(list[list[int]], rest[5:])
     out = (seg_id, tok_ids, doc_id, gesture, agent_name, frame_ranges)
     return out
 
@@ -260,15 +274,16 @@ def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> R
     too_many = False
     allowed: set[str | int] = set()
     for k, v in to_send.items():
-        if k > 0:
-            size = len(v)
-            if size + current_lines > max_kwic:
-                most_allowed = max_kwic - current_lines
-                if not too_many and len(v) > most_allowed:
-                    too_many = True
-                assert isinstance(to_send[k], list)
-                to_send[k] = cast(list, v)[:most_allowed]
-                allowed.update(set(i[0] for i in cast(list, to_send[k])))
+        if k <= 0:
+            continue
+        size = len(v)
+        if size + current_lines > max_kwic:
+            most_allowed = max_kwic - current_lines
+            if not too_many and len(v) > most_allowed:
+                too_many = True
+            assert isinstance(to_send[k], list)
+            to_send[k] = cast(list, v)[:most_allowed]
+            allowed.update(set(i[0] for i in cast(list, to_send[k])))
     if too_many:
         to_send[-1] = {k: v for k, v in cast(dict, to_send[-1]).items() if k in allowed}
 
@@ -353,15 +368,3 @@ def _fix_freq(v: list[list]) -> list[list]:
         if body not in fixed:
             fixed.append(body)
     return fixed
-
-
-def _first_list(first_list: int | None, rest: list) -> int:
-    """
-    Determine the first list item in a vian kwic item
-    """
-    if first_list is not None:
-        return first_list
-    return next(
-        (i for i, x in enumerate(rest) if isinstance(x, (list, tuple))),
-        len(rest),
-    )

@@ -6,6 +6,7 @@ TypedDicts for CorpusConfig and CorpusTemplate are in configure.py
 import asyncio
 
 from collections import defaultdict
+from collections.abc import Awaitable, Callable
 from datetime import datetime
 from typing import Any, Mapping, TypeAlias
 from uuid import UUID
@@ -122,3 +123,13 @@ Iteration: TypeAlias = tuple[
 
 # todo: finish this one
 QueryArgs: TypeAlias = Any
+
+# one of the main endpoint functions like query(), upload()
+Endpoint: TypeAlias = Callable[
+    [web.Request], Awaitable[web.Response | web.WebSocketResponse]
+]
+
+# a kwic line for vian, with seg, toks, doc, gesture, agent and frame ranges
+VianKWIC: TypeAlias = tuple[
+    int | str, list[int], int | str, str | None, str | None, list[list[int]]
+]

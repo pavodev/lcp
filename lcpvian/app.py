@@ -63,10 +63,9 @@ from .query import query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
-from .typed import Task, Websockets
+from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
 from .utils import ParserClass, handle_lama_error, handle_timeout
-from .validate import validate
 from .video import video
 
 
@@ -170,57 +169,27 @@ async def create_app(test: bool = False) -> web.Application:
     conf: dict[str, CorpusConfig] = {}
     app["config"] = conf
 
-    resource = cors.add(app.router.add_resource("/corpora"))
-    # cors.add(resource.add_route("GET", corpora))
-    cors.add(resource.add_route("POST", corpora))
+    endpoints: list[tuple[str, str, Endpoint]] = [
+        ("/check-file-permissions", "GET", check_file_permissions),
+        ("/corpora", "POST", corpora),
+        ("/create", "POST", make_schema),
+        ("/document/{doc_id}", "POST", document),
+        ("/document_ids/{corpus_id}", "POST", document_ids),
+        ("/fetch", "POST", fetch_queries),
+        ("/get_message/{uuid}", "GET", get_message),
+        ("/project", "POST", project_create),
+        ("/project/{project}/api/create", "POST", project_api_create),
+        ("/project/{project}/api/{key}/revoke", "POST", project_api_revoke),
+        ("/query", "POST", query),
+        ("/settings", "GET", lama_user_data),
+        ("/store", "POST", store_query),
+        ("/upload", "POST", upload),
+        ("/video", "GET", video),
+        ("/ws", "GET", sock),
+    ]
 
-    resource = cors.add(app.router.add_resource("/query"))
-    cors.add(resource.add_route("POST", query))
-
-    resource = cors.add(app.router.add_resource("/validate"))
-    cors.add(resource.add_route("POST", validate))
-
-    resource = cors.add(app.router.add_resource("/upload"))
-    cors.add(resource.add_route("POST", upload))
-
-    resource = cors.add(app.router.add_resource("/create"))
-    cors.add(resource.add_route("POST", make_schema))
-
-    resource = cors.add(app.router.add_resource("/video"))
-    cors.add(resource.add_route("GET", video))
-
-    resource = cors.add(app.router.add_resource("/ws"))
-    cors.add(resource.add_route("GET", sock))
-
-    resource = cors.add(app.router.add_resource("/get_message/{uuid}"))
-    cors.add(resource.add_route("GET", get_message))
-
-    resource = cors.add(app.router.add_resource("/document/{doc_id}"))
-    cors.add(resource.add_route("POST", document))
-
-    resource = cors.add(app.router.add_resource("/document_ids/{corpus_id}"))
-    cors.add(resource.add_route("POST", document_ids))
-
-    resource = cors.add(app.router.add_resource("/fetch"))
-    cors.add(resource.add_route("POST", fetch_queries))
-
-    resource = cors.add(app.router.add_resource("/store"))
-    cors.add(resource.add_route("POST", store_query))
-
-    resource = cors.add(app.router.add_resource("/project"))
-    cors.add(resource.add_route("POST", project_create))
-
-    resource = cors.add(app.router.add_resource("/project/{project}/api/create"))
-    cors.add(resource.add_route("POST", project_api_create))
-
-    resource = cors.add(app.router.add_resource("/project/{project}/api/{key}/revoke"))
-    cors.add(resource.add_route("POST", project_api_revoke))
-
-    resource = cors.add(app.router.add_resource("/settings"))
-    cors.add(resource.add_route("GET", lama_user_data))
-
-    resource = cors.add(app.router.add_resource("/check-file-permissions"))
-    cors.add(resource.add_route("GET", check_file_permissions))
+    for url, method, func in endpoints:
+        cors.add(cors.add(app.router.add_resource(url)).add_route(method, func))
 
     # we keep two redis connections, for reasons
     redis_url = f"{REDIS_URL}/{REDIS_DB_INDEX}"
