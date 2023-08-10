@@ -131,6 +131,7 @@ def _format_kwics(
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
     skipped: defaultdict[int, int] = defaultdict(int)
+    vian_in_lcp: bool | None = None
 
     if sents is None:
         print("Sentences is None: expired?")
@@ -144,7 +145,7 @@ def _format_kwics(
         add_to = cast(ResultSents, out[-1])
         add_to[str(sent[0])] = [sent[1], sent[2]]
 
-    for line in result:
+    for a, line in enumerate(result):
         key = int(line[0])
         rest = line[1]
         if max_kwic and counts.get(key, 0) > max_kwic:
@@ -168,10 +169,12 @@ def _format_kwics(
             first_list = _first_list(first_list, rest)
             rest = list(_format_vian(rest, first_list))
         elif key in kwics:
-            rest = [rest[0], rest[1:]]
-            # fix for vian inside lcp:
-            if any(isinstance(i, list) for i in rest[1]):
+            if vian_in_lcp is None:
+                vian_in_lcp = _vian_inside_lcp(rest)
+            if vian_in_lcp:
                 rest = [rest[0], rest[1][:-7]]
+            else:
+                rest = [rest[0], rest[1:]]
         if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
@@ -182,6 +185,21 @@ def _format_kwics(
         out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
+
+
+def _vian_inside_lcp(rest: Sequence) -> bool:
+    for i in rest[1:]:
+        if not isinstance(i, list):
+            continue
+        if not i:
+            continue
+        if len(i) < 6:
+            continue
+        if any(
+            isinstance(x, list) for x in i
+        ):  # and len(x) == 2 and isinstance(x[0], int)
+            return True
+    return False
 
 
 def _get_all_sents(
