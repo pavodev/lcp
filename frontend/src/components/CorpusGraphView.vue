@@ -25,7 +25,6 @@ export default {
   computed: {
     graphData() {
       let corpus = this.corpus;
-      console.log("corpus", corpus);
       let data = [
         {
           id: "1",
@@ -41,15 +40,36 @@ export default {
         if ("attributes" in corpus.layer[layer]) {
           Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
-            data.push({
+            let text = attribute.replace(/@/gi, "_");
+            let attributes = corpus.layer[layer].attributes[attribute];
+            let attributeData = {
               id: attributeId,
-              text: attribute.replace(/@/gi, "_"),
+              text: text,
               edgeType: "circle",
-            });
+            };
+            if ("entity" in attributes && attributes.entity in corpus.layer) {
+              attributeData.next = [`l-${attributes.entity.toLowerCase().replace(/@/gi, "_")}`];
+              attributeData.link = ["-.->|refers to|"];
+            }
+            else if (attributes.type!=="text") {
+              let possibleValues = Object.keys(attributes);
+              if (attributes.type=="categorical"){
+                if (attributes.values instanceof Array && attributes.values.length>0) {
+                  possibleValues = attributes.values.filter(v=>v.match(/^[^'"()]+$/));
+                  if (possibleValues.length != attributes.values.length)
+                    possibleValues.push("/!\\ values with special characters not listed /!\\");
+                }
+                else
+                  possibleValues = ["List of values missing from specs"];
+              }
+              attributeData.text = `<abbr title='${possibleValues.join(" ")}'>${attributeData.text}</abbr>`;
+            }
+            data.push(attributeData);
             next.push(attributeId);
             link.push("---")
           });
         }
+        // Is this necessary? Meta is an attribute itself
         if ("meta" in corpus.layer[layer]) {
           Object.keys(corpus.layer[layer].meta).forEach((meta) => {
             let metaId = `a-${index}-${meta.toLowerCase()}`;
@@ -98,7 +118,6 @@ export default {
           parentLayer.link.push("---|part of|");
         }
       }
-      console.log("data", JSON.stringify(data));
       return data;
     },
   },
@@ -106,7 +125,8 @@ export default {
     // Dirty fix -- ask Igor why a fix is needed in the first place
     let updateGraphUntilSuccessful = ()=>{
       if (this.$refs.mermaidcontainer==null) return;
-      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) return;
+      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) 
+        return this.$emit("graphReady", this.$refs.mermaidcontainer);;
       this.graphIndex += 1;
       window.requestAnimationFrame(updateGraphUntilSuccessful);
     }

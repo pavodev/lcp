@@ -10,6 +10,7 @@ import {
   faCircleInfo,
   faCircleNodes,
   faCirclePlus,
+  faExpand,
   faForward,
   faHouse,
   faLink,
@@ -41,6 +42,7 @@ library.add(faChartSimple);
 library.add(faCircleInfo);
 library.add(faCircleNodes);
 library.add(faCirclePlus);
+library.add(faExpand);
 library.add(faForward);
 library.add(faHouse);
 library.add(faLink);
