@@ -16,7 +16,7 @@ SKIPS: Set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
 if not any(a.endswith("setup.py") for a in sys.argv) or "build_ext" in sys.argv:
     from mypyc.build import mypycify
 
-    if "--inplace" not in sys.argv:
+    if "build_ext" in sys.argv and "--inplace" not in sys.argv:
         sys.argv.append("--inplace")
 
     files = []
