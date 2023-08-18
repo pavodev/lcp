@@ -445,6 +445,7 @@
               >
                 <div class="btn-group mt-2 btn-group-sm mb-3">
                   <a
+                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
                     href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
@@ -461,7 +462,7 @@
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
                     :class="
-                      plainType == 'table' ? 'active btn-primary' : 'btn-light'
+                      plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1]) ? 'active btn-primary' : 'btn-light'
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
@@ -469,7 +470,7 @@
                   </a>
                 </div>
                 <ResultsPlainTableView
-                  v-if="plainType == 'table'"
+                  v-if="plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1])"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -479,7 +480,7 @@
                   :loading="loading"
                 />
                 <ResultsKWICView
-                  v-else
+                  v-else-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -863,6 +864,10 @@ myColl3 => collocation
     },
   },
   methods: {
+    resultContainsSet(result) {
+      return result.length>0 && result[0] instanceof Array && result[0].length > 1 && result[0][1] instanceof Array &&
+              (result[0][1].find( r => r instanceof Array ) !== undefined);
+    },
     updateLoading(status) {
       this.queryStatus = status;
       if (["finished"].includes(status)) {
