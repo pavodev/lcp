@@ -305,13 +305,7 @@
                 </span>
               </div>
               <div class="col-7">
-                <vue3-mermaid
-                  v-if="showGraph"
-                  :nodes="graphData"
-                  type="graph TD"
-                  :config="mermaidConfig"
-                  :key="graphIndex"
-                ></vue3-mermaid>
+                <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
               </div>
             </div>
           </div>
@@ -339,6 +333,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ProjectNewView from "@/components/project/NewView.vue";
+import CorpusGraphView from "@/components/CorpusGraphView.vue";
 import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
@@ -350,11 +345,7 @@ export default {
   data() {
     return {
       corpusModal: null,
-      graphIndex: 0,
       showGraph: false,
-      mermaidConfig: {
-        theme: "neutral",
-      },
       allowProjectModalSave: false,
       modalProjectData: null,
       appName: config.appName,
@@ -365,6 +356,7 @@ export default {
   components: {
     Title,
     ProjectNewView,
+    CorpusGraphView
   },
   methods: {
     filterCorpora(corpora) {
@@ -472,84 +464,7 @@ export default {
         retval[project_id].corpora.push(corpus);
       });
       return retval;
-    },
-    graphData() {
-      let corpus = this.corpusModal;
-      let data = [
-        {
-          id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, ""),
-          next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
-            (layer) => `l-${layer.toLowerCase().replace(/@/gi, "")}`
-          ),
-        },
-      ];
-      let partOfs = {};
-      Object.keys(corpus.layer).forEach((layer, index) => {
-        console.log("Layer", layer, corpus.layer[layer], Object.keys(corpus.layer[layer]));
-        let next = [], link = [];
-        if ("attributes" in corpus.layer[layer]) {
-          Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
-            let attributeId = `a-${index}-${attribute.toLowerCase()}`;
-            data.push({
-              id: attributeId,
-              text: attribute.replace(/@/gi, ""),
-              edgeType: "circle",
-            });
-            next.push(attributeId);
-            link.push("---")
-          });
-        }
-        if ("meta" in corpus.layer[layer]) {
-          Object.keys(corpus.layer[layer].meta).forEach((meta) => {
-            let metaId = `a-${index}-${meta.toLowerCase()}`;
-            data.push({
-              id: metaId,
-              text: meta.replace(/@/gi, ""),
-              edgeType: "circle",
-            });
-            next.push(metaId);
-            link.push("---")
-          });
-        }
-        if ("contains" in corpus.layer[layer]) {
-          let containedId = `l-${corpus.layer[layer].contains.toLowerCase().replace(/@/gi, "")}`;
-          next.push(containedId);
-          link.push("-->|contains|")
-          data[0].next = data[0].next.filter( (layerId) => layerId != containedId );
-        }
-        let layerData = {
-          id: `l-${layer.toLowerCase().replace(/@/gi, "")}`,
-          text: layer.replace(/@/gi, ""),
-          next: next,
-          link: link
-        };
-        if ("partOf" in corpus.layer[layer]) {
-          let parentLayerId = `l-${corpus.layer[layer].partOf.toLowerCase().replace(/@/g,"")}`;
-          partOfs[parentLayerId] = [...(partOfs[parentLayerId]||[]), layerData];
-        }
-        data.push(layerData);
-      });
-      // Handle the partOfs after adding their parents to the structure
-      for (let parentLayerId in partOfs) {
-        let parentLayer = data.find( (layer) => layer.id==parentLayerId );
-        if (parentLayer===undefined) continue;
-        // Remove the attributes from the parent: they will be inherited by the children
-        // let parentAttributes = [];
-        // parentLayer.next = parentLayer.next.filter( (layerId) => 
-        //   !String.prototype.startsWith.call(layerId,'a-') || (parentAttributes.push(layerId) && false)
-        // );
-        for (let childLayerData of partOfs[parentLayerId]) {
-          // Inherit the attributes
-          // childLayerData.next.push(...parentAttributes);
-          // childLayerData.link.push(...parentAttributes.map( (_) => `-->|via ${parentLayer.text}|` ))
-          // Add and flag the layer as "part of" the parent
-          parentLayer.next.push(childLayerData);
-          parentLayer.link.push("---|part of|");
-        }
-      }
-      return data;
-    },
+    }
   },
   mounted() {
     this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
