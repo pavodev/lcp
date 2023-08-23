@@ -2,6 +2,7 @@
 
 predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                 | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
+                | "group" label _NL [_INDENT label+ _DEDENT]                        -> group
                 | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
                 | BOOLEAN _NL [_INDENT (property|predicate)+ _DEDENT]               -> boolean
                 | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
