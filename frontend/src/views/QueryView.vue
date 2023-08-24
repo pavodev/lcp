@@ -445,19 +445,6 @@
               >
                 <div class="btn-group mt-2 btn-group-sm mb-3">
                   <a
-                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
-                    href="#"
-                    @click.stop.prevent="plainType = 'kwic'"
-                    class="btn"
-                    :class="
-                      plainType != 'table' ? 'active btn-primary' : 'btn-light'
-                    "
-                    aria-current="page"
-                  >
-                    <FontAwesomeIcon :icon="['fas', 'barcode']" />
-                    KWIC
-                  </a>
-                  <a
                     href="#"
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
@@ -466,7 +453,20 @@
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
-                    Table
+                    Plain
+                  </a>
+                  <a
+                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                    href="#"
+                    @click.stop.prevent="plainType = 'kwic'"
+                    class="btn"
+                    :class="
+                      plainType == 'kwic' ? 'active btn-primary' : 'btn-light'
+                    "
+                    aria-current="page"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'barcode']" />
+                    KWIC
                   </a>
                 </div>
                 <ResultsPlainTableView
@@ -751,7 +751,7 @@ myColl3 => collocation
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
       failedStatus: false,
-      plainType: "kwic",
+      plainType: "table",
       sqlQuery: null,
       isDebug: false,
       queryStatus: null,
