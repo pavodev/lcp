@@ -309,7 +309,7 @@ def _sentences(
     )
 
     if prev_offset > offset and not kwargs.get("from_memory"):
-        offset = prev_offset
+        offset = prev_offset if resume else -1
     total_to_get = job.kwargs.get("needed", total_requested)
 
     cb: Batch = depended.kwargs["current_batch"]
