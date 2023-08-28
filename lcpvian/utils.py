@@ -30,11 +30,18 @@ except ImportError:
 from redis import Redis as RedisConnection
 from redis.asyncio.connection import BaseParser
 
-del BaseParser.__slots__  # type: ignore
+try:
+    del BaseParser.__slots__  # type: ignore
+except AttributeError:
+    pass
+
 from redis.asyncio.connection import HiredisParser, PythonParser
 
-del HiredisParser.__slots__  # type: ignore
-del PythonParser.__slots__  # type: ignore
+try:
+    del HiredisParser.__slots__  # type: ignore
+    del PythonParser.__slots__  # type: ignore
+except AttributeError:
+    pass
 
 from redis.utils import HIREDIS_AVAILABLE
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
