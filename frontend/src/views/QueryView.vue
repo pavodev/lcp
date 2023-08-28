@@ -10,6 +10,14 @@
         <div class="col-4">
           <div class="mb-3 mt-3">
             <label class="form-label">Corpora</label>
+            <div v-if="selectedCorpora && selectedCorpora.corpus"
+              class="details-button icon-3 tooltips"
+              @click.stop="switchGraph()"
+              title="Show/hide corpus structure"
+              :style="{position: 'absolute', lineHeight: '40px', transform: 'translate(calc(-100% - 0.5em))'}"
+            >
+              <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+            </div>
             <multiselect
               v-model="selectedCorpora"
               :options="corporaOptions"
@@ -142,6 +150,18 @@
             <div></div>
             <div></div>
           </div>
+          <div class="corpus-graph" v-if="corpusGraph">
+            <FontAwesomeIcon 
+              :icon="['fas', 'expand']" 
+              @click="openGraphInModal"
+              data-bs-toggle="modal"
+              data-bs-target="#corpusDetailsModal"
+            />
+            <CorpusGraphView
+              :corpus="corpusGraph"
+              @graphReady="resizeGraph"
+            />
+          </div>
         </div>
         <div class="col-8">
           <div class="form-floating mb-3">
@@ -199,6 +219,7 @@
                 <EditorView
                   :query="queryDQD"
                   :corpora="selectedCorpora"
+                  @submit="submit"
                   @update="updateQueryDQD"
                 />
                 <p
@@ -425,30 +446,31 @@
                 <div class="btn-group mt-2 btn-group-sm mb-3">
                   <a
                     href="#"
+                    @click.stop.prevent="plainType = 'table'"
+                    class="btn"
+                    :class="
+                      plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1]) ? 'active btn-primary' : 'btn-light'
+                    "
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'table']" />
+                    Plain
+                  </a>
+                  <a
+                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                    href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
                     :class="
-                      plainType != 'table' ? 'active btn-primary' : 'btn-light'
+                      plainType == 'kwic' ? 'active btn-primary' : 'btn-light'
                     "
                     aria-current="page"
                   >
                     <FontAwesomeIcon :icon="['fas', 'barcode']" />
                     KWIC
                   </a>
-                  <a
-                    href="#"
-                    @click.stop.prevent="plainType = 'table'"
-                    class="btn"
-                    :class="
-                      plainType == 'table' ? 'active btn-primary' : 'btn-light'
-                    "
-                  >
-                    <FontAwesomeIcon :icon="['fas', 'table']" />
-                    Table
-                  </a>
                 </div>
                 <ResultsPlainTableView
-                  v-if="plainType == 'table'"
+                  v-if="plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1])"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -458,7 +480,7 @@
                   :loading="loading"
                 />
                 <ResultsKWICView
-                  v-else
+                  v-else-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -528,6 +550,45 @@
         </div>
       </div>
     </div>
+    <div
+      class="modal fade"
+      id="corpusDetailsModal"
+      tabindex="-1"
+      aria-labelledby="corpusDetailsModalLabel"
+      aria-hidden="true"
+      ref="vuemodal"
+    >
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="corpusDetailsModalLabel">
+              Corpus structure
+            </h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body text-start" v-if="corpusModal">
+            <div class="row">
+              <p class="title mb-0">{{ corpusModal.meta.name }}</p>
+              <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -554,6 +615,14 @@ textarea {
 .error-text {
   margin-top: 7px;
 }
+.corpus-graph .fa-expand {
+  opacity: 0.5;
+  float: right;
+}
+.corpus-graph .fa-expand:hover {
+  opacity: 1;
+  cursor: pointer;
+}
 </style>
 
 <script>
@@ -569,6 +638,7 @@ import ResultsTableView from "@/components/results/TableView.vue";
 import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
+import CorpusGraphView from "@/components/CorpusGraphView.vue";
 
 export default {
   name: "QueryTestView",
@@ -681,10 +751,13 @@ myColl3 => collocation
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
       failedStatus: false,
-      plainType: "kwic",
+      plainType: "table",
       sqlQuery: null,
       isDebug: false,
       queryStatus: null,
+      corpusGraph: null,
+      corpusModal: null,
+      showGraph: false
     };
   },
   components: {
@@ -693,7 +766,8 @@ myColl3 => collocation
     ResultsPlainTableView,
     ResultsTableView,
     EditorView,
-  },
+    CorpusGraphView
+},
   watch: {
     corpora: {
       handler() {
@@ -727,6 +801,11 @@ myColl3 => collocation
       deep: true,
     },
     selectedCorpora() {
+      let updateGraph = false;
+      if (this.corpusGraph) {
+        this.corpusGraph = null;
+        updateGraph = true;
+      }
       this.validate();
       if (this.selectedCorpora) {
         history.pushState(
@@ -734,6 +813,8 @@ myColl3 => collocation
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
+        if (updateGraph) // make sure to delay the re-setting of corpusGraph
+          setTimeout(()=>this.corpusGraph = this.selectedCorpora.corpus, 1);
       } else {
         history.pushState({}, null, `/query/`);
       }
@@ -783,6 +864,10 @@ myColl3 => collocation
     },
   },
   methods: {
+    resultContainsSet(result) {
+      return result.length>0 && result[0] instanceof Array && result[0].length > 1 && result[0][1] instanceof Array &&
+              (result[0][1].find( r => r instanceof Array ) !== undefined);
+    },
     updateLoading(status) {
       this.queryStatus = status;
       if (["finished"].includes(status)) {
@@ -1029,6 +1114,35 @@ myColl3 => collocation
         data["percentage_done"] += this.percentageDone;
         this.WSDataResults = data;
       }
+    },
+    switchGraph() {
+      if (!this.corpusGraph && this.selectedCorpora)
+        this.corpusGraph = this.selectedCorpora.corpus;
+      else
+        this.corpusGraph = null;
+    },
+    openGraphInModal() {
+      if (!this.corpusGraph) return;
+      this.corpusModal = this.corpusGraph;
+      // Cannot have more than one graph displayed at a time
+      let restoreSmallGraphWith = this.corpusGraph;
+      this.corpusGraph = null;
+      this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
+        this.showGraph = true;
+      });
+      this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
+        this.showGraph = false;
+        if (restoreSmallGraphWith)
+          this.corpusGraph = restoreSmallGraphWith;
+        restoreSmallGraphWith = null;
+      });
+    },
+    resizeGraph(container) {
+      let svg = container.querySelector("svg");
+      if (svg===null) return;
+      let g = svg.querySelector("g");
+      if (g===null) return;
+      svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
     submitFullSearch() {
       this.submit(null, true, false, true);

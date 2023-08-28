@@ -13,6 +13,7 @@ export default {
     'group',
     'sequence',
     'set',
+    'group',
     'plain',
     'analysis',
     'collocation',

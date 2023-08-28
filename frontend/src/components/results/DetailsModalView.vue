@@ -13,7 +13,7 @@
           aria-selected="true"
           v-if="hasDepRel"
         >
-          Dependency Visualizer
+          Dependency Graph
         </button>
         <button
           class="nav-link"
@@ -26,7 +26,7 @@
           aria-controls="nav-details"
           aria-selected="false"
         >
-          Details
+          Tabular
         </button>
       </div>
     </nav>

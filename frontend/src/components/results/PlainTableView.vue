@@ -14,7 +14,20 @@
           :data-index="resultIndex"
         >
           <td scope="row">
-            <template
+            <span
+              v-for="(token) in item"
+              class="token"
+              :key="`form-${token.index}`"
+              :class="[
+                (token.group >= 0 ? `text-bold color-group-${token.group}` : ''),
+                (currentToken && columnHeaders && currentToken[columnHeaders.indexOf('head')] == token.index ? 'highlight' : '')
+              ].join(' ')"
+              @mousemove="showPopover(token.token, resultIndex, $event)"
+              @mouseleave="closePopover"
+            >
+              {{ token.form  }}
+            </span>
+            <!-- <template
               v-for="(group, groupIndex) in groups"
               :key="`tbody-${groupIndex}`"
             >
@@ -50,7 +63,7 @@
               @mouseleave="closePopover"
             >
               {{ token[0] }}
-            </span>
+            </span> -->
           </td>
           <td>
             <button
@@ -226,6 +239,21 @@
 import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 
+class TokenToDisplay {
+  constructor(tokenArray, index, groups, columnHeaders) {
+    if (!(tokenArray instanceof Array) || tokenArray.length < 2)
+      throw Error(`Invalid format for token ${JSON.stringify(tokenArray)}`);
+    if (isNaN(Number(index)) || index<=0)
+      throw Error(`Invalid index (${index}) for token ${JSON.stringify(tokenArray)}`);
+    if (!(groups instanceof Array) || groups.find(g=>!(g instanceof Array)))
+      throw Error(`Invalid groups (${JSON.stringify(groups)}) for token ${JSON.stringify(tokenArray)}`);
+    columnHeaders.forEach( (header,i) => this[header] = tokenArray[i] );
+    this.token = tokenArray;
+    this.index = index;
+    this.group = groups.findIndex( g => g.find(id=>id==index) );
+  }
+}
+
 export default {
   name: "ResultsPlainTableView",
   props: [
@@ -385,42 +413,48 @@ export default {
           let sentenceId = row[0];
           let startIndex = this.sentences[sentenceId][0];
           let tokens = this.sentences[sentenceId][1];
-          let tokenData = this.getGroups([0, ...row[1]]);
-          let range = tokenData.map((tokensArr) =>
-            tokensArr.map((tokenId) => tokenId - startIndex)
-          );
 
-          let retval = [
-            // Before first match
-            // Revert when in table
-            // tokens.filter((_, index) => index < range[0][0]).reverse(),
-            tokens.filter((_, index) => index < range[0][0])
-          ];
+          let tokenData = JSON.parse(JSON.stringify(row[1])); // tokens are already gouped in sets/sequences
+          tokenData = tokenData.map( tokenIdOrSet => tokenIdOrSet instanceof Array ? tokenIdOrSet : [tokenIdOrSet] );
+          // Return a list of TokenToDisplay instances
+          tokens = tokens.map( (token,idx) => new TokenToDisplay(token, startIndex + idx, tokenData, this.columnHeaders) );
 
-          for (let index = 0; index < range.length; index++) {
-            retval.push(
-              tokens.filter(
-                (_, tokenIndex) =>
-                  tokenIndex >= range[index][0] &&
-                  tokenIndex <= range[index].at(-1)
-              )
-            );
-            // Context between forms
-            if (index + 1 < range.length) {
-              retval.push(
-                tokens.filter(
-                  (_, tokenIndex) =>
-                    tokenIndex > range[index].at(-1) &&
-                    tokenIndex < range[index + 1][0]
-                )
-              );
-            }
-          }
+          return tokens;
+          // let range = tokenData.map( (tokensArr) =>
+          //   tokensArr.map( (tokenId) => tokenId - startIndex )
+          // );
 
-          // After last form
-          retval.push(tokens.filter((_, index) => index > range.at(-1).at(-1)));
-          retval.push(range);
-          return retval;
+          // let retval = [
+          //   // Before first match
+          //   // Revert when in table
+          //   // tokens.filter((_, index) => index < range[0][0]).reverse(),
+          //   tokens.filter((_, index) => index < range[0][0])
+          // ];
+
+          // for (let index = 0; index < range.length; index++) {
+          //   retval.push(
+          //     tokens.filter(
+          //       (_, tokenIndex) =>
+          //         tokenIndex >= range[index][0] &&
+          //         tokenIndex <= range[index].at(-1)
+          //     )
+          //   );
+          //   // Context between forms
+          //   if (index + 1 < range.length) {
+          //     retval.push(
+          //       tokens.filter(
+          //         (_, tokenIndex) =>
+          //           tokenIndex > range[index].at(-1) &&
+          //           tokenIndex < range[index + 1][0]
+          //       )
+          //     );
+          //   }
+          // }
+
+          // // After last form
+          // retval.push(tokens.filter((_, index) => index > range.at(-1).at(-1)));
+          // retval.push(range);
+          // return retval;
         });
     },
     columnHeaders() {

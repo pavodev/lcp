@@ -2,15 +2,19 @@
   <div id="details-view" v-if="data">
     <table class="table mb-5">
       <tbody>
-        <tr v-for="(item, index) in columnHeaders" :key="`tr-${index}`">
-          <th>{{ item }}</th>
-          <td v-for="(token, tIndex) in sentences[1]" :key="`t${index}-${tIndex}`">
-            <span v-if="item == 'head'" v-html="headToken(token)"> </span>
+        <tr>
+          <td v-for="(header, index) in columnHeaders" :key="`tr-header-${index}`">
+            <th>{{ header }}</th>
+          </td>
+        </tr>
+        <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`">
+          <td v-for="(column, cIndex) in columnHeaders" :key="`td-${tIndex}-${cIndex}`">
+            <span v-if="column == 'head'" v-html="headToken(token)"> </span>
             <span
               v-else
-              :class="textClasses(item, tIndex)"
-              v-html="token[index]"
-            ></span>
+              :class="textClasses(column, tIndex)"
+              v-html="token[cIndex]"
+            ></span>    
           </td>
         </tr>
       </tbody>

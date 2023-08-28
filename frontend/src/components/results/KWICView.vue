@@ -10,7 +10,7 @@
             <th scope="col" class="header-left">
               {{ groupIndex == 0 ? "Left context" : "Context" }}
             </th>
-            <th scope="col" class="header-form">Form</th>
+            <th scope="col" class="header-form">Match</th>
           </template>
           <th scope="col">Right context</th>
           <th scope="col">-</th>

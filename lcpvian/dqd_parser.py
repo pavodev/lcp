@@ -17,6 +17,7 @@ dqd_grammar = r"""
 
     predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
                     | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
+                    | "group" label _NL [_INDENT (label _NL)+ _DEDENT]                  -> group
                     | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
                     | BOOLEAN _NL [_INDENT (property|predicate)+ _DEDENT]               -> boolean
                     | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
@@ -154,6 +155,18 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
                     else {}
                 ),
                 **constraints,
+            }
+        }
+
+    elif tree.data in ("group"):
+        children = [to_dict(child) for child in tree.children]
+        # all children are labels, but the first one (mandatory) is the group's label
+        own_label = children[0].get("label")
+        members = [child for child in children if child.get("label") is not None][1:]
+        return {
+            tree.data: {
+                "label": own_label,
+                "members": members
             }
         }
 
