@@ -17,36 +17,10 @@ import aiohttp_cors
 import asyncio
 import uvloop
 
-from dotenv import load_dotenv
-
-load_dotenv(override=True)
-
-
-SENTRY_DSN: str | None = os.getenv("SENTRY_DSN", None)
-
-if SENTRY_DSN:
-
-    import sentry_sdk
-    from sentry_sdk.integrations.aiohttp import AioHttpIntegration
-    from sentry_sdk.integrations.logging import LoggingIntegration
-
-    sentry_logging = LoggingIntegration(
-        level=logging.INFO,
-        event_level=logging.WARNING,
-    )
-
-    sentry_sdk.init(
-        dsn=SENTRY_DSN,
-        integrations=[AioHttpIntegration(), sentry_logging],
-        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
-        environment=os.getenv("SENTRY_ENVIRONMENT", "lcpvian"),
-    )
-
-
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
 from aiohttp_catcher import Catcher, catch
-
+from dotenv import load_dotenv
 from redis import Redis
 from redis import asyncio as aioredis
 from rq.exceptions import AbandonedJobError, NoSuchJobError
@@ -69,9 +43,32 @@ from .upload import make_schema, upload
 from .utils import ParserClass, handle_lama_error, handle_timeout
 from .video import video
 
+load_dotenv(override=True)
 
+SENTRY_DSN: str | None = os.getenv("SENTRY_DSN", None)
+
+if SENTRY_DSN:
+
+    from sentry_sdk import init as sentry
+    from sentry_sdk.integrations.aiohttp import AioHttpIntegration
+    from sentry_sdk.integrations.logging import LoggingIntegration
+
+    sentry_logging = LoggingIntegration(
+        level=logging.INFO,
+        event_level=logging.WARNING,
+    )
+
+    sentry(
+        dsn=SENTRY_DSN,
+        integrations=[AioHttpIntegration(), sentry_logging],
+        traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
+        environment=os.getenv("SENTRY_ENVIRONMENT", "lcpvian"),
+    )
+
+# this is all just a way to find out if utils (and therefore the codebase) is a c extension
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
 C_COMPILED = "SourceFileLoader" not in str(_LOADER)
+
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
