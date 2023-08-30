@@ -11,6 +11,37 @@
   
 <script>
 
+// Mermaid does not support arrows pointing to the source node(!)
+// This hack finds all the paths associated with an "in" label and reverses their line commands
+function reverseIns(graph) {
+  let inLabels = [...graph.querySelectorAll("span.edgeLabel")].filter( s=>s.innerText=="in" );
+  let inPaths = [];
+  inLabels.forEach( label=>{
+    let inPathClasses = [...label.classList].map( cls => '.' + (
+      cls=="edgeLabel" 
+        ? "edgePath" 
+        : cls.replace(/(^L-|')/g,'') // An L- prefix and some single quotes get inserted in labels' classes for some reason
+      ) 
+    ).join('');
+    let inPath = graph.querySelector( inPathClasses + " path" );
+    if (inPath) inPaths.push(inPath);
+  });
+  inPaths.forEach( path => {
+    let dPath = path.getAttribute("d");
+    let commands = dPath.split(/(?=[MLC])/).reverse().map( (command,i) => {
+      if (i==0) return command.replace(/^L/,"M");
+      else if (command.startsWith("C")) {
+        let curbs = command.match(/(\d+)(\.\d+)*,(\d+)(\.\d+)*/g);
+        return "C" + curbs.reverse().join(","); // this doesn't produce the smoothest curves, but they're still readable
+      }
+      else
+        return command.replace(/^M/,"L");
+    }).join('');
+    path.setAttribute("d", commands);
+  } );
+  return true;
+}
+
 export default {
   name: "CorpusGraphView",
   data() {
@@ -85,7 +116,7 @@ export default {
         if ("contains" in corpus.layer[layer]) {
           let containedId = `l-${corpus.layer[layer].contains.toLowerCase().replace(/@/gi, "_")}`;
           next.push(containedId);
-          link.push("-->|contains|")
+          link.push("-- in -->")
           data[0].next = data[0].next.filter( (layerId) => layerId != containedId );
         }
         let layerData = {
@@ -126,7 +157,7 @@ export default {
     let updateGraphUntilSuccessful = ()=>{
       if (this.$refs.mermaidcontainer==null) return;
       if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) 
-        return this.$emit("graphReady", this.$refs.mermaidcontainer);;
+        return reverseIns(this.$refs.mermaidcontainer) && this.$emit("graphReady", this.$refs.mermaidcontainer);
       this.graphIndex += 1;
       window.requestAnimationFrame(updateGraphUntilSuccessful);
     }

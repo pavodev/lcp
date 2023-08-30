@@ -85,6 +85,9 @@
                     placeholder="Search corpora"
                   />
                 </div>
+                <div v-if="corporaFilter && filterError && filterError.message" class="alert notification alert-danger">
+                  {{ filterError.message }}
+                </div>
               </div>
               <div v-if="index != -1" class="col-2 text-end">
                 <span v-if="project.api">
@@ -351,6 +354,7 @@ export default {
       appName: config.appName,
       tooltips: [],
       corporaFilter: "",
+      filterError: null
     };
   },
   components: {
@@ -361,11 +365,26 @@ export default {
   methods: {
     filterCorpora(corpora) {
       if (this.corporaFilter) {
-        corpora = corpora.filter(
-          (c) =>
-            c.meta.name.search(new RegExp(this.corporaFilter, "i")) > -1 ||
-            c.meta.author.search(new RegExp(this.corporaFilter, "i")) > -1
-        );
+        let rgx = null;
+        // use a try/catch statement to test the regex
+        try { rgx = new RegExp(this.corporaFilter, "i"); }
+        catch (e) {
+          if (!this.filterError || this.filterError.pattern != this.corporaFilter) {
+            this.filterError = {pattern: this.corporaFilter};
+            setTimeout(()=>{
+              if (!this.filterError) return;
+              this.filterError.message = `Invalid search pattern (${e.message})`;
+            }, 1000); // allow 1s for the user to correct/complete the pattern
+          }
+        }
+        if (rgx) {
+          corpora = corpora.filter(
+            (c) =>
+              c.meta.name.search(rgx) > -1 ||
+              c.meta.author.search(rgx) > -1
+          );
+          this.filterError = null;
+        }
       }
       return corpora;
     },
