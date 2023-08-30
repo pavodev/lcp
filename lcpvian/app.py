@@ -45,11 +45,19 @@ from .video import video
 
 load_dotenv(override=True)
 
-SENTRY_DSN: str | None = os.getenv("SENTRY_DSN", None)
+# this is all just a way to find out if utils (and therefore the codebase) is a c extension
+_LOADER = importlib.import_module(handle_timeout.__module__).__loader__
+C_COMPILED = "SourceFileLoader" not in str(_LOADER)
+SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
+REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+APP_PORT = int(os.getenv("AIO_PORT", 9090))
+DEBUG = bool(os.getenv("DEBUG", "false").lower() in ("true", "1"))
+
 
 if SENTRY_DSN:
 
-    from sentry_sdk import init as sentry
+    from sentry_sdk import init as sentry_init
     from sentry_sdk.integrations.aiohttp import AioHttpIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
 
@@ -58,21 +66,12 @@ if SENTRY_DSN:
         event_level=logging.WARNING,
     )
 
-    sentry(
+    sentry_init(
         dsn=SENTRY_DSN,
         integrations=[AioHttpIntegration(), sentry_logging],
         traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", 1.0)),
         environment=os.getenv("SENTRY_ENVIRONMENT", "lcpvian"),
     )
-
-# this is all just a way to find out if utils (and therefore the codebase) is a c extension
-_LOADER = importlib.import_module(handle_timeout.__module__).__loader__
-C_COMPILED = "SourceFileLoader" not in str(_LOADER)
-
-REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-APP_PORT = int(os.getenv("AIO_PORT", 9090))
-DEBUG = bool(os.getenv("DEBUG", "false").lower() in ("true", "1"))
 
 
 async def on_shutdown(app: web.Application) -> None:
@@ -199,9 +198,12 @@ async def create_app(test: bool = False) -> web.Application:
     app["query"] = Queue("query", connection=app["redis"])
     app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
 
+    # so far unused, we could potentially provide users with detailed feedback by
+    # exploiting the 'failed job registry' provided by RQ.
     app["failed_registry_internal"] = FailedJobRegistry(queue=app["internal"])
     app["failed_registry_query"] = FailedJobRegistry(queue=app["query"])
     app["failed_registry_background"] = FailedJobRegistry(queue=app["background"])
+
     app["query_service"] = QueryService(app)
     await app["query_service"].get_config()
     canceled: deque[str] = deque(maxlen=99999)
