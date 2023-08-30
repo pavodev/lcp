@@ -51,6 +51,7 @@ from redis import Redis
 from redis import asyncio as aioredis
 from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
+from rq.registry import FailedJobRegistry
 
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
@@ -200,6 +201,10 @@ async def create_app(test: bool = False) -> web.Application:
     app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)
     app["query"] = Queue("query", connection=app["redis"])
     app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
+
+    app["failed_registry_internal"] = FailedJobRegistry(queue=app["internal"])
+    app["failed_registry_query"] = FailedJobRegistry(queue=app["query"])
+    app["failed_registry_background"] = FailedJobRegistry(queue=app["background"])
     app["query_service"] = QueryService(app)
     await app["query_service"].get_config()
     canceled: deque[str] = deque(maxlen=99999)
