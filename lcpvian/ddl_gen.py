@@ -62,7 +62,6 @@ class DDL:
     """
 
     def __init__(self) -> None:
-
         self.perms: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             GRANT USAGE ON SCHEMA {x} TO {y};

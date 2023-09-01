@@ -159,18 +159,18 @@ nav a.router-link-exact-active {
   background-color: #f58231;
 }
 .color-group-3 {
-  color: #dcbeff;
+  background-color: #dcbeff;
 }
 .color-group-4 {
-  color: #800000;
+  background-color: #800000;
   color: #fff;
 }
 .color-group-5 {
-  color: #000075;
+  background-color: #000075;
   color: #fff;
 }
 .color-group-6 {
-  color: #a9a9a9;
+  background-color: #a9a9a9;
 }
 .nav-tabs {
   box-shadow: 0 5px 7px -8px #777;
@@ -178,4 +178,9 @@ nav a.router-link-exact-active {
 
 .text-bg-primary {
   background-color: #2a7f62 !important;
+}
+
+.badge {
+  font-family: monospace;
+  border-radius: 0.2em;
 }

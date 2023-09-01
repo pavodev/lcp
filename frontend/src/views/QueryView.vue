@@ -219,6 +219,7 @@
                 <EditorView
                   :query="queryDQD"
                   :corpora="selectedCorpora"
+                  :invalidError="isQueryValidData && isQueryValidData.valid != true ? isQueryValidData.error : null"
                   @submit="submit"
                   @update="updateQueryDQD"
                 />
@@ -449,14 +450,14 @@
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
                     :class="
-                      plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1]) ? 'active btn-primary' : 'btn-light'
+                      plainType == 'table' || resultContainsSet(resultSet) ? 'active btn-primary' : 'btn-light'
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
                     Plain
                   </a>
                   <a
-                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                    v-if="resultContainsSet(resultSet) == false"
                     href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
@@ -470,7 +471,7 @@
                   </a>
                 </div>
                 <ResultsPlainTableView
-                  v-if="plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1])"
+                  v-if="plainType == 'table' || resultContainsSet(resultSet)"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -480,7 +481,7 @@
                   :loading="loading"
                 />
                 <ResultsKWICView
-                  v-else-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                  v-else-if="resultContainsSet(resultSet) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -639,6 +640,7 @@ import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 export default {
   name: "QueryTestView",
@@ -864,9 +866,11 @@ myColl3 => collocation
     },
   },
   methods: {
-    resultContainsSet(result) {
-      return result.length>0 && result[0] instanceof Array && result[0].length > 1 && result[0][1] instanceof Array &&
-              (result[0][1].find( r => r instanceof Array ) !== undefined);
+    resultContainsSet(resultSet) {
+      if (!resultSet.attributes instanceof Array) return false;
+      let entities = resultSet.attributes.find(v=>v.name=="entities");
+      if (!entities) return false;
+      return Boolean((entities.data instanceof Array) && entities.data.find(v=>["set","group"].includes(v.type)));
     },
     updateLoading(status) {
       this.queryStatus = status;
@@ -1274,5 +1278,11 @@ myColl3 => collocation
         : [];
     },
   },
+  mounted() {
+    setTooltips();
+  },
+  beforeUnmount() {
+    removeTooltips();
+  }
 };
 </script>

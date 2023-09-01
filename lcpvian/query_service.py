@@ -154,7 +154,6 @@ class QueryService:
         """
         job: Job | None
         try:
-
             job = Job.fetch(hashed, connection=self.app["redis"])
             is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
             self.app["redis"].expire(job.id, self.query_ttl)

@@ -7,7 +7,7 @@
             v-for="(group, groupIndex) in groups"
             :key="`thead-${groupIndex}`"
           >
-            <th scope="col" class="header-left">
+            <th scope="col" :class="`header-${groupIndex==0?'left':'form'}`">
               {{ groupIndex == 0 ? "Left context" : "Context" }}
             </th>
             <th scope="col" class="header-form">Match</th>
@@ -34,7 +34,10 @@
                 class="token"
                 v-for="(token, tokenIndex) in item[groupIndex * 2]"
                 :key="`rc-${tokenIndex}`"
-                :class="bgCheck(resultIndex, groupIndex, tokenIndex, item, 1)"
+                :class="[
+                  (columnHeaders && token[columnHeaders.indexOf('spaceAfter')]===0 ? 'nospace' : ''),
+                  ...bgCheck(resultIndex, groupIndex, tokenIndex, item, 1)
+                ]"
                 @mousemove="showPopover(token, resultIndex, $event)"
                 @mouseleave="closePopover"
               >
@@ -46,7 +49,10 @@
                 class="token"
                 v-for="(token, tokenIndex) in item[groupIndex * 2 + 1]"
                 :key="`form-${tokenIndex}`"
-                :class="bgCheck(resultIndex, groupIndex, tokenIndex, item, 2)"
+                :class="[
+                  (columnHeaders && token[columnHeaders.indexOf('spaceAfter')]===0 ? 'nospace' : ''),
+                  ...bgCheck(resultIndex, groupIndex, tokenIndex, item, 2)
+                ]"
                 @mousemove="showPopover(token, resultIndex, $event)"
                 @mouseleave="closePopover"
               >
@@ -59,9 +65,10 @@
               class="token"
               v-for="(token, tokenIndex) in item[groups.length * 2]"
               :key="`lt-${tokenIndex}`"
-              :class="
+              :class="[
+                (columnHeaders && token[columnHeaders.indexOf('spaceAfter')]===0 ? 'nospace' : ''),
                 bgCheck(resultIndex, groups.length - 1, tokenIndex, item, 3)
-              "
+              ]"
               @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -190,11 +197,15 @@
   text-overflow: ellipsis;
 }
 .middle-context {
-  /* white-space: nowrap;
-  overflow: visible;
-  max-width: 0;
-  width: 10%; */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 10vw;
   text-align: center;
+}
+.left-context:before, .middle-context:before {
+    float: right;
+    content: attr(data-tail);
 }
 .right-context {
   white-space: nowrap;
@@ -228,6 +239,10 @@
   background-color: #2a7f62;
   color: #fff;
   cursor: pointer;
+}
+.token.nospace {
+  padding-right: 0px;
+  margin-right: -2px; /* compensate for next token's padding-left */
 }
 .highlight {
   background-color: #1e999967;
@@ -285,23 +300,17 @@ export default {
     // },
     getGroups(data, initial=false) {
       let groups = [];
-      let tmpGroup = [];
       if (data) {
         let tokenData = JSON.parse(JSON.stringify(data));
         tokenData = tokenData.splice(1, tokenData.length).sort();
         if (initial === true) {
           tokenData = tokenData[0]
         }
-        tokenData.forEach((tokenId, idx) => {
-          if (idx > 0 && Math.abs(tokenData[idx] - tokenData[idx - 1]) > 1) {
-            if (tmpGroup.length > 0) {
-              groups.push(tmpGroup.sort());
-            }
-            tmpGroup = [];
-          }
-          tmpGroup.push(tokenId);
-        });
-        groups.push(tmpGroup.sort());
+        groups = tokenData.map( (tokenOrArrayOfTokens) => 
+          tokenOrArrayOfTokens instanceof Array 
+            ? tokenOrArrayOfTokens 
+            : [tokenOrArrayOfTokens] 
+        );
       }
       return groups;
     },
@@ -368,6 +377,14 @@ export default {
       }
       return classes;
     },
+    columnEllipses() {
+      [...document.querySelectorAll("#kwic-view td.left-context,#kwic-view td.middle-context")].forEach( (cell) => {
+        if (cell.scrollWidth > cell.offsetWidth)
+          cell.dataset.tail = [...cell.children].at(-1).textContent;
+        else
+        cell.dataset.tail = "";
+      });
+    }
   },
   computed: {
     headToken() {
@@ -397,7 +414,14 @@ export default {
           let startIndex = this.sentences[sentenceId][0];
           let tokens = this.sentences[sentenceId][1];
           let tokenData = this.getGroups([0, ...row[1]]);
-          let range = tokenData.map((tokensArr) =>
+          // Handle sequences (arrays of tokens)
+          let expandedTokenData = [];
+          tokenData.forEach( (tokensArr) => {
+            if (tokensArr.every(v=>v instanceof Array)) expandedTokenData.push(...tokensArr);
+            else expandedTokenData.push(tokensArr);
+          });
+          // let range = tokenData.map((tokensArr) =>
+          let range = expandedTokenData.map((tokensArr) =>
             tokensArr.map((tokenId) => tokenId - startIndex)
           );
 
@@ -444,5 +468,11 @@ export default {
       return columns["prepared"]["columnHeaders"];
     },
   },
+  mounted() {
+    this.columnEllipses();
+  },
+  updated() {
+    this.columnEllipses();
+  }
 };
 </script>

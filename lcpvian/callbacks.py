@@ -689,6 +689,5 @@ def _config(
         "msg_id": msg_id,
     }
     if publish:
-
         connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
     return jso

@@ -10,6 +10,7 @@
 </template>
   
 <script>
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 // Mermaid does not support arrows pointing to the source node(!)
 // This hack finds all the paths associated with an "in" label and reverses their line commands
@@ -93,7 +94,7 @@ export default {
                 else
                   possibleValues = ["List of values missing from specs"];
               }
-              attributeData.text = `<abbr title='${possibleValues.join(" ")}'>${attributeData.text}</abbr>`;
+              attributeData.text = `<abbr title='${possibleValues.join(" ")}' class='tooltips'>${attributeData.text}</abbr>`;
             }
             data.push(attributeData);
             next.push(attributeId);
@@ -156,13 +157,27 @@ export default {
     // Dirty fix -- ask Igor why a fix is needed in the first place
     let updateGraphUntilSuccessful = ()=>{
       if (this.$refs.mermaidcontainer==null) return;
-      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) 
-        return reverseIns(this.$refs.mermaidcontainer) && this.$emit("graphReady", this.$refs.mermaidcontainer);
+      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) {
+        reverseIns(this.$refs.mermaidcontainer); // reverse the direction of the arrows of the 'in' relations
+        setTooltips(this.$refs.mermaidcontainer);
+        this.$emit("graphReady", this.$refs.mermaidcontainer);
+        return;
+      }
       this.graphIndex += 1;
       window.requestAnimationFrame(updateGraphUntilSuccessful);
     }
     updateGraphUntilSuccessful();
+  },
+  beforeUnmount() {
+    // this.removeTooltips();
+    removeTooltips();
   }
 };
 </script>
   
+<style>
+.mermaid .tooltips {
+  border-bottom: dotted 1px black;
+  cursor: help;
+}
+</style>

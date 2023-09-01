@@ -14,6 +14,18 @@
 }
 </style>
 
+<style>
+/* need to use a non-scoped style because these classes are dynamically added */
+.invalidDQDGlyph {
+  border: 4px solid red;
+  background: linear-gradient(45deg, rgba(0,0,0,0) 0%,rgba(0,0,0,0) 43%,#fff 45%,#fff 55%,rgba(0,0,0,0) 57%,rgba(0,0,0,0) 100%), linear-gradient(135deg, red 0%,red 43%,#fff 45%,#fff 55%,red 57%,red 100%);
+  border-radius: 0.25em;
+}
+.invalidDQDLine {
+	background: rgba(255, 55, 55, 0.15);
+}
+</style>
+
 <script>
 import * as monaco from "monaco-editor";
 import DQDmonaco from "@/dqd_monaco.js";
@@ -145,6 +157,7 @@ monaco.languages.register({ id: "DQDmonaco" });
 monaco.languages.setMonarchTokensProvider("DQDmonaco", DQDmonaco);
 
 let editor = null;
+let decorations = null;
 // We use a hack to suggest continuation for attributes with categorical values
 let suggestValuesCommandId = null; // Reference to a monaco command to immediately show the suggestion modal again
 let suggestValuesArray = null;  // This is either null, or set to an array of the relevant categorical values
@@ -157,7 +170,7 @@ export default {
       languageObj: null,
     };
   },
-  props: ["query", "corpora"],
+  props: ["query", "corpora", "invalidError"],
   watch: {
     corpora: {
       handler: function() {
@@ -319,6 +332,11 @@ export default {
         this.languageObj = dispose
       },
       immediate: true
+    },
+    invalidError: {
+      handler() {
+        this.updateErrors();
+      }
     }
   },
   mounted() {
@@ -331,11 +349,15 @@ export default {
       renderLineHighlight: "none",
       automaticLayout: true,
       folding: false,
+      glyphMargin: true
     });
 
     editor.getModel().onDidChangeContent(() => {
-      this.updateContent()
+      this.updateContent();
+      this.updateErrors();
     });
+
+    editor.getModel().updateOptions({ tabSize: 4 });
 
     // editor.onDidFocusEditorText(()=>{
     //   this.$refs.editor.style.height = "500px"
@@ -377,10 +399,53 @@ export default {
         }) );
       return keywords;
     },
+    processErrorMessage(message) {
+      // if (message.startsWith("Unexpected token")) return "Invalid character";
+      let msg = message.replace(/token [^(\s]+\([^),]+, ([^)]+)\)/,"$1")
+                       .replace(/at line(.|\n)+$/,"");
+      if (message.match(/Expected one of: \* STRING Previous tokens: \[Token\('OPERATOR', '[=<>]+'\)\]/)) 
+        msg += " Provide a value for the comparison"
+      return msg;
+    },
     updateContent() {
       this.queryData = editor.getValue()
       this.$emit("update", this.queryData)
     },
+    updateErrors() {
+      if (decorations) decorations.clear();
+      if (!this.invalidError) return null;
+      try {
+        let [line,column] = this.invalidError.match(/at line (\d+), column (\d+)/i).slice(1,3);
+        setTimeout( ()=> {
+          if (decorations) decorations.clear();
+          if (!this.invalidError) return;
+          let model = editor.getModel();
+          [line,column] = [parseInt(line),parseInt(column)];
+          let lineContent = model.getLineContent(line);
+          if (column > lineContent.length) {
+            let problematicText = this.invalidError.match(/^Unexpected \S+ \S+\([^),]+, '([^')]+)'\)/i);
+            if (problematicText) {
+              problematicText = problematicText[1];
+              let oldline = line, nlines = model.getLineCount();
+              while (line < nlines && !model.getLineContent(line).match(problematicText)) line++;
+              if (line < nlines)
+                column = model.getLineContent(line).length;
+              else
+                line = oldline;
+            }
+          }
+          decorations = editor.createDecorationsCollection([{
+            range: new monaco.Range(parseInt(line), 1, parseInt(line), parseInt(column)),
+            options: {
+              isWholeLine: true,
+              inlineClassName: "invalidDQDLine",
+              glyphMarginClassName: "invalidDQDGlyph",
+              glyphMarginHoverMessage: { value: this.processErrorMessage(this.invalidError) }
+            }
+          }]);
+        } , 1000);
+      } catch { /* nothing */ }
+    }
   },
 };
 </script>
