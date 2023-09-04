@@ -867,7 +867,7 @@ myColl3 => collocation
   },
   methods: {
     resultContainsSet(resultSet) {
-      if (!resultSet.attributes instanceof Array) return false;
+      if (!(resultSet.attributes instanceof Array)) return false;
       let entities = resultSet.attributes.find(v=>v.name=="entities");
       if (!entities) return false;
       return Boolean((entities.data instanceof Array) && entities.data.find(v=>["set","group"].includes(v.type)));
