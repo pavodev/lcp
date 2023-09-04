@@ -4,9 +4,14 @@
 </template>
 
 <style scoped>
+  #dep-rel-view {
+    height: 50vh;
+  }
   * >>> svg {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 12px;
+    scale: 1.5;
+    transform-origin: top left;
   }
   * >>> svg .dep-text,
   * >>> svg .link-text {
