@@ -183,151 +183,147 @@ export default {
         // Register a completion item provider for the new language
         const { dispose } = monaco.languages.registerCompletionItemProvider("DQDmonaco", {
           provideCompletionItems: (model, position) => {
-            var word = model.getWordUntilPosition(position);
+            var word = model.getWordUntilPosition(position), column = position.column;
+            while (suggestValuesArray===null && word.word=="" && column>0) {
+              column--;
+              let previousWord = model.getWordUntilPosition({lineNumber: position.lineNumber, column: column}).word;
+              if (previousWord) return this.triggerAutocomplete(previousWord, /*prefixWithSpace:*/ true);
+            }
             var range = {
               startLineNumber: position.lineNumber,
               endLineNumber: position.lineNumber,
               startColumn: word.startColumn,
               endColumn: word.endColumn,
             };
-            // Retrieve the command ID if the command was already created, or else create it now
-            suggestValuesCommandId = suggestValuesCommandId || editor.addCommand( 0, (_,suggestion) => { // eslint-disable-line no-unused-vars
-              if (!this.corpora || !this.corpora.corpus) return;
-              // eslint-disable-next-line no-unused-vars
-              Object.entries(this.corpora.corpus.layer).forEach( ([_,{attributes}]) => {
-                let props = (attributes||{})[suggestion];
-                if (props && props.type == "categorical" && props.values instanceof Array)
-                  setTimeout( ()=>{ // Timeout necessary to prevent overlap from previous accepted suggestion
-                    suggestValuesArray = props.values; // can't directly pass an argument to triggerSuggest, so use this instead
-                    editor.trigger('', 'editor.action.triggerSuggest', {});
-                  } , 1 );
-              });
-            } );
+
             // Use suggestValuesArray if it is set
-            var suggestions = suggestValuesArray ? suggestValuesArray.map( (item) => Object({
-              label: item,
-              kind: monaco.languages.CompletionItemKind.Text,
-              insertText: item,
-              range: range
-            })) : [
-              {
-                label: "Token",
+            var suggestions = suggestValuesArray 
+              ? suggestValuesArray.map( (item) => Object({
+                label: item,
                 kind: monaco.languages.CompletionItemKind.Text,
-                insertText: "Token\n\tform = test1",
+                insertText: item,
                 range: range
-              },
-              {
-                label: "Segment",
-                kind: monaco.languages.CompletionItemKind.Text,
-                insertText: "Segment s1",
-                range: range,
-              },
-              // {
-              //   label: "NOT",
-              //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //   insertText: "NOT\n\t",
-              //   range: range,
-              // },
-              ...this.columnHeaders().map(item => {
-                return {
-                  label: item,
-                  kind: monaco.languages.CompletionItemKind.Keyword,
-                  insertText: `${item} = `,
-                  range: range,
-                  command: {
-                    id: suggestValuesCommandId,
-                    title: "insert values",
-                    arguments: [item]
-                  }
-                }
-              }),
-              {
-                label: "from",
-                kind: monaco.languages.CompletionItemKind.Keyword,
-                insertText: "from = ",
-                range: range,
-              },
-              {
-                label: "head",
-                kind: monaco.languages.CompletionItemKind.Keyword,
-                insertText: "head = ",
-                range: range,
-              },
-              {
-                label: "dep",
-                kind: monaco.languages.CompletionItemKind.Keyword,
-                insertText: "dep = ",
-                range: range,
-              },
-              {
-                label: "to",
-                kind: monaco.languages.CompletionItemKind.Keyword,
-                insertText: "to = ",
-                range: range,
-              },
-              {
-                label: "label",
-                kind: monaco.languages.CompletionItemKind.Keyword,
-                insertText: "label = ",
-                range: range,
-              },
-              // {
-              //   label: "pos",
-              //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //   insertText: "pos = ",
-              //   range: range,
-              // },
-              // {
-              //   label: "AND",
-              //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //   insertText: "AND\n\t",
-              //   range: range,
-              // },
-              // {
-              //   label: "OR",
-              //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //   insertText: "OR\n\t",
-              //   range: range,
-              // },
-              {
-                label: "DepRel",
-                kind: monaco.languages.CompletionItemKind.Text,
-                insertText: "DepRel dr1\n\t",
-                insertTextRules:
-                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                range: range,
-              },
-              {
-                label: "group",
-                kind: monaco.languages.CompletionItemKind.Snippet,
-                insertText: "group g\n\tt1\n\tt2",
-                insertTextRules:
-                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: "If-Else Statement",
-                range: range,
-              },
-              {
-                label: "distance",
-                kind: monaco.languages.CompletionItemKind.Snippet,
-                insertText: "distance\n\tfrom = \n\tto = \n\tvalue = ",
-                insertTextRules:
-                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: "If-Else Statement",
-                range: range,
-              },
-              {
-                label: "sequence",
-                kind: monaco.languages.CompletionItemKind.Snippet,
-                insertText: "sequence\n\t",
-                insertTextRules:
-                  monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                documentation: "If-Else Statement",
-                range: range,
-              },
-            ];
+              }))
+              : [
+                  {
+                    label: "Token",
+                    kind: monaco.languages.CompletionItemKind.Text,
+                    insertText: "Token\n\tform = test1",
+                    range: range
+                  },
+                  {
+                    label: "Segment",
+                    kind: monaco.languages.CompletionItemKind.Text,
+                    insertText: "Segment s1",
+                    range: range,
+                  },
+                  // {
+                  //   label: "NOT",
+                  //   kind: monaco.languages.CompletionItemKind.Keyword,
+                  //   insertText: "NOT\n\t",
+                  //   range: range,
+                  // },
+                  ...this.columnHeaders().map(item => {
+                    return {
+                      label: item,
+                      kind: monaco.languages.CompletionItemKind.Keyword,
+                      insertText: `${item} = `,
+                      range: range,
+                      command: {
+                        id: suggestValuesCommandId,
+                        title: "insert values",
+                        arguments: [item]
+                      }
+                    }
+                  }),
+                  {
+                    label: "from",
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                    insertText: "from = ",
+                    range: range,
+                  },
+                  {
+                    label: "head",
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                    insertText: "head = ",
+                    range: range,
+                  },
+                  {
+                    label: "dep",
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                    insertText: "dep = ",
+                    range: range,
+                  },
+                  {
+                    label: "to",
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                    insertText: "to = ",
+                    range: range,
+                  },
+                  {
+                    label: "label",
+                    kind: monaco.languages.CompletionItemKind.Keyword,
+                    insertText: "label = ",
+                    range: range,
+                  },
+                  // {
+                  //   label: "pos",
+                  //   kind: monaco.languages.CompletionItemKind.Keyword,
+                  //   insertText: "pos = ",
+                  //   range: range,
+                  // },
+                  // {
+                  //   label: "AND",
+                  //   kind: monaco.languages.CompletionItemKind.Keyword,
+                  //   insertText: "AND\n\t",
+                  //   range: range,
+                  // },
+                  // {
+                  //   label: "OR",
+                  //   kind: monaco.languages.CompletionItemKind.Keyword,
+                  //   insertText: "OR\n\t",
+                  //   range: range,
+                  // },
+                  {
+                    label: "DepRel",
+                    kind: monaco.languages.CompletionItemKind.Text,
+                    insertText: "DepRel dr1\n\t",
+                    insertTextRules:
+                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    range: range,
+                  },
+                  {
+                    label: "group",
+                    kind: monaco.languages.CompletionItemKind.Snippet,
+                    insertText: "group g\n\tt1\n\tt2",
+                    insertTextRules:
+                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    documentation: "If-Else Statement",
+                    range: range,
+                  },
+                  {
+                    label: "distance",
+                    kind: monaco.languages.CompletionItemKind.Snippet,
+                    insertText: "distance\n\tfrom = \n\tto = \n\tvalue = ",
+                    insertTextRules:
+                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    documentation: "If-Else Statement",
+                    range: range,
+                  },
+                  {
+                    label: "sequence",
+                    kind: monaco.languages.CompletionItemKind.Snippet,
+                    insertText: "sequence\n\t",
+                    insertTextRules:
+                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+                    documentation: "If-Else Statement",
+                    range: range,
+                  },
+                ];
             suggestValuesArray = null;
             return { suggestions: suggestions };
           },
+          triggerCharacters: ["="]
         });
         this.languageObj = dispose
       },
@@ -369,6 +365,10 @@ export default {
     // })
 
     editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, ()=>this.$emit("submit"));
+
+    // Generate a command ID for manual triggering of autocompletion
+    // eslint-disable-next-line no-unused-vars
+    suggestValuesCommandId = editor.addCommand( 0, (_,suggestion) => this.triggerAutocomplete(suggestion) );
     
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
@@ -398,6 +398,23 @@ export default {
             keywords.push(...props.values);
         }) );
       return keywords;
+    },
+    triggerAutocomplete(prompt,prefixWithSpace=false) {
+      if (!this.corpora || !this.corpora.corpus) return;
+      // eslint-disable-next-line no-unused-vars
+      Object.entries(this.corpora.corpus.layer).forEach( ([_,{attributes}]) => {
+        let props = (attributes||{})[prompt];
+        if (!props || props.type != "categorical") return;
+        let values = props.values;
+        if (!(values instanceof Array) && prompt in this.corpora.corpus.glob_attr)
+          values = this.corpora.corpus.glob_attr[prompt];
+        if (!(values instanceof Array) || values.length==0) return;
+        if (prefixWithSpace) values = values.map((v)=>" "+v);
+        setTimeout( ()=>{ // Timeout necessary to prevent overlap from previous accepted suggestion
+          suggestValuesArray = values; // can't directly pass an argument to triggerSuggest, so use this instead
+          editor.trigger('', 'editor.action.triggerSuggest', {});
+        } , 1 );
+      });
     },
     processErrorMessage(message) {
       // if (message.startsWith("Unexpected token")) return "Invalid character";
