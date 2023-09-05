@@ -1,4 +1,14 @@
 <template>
+  <PaginationComponent
+    v-if="data"
+    style="float: right"
+    :resultCount="data.length"
+    :resultsPerPage="resultsPerPage"
+    :currentPage="currentPage"
+    @update="updatePage"
+    :key="data.length"
+    :loading="loading"
+  />
   <div id="kwic-view">
     <table class="table" v-if="data">
       <thead>

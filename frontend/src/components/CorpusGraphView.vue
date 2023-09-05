@@ -84,17 +84,25 @@ export default {
               attributeData.link = ["-.->|refers to|"];
             }
             else if (attributes.type!=="text") {
+              let warnings = [];
               let possibleValues = Object.keys(attributes);
               if (attributes.type=="categorical"){
                 if (attributes.values instanceof Array && attributes.values.length>0) {
                   possibleValues = attributes.values.filter(v=>v.match(/^[^'"()]+$/));
                   if (possibleValues.length != attributes.values.length)
-                    possibleValues.push("/!\\ values with special characters not listed /!\\");
+                    warnings.push("values with special characters not listed");
                 }
+                else if (attributes.isGlobal && attribute in corpus.glob_attr)
+                  possibleValues = corpus.glob_attr[attribute];
                 else
                   possibleValues = ["List of values missing from specs"];
               }
-              attributeData.text = `<abbr title='${possibleValues.join(" ")}' class='tooltips'>${attributeData.text}</abbr>`;
+              let stringPossibleValues = possibleValues.reduce( (stringSoFar,newWord) => (newWord+" "+stringSoFar).length < 200 ? stringSoFar + " " + newWord : stringSoFar , "" );
+              if (stringPossibleValues.length < possibleValues.join(" ").length) {
+                stringPossibleValues += " ..."
+                warnings.push("too many values to display");
+              }
+              attributeData.text = `<abbr title='${stringPossibleValues}${warnings.length?' /!\\ '+warnings.join(' - ')+' /!\\':''}' class='tooltips'>${attributeData.text}</abbr>`;
             }
             data.push(attributeData);
             next.push(attributeId);

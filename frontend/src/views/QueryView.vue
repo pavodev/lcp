@@ -591,9 +591,31 @@
       </div>
     </div>
   </div>
+  <div id="nav-progress-bar" class="progress">
+    <div 
+      class="progress-bar"
+      :class="
+        loading ? 'progress-bar-striped progress-bar-animated' : ''
+      "
+      role="progressbar"
+      aria-label="Basic example"
+      :style="`width: ${percentageDone}%`"
+      :aria-valuenow="percentageDone"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      >
+    </div>
+  </div>
 </template>
 
 <style scoped>
+#nav-progress-bar {
+  position: fixed;
+  width: 100vw;
+  height: 0.5em;
+  top: 52px;
+  z-index: 1005;
+}
 .container {
   text-align: left;
 }
