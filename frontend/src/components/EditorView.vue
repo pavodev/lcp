@@ -172,6 +172,9 @@ export default {
   },
   props: ["query", "corpora", "invalidError"],
   watch: {
+    query(){
+      editor.getModel().setValue(this.query);
+    },
     corpora: {
       handler: function() {
 
@@ -197,7 +200,7 @@ export default {
             };
 
             // Use suggestValuesArray if it is set
-            var suggestions = suggestValuesArray 
+            var suggestions = suggestValuesArray
               ? suggestValuesArray.map( (item) => Object({
                 label: item,
                 kind: monaco.languages.CompletionItemKind.Text,
@@ -369,7 +372,7 @@ export default {
     // Generate a command ID for manual triggering of autocompletion
     // eslint-disable-next-line no-unused-vars
     suggestValuesCommandId = editor.addCommand( 0, (_,suggestion) => this.triggerAutocomplete(suggestion) );
-    
+
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
     }, true);
@@ -420,7 +423,7 @@ export default {
       // if (message.startsWith("Unexpected token")) return "Invalid character";
       let msg = message.replace(/token [^(\s]+\([^),]+, ([^)]+)\)/,"$1")
                        .replace(/at line(.|\n)+$/,"");
-      if (message.match(/Expected one of: \* STRING Previous tokens: \[Token\('OPERATOR', '[=<>]+'\)\]/)) 
+      if (message.match(/Expected one of: \* STRING Previous tokens: \[Token\('OPERATOR', '[=<>]+'\)\]/))
         msg += " Provide a value for the comparison"
       return msg;
     },

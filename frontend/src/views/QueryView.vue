@@ -671,92 +671,7 @@ export default {
   data() {
     return {
       query: "",
-      queryDQD: `Turn d
-    IsPresident = no
-    PoliticalGroup != NI
-
-Segment@d s
-
-sequence seq
-    Token@s t1
-        upos = DET
-    Token@s t2
-        upos = ADJ
-    Token@s t3
-        lemma = ^Fr.*
-        lemma.length > 5
-        upos = NOUN
-
-set tdeps
-    Token@s tx
-        DepRel
-            head = t3
-            dep = tx
-
-Token@s thead
-    upos = VERB
-    DepRel
-        head = thead
-        dep = t3
-
-
-myKWIC1 => plain
-    context
-        s
-    entities
-        t1
-        #t2
-        t3
-
-myKWIC2 => plain
-    context
-        s
-    entities
-        t1
-        t2
-        t3
-
-myStat1 => analysis
-    attributes
-        t1.lemma
-        t2.lemma
-        t3.lemma
-    functions
-        frequency
-    filter
-        frequency > 10
-
-myStat2 => analysis
-    attributes
-        t3.lemma
-        d.OriginalLanguage
-    functions
-        frequency
-    filter
-        frequency > 10
-
-myColl1 => collocation
-    center
-        t3
-    window
-        -5..+5
-    attribute
-        lemma
-
-myColl2 => collocation
-    space
-        tdeps
-    attribute
-        lemma
-    comment
-        PoS collocations of all dependends
-
-myColl3 => collocation
-    space
-        thead
-    attribute
-        lemma
-`,
+      queryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
       selectedCorpora: [],
@@ -832,8 +747,9 @@ myColl3 => collocation
         this.corpusGraph = null;
         updateGraph = true;
       }
-      this.validate();
+      // this.validate();
       if (this.selectedCorpora) {
+        this.queryDQD = this.selectedCorpora.corpus.sample_query || ""
         history.pushState(
           {},
           null,

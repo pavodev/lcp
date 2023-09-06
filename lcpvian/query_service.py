@@ -60,7 +60,9 @@ mc.description,
 mc.corpus_template::jsonb || a.glob_attr::jsonb AS corpus_template,
 mc.schema_path,
 mc.token_counts,
-mc.mapping,mc.enabled
+mc.mapping,
+mc.enabled,
+mc.sample_query
 """
 CONFIG_FROM = """
 main.corpus mc
@@ -415,7 +417,7 @@ class QueryService:
             room_info = " AND room = :room"
             params["room"] = room
 
-        query = f"""SELECT * FROM lcp_user.queries 
+        query = f"""SELECT * FROM lcp_user.queries
                     WHERE username = :user {room_info}
                     ORDER BY created_at DESC LIMIT {limit};
                 """
