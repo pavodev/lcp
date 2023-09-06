@@ -722,6 +722,7 @@ export default {
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
+            this.queryDQD = corpus[0].sample_query || ""
           }
           this.preselectedCorporaId = null;
           this.validate();
