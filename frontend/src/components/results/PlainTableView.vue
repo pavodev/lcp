@@ -1,4 +1,14 @@
 <template>
+  <PaginationComponent
+    v-if="data"
+    style="float: right"
+    :resultCount="data.length"
+    :resultsPerPage="resultsPerPage"
+    :currentPage="currentPage"
+    @update="updatePage"
+    :key="data.length"
+    :loading="loading"
+  />
   <div id="plain-table-view">
     <table class="table" v-if="data">
       <!-- <thead>
@@ -20,8 +30,9 @@
               :key="`form-${token.index}`"
               :class="[
                 (token.group >= 0 ? `text-bold color-group-${token.group}` : ''),
+                (token.spaceAfter === 0 ? 'nospace' : ''),
                 (currentToken && columnHeaders && currentToken[columnHeaders.indexOf('head')] == token.index ? 'highlight' : '')
-              ].join(' ')"
+              ]"
               @mousemove="showPopover(token.token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -225,6 +236,10 @@
   background-color: #2a7f62;
   color: #fff;
   cursor: pointer;
+}
+.token.nospace {
+  padding-right: 0px;
+  margin-right: -2px; /* compensate for next token's padding-left */
 }
 .highlight {
   background-color: #1e999967 !important;

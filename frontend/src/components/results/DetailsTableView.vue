@@ -9,7 +9,7 @@
         </tr>
         <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`">
           <td v-for="(column, cIndex) in columnHeaders" :key="`td-${tIndex}-${cIndex}`">
-            <span v-if="column == 'head'" v-html="headToken(token)"> </span>
+            <span v-if="column == 'head'" v-html="headToken(token, tIndex)"> </span>
             <span
               v-else
               :class="textClasses(column, tIndex)"
@@ -38,8 +38,8 @@ export default {
     }
   },
   methods: {
-    headToken(tokenData) {
-      let token = "-"
+    headToken(tokenData, tIndex) {
+      let token = "- ROOT -"
       let headIndex = this.columnHeaders.indexOf("head")
       let lemmaIndex = this.columnHeaders.indexOf("lemma")
       let startId = this.sentences[0]
@@ -47,6 +47,14 @@ export default {
         let tokenId = tokenData[headIndex];
         if (tokenId) {
           token = this.sentences[1][tokenId - startId][lemmaIndex]
+          let difference = tokenId - startId - tIndex;
+          let arrow = "↓", tag="sub";
+          if (difference<0) {
+            arrow = "↑";
+            tag = "sup";
+            difference = Math.abs(difference);
+          }
+          token += ` <${tag}>${arrow}${difference}</${tag}>`;
         }
       }
       return token;
@@ -59,24 +67,23 @@ export default {
       if (partitions.length) {
         columns = columns["partitions"][partitions[0]];
       }
-      return columns["prepared"]["columnHeaders"];
+      return columns["prepared"]["columnHeaders"].filter( (column) => column!="spaceAfter" );
     },
     textClasses(item, index) {
-      let classes = []
-      if (item.indexOf('pos') > -1) {
-        classes.push('badge rounded-pill')
+      let classes = [];
+      if (item.indexOf('pos') > -1 || item.indexOf('label') > -1) {
+        // classes.push('badge rounded-pill')
+        classes.push('badge')
         classes.push('bg-secondary')
       }
       if (item.indexOf('form') > -1) {
-        let startId = this.sentences[0]
-        let selectedStartId = this.data[1]
-        let selectedEndId = this.data.at(-1)
-        if ((startId + index) >= selectedStartId && (startId + index) <= selectedEndId) {
-          classes.push('text-bold')
-        }
+        let startId = this.sentences[0];
+        let tokenId = startId + index;
+        let group = this.data[1].findIndex( v=>v instanceof Array ? v.includes(tokenId) : v ==tokenId );
+        if (group >= 0) classes.push(`color-group-${group}`);  
       }
       return classes
-    },
+    }
   },
 };
 </script>

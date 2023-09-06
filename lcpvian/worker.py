@@ -26,7 +26,6 @@ load_dotenv(override=True)
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
 if SENTRY_DSN:
-
     import sentry_sdk
     from sentry_sdk.integrations.rq import RqIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
@@ -127,14 +126,12 @@ class MyWorker(Worker):
 
 
 async def work() -> None:
-
     with Connection():
         w = MyWorker(["internal", "query", "background"])
         w.work()
 
 
 def start_worker() -> None:
-
     try:
         if sys.version_info >= (3, 11):
             with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:

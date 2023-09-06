@@ -4,9 +4,14 @@
 </template>
 
 <style scoped>
+  #dep-rel-view {
+    height: 50vh;
+  }
   * >>> svg {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 12px;
+    scale: 1.5;
+    transform-origin: top left;
   }
   * >>> svg .dep-text,
   * >>> svg .link-text {
@@ -98,19 +103,26 @@ export default {
       let sumX = 0
       let matrix = []
       let linksDict = {}
+      let groups = {}
+      data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array 
+        ? tokenIdOrArray.forEach( (tokenId) => groups[tokenId] = tokenId in groups ? groups[tokenId] : groupId )
+        : groups[tokenIdOrArray] = tokenIdOrArray in groups ? groups[tokenIdOrArray] : groupId
+      )
 
       // Compile tokens and link matrix
       sentences[1].forEach((token, index) => {
         let textWidth = browserText.getWidth(token[0], 12, "Arial")
         let typeWidth = browserText.getWidth(token[2], 12, "Arial")
+        let currentTokenId = startId + index
         tokens.push({
-          id: startId + index,
+          id: currentTokenId,
           // name: startId + index
           form: token[0],
           lemma: token[1],
           pos: token[2],
           width: textWidth,
-          sumX: sumX
+          sumX: sumX,
+          group: currentTokenId in groups ? `color-group-${groups[currentTokenId]}` : ''
         })
         sumX += Math.max(textWidth, typeWidth)
 
@@ -118,7 +130,6 @@ export default {
         if (token[4]) {
           let currentTokenIndex = index
           let targetTokenIndex = token[4] - startId
-          let currentTokenId = startId + index
           let targetTokenId = token[4]
           let indexLevel = Math.abs(targetTokenIndex - currentTokenIndex)
 
@@ -239,14 +250,36 @@ export default {
           .attr("class", "link-pointer")
           .attr("points", "0 0, 5 3, 0 6")
 
+    // eslint-disable-next-line no-case-declarations
+    let filters = ['head','dep'].map( (id)=> svg.select("defs")
+      .append("filter")
+        .attr("id", id)
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", 1)
+        .attr("height", 1)
+    )
+    filters.forEach( (f) => {
+      f.append("feFlood").attr("flood-color", f.attr('id')=='head' ? "#1e999967" : "#2a7f62")
+      f.append("feComposite").attr("in", "SourceGraphic")
+    })
+
     svg.append("g")
       .selectAll("text")
       .data(this.tokens)
       .join("text")
-      .attr("class", d => (d.id >= this.data[1] && d.id <= this.data.at(-1)) ? "text-bold text-danger" : "")
+      // .attr("class", d => (d.id >= this.data[1] && d.id <= this.data.at(-1)) ? "text-bold text-danger" : "")
+      .attr("class", d => d.group )
       .text(d => d.form)
       .attr("x", (d, index) => (this.tokenSpace * index + d.sumX))
-      .attr("y", 10 + maxLevel*15);
+      .attr("y", 10 + maxLevel*15)
+      .attr("filter", d => `url(#${d.id})` )
+      .on("mouseenter", d => {
+        let tid = d.target.getAttribute("filter").replace(/\D/g,'')
+        filters[1].attr("id", tid)
+        filters[0].attr("id", (this.links.find( (l)=>l.source==tid ) || {target:null}).target )
+      })
+      .on("mouseleave", () => filters.map( (f,i) => f.attr("id", i==0?'head':'dep') ) )
 
     svg.append("g")
     .attr("class", "text-lemma")
@@ -323,7 +356,30 @@ export default {
           .attr("class", "link-text")
           .attr("text-anchor", "middle")
           .attr("dominant-baseline", "middle")
-          .text(d => d.label)
+          .text(d => d.label);
+
+    // adapt CSS highlighting to SVG
+    [...svg.node().querySelectorAll("text[class^=color-group-]")].forEach( (node) => {
+      let style = window.getComputedStyle(node)
+      node.style.fill = style.color
+      node.style.fontWeight = "bold"
+      let backgroundId = "rgb" + style.backgroundColor.replace(/[^\d,]/g,'').replace(/,/g,'-')
+      let select = svg.select(`defs filter#${backgroundId}`).node()
+      if (select==null) {
+        select = svg.select("defs")
+                    .append("filter")
+                      .attr("id", backgroundId)
+                      .attr("x", 0)
+                      .attr("y", 0)
+                      .attr("width", 1)
+                      .attr("height", 1)
+        select.append("feFlood")
+                .attr("flood-color", style.backgroundColor)
+        select.append("feComposite")
+                .attr("in", "SourceGraphic")
+      }
+      node.setAttribute("filter", `url(#${backgroundId})`);
+    });
   },
 }
 </script>
