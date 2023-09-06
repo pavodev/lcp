@@ -10,6 +10,7 @@
 </template>
   
 <script>
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 // Mermaid does not support arrows pointing to the source node(!)
 // This hack finds all the paths associated with an "in" label and reverses their line commands
@@ -83,17 +84,25 @@ export default {
               attributeData.link = ["-.->|refers to|"];
             }
             else if (attributes.type!=="text") {
+              let warnings = [];
               let possibleValues = Object.keys(attributes);
               if (attributes.type=="categorical"){
                 if (attributes.values instanceof Array && attributes.values.length>0) {
                   possibleValues = attributes.values.filter(v=>v.match(/^[^'"()]+$/));
                   if (possibleValues.length != attributes.values.length)
-                    possibleValues.push("/!\\ values with special characters not listed /!\\");
+                    warnings.push("values with special characters not listed");
                 }
+                else if (attributes.isGlobal && attribute in corpus.glob_attr)
+                  possibleValues = corpus.glob_attr[attribute];
                 else
                   possibleValues = ["List of values missing from specs"];
               }
-              attributeData.text = `<abbr title='${possibleValues.join(" ")}'>${attributeData.text}</abbr>`;
+              let stringPossibleValues = possibleValues.reduce( (stringSoFar,newWord) => (newWord+" "+stringSoFar).length < 200 ? stringSoFar + " " + newWord : stringSoFar , "" );
+              if (stringPossibleValues.length < possibleValues.join(" ").length) {
+                stringPossibleValues += " ..."
+                warnings.push("too many values to display");
+              }
+              attributeData.text = `<abbr title='${stringPossibleValues}${warnings.length?' /!\\ '+warnings.join(' - ')+' /!\\':''}' class='tooltips'>${attributeData.text}</abbr>`;
             }
             data.push(attributeData);
             next.push(attributeId);
@@ -156,13 +165,27 @@ export default {
     // Dirty fix -- ask Igor why a fix is needed in the first place
     let updateGraphUntilSuccessful = ()=>{
       if (this.$refs.mermaidcontainer==null) return;
-      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) 
-        return reverseIns(this.$refs.mermaidcontainer) && this.$emit("graphReady", this.$refs.mermaidcontainer);
+      if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) {
+        reverseIns(this.$refs.mermaidcontainer); // reverse the direction of the arrows of the 'in' relations
+        setTooltips(this.$refs.mermaidcontainer);
+        this.$emit("graphReady", this.$refs.mermaidcontainer);
+        return;
+      }
       this.graphIndex += 1;
       window.requestAnimationFrame(updateGraphUntilSuccessful);
     }
     updateGraphUntilSuccessful();
+  },
+  beforeUnmount() {
+    // this.removeTooltips();
+    removeTooltips();
   }
 };
 </script>
   
+<style>
+.mermaid .tooltips {
+  border-bottom: dotted 1px black;
+  cursor: help;
+}
+</style>

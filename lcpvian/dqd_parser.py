@@ -163,12 +163,7 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
         # all children are labels, but the first one (mandatory) is the group's label
         own_label = children[0].get("label")
         members = [child for child in children if child.get("label") is not None][1:]
-        return {
-            tree.data: {
-                "label": own_label,
-                "members": members
-            }
-        }
+        return {tree.data: {"label": own_label, "members": members}}
 
     elif tree.data in ("boolean"):
         children = []
