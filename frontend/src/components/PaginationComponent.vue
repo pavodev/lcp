@@ -112,7 +112,7 @@
   background-color: #2a7f62;
   border-color: #2a7f62;
 }
-</style>>
+</style>
 
 <script>
 export default {

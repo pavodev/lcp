@@ -18,3 +18,9 @@ export function removeTooltips() {
     });
     tooltips = [];
 }
+export function notification(node,text,options) {
+  options = {...{placement:'top',show:true},...(options||{})};
+  let tooltipInstance = new Tooltip(node, {trigger:'manual',title:text, ...options});
+  if (options.show) tooltipInstance.show();
+  return tooltipInstance;
+}

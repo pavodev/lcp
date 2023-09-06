@@ -271,6 +271,7 @@ class TokenToDisplay {
 
 export default {
   name: "ResultsPlainTableView",
+  emits: ["updatePage"],
   props: [
     "data",
     "sentences",

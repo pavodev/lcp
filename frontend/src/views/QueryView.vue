@@ -114,16 +114,18 @@
               "
               @click="submitFullSearch"
               class="btn btn-primary me-1"
+              :title="warning()"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               Search whole corpus
             </button>
             <button
-              v-if="loading"
+              v-else-if="loading"
               type="button"
               @click="stop"
               :disabled="loading == false"
               class="btn btn-primary me-1"
+              :title="warning(false)"
             >
               <FontAwesomeIcon :icon="['fas', 'xmark']" />
               Stop
@@ -373,7 +375,7 @@
         </div>
       </div>
     </div>
-    <div class="container-fluid">
+    <div class="container-fluid" ref="moreResultsLocation">
       <div class="row">
         <div class="col-12" v-if="WSDataResults && WSDataResults.result">
           <nav>
@@ -594,8 +596,12 @@
       </div>
     </div>
   </div>
-  <div id="nav-progress-bar" class="progress">
-    <div
+  <div id="nav-progress-bar" 
+    class="progress"
+    :class="loading ? 'progress-bar-striped progress-bar-animated' : ''"
+    :style="loading ? 'background-color: pink;' : ''"
+  >
+    <div 
       class="progress-bar"
       :class="
         loading ? 'progress-bar-striped progress-bar-animated' : ''
@@ -653,6 +659,7 @@ textarea {
 
 <script>
 import { mapState } from "pinia";
+import { ref } from "vue";
 
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -665,7 +672,7 @@ import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
-import { setTooltips, removeTooltips } from "@/tooltips";
+import { setTooltips, removeTooltips, notification } from "@/tooltips";
 
 export default {
   name: "QueryTestView",
@@ -1101,6 +1108,8 @@ export default {
       cleanResults = true,
       fullSearch = false
     ) {
+      if (this.moreResultsLocation)
+        [...this.moreResultsLocation.querySelectorAll(".tooltip")].forEach((t)=>t.remove());
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
@@ -1183,6 +1192,23 @@ export default {
       };
       useCorpusStore().fetchQueries(data);
     },
+    warning(show=true) {
+      if (!this.moreResultsLocation) return;
+      [...this.moreResultsLocation.querySelectorAll(".tooltip")].forEach((t)=>t.remove());
+      if (show===false) return "";
+      const tooltip = notification(
+        this.moreResultsLocation, 
+        `The first pages of results have been fetched. 
+        More results will be fetched if you move to the next page or if you hit Search whole corpus.`,
+        {
+          placement: "top",
+          container: this.moreResultsLocation,
+          offset: "1em"
+        }
+      );
+      this.moreResultsLocation.addEventListener("click", ()=>tooltip && tooltip._element && tooltip.dispose());
+      return "Not showing all the results";
+    }
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -1220,13 +1246,19 @@ export default {
             };
           })
         : [];
-    },
+    }
   },
   mounted() {
     setTooltips();
   },
   beforeUnmount() {
     removeTooltips();
-  }
+  },
+  setup() {
+    const moreResultsLocation = ref(null);
+    return {
+      moreResultsLocation
+    }
+  },
 };
 </script>

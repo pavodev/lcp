@@ -91,7 +91,7 @@ myColl3 => collocation
 """
 
 EXPECTED = {
-    "$schema": "cobquec2.json",
+    "$schema": "cobquec3.json",
     "query": [
         {
             "layer": "Turn",
