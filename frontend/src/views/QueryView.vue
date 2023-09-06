@@ -286,87 +286,89 @@
         </div> -->
         <div class="col">
           <hr class="mt-5 mb-5" />
-          <h6 class="mb-3">Query result</h6>
-          <div class="progress mb-2">
-            <div
-              class="progress-bar"
-              :class="
-                loading ? 'progress-bar-striped progress-bar-animated' : ''
+          <span v-if="debug">
+            <h6 class="mb-3">Query result</h6>
+            <div class="progress mb-2">
+              <div
+                class="progress-bar"
+                :class="
+                  loading ? 'progress-bar-striped progress-bar-animated' : ''
+                "
+                role="progressbar"
+                aria-label="Basic example"
+                :style="`width: ${percentageDone}%`"
+                :aria-valuenow="percentageDone"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ percentageDone.toFixed(2) }}%
+              </div>
+            </div>
+            Total progress
+            <div class="progress mb-2">
+              <div
+                class="progress-bar"
+                :class="
+                  loading ? 'progress-bar-striped progress-bar-animated' : ''
+                "
+                role="progressbar"
+                aria-label="Basic example"
+                :style="`width: ${percentageTotalDone}%`"
+                :aria-valuenow="percentageTotalDone"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ percentageTotalDone.toFixed(2) }}%
+              </div>
+            </div>
+            <div class="row mb-4">
+              <div class="col">
+                <p class="mb-1">
+                  Number of results:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.total_results_so_far"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Projected results:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.projected_results"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Batch done:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.batches_done"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Status:
+                  <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
+                  <span class="text-bold" v-html="queryStatus"></span>
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              v-if="
+                queryStatus == 'satisfied' && !loading
               "
-              role="progressbar"
-              aria-label="Basic example"
-              :style="`width: ${percentageDone}%`"
-              :aria-valuenow="percentageDone"
-              aria-valuemin="0"
-              aria-valuemax="100"
+              @click="submitFullSearch"
+              class="btn btn-primary me-1 mb-5"
             >
-              {{ percentageDone.toFixed(2) }}%
-            </div>
-          </div>
-          Total progress
-          <div class="progress mb-2">
-            <div
-              class="progress-bar"
-              :class="
-                loading ? 'progress-bar-striped progress-bar-animated' : ''
-              "
-              role="progressbar"
-              aria-label="Basic example"
-              :style="`width: ${percentageTotalDone}%`"
-              :aria-valuenow="percentageTotalDone"
-              aria-valuemin="0"
-              aria-valuemax="100"
-            >
-              {{ percentageTotalDone.toFixed(2) }}%
-            </div>
-          </div>
-          <div class="row mb-4">
-            <div class="col">
-              <p class="mb-1">
-                Number of results:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.total_results_so_far"
-                ></span>
-              </p>
-            </div>
-            <div class="col">
-              <p class="mb-1">
-                Projected results:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.projected_results"
-                ></span>
-              </p>
-            </div>
-            <div class="col">
-              <p class="mb-1">
-                Batch done:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.batches_done"
-                ></span>
-              </p>
-            </div>
-            <div class="col">
-              <p class="mb-1">
-                Status:
-                <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
-                <span class="text-bold" v-html="queryStatus"></span>
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            v-if="
-              queryStatus == 'satisfied' && !loading
-            "
-            @click="submitFullSearch"
-            class="btn btn-primary me-1 mb-5"
-          >
-            <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-            Search whole corpus
-          </button>
+              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+              Search whole corpus
+            </button>
+          </span>
         </div>
       </div>
     </div>
