@@ -151,8 +151,8 @@
             <div></div>
           </div>
           <div class="corpus-graph" v-if="corpusGraph">
-            <FontAwesomeIcon 
-              :icon="['fas', 'expand']" 
+            <FontAwesomeIcon
+              :icon="['fas', 'expand']"
               @click="openGraphInModal"
               data-bs-toggle="modal"
               data-bs-target="#corpusDetailsModal"

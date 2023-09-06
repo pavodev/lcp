@@ -15,11 +15,13 @@ export const useUserStore = defineStore("userData", {
     userData: null,
     roomId: roomId,
     projects: [],
+    dataFetched: false,
   }),
   getters: {},
   actions: {
     fetchUserData() {
       httpApi.get(`/settings`).then((r) => {
+        this.dataFetched = true
         this.userData = r.data;
         if (this.userData.publicProfiles.length) {
           this.projects = this.userData.publicProfiles
