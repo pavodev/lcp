@@ -108,6 +108,17 @@
               Submit
             </button>
             <button
+              type="button"
+              v-if="
+                queryStatus == 'satisfied' && !loading
+              "
+              @click="submitFullSearch"
+              class="btn btn-primary me-1"
+            >
+              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+              Search whole corpus
+            </button>
+            <button
               v-if="loading"
               type="button"
               @click="stop"
@@ -357,17 +368,6 @@
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              v-if="
-                queryStatus == 'satisfied' && !loading
-              "
-              @click="submitFullSearch"
-              class="btn btn-primary me-1 mb-5"
-            >
-              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Search whole corpus
-            </button>
           </span>
         </div>
       </div>
