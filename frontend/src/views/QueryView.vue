@@ -225,7 +225,7 @@
                 />
                 <p
                   class="error-text text-danger mt-3"
-                  v-if="isQueryValidData && isQueryValidData.valid != true"
+                  v-if="isQueryValidData && isQueryValidData.valid != true && debug"
                 >
                   {{ isQueryValidData.error }}
                 </p>
@@ -592,7 +592,7 @@
     </div>
   </div>
   <div id="nav-progress-bar" class="progress">
-    <div 
+    <div
       class="progress-bar"
       :class="
         loading ? 'progress-bar-striped progress-bar-animated' : ''
@@ -1264,7 +1264,7 @@ myColl3 => collocation
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useUserStore, ["userData", "roomId", "debug"]),
     ...mapState(useWsStore, ["messages"]),
     availableLanguages() {
       let retval = [];

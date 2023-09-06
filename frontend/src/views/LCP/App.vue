@@ -48,7 +48,7 @@
             </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
+            <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
@@ -90,6 +90,7 @@ import NotificationView from "@/components/NotificationView.vue";
 export default {
   name: "AppLCP",
   data() {
+    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
     }
@@ -111,7 +112,7 @@ export default {
     NotificationView,
   },
   computed: {
-    ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useUserStore, ["userData", "roomId", "debug"]),
   },
   watch: {
     userData() {
