@@ -229,6 +229,7 @@
               >
                 <EditorView
                   :query="queryDQD"
+                  :defaultQuery="defaultQueryDQD"
                   :corpora="selectedCorpora"
                   :invalidError="isQueryValidData && isQueryValidData.valid != true ? isQueryValidData.error : null"
                   @submit="submit"
@@ -672,6 +673,7 @@ export default {
     return {
       query: "",
       queryDQD: "",
+      defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
       selectedCorpora: [],
@@ -722,7 +724,8 @@ export default {
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
-            this.queryDQD = corpus[0].sample_query || ""
+            this.defaultQueryDQD = corpus[0].sample_query || ""
+            this.queryDQD = this.defaultQueryDQD
           }
           this.preselectedCorporaId = null;
           this.validate();
@@ -750,7 +753,7 @@ export default {
       }
       // this.validate();
       if (this.selectedCorpora) {
-        this.queryDQD = this.selectedCorpora.corpus.sample_query || ""
+        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || ""
         history.pushState(
           {},
           null,

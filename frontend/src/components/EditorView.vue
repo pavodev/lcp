@@ -170,10 +170,10 @@ export default {
       languageObj: null,
     };
   },
-  props: ["query", "corpora", "invalidError"],
+  props: ["query", "defaultQuery", "corpora", "invalidError"],
   watch: {
-    query(){
-      editor.getModel().setValue(this.query);
+    defaultQuery(){
+      editor.getModel().setValue(this.defaultQuery);
     },
     corpora: {
       handler: function() {
