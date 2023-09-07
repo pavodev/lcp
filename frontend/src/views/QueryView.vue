@@ -625,6 +625,25 @@
       </div>
     </div>
   </div>
+  <div id="nav-progress-bar" 
+    class="progress"
+    :class="loading ? 'progress-bar-striped progress-bar-animated' : ''"
+    :style="loading ? 'background-color: pink;' : ''"
+  >
+    <div 
+      class="progress-bar"
+      :class="
+        loading ? 'progress-bar-striped progress-bar-animated' : ''
+      "
+      role="progressbar"
+      aria-label="Basic example"
+      :style="`width: ${navPercentage}%`"
+      :aria-valuenow="navPercentage"
+      aria-valuemin="0"
+      aria-valuemax="100"
+      >
+    </div>
+  </div>
 </template>
 
 <style scoped>
@@ -1263,11 +1282,5 @@ export default {
   beforeUnmount() {
     removeTooltips();
   },
-  mounted() {
-    setTooltips();
-  },
-  beforeUnmount() {
-    removeTooltips();
-  }
 };
 </script>
