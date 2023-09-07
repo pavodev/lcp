@@ -114,7 +114,6 @@
               "
               @click="submitFullSearch"
               class="btn btn-primary me-1"
-              :title="warning()"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               Search whole corpus
@@ -125,7 +124,6 @@
               @click="stop"
               :disabled="loading == false"
               class="btn btn-primary me-1"
-              :title="warning(false)"
             >
               <FontAwesomeIcon :icon="['fas', 'xmark']" />
               Stop
@@ -375,7 +373,38 @@
         </div>
       </div>
     </div>
-    <div class="container-fluid" ref="moreResultsLocation">
+    <div 
+      v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
+      class="tooltip bs-tooltip-auto fade show" 
+      role="tooltip" 
+      style="position: absolute; left: 50vw; transform: translate(-50%,-100%); margin: 0px; z-index: 10;" 
+      data-popper-placement="top">
+      <div class="tooltip-arrow" style="position: absolute; left: 50%;"></div>
+      <div class="tooltip-inner">
+        <div>
+          The first pages of results have been fetched. 
+          More results will be fetched if you move to the next page or if you hit Search whole corpus.
+        </div>
+        <div style="margin-top:0.5em">
+          <input type="checkbox" id="dontShowResultsNotif" />
+          <label for="dontShowResultsNotif">Don't show this again</label>
+          <button 
+            @click="dismissResultsNotification"
+            style="border:solid 1px white; border-radius:0.5em; margin-left:0.25em; color:white; background-color:transparent;"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div 
+      v-if="percentageDone==100 && (!WSDataSentences || !WSDataSentences.result)"
+      style="text-align: center;"
+    >
+      No results found!
+    </div>
+    <div class="container-fluid">
       <div class="row">
         <div class="col-12" v-if="WSDataResults && WSDataResults.result">
           <nav>
@@ -608,8 +637,8 @@
       "
       role="progressbar"
       aria-label="Basic example"
-      :style="`width: ${percentageDone}%`"
-      :aria-valuenow="percentageDone"
+      :style="`width: ${navPercentage}%`"
+      :aria-valuenow="navPercentage"
       aria-valuemin="0"
       aria-valuemax="100"
       >
@@ -659,7 +688,6 @@ textarea {
 
 <script>
 import { mapState } from "pinia";
-import { ref } from "vue";
 
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useNotificationStore } from "@/stores/notificationStore";
@@ -672,7 +700,7 @@ import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
-import { setTooltips, removeTooltips, notification } from "@/tooltips";
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 export default {
   name: "QueryTestView",
@@ -696,6 +724,7 @@ export default {
       simultaneousMode: false,
       percentageDone: 0,
       percentageTotalDone: 0,
+      percentageWordsDone: 0,
       loading: false,
       stats: null,
       queryTest: "const noop = () => {}",
@@ -707,7 +736,8 @@ export default {
       queryStatus: null,
       corpusGraph: null,
       corpusModal: null,
-      showGraph: false
+      showGraph: false,
+      showResultsNotification: false
     };
   },
   components: {
@@ -782,6 +812,9 @@ export default {
       if (this.WSDataResults) {
         if (this.WSDataResults.percentage_done) {
           this.percentageDone = this.WSDataResults.percentage_done;
+        }
+        if (this.WSDataResults.percentage_words_done) {
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done;
         }
         if (
           this.WSDataResults.total_results_so_far &&
@@ -1015,6 +1048,7 @@ export default {
             }
           }
           this.percentageDone = data.percentage_done;
+          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
@@ -1108,8 +1142,8 @@ export default {
       cleanResults = true,
       fullSearch = false
     ) {
-      if (this.moreResultsLocation)
-        [...this.moreResultsLocation.querySelectorAll(".tooltip")].forEach((t)=>t.remove());
+      if (!useUserStore().userData.dontShowResultsNotif)
+        this.showResultsNotification = true;
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
@@ -1143,6 +1177,7 @@ export default {
       if (retval.status == "started") {
         this.loading = true;
         this.percentageDone = 0.001;
+        this.percentageWordsDone = 0;
       }
     },
     resume() {
@@ -1192,22 +1227,11 @@ export default {
       };
       useCorpusStore().fetchQueries(data);
     },
-    warning(show=true) {
-      if (!this.moreResultsLocation) return;
-      [...this.moreResultsLocation.querySelectorAll(".tooltip")].forEach((t)=>t.remove());
-      if (show===false) return "";
-      const tooltip = notification(
-        this.moreResultsLocation, 
-        `The first pages of results have been fetched. 
-        More results will be fetched if you move to the next page or if you hit Search whole corpus.`,
-        {
-          placement: "top",
-          container: this.moreResultsLocation,
-          offset: "1em"
-        }
-      );
-      this.moreResultsLocation.addEventListener("click", ()=>tooltip && tooltip._element && tooltip.dispose());
-      return "Not showing all the results";
+    dismissResultsNotification() {
+      this.showResultsNotification = false;
+      const dontShowResultsNotif = document.querySelector("#dontShowResultsNotif");
+      if (dontShowResultsNotif && dontShowResultsNotif.checked)
+        useUserStore().userData.dontShowResultsNotif = true;
     }
   },
   computed: {
@@ -1246,6 +1270,10 @@ export default {
             };
           })
         : [];
+    },
+    navPercentage() {
+      if (this.loading) return Math.max(this.percentageDone,this.percentageWordsDone);
+      else return this.percentageDone;
     }
   },
   mounted() {
@@ -1253,12 +1281,6 @@ export default {
   },
   beforeUnmount() {
     removeTooltips();
-  },
-  setup() {
-    const moreResultsLocation = ref(null);
-    return {
-      moreResultsLocation
-    }
   },
 };
 </script>
