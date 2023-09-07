@@ -119,7 +119,7 @@
               Search whole corpus
             </button>
             <button
-              v-if="loading"
+              v-else-if="loading"
               type="button"
               @click="stop"
               :disabled="loading == false"
@@ -373,6 +373,37 @@
         </div>
       </div>
     </div>
+    <div 
+      v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
+      class="tooltip bs-tooltip-auto fade show" 
+      role="tooltip" 
+      style="position: absolute; left: 50vw; transform: translate(-50%,-100%); margin: 0px; z-index: 10;" 
+      data-popper-placement="top">
+      <div class="tooltip-arrow" style="position: absolute; left: 50%;"></div>
+      <div class="tooltip-inner">
+        <div>
+          The first pages of results have been fetched. 
+          More results will be fetched if you move to the next page or if you hit Search whole corpus.
+        </div>
+        <div style="margin-top:0.5em">
+          <input type="checkbox" id="dontShowResultsNotif" />
+          <label for="dontShowResultsNotif">Don't show this again</label>
+          <button 
+            @click="dismissResultsNotification"
+            style="border:solid 1px white; border-radius:0.5em; margin-left:0.25em; color:white; background-color:transparent;"
+          >
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div 
+      v-if="percentageDone==100 && (!WSDataSentences || !WSDataSentences.result)"
+      style="text-align: center;"
+    >
+      No results found!
+    </div>
     <div class="container-fluid">
       <div class="row">
         <div class="col-12" v-if="WSDataResults && WSDataResults.result">
@@ -594,16 +625,20 @@
       </div>
     </div>
   </div>
-  <div id="nav-progress-bar" class="progress">
-    <div
+  <div id="nav-progress-bar" 
+    class="progress"
+    :class="loading ? 'progress-bar-striped progress-bar-animated' : ''"
+    :style="loading ? 'background-color: pink;' : ''"
+  >
+    <div 
       class="progress-bar"
       :class="
         loading ? 'progress-bar-striped progress-bar-animated' : ''
       "
       role="progressbar"
       aria-label="Basic example"
-      :style="`width: ${percentageDone}%`"
-      :aria-valuenow="percentageDone"
+      :style="`width: ${navPercentage}%`"
+      :aria-valuenow="navPercentage"
       aria-valuemin="0"
       aria-valuemax="100"
       >
@@ -689,6 +724,7 @@ export default {
       simultaneousMode: false,
       percentageDone: 0,
       percentageTotalDone: 0,
+      percentageWordsDone: 0,
       loading: false,
       stats: null,
       queryTest: "const noop = () => {}",
@@ -700,7 +736,8 @@ export default {
       queryStatus: null,
       corpusGraph: null,
       corpusModal: null,
-      showGraph: false
+      showGraph: false,
+      showResultsNotification: false
     };
   },
   components: {
@@ -775,6 +812,9 @@ export default {
       if (this.WSDataResults) {
         if (this.WSDataResults.percentage_done) {
           this.percentageDone = this.WSDataResults.percentage_done;
+        }
+        if (this.WSDataResults.percentage_words_done) {
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done;
         }
         if (
           this.WSDataResults.total_results_so_far &&
@@ -1008,6 +1048,7 @@ export default {
             }
           }
           this.percentageDone = data.percentage_done;
+          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
@@ -1101,6 +1142,8 @@ export default {
       cleanResults = true,
       fullSearch = false
     ) {
+      if (!useUserStore().userData.dontShowResultsNotif)
+        this.showResultsNotification = true;
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
@@ -1134,6 +1177,7 @@ export default {
       if (retval.status == "started") {
         this.loading = true;
         this.percentageDone = 0.001;
+        this.percentageWordsDone = 0;
       }
     },
     resume() {
@@ -1183,6 +1227,12 @@ export default {
       };
       useCorpusStore().fetchQueries(data);
     },
+    dismissResultsNotification() {
+      this.showResultsNotification = false;
+      const dontShowResultsNotif = document.querySelector("#dontShowResultsNotif");
+      if (dontShowResultsNotif && dontShowResultsNotif.checked)
+        useUserStore().userData.dontShowResultsNotif = true;
+    }
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -1221,12 +1271,16 @@ export default {
           })
         : [];
     },
+    navPercentage() {
+      if (this.loading) return Math.max(this.percentageDone,this.percentageWordsDone);
+      else return this.percentageDone;
+    }
   },
   mounted() {
     setTooltips();
   },
   beforeUnmount() {
     removeTooltips();
-  }
+  },
 };
 </script>

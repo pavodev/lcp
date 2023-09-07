@@ -116,14 +116,14 @@
       <table class="table popover-table">
         <thead>
           <tr>
-            <th v-for="(item, index) in columnHeaders" :key="`th-${index}`">
+            <th v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`th-${index}`">
               {{ item }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td v-for="(item, index) in columnHeaders" :key="`tr-${index}`">
+            <td v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`tr-${index}`">
               <span v-if="item == 'head'" v-html="headToken"> </span>
               <span
                 v-else
@@ -265,6 +265,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
   name: "ResultsKWICView",
+  emits: ["updatePage"],
   props: [
     "data",
     "sentences",
