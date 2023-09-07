@@ -35,7 +35,7 @@ elif command == "dqd":
 elif command == "ddl":
     print("Creating DDL...")
 
-    main()
+    main(sys.argv[-1])
 
 elif command == "corpora":
     types = {"lcp", "vian", "all"}
