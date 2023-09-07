@@ -115,7 +115,7 @@ def to_dict(tree: Any, part_of: str | None = None) -> Any:
     if tree.data == "start":
         children = [to_dict(child) for child in tree.children]
         return {
-            "$schema": "cobquec2.json",
+            "$schema": "cobquec3.json",
             "query": [child for child in children if "results" not in child],
             "results": [
                 child.get("results") for child in children if "results" in child

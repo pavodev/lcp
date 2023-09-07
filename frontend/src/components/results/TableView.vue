@@ -3,6 +3,16 @@
     <table class="table" v-if="data">
       <thead>
         <tr>
+          <th scope="col" v-for="(col, index) in attributes" :key="index">
+            <input
+              type="text"
+              v-model="filters[index]"
+              class="form-control form-control-sm"
+              :placeholder="`Filter by ${col.name}`"
+            >
+          </th>
+        </tr>
+        <tr>
           <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)">
             {{ col.name }}
             <span v-if="index == sortBy">
@@ -14,7 +24,7 @@
       </thead>
       <tbody>
         <tr
-          v-for="(item, resultIndex) in sortedData"
+          v-for="(item, resultIndex) in filteredData"
           :key="resultIndex"
           :data-index="resultIndex"
         >
@@ -111,8 +121,9 @@ export default {
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
-      sortBy: 0,
-      sortDirection: 0,
+      sortBy: this.attributes.length - 1,
+      sortDirection: 1,
+      filters: this.attributes.map(() => ''),
     };
   },
   components: {
@@ -181,10 +192,18 @@ export default {
       }
       return columns["prepared"]["columnHeaders"];
     },
-    sortedData() {
-      let data = this.data
-      console.log("Sort by", this.sortBy, this.sortDirection)
-      data.sort((a, b) => {
+    filteredData() {
+      let filtered = this.data.filter(row => {
+        let res = true
+        row.forEach((data, index) => {
+          if (this.filters[index] && !data.toString().startsWith(this.filters[index])){
+            res = false
+          }
+        })
+        return res
+      })
+      // console.log("Sort by", this.sortBy, this.sortDirection)
+      filtered.sort((a, b) => {
         let retval = 0
         if (a[this.sortBy] > b[this.sortBy]) {
           retval = this.sortDirection == 0 ? 1 : -1
@@ -194,7 +213,7 @@ export default {
         }
         return retval
       })
-      return data
+      return filtered
     },
   },
 };

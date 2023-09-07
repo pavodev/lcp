@@ -265,6 +265,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
   name: "ResultsKWICView",
+  emits: ["updatePage"],
   props: [
     "data",
     "sentences",

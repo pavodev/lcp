@@ -387,6 +387,17 @@ export default {
           this.filterError = null;
         }
       }
+
+      function compare(a, b) {
+        if (a.meta.name < b.meta.name){
+          return -1;
+        }
+        if (a.meta.name > b.meta.name){
+          return 1;
+        }
+        return 0;
+      }
+      corpora = corpora.sort(compare)
       return corpora;
     },
     openCorpus(corpus) {

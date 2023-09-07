@@ -68,6 +68,7 @@ class CorpusConfig(CorpusTemplate, total=False):
     token: str
     document: str
     column_names: list[str]
+    sample_query: str
     # doc ids is stored as [job_id, {1: "AKAW"}]
     doc_ids: NotRequired[Sequence[str | dict[str, str]]]
     _batches: NotRequired[dict[str, int]]
