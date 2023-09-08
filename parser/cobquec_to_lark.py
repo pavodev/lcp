@@ -1,34 +1,82 @@
+### TODO
+#
+#   - When a rule already exists, give it an alias instead of repeating it
+#     If an already exists, then we're doomed...
+
+import json
+import re
+
+EOF = r'''
+%import common.CNAME                                                                -> NAME
+%import common.WS_INLINE
+%declare _INDENT _DEDENT
+%ignore WS_INLINE
+
+_NL: /(\r?\n[\t ]*)+/
+'''
+
+KEYWORDS = {
+    'context': '("context" _NL [_INDENT context _DEDENT])',
+    'entities': '("entities" _NL [_INDENT entities _DEDENT])',
+    'entityRef': '(entityRef _NL?)',
+    'group': '("group" LABEL_T? group)',
+    'plain': '(LABEL_T "=> plain" _NL plain)',
+    'statAnalysis': '(LABEL_T "=> analysis" _NL statAnalysis)',
+    'collAnalysis': '(LABEL_T "=> collocation" _NL collAnalysis)',
+    'resultSets': '(_NL resultSets)',
+    'set': '("set" LABEL_T? set)',
+    'sequence': '("sequence" LABEL_T? sequence)',
+    'statement': '(_NL statement)',
+}
 
 class Converter():
     
-    def __init__(self, config):
-        self.terminals = dict()
-        self.rules = dict()
+    def __init__(self, configfile):
         
-        req = config.get("required",[])        
-        self.defs = config.get("$defs", {})
-        self.lark = [f"?start: _NL* {' '.join(req)}"]
-        props = config.get("properties", {})
-        for r in req:
-            reqProps = props.get(r, None)
-            if reqProps is None: continue
-            self.parseRef(r, reqProps)
-    
-    
-    def cqc_to_lark(self, config):
+        f = open(configfile)
+        config = json.load(f)
+        
         req = config.get("required",[])
-        global defs
-        defs = config.get("$defs", {})
-        lark += [f"?start: _NL* {' '.join(req)}"]
-        props = config.get("properties", {})
+        properties = config.get("properties", {})
+        
+        self.start = "?start: _NL*"
+        self.rules = dict()
+        self.terminals = dict()
+        
         for r in req:
-            reqProps = props.get(r, None)
-            if reqProps is None: continue
-            self.parseRef(r, reqProps)
-        return lark
+            if r == "comment": continue
+            # self.rules[r] = self.parseEntry(r, properties[r], True)
+            name = self.parseEntry(r, properties[r], True)
+            self.start += f" {name}"
+    
+        for name,props in config["$defs"].items():
+            self.parseEntry(name,props,True)
+            
+        # Handle the keywords and new lines here
+        for r in self.rules:
+            for k in KEYWORDS:
+                if r == "query" and k == "statement":
+                    self.rules[r] = self.rules[r][0] + re.sub(r"\bstatement\b", KEYWORDS['statement'], self.rules[r][1:])
+                else:
+                    self.rules[r] = re.sub(rf"\b{k}\b", KEYWORDS[k], self.rules[r])
+                    
+        strrules = "\n".join([f"{r} : {self.rules[r]}" for r in self.rules])
+        strterminals = "\n".join([f"{t} : {self.terminals[t]}" for t in self.terminals])
+        self.output = f"""
+{self.start}
 
+{strrules}
 
-    def parseRef(self, name, obj):
+{strterminals}
+
+{EOF}
+        """
+
+    def parseEntry(self, name, obj, main=False):
+        
+        name = re.sub(r"[A-Z]", lambda x: "_"+x[0].lower(), name)
+    
+        ref = obj.get("$ref", None)
         type = obj.get("type", None)
         enum = obj.get("enum", None)
         pattern = obj.get("pattern", None)
@@ -36,14 +84,10 @@ class Converter():
         items = obj.get("items", None)
         properties = obj.get("properties", None)
         required = obj.get("required", [])
-        
-        if type=="string":
-            if not pattern: pattern = ".*"
-            return self.terminal(name,pattern)
-        
-        if type=="number":
-            return self.terminal(name,"^\d+(\.\d+)?")
-        
+         
+        rule = "{rule}"
+       
+        # Array returns either reference ~ n..m or (literal|literal) ~ n..m
         if type=="array" and items:
             minItems, maxItems = (obj.get("minItems", 1), obj.get("maxItems", None))
             # Two cases: either a ref, or an enum
@@ -52,126 +96,106 @@ class Converter():
                 enums = [f'"{e}"' for e in items["enum"]]
                 item = f'({"|".join(enums)})'
             elif "$ref" in items:
-                item = items["$ref"].split('/')[-1]
-            if minItems > 1:
-                rule = f"{item} ~ {str(minItems)}"
-                if maxItems is None:
-                    rule += f" {item}*"
-                elif maxItems > maxItems:
-                    rule += f"..{str(maxItems)}"
-                return rule
+                item = re.sub(r"[A-Z]", lambda x: "_"+x[0].lower(), items["$ref"].split('/')[-1])
+            rule = f"{item} ~ {str(minItems)}"
+            if maxItems is None:
+                rule += f" {item}*"
+            elif maxItems > maxItems:
+                rule += f"..{str(maxItems)}"
+            # return rule
+    
+        elif ref:
+            reference = re.sub(r"[A-Z]", lambda x: "_"+x[0].lower(), ref.split("/")[-1])
+            if name in self.rules:
+                n = 2
+                while name+chr(n+96) in self.rules: n += 1
+                name = name+chr(n+96)
+            rule = rule.format(rule=reference)
+    
+        elif type=="string" and not ref and not enum:
+            if not pattern: pattern = ".*"
+            rule = rule.format(rule=self.terminal(name,pattern))
         
-        rule = ""
+        elif type=="number":
+            rule = rule.format(rule=self.terminal(name,"^\d+(\.\d+)?"))
         
-        if properties:
+        if name == "statement":
+            rule = rule.format(rule="[_INDENT {rule} _DEDENT]")
+            # Add the _NL in a post-parse step
+        
+        if oneOf:
+            rule = rule.format(rule="({rule})")
+            oneOfArray = []
+            
+            for n, one in enumerate(oneOf):
+                if "required" in one:
+                    subArray = []
+                    for o in one['required']:
+                        assert properties and o in properties, f"'{name}' requires '{o}' but no property found with that name"
+                        subArray.append(self.parseEntry(o,properties[o]))
+                    oneOfArray.append(f"({'|'.join(subArray)})")
+                else:
+                    oneOfArray.append(self.parseEntry(f"{name}OneOf{chr(n+97)}",one))
+                    
+            rule = rule.format(rule=f"{'|'.join(oneOfArray)}")
+        
+        elif properties:
             if name == "unit":
                 # This is hard-coded but ideally cobquec should list the properties in the proper order
+                tmp_rule = ""
                 sort_props = ('layer','partOf','label','constraints')
                 for p in sort_props:
                     if p not in properties: continue
                     if p in required:
-                        rule += f" {self.parseRef(p,properties[p])}"
+                        tmp_rule += f" {self.parseEntry(p,properties[p])}"
                     else:
-                        rule += f"{'"@"' if p=='partOf' else ' '}{self.parseRef(p,properties[p])}?"
+                        at = '"@"'
+                        tmp_rule += f"({at if p=='partOf' else ' '}{self.parseEntry(p,properties[p])})?"
+                rule = rule.format(rule=tmp_rule)
                     
             else:
-                if name in ("sequence", "group", "set"):
-                    rule = f'"{name}"'
-                for p in sort_props:
+                tmp_rule = ""
+                for p in properties:
                     if p not in properties: continue
                     if p == "comment": continue
-                    rule += f" {self.parseRef(p,properties[p])}{'?' if p not in required else ''}"
-
+                    tmp_rule += f" {self.parseEntry(p,properties[p])}{'?' if p not in required else ''}"
+                rule = rule.format(rule=tmp_rule)
                     
-        if enum:
+        elif enum:
             enumNamePrefix = f"{name}Enum"
-            rule = f"({'|'.join([self.parseRef(enumNamePrefix+str(n),e) for n,e in enumerate(enum)])})"
-        elif oneOf:
-            pass
-        
+            enumArray = []
+            for n,e in enumerate(enum):
+                if isinstance(e, str):
+                    enumArray.append(f'"{e}"')
+                else:
+                    enumArray.append(self.parseEntry(enumNamePrefix+chr(n+97),e))
+                    
+            rule = rule.format(rule=f"({'|'.join(enumArray)})")
+            
+            
+        if name in self.rules:
+            n = 2
+            while name+chr(n+96) in self.rules:
+                n += 1
+            name = name+chr(n+96)
+            
         self.rules[name] = rule
+        return name
+        
         
     def terminal(self,name,pattern):
-        name = name.upper()
+        name = name.upper() + "_T"
+        pattern = "/" + pattern.replace("/","\/") + "/"
         if name in self.terminals:
             if self.terminals[name] == pattern:
                 return name
             else:
-                i = 0
-                while name+str(i) in self.terminals:
-                    if self.terminals[name+str(i)] == pattern: return name+str(i)
-                    else: i += 1
-                self.terminals[name+str(i)] = pattern
-                return name+str(i)
+                n = 2
+                while name+chr(n+64) in self.terminals:
+                    if self.terminals[name+chr(n+64)] == pattern: return name+chr(n+64)
+                    else: n += 1
+                self.terminals[name+chr(n+64)] = pattern
+                return name+chr(n+64)
         else:
             self.terminals[name] = pattern
             return name
-        # if (type=="string" and pattern and not ref):
-        #     self.getVariable(name,obj)
-        
-        # if type and enum:
-        #     return f"/({'|'.join([e for e in enum])})/" # Need to escape any regex char in e first
-        
-        # if oneOf is not None:
-        #     refs = [o['$ref'] for o in oneOf if o.get('$ref',None)]
-        #     lark += [f"{name}   : {before}{'|'.join(refs)}{after}"]
-        #     for ref in refs:
-        #         refProps = defs.get(ref,None)
-        #         if refProps is not None: self.parseRef(ref, refProps)
-        #         return
-        #     return
-        # properties = obj.get("properties",None)
-        # if properties:
-        #     self.handleProperties(name,properties)
-        #     return    
-        # before, after = ("","")
-        # if (name=="statement"):
-        #     before,after = ("_NL [_INDENT ","_DEDENT]")
-        # its = obj.get("items",None)
-        # if its is not None:
-        #     ref = its.get("$ref", None)
-        #     if ref is not None:
-        #         lark += [f"{name}   : {before}{ref}{after}"]
-        #         refProps = defs.get(ref,None)
-        #         if refProps is not None: self.parseRef(ref, refProps)
-        #         return
-
-
-    def getVariable(self, name,props):
-        self.terminal[name.upper()] = props
-        
-        
-    def enum(self, enums):
-        r = "({enums})"
-        ar = []
-        for e in enums:
-            if self.isRef(e):
-                ar.append(self.getRef(e))
-            else: # text?
-                # create a new VARIABLE
-                ar.append("VARIABLE")
-        return r.format(enums='|'.join(r))
-
-
-    def isRef(self, o):
-        return isinstance(o,dict) and o.get("$ref",None)
-        
-        
-    def getProp(self, name,element):
-        props = element.get("properties", {name: None})
-        return props[name]
-        
-        
-    def getDef(self, name):
-        return defs.get(name, None)
-
-
-    def getRef(self, name,element):
-        if isinstance(name,dict) and name.get("$ref"):
-            return self.getDef(name['$ref'].split('/')[-1])
-        elif isinstance(name,str):
-            return self.getProp(name,element)
-
-
-    def handleProperties(self, name,props):
-        pass
