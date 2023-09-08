@@ -63,7 +63,7 @@
                 Logout
                 <!-- <small>({{ userData.user.displayName }})</small> -->
               </router-link>
-              <a class="nav-link" href="/Shibboleth.sso/Login" v-else>
+              <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
                 Login
               </a>
