@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import sys
 
 from collections import abc, defaultdict
 from collections.abc import Callable
@@ -832,4 +833,4 @@ def main(corpus_template_path: str) -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[-1])
