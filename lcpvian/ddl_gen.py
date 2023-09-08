@@ -9,6 +9,7 @@ import json
 import math
 import os
 import re
+import sys
 
 from collections import abc, defaultdict
 from collections.abc import Callable
@@ -432,7 +433,7 @@ class Type(DDL):
 class CTProcessor:
     def __init__(self, corpus_template: dict[str, Any], glos: Globs) -> None:
         self.corpus_temp = corpus_template
-        self.schema_name = corpus_template["schema_name"]
+        self.schema_name = corpus_template.get("schema_name", "testcorpus")
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.globals = glos
         self.ddl = DDL()
@@ -772,26 +773,22 @@ def generate_ddl(
     ).asdict()
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Generate Postgres DDL from CT.")
-    parser.add_argument(
-        "cmd", type=str, help="The command being run (ignore this)"  # nargs="+",
-    )
-    parser.add_argument(
-        "ct_file", type=str, help="the corpus corpus_temp file (json)"  # nargs="+",
-    )
-    parser.add_argument(
-        "-t", "--tabwidth", type=int, default=8, help="size of tabulator"
-    )
-
-    args = parser.parse_args()
-
-    with open(args.ct_file) as f:
+def main(corpus_template_path: str) -> None:
+    with open(corpus_template_path) as f:
         corpus_temp = json.load(f)
 
     data = generate_ddl(corpus_temp)
 
-    print(json.dumps(data, indent=4))
+
+    # print(json.dumps(data, indent=4))
+    print(data["create"])
+    for ref in data["refs"]:
+        print(ref)
+    for ref in data["constraints"]:
+        print(ref)
+    print(data["prep_seg_create"])
+    print(data["prep_seg_insert"])
+    print(data["perms"])
 
     return
     # need to comment out the below for mypy
@@ -836,4 +833,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[-1])

@@ -54,16 +54,15 @@
               </span>
             </li>
             <li class="nav-item">
-              <router-link
-                class="nav-link"
-                to="/Shibboleth.sso/Logout"
+              <a
                 v-if="userData && userData.user && userData.user.id"
+                class="nav-link"
+                href="/Shibboleth.sso/Logout"
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
                 Logout
-                <!-- <small>({{ userData.user.displayName }})</small> -->
-              </router-link>
-              <a class="nav-link" href="/Shibboleth.sso/Login" v-else>
+              </a>
+              <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
                 Login
               </a>
