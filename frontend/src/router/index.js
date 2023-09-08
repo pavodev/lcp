@@ -46,7 +46,7 @@ router.beforeEach((to, from, next) => {
   if (to.matched.some((record) => record.meta.requiresAuth)) {
     // console.log("A", useUserStore().dataFetched, Object.keys(useUserStore().userData.user).length == 0)
     if (useUserStore().dataFetched && Object.keys(useUserStore().userData.user).length == 0) {
-      window.location.replace("/Shibboleth.sso/Login");
+      window.location.replace("/login");
       // console.log("Redirect")
     }
     else {
