@@ -1142,7 +1142,7 @@ export default {
       cleanResults = true,
       fullSearch = false
     ) {
-      if (!useUserStore().userData.dontShowResultsNotif)
+      if (!localStorage.getItem("dontShowResultsNotif"))
         this.showResultsNotification = true;
       if (resumeQuery == false) {
         this.failedStatus = false;
@@ -1231,7 +1231,7 @@ export default {
       this.showResultsNotification = false;
       const dontShowResultsNotif = document.querySelector("#dontShowResultsNotif");
       if (dontShowResultsNotif && dontShowResultsNotif.checked)
-        useUserStore().userData.dontShowResultsNotif = true;
+        localStorage.setItem("dontShowResultsNotif", true);
     }
   },
   computed: {
