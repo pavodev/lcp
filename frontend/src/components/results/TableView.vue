@@ -7,6 +7,7 @@
             <input
               type="text"
               v-model="filters[index]"
+              v-if="col.type != 'aggregrate'"
               class="form-control form-control-sm"
               :placeholder="`Filter by ${col.name}`"
             >
@@ -196,7 +197,7 @@ export default {
       let filtered = this.data.filter(row => {
         let res = true
         row.forEach((data, index) => {
-          if (this.filters[index] && !data.toString().startsWith(this.filters[index])){
+          if (this.filters[index] && !data.toString().toLowerCase().includes(this.filters[index].toLowerCase())){
             res = false
           }
         })
