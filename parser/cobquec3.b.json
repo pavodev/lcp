@@ -13,53 +13,32 @@
                 "type": "string"
             }
         },
-        "mathUnit": {
-            "description": "an object that can be mathematically operated on",
+        "numberExpression": {
+            "description": "an expression that evaluates to a number (not a recursive pattern; 2nd check required on BE)",
             "type": "string",
-            "enum": [
+            "pattern": "^[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*$"
+        },
+        "stringAttribute": {
+            "description": "a string attribute of an entity",
+            "type": "string",
+            "$ref": "#/$defs/entityRef"
+        },
+        "stringUnit": {
+            "description": "a string",
+            "type": "string",
+            "oneOf": [
                 {
-                    "description": "complex mathUnit",
-                    "$ref": "#/$defs/complexMathUnit"
+                    "description": "a string attribute",
+                    "$ref": "#/$defs/stringAttribute"
                 },
                 {
-                    "description": "a numeric attribute",
-                    "$ref": "#/$defs/entityRef"
-                },
-                {
-                    "description": "a number literal",
-                    "type": "number"
-                },
-                {
-                    "description": "a unit literal (s=secons, m=minutes, y=year)",
-                    "type": "string",
-                    "pattern": "^-?([0-9]+[.])?[0-9]+[smy]$"
+                    "description": "a string literal",
+                    "$ref": "#/$defs/stringLiteral"
                 }
             ]
         },
-        "complexMathUnit": {
-            "type": "object",
-            "properties": {
-                "mathUnit": { "$ref": "#/$defs/mathUnit" },
-                "operatorAndRightHandSideMath": { "$ref": "#/$defs/operatorAndRightHandSideMath" } 
-            },
-            "required": [
-                "mathUnit",
-                "operatorAndRightHandSideMath"
-            ]
-        },
-        "operatorAndRightHandSideMath": {
-            "type": "object",
-            "properties": {
-                "operator": { "$ref": "#/$defs/mathOperator" },
-                "mathUnit": { "$ref": "#/$defs/mathUnit" }
-            },
-            "required": [
-                "operator",
-                "mathUnit"
-            ]
-        },
         "stringLiteral": {
-            "description": "a string object",
+            "description": "a string encapsulated in quotes",
             "type": "string",
             "pattern": "^('.+'|\".+\")$"
         },
@@ -67,16 +46,6 @@
             "description": "A regular expression literal",
             "type": "string",
             "pattern": "^/.+/$"
-        },
-        "mathOperator": {
-            "description": "operators for mathematical calculations (i.e. return a number )",
-            "type": "string",
-            "enum": [
-                "+",
-                "-",
-                "*",
-                "/"
-            ]
         },
         "mathCompOperator": {
             "description": "operators for mathematical expressions (i.e. evaluate to bool)",
@@ -90,7 +59,7 @@
                 "<="
             ]
         },
-        "regexOperator": {
+        "stringRegexOperator": {
             "description": "operators for regex comparison",
             "type": "string",
             "enum": [
@@ -114,88 +83,124 @@
                 "type": "string"
             }
         },
-        "comparison": {
-            "description": "comparisons can be evaluated to boolean",
-            "type": "object",
-            "properties": {
-                "leftHandSide": {
-                    "$ref": "#/$defs/entityRef"
-                },
-                "operatorAndRightHandSide": {
-                    "$ref": "#/$defs/operatorAndRightHandSide"
-                }
-            },
-            "required": [
-                "leftHandSide",
-                "operatorAndRightHandSide"
-            ]
-        },
-        "operatorAndRightHandSide": {
-            "description": "The operator and right-hand side of any comparison",
-            "type": "object",
-            "oneOf": [{
-                "$ref": "#/$defs/regexComparison"
-            }, {
-                "$ref": "#/$defs/mathComparison"
-            }, {
-                "$ref": "#/$defs/stringComparison"
-            }]
-        },
-        "regexComparison": {
-            "description": "The operator and right-hand side of a regular expression comparison",
-            "type": "object",
-            "properties": {
-                "operator": {
-                    "$ref": "#/$defs/regexOperator"
-                },
-                "rightHandSide": {
-                    "$ref": "#/$defs/regexOrEntity"
-                }
-            },
-            "required": [
-                "operator",
-                "rightHandSide"
-            ]
-        },
-        "regexOrEntity": {
-            "type": "object",
-            "oneOf": [{
-                "$ref": "#/$defs/RegEx"
-            }, {
-                "$ref": "#/$defs/entityRef"
-            }]
-        },
         "mathComparison": {
-            "description": "The operator and right-hand side of a mathematic (or simple entity-to-entity) comparison",
-            "type": "object",
-            "properties": {
-                "operator": {
+            "description": "a comparison of mathematical objects",
+            "type": "array",
+            "prefixItems": [
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/numberExpression"
+                },
+                {
+                    "type": "string",
                     "$ref": "#/$defs/mathCompOperator"
                 },
-                "rightHandSide": {
-                    "$ref": "#/$defs/mathUnit"
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/numberExpression"
                 }
-            },
-            "required": [
-                "operator",
-                "rightHandSide"
-            ]
+            ],
+            "minItems": 3,
+            "maxItems": 3
         },
         "stringComparison": {
-            "description": "The operator and right-hand side of a string comparison",
-            "type": "object",
-            "properties": {
-                "operator": {
+            "description": "a comparison of string objects",
+            "type": "array",
+            "prefixItems": [
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/entityRef"
+                },
+                {
+                    "type": "string",
                     "$ref": "#/$defs/compOperator"
                 },
-                "rightHandSide": {
+                {
+                    "type": "string",
                     "$ref": "#/$defs/stringLiteral"
                 }
+            ],
+            "minItems": 3,
+            "maxItems": 3
+        },
+        "stringRegexComparison": {
+            "description": "a comparison of string objects",
+            "type": "array",
+            "prefixItems": [
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/stringAttribute"
+                },
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/stringRegexOperator"
+                },
+                {
+                    "type": "string",
+                    "$ref": "#/$defs/RegEx"
+                }
+            ],
+            "minItems": 3,
+            "maxItems": 3
+        },
+        "entityComparison": {
+            "description": "a comparison of entities",
+            "type": "array",
+            "prefixItems": [
+                {
+                    "$ref": "#/$defs/entityRef"
+                },
+                {
+                    "$ref": "#/$defs/compOperator"
+                },
+                {
+                    "$ref": "#/$defs/entityRef"
+                }
+            ],
+            "minItems": 3,
+            "maxItems": 3
+        },
+        "comparison": {
+            "description": "any comparison that can be evaluated to boolean",
+            "type": "object",
+            "properties": {
+                "mathComparison": {
+                    "$ref": "#/$defs/mathComparison"
+                },
+                "stringComparison": {
+                    "$ref": "#/$defs/stringComparison"
+                },
+                "stringRegexComparison": {
+                    "$ref": "#/$defs/stringRegexComparison"
+                },
+                "entityComparison": {
+                    "$ref": "#/$defs/entityComparison"
+                }
             },
-            "required": [
-                "operator",
-                "rightHandSide"
-            ]
+            "oneOf": [{
+                    "required": [
+                        "mathComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "stringComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "stringRegexComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "entityComparison"
+                    ]
+                }
+            ],
+            "comment": {
+                "type": "string"
+            }
         },
         "logicalOpUnary": {
             "description": "the only unary logical operator",
@@ -210,7 +215,7 @@
                 "args": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/$defs/expression"
+                        "$ref": "#/$defs/constraint"
                     },
                     "minItems": 1,
                     "maxItems": 1
@@ -247,7 +252,7 @@
                 "args": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/$defs/expression"
+                        "$ref": "#/$defs/constraint"
                     },
                     "minItems": 2,
                     "maxItems": 2
@@ -275,7 +280,7 @@
                 "args": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/$defs/expression"
+                        "$ref": "#/$defs/constraint"
                     },
                     "minItems": 2
                 },
@@ -303,7 +308,7 @@
                 "args": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/$defs/expression"
+                        "$ref": "#/$defs/constraint"
                     },
                     "minItems": 2,
                     "maxItems": 2
@@ -332,7 +337,7 @@
                 "args": {
                     "type": "array",
                     "items": {
-                        "$ref": "#/$defs/expression"
+                        "$ref": "#/$defs/constraint"
                     },
                     "minItems": 1,
                     "maxItems": 1
@@ -349,28 +354,42 @@
         "expression": {
             "description": "expressions return boolean values",
             "type": "object",
-            "oneOf": [{
-                    "$ref": "#/$defs/comparison"
-                },
-                {
+            "properties": {
+                "logicalOpUnary": {
                     "$ref": "#/$defs/logicalOpUnary"
                 },
-                {
+                "logicalOpBinary": {
                     "$ref": "#/$defs/logicalOpBinary"
                 },
-                {
+                "logicalOpNAry": {
                     "$ref": "#/$defs/logicalOpNAry"
                 },
-                {
+                "universalQuantification": {
                     "$ref": "#/$defs/universalQuantification"
                 },
-                {
+                "existentialQuantification": {
                     "$ref": "#/$defs/existentialQuantification"
+                }
+            },
+            "oneOf": [{
+                    "required": ["logicalOpUnary"]
+                },
+                {
+                    "required": ["logicalOpBinary"]
+                },
+                {
+                    "required": ["logicalOpNAry"]
+                },
+                {
+                    "required": ["universalQuantification"]
+                },
+                {
+                    "required": ["existentialQuantification"]
                 }
             ]
         },
         "statement": {
-            "description": "",
+            "description": "empty description",
             "type": "object",
             "oneOf": [{
                     "$ref": "#/$defs/expression"
@@ -386,19 +405,22 @@
         "unit": {
             "type": "object",
             "properties": {
-                "label": {
-                    "description": "The label assigned to a unit to allow referring to it in the constraint section",
-                    "type": "string"
-                },
                 "layer": {
                     "description": "The layer of the respective unit",
                     "type": "string"
                 },
-                "constraints": {
-                    "$ref": "#/$defs/statement"
-                },
                 "partOf": {
                     "type": "string"
+                },
+                "label": {
+                    "description": "The label assigned to a unit to allow referring to it in the constraint section",
+                    "type": "string"
+                },
+                "constraints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/constraint"
+                    }
                 },
                 "comment": {
                     "type": "string"
@@ -408,11 +430,22 @@
                 "layer"
             ]
         },
+        "constraint": {
+            "type": "object",
+            "oneOf": [{
+                "$ref": "#/$defs/comparison"
+            }, {
+                "$ref": "#/$defs/statement"
+            }]
+        },
         "sequence": {
             "properties": {
                 "label": {
-                    "description": "The label assigned to a sequence to allow referring to it from other parts",
                     "type": "string"
+                },
+                "repetition": {
+                    "type": "string",
+                    "pattern": "^(\\d+\\.\\.(\\d+|\\*)|[1-9]+\\d*)$"
                 },
                 "members": {
                     "type": "array",
@@ -420,10 +453,6 @@
                         "$ref": "#/$defs/statement"
                     },
                     "minItems": 1
-                },
-                "repetition": {
-                    "type": "string",
-                    "pattern": "^(\\d+\\.\\.(\\d+|\\*)|[1-9]+\\d*)$"
                 }
             },
             "required": [
@@ -432,6 +461,9 @@
         },
         "group": {
             "properties": {
+                "label": {
+                    "type": "string"
+                },
                 "members": {
                     "type": "array",
                     "items": {
@@ -445,15 +477,25 @@
             ]
         },
         "set": {
-            "type": "object",
-            "$ref": "#/$defs/statement"
-        },
-        "multipleUnits": {
-            "type": "object",
             "properties": {
                 "label": {
                     "type": "string"
                 },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/statement"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "members"
+            ]
+        },
+        "multipleUnits": {
+            "type": "object",
+            "properties": {
                 "sequence": {
                     "$ref": "#/$defs/sequence"
                 },
