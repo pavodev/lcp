@@ -1,71 +1,102 @@
-?start: _NL* [main_property+]
+?start: _NL* [(query|results)+]
 
-main_property: (query__bq|result_sets__tm)
+query           : statement__
 
-result_sets__tm: label__cl "=>"( plain__zk|stat_analysis__cc|coll_analysis__nd) ~ 1
-plain__zk: ("plain" _NL [_INDENT  context__yz(entities__yl _NL?)+ _DEDENT])
-context__yz: ("context" _NL [_INDENT LAYER_T _DEDENT])
-stat_analysis__cc: ("analysis" _NL [_INDENT  attributes__py functions__rf( filter__sc)? _DEDENT])
-attributes__py: ("attributes" _NL [_INDENT ATTRIBUTEREF_T+ _DEDENT])
-functions__rf: ("frequency"|"minimum"|"maximum"|"average"|"stddev")+
-coll_analysis__nd: ("collocation" _NL [_INDENT ( (center__va window__bd)|space__kb) attribute__tp _DEDENT])
-window__bd: ("window" _NL [_INDENT WINDOW_T _DEDENT])
-center__va: ("center" _NL [_INDENT ENTITYREF_T _NL* _DEDENT])
-attribute__tp: LAYER_T
-filter__sc: ("filter" _NL [_INDENT ( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so) _DEDENT])
-universal_quantification__ud:  quantor__hv args__as
-query__bq: (( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)|(sequence__dd|group__ou|set__ex)|layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]) ~ 1
-label__ik: LAYER_T
-group__ou: ("group" ( label__ic)? members__uz)
-args__as: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))) ~ 2
-string_comparison__ax: (ENTITYREF_T ("="|"!=") STRINGLITERAL_T) _NL
-logical_op_unary__id:  operator__vz args__bi
-members__uz: (_NL [_INDENT (( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))+ _DEDENT])
-args__bi: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))) ~ 1
-string_regex_comparison__ug: (ENTITYREF_T ("~"|"!~") REGEX_T) _NL
-operator__vz: ("NOT")
-quantor__hv: ("ALL"|"!ALL"|"¬ALL")
-existential_quantification__so:  quantor__ah args__yn
-set__ex: ("set" ( label__ql)? members__ke)
-label__ql: LAYER_T
-part_of__bg: LAYER_T
-args__yn: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))) ~ 1
-members__ke: (_NL [_INDENT (( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))+ _DEDENT])
-entities__yl: ("entities" _NL [_INDENT ENTITYREF_T+ _DEDENT])
-constraints__ur: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex)))+
-quantor__ah: ("EXIST"|"!EXIST"|"¬EXIST")
-logical_op_n_ary__ec:  operator__jn _NL* args__qa
-args__qa: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))) ~ 2 (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex)))*
-entity_comparison__ea: (ENTITYREF_T ("="|"!=") ENTITYREF_T) _NL
-sequence__dd: ("sequence" ( label__he)?( repetition__wl)? members__ff)
-repetition__wl: REPETITION_T
-label__cl: LAYER_T
-math_comparison__nb: (NUMBEREXPRESSION_T ("="|"!="|">"|"<"|">="|"<=") NUMBEREXPRESSION_T) _NL
-label__he: LAYER_T
-label__ic: LAYER_T
-logical_op_binary__eg:  operator__yh _NL* args__tr
-operator__yh: OPERATOR_T
-args__tr: (( math_comparison__nb|string_comparison__ax|string_regex_comparison__ug|entity_comparison__ea)|(( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))) ~ 2
-layer__cx: LAYER_T
-space__kb: ("space" _NL [_INDENT ENTITYREF_T+ _NL* _DEDENT])
-operator__jn: OPERATOR_N_T
-members__ff: (_NL [_INDENT (( logical_op_unary__id|logical_op_binary__eg|logical_op_n_ary__ec|universal_quantification__ud|existential_quantification__so)| layer__cx("@"part_of__bg)?( label__ik)? _NL [_INDENT constraints__ur _DEDENT]|( sequence__dd|group__ou|set__ex))+ _DEDENT])
+statement__     : "sequence" label? repetition? _NL _INDENT members _DEDENT           -> sequence
+                | "set" label? _NL _INDENT members _DEDENT                            -> set
+                | "group" label? _NL _INDENT members _DEDENT                          -> group
+                | quantor__universal _NL _INDENT args__q_two _DEDENT                  -> universal_quantification
+                | quantor__existential _NL _INDENT args__q_one _DEDENT                -> existential_quantification
+                | operator__unary _NL _INDENT args__one _DEDENT                       -> logical_op_unary
+                | operator__binary _NL _INDENT args__two _DEDENT                      -> logical_op_binary
+                | operator__n_ary _NL _INDENT args__any _DEDENT                       -> logical_op_n_ary
+                | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]        -> unit
 
-OPERATOR_N_T.1 : /^(AND|OR)$/
-OPERATOR_T.1 : /^(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)$/
-NUMBEREXPRESSION_T.2 : /^[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*$/
-STRINGLITERAL_T.3 : /^('.+'|".+")$/
-REGEX_T.4 : /^\/.+\/$/
-REPETITION_T.5 : /^(\d+\.\.(\d+|\*)|[1-9]+\d*)$/
-ATTRIBUTEREF_T.6 : /^[a-zA-Z][a-zA-Z0-9]*([.][a-zA-Z][a-zA-Z0-9]*)*$/
-WINDOW_T.7 : /^([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)$/
-ENTITYREF_T.8 : /^[a-zA-Z][a-zA-Z0-9]*$/
-LAYER_T.9 : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+members         : statement__+                                                        -> members
 
+constraints     : comparison
+                | statement__
+
+quantor__universal   : QUANTOR_UNIVERSAL
+quantor__existential : QUANTOR_EXISTENTIAL
+
+operator__unary  : OPERATOR_UNARY
+operator__binary : OPERATOR_BINARY
+operator__n_ary  : OPERATOR_N_ARY
+
+args__q_one      : statement__ ~ 1
+args__q_two      : statement__ ~ 2
+args__one        : constraints ~ 1
+args__two        : constraints ~ 2
+args__any        : constraints constraints+
+
+results         : label RESULTS_ARROW results_type__                                 -> results
+results_type__  : "plain" _NL _INDENT context entities _DEDENT                       -> results_plain
+                | "analysis" _NL _INDENT attributes filter? functions _DEDENT        -> results_analysis
+                | "collocation" _NL _INDENT (center window|space) attribute _DEDENT  -> results_collocation
+
+context         : "context" _NL _INDENT label _NL* _DEDENT _NL*                      -> context
+entities        : "entities" _NL _INDENT entity_ref__+ _NL* _DEDENT _NL*             -> entities
+
+attributes      : "attributes" _NL _INDENT (attribute__ _NL)+ _DEDENT                -> attributes
+filter          : "filter" _NL _INDENT (filter__ _NL)+ _DEDENT                       -> filter
+functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
+
+center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
+window          : "window" _NL _INDENT range__ _DEDENT                               -> window
+space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
+attribute       : "attribute" _NL _INDENT attribute__ _DEDENT                        -> attribute
+
+comparison      : entity operator comparison_type__ _NL
+entity          : VARIABLE
+operator        : OPERATOR
+
+comparison_type__ : NUMBER_EXPRESSION                                                -> math_comparison
+                  | STRING_LITERAL                                                   -> string_comparison
+                  | REGEX                                                            -> regex_comparison
+                  | VARIABLE                                                         -> entity_comparison
+
+label           : VARIABLE                                                             -> label
+layer           : VARIABLE                                                             -> layer
+part_of         : VARIABLE                                                             -> part_of
+repetition      : REPETITION                                                           -> repetition
+
+
+entity_ref__    : VARIABLE _NL*
+
+functions__     : ENUM_FUNCTIONS
+attribute__     : STRING
+filter__        : STRING
+range__         : RANGE
+
+
+QUANTOR_UNIVERSAL.3   : /(ALL|!ALL|¬ALL)/
+QUANTOR_EXISTENTIAL.3 : /(EXIST|!EXIST|¬EXIST)/
+OPERATOR_UNARY.3      : /NOT/
+OPERATOR_BINARY.3     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
+OPERATOR_N_ARY.3      : /(AND|OR)/
+RESULTS_ARROW.3       : /=>/
+ENUM_FUNCTIONS.3      : /frequency|minimum|maximum|average|stddev/
+
+VARIABLE.2      : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+
+OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
+NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
+REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
+
+STRING_LITERAL  : /('.+'|".+")/
+REGEX           : /\/.+\//
+RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
+STRING          : /[^\n\r ].*/
+
+SL_COMMENT      : /#[^\r\n]+/ _NL
+DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
 %import common.CNAME                                                                -> NAME
 %import common.WS_INLINE
 %declare _INDENT _DEDENT
 %ignore WS_INLINE
+%ignore SL_COMMENT
+%ignore DL_COMMENT
 
 _NL: /(\r?\n[\t ]*)+/

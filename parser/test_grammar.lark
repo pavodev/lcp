@@ -2,9 +2,9 @@
 
 query           : statement__
 
-statement__     : "sequence" label? repetition? _NL _INDENT members+ _DEDENT          -> sequence
-                | "set" label? _NL _INDENT members+ _DEDENT                           -> set
-                | "group" label? _NL _INDENT members+ _DEDENT                         -> group
+statement__     : SEQUENCE label? repetition? _NL _INDENT members _DEDENT             -> sequence
+                | "set" label? _NL _INDENT members _DEDENT                            -> set
+                | "group" label? _NL _INDENT members _DEDENT                          -> group
                 | quantor__universal _NL _INDENT args__q_two _DEDENT                  -> universal_quantification
                 | quantor__existential _NL _INDENT args__q_one _DEDENT                -> existential_quantification
                 | operator__unary _NL _INDENT args__one _DEDENT                       -> logical_op_unary
@@ -14,7 +14,7 @@ statement__     : "sequence" label? repetition? _NL _INDENT members+ _DEDENT    
 
 members         : statement__+                                                        -> members
 
-constraints     : comparison
+constraints     : entity operator comparison_type__ _NL                               -> comparison
                 | statement__
 
 quantor__universal   : QUANTOR_UNIVERSAL
@@ -47,7 +47,6 @@ window          : "window" _NL _INDENT range__ _DEDENT                          
 space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
 attribute       : "attribute" _NL _INDENT attribute__ _DEDENT                        -> attribute
 
-comparison      : entity operator comparison_type__ _NL
 entity          : VARIABLE
 operator        : OPERATOR
 
@@ -69,26 +68,28 @@ attribute__     : STRING
 filter__        : STRING
 range__         : RANGE
 
-VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+
+SEQUENCE.4            : /sequence/
+
+QUANTOR_UNIVERSAL.3   : /(ALL|!ALL|¬ALL)/
+QUANTOR_EXISTENTIAL.3 : /(EXIST|!EXIST|¬EXIST)/
+OPERATOR_UNARY.3      : /NOT/
+OPERATOR_BINARY.3     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
+OPERATOR_N_ARY.3      : /(AND|OR)/
+RESULTS_ARROW.3       : /=>/
+ENUM_FUNCTIONS.3      : /frequency|minimum|maximum|average|stddev/
+
+VARIABLE.2      : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+
 OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
+NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
+REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
+
 STRING_LITERAL  : /('.+'|".+")/
 REGEX           : /\/.+\//
-NUMBER_EXPRESSION.1 : /^[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*$/
 RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
-
-ENUM_FUNCTIONS  : /frequency|minimum|maximum|average|stddev/
-
-QUANTOR_UNIVERSAL.1   : /(ALL|!ALL|¬ALL)/
-QUANTOR_EXISTENTIAL.1 : /(EXIST|!EXIST|¬EXIST)/
-
-OPERATOR_UNARY.1  : /NOT/
-OPERATOR_BINARY.1 : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
-OPERATOR_N_ARY.1  : /(AND|OR)/
-
-RESULTS_ARROW.2 : /=>/
-BOOLEAN.1       : /(AND|OR)/
-REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
 STRING          : /[^\n\r ].*/
+
 SL_COMMENT      : /#[^\r\n]+/ _NL
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 

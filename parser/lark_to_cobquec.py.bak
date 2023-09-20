@@ -14,8 +14,8 @@ IGNORE = {
 class Ref():
     def __init__(self,name,options={}):
         self.name = name
-        self.minItems = int(options.get("minItems")) if options.get("minItems") else None
-        self.maxItems = int(options.get("maxItems")) if options.get("maxItems") else None
+        self.minItems = options.get("minItems")
+        self.maxItems = options.get("maxItems")
         self.required = not options.get("optional", False)
         
     @property
@@ -34,14 +34,13 @@ class RuleRef(Ref):
         if self.minItems:
             return "array"
         assert self.name in all_rules, f"Couldn't find {self.name} in rules"
-        # return "object"
-        return all_rules[self.name].type
+        return "object"
     
     @property
     def as_object(self):
         o = {'type': self.type}
-        if self.minItems or self.maxItems:
-            o['items'] = {"$ref": f"#/$defs/{self.name}"}
+        if self.type == "array":
+            o['items'] = {"$ref": f"#/defs/{self.name}"}
             if self.minItems: o['minItems'] = self.minItems
             if self.maxItems: o['maxItems'] = self.maxItems
         else:
@@ -51,7 +50,7 @@ class RuleRef(Ref):
             if self.name.endswith("__"):
                 o = rule.as_object
             else:
-                o = {"type": self.type, "$ref": f"#/$defs/{self.name}"}
+                o = {"$ref": f"#/defs/{self.name}"}
         
         return (o, self.required)
 
@@ -63,7 +62,7 @@ class TermRef(Ref):
     @property
     def type(self):
         if self.minItems:
-            return "array" # Should never happen?
+            return "array"
         return "string"
 
     @property
@@ -106,20 +105,17 @@ class Rule():
         if self._object:
             return self._object
         
-        self._object = {
-            "properties": {},
-            "oneOf": [],
-            "required": []
-        }
         if len(self.references) > 1: # Big disjunction -- assumption: all disjuncts are named rules
             if self.name.endswith("__"): # If this is a forwarding rule, the named rules are properties
+                self._object['properties'] = dict()
+                self._object['oneOf'] = []
                 for r in self.references:
                     assert isinstance(r[0],Ref), f"Disjuncts of big disjunctions must all be named rules ({self.name}, {r[0]})"
-                    self._object['properties'][r[0].propertyName] = {"type":r[0].type, "$ref":f"#/$defs/{r[0].name}"}
+                    self._object['properties'][r[0].propertyName] = {"$ref": f"#/$defs/{r[0].name}"}
                     if r[0].required: self._object['oneOf'].append({"required": [r[0].propertyName]})
                 if not self._object['oneOf']: self._object.pop("oneOf")
             else: # If this is not a forwarding rule, return a bare oneOf
-                self._object['oneOf'] = [{"type":r[0].type, "$ref":f"#/$defs/{r[0].name}"} for r in self.references if isinstance(r[0],Ref)]
+                self._object['oneOf'] = [{"$ref": f"#/$defs/{r[0].name}"} for r in self.references if isinstance(r[0],Ref)]
         else:
             refs = self.references[0] # one-line rule
             if isinstance(refs,Ref): # only rules that point to a terminal have them as their direct, only reference child
@@ -128,6 +124,8 @@ class Rule():
             elif isinstance(refs,list): # the rule does not point to a terminal
                 if len(refs)==1:
                     if isinstance(refs[0],list) and all(isinstance(x,Ref) for x in refs[0]):
+                        self._object['oneOf'] = []
+                        self._object['properties'] = {}
                         for r in refs[0]:
                             o, required = r.as_object
                             self._object['properties'][r.propertyName] = o.get('properties',o)
@@ -136,11 +134,14 @@ class Rule():
                         if not self._object['oneOf']: self._object.pop("oneOf")
                     elif isinstance(refs[0], Ref):
                         self._object, required = refs[0].as_object
-                        if required and not refs[0].name.endswith("__") and refs[0].type not in ("string","array"):
+                        if required and not refs[0].name.endswith("__") and refs[0].type != "array":
                             self._object['required'] = [refs[0].propertyName]
                     else:
                         assert False, f"Reference {refs[0]} from rule {self.name} of type unhandled"
                 elif len(refs)>1: # If there's more than one reference, there *need* to be properties
+                    self._object['properties'] = {}
+                    self._object['required'] = []
+                    self._object['oneOf'] = []
                     for ref in refs:
                         if isinstance(ref,list): # Disjunction inside properties
                             for disjunct in ref:
@@ -166,16 +167,14 @@ class Rule():
                                 for oneOf in o.get('oneOf', []):
                                     self._object['oneOf'].append(oneOf)
                             else:
-                                print(f"adding property {ref.propertyName} to {self.name}", ref, o)
-                                # self._object['properties'][ref.propertyName] = {"type":ref.type, "$ref":f"#/$defs/{ref.name}"}
                                 self._object['properties'][ref.propertyName] = o
                                 if required: self._object['required'].append( ref.propertyName )
                     # end for refs
+                    if not self._object['oneOf']: self._object.pop("oneOf")
+                    if not self._object['required']: self._object.pop("required")
             else:
                 assert False, f"Reference {refs} from rule {self.name} of type unhandled"
-            
-        for p in ('oneOf','required','properties'):
-            if p in self._object and not self._object[p]: self._object.pop(p)
+                
         return self._object
         
     @property
@@ -191,14 +190,13 @@ class Rule():
             else:
                 return "object"
         else:
-            refs = self.references[0]
-            if isinstance(refs, Ref) and (isinstance(refs, TermRef) or refs.name.endswith("__")):
-                return refs.type
-            elif len(refs)==1:
-                if isinstance(refs[0],list) and len(refs[0])>1:
-                    return refs[0][0].type
-                elif isinstance(refs[0],Ref):
-                    return refs[0].type
+            if isinstance(self.references[0], TermRef) or self.references[0].name.endswith("__"):
+                return self.references[0].type
+            elif len(self.references[0])==1:
+                if isinstance(self.references[0][0],list) and len(self.references[0][0])>1:
+                    return self.references[0][0][0].type
+                elif isinstance(self.references[0][0],Ref) and self.references[0][0].name.endswith("__"):
+                    return self.references[0][0].type
         return "object"
             
 
@@ -359,7 +357,7 @@ with open("test_grammar.lark") as f:
 for _,rule in all_rules.items():
     rule.build_references()
     
-schema = {
+jsonObject = {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
     "title": "Constraint-based Query Configuration",
@@ -370,15 +368,8 @@ schema = {
     
 for name,rule in all_rules.items():
     if name=="start":
-        schema['properties'] = rule.as_object['properties']
+        jsonObject['properties'] = rule.as_object['properties']
     else:
-        schema['$defs'][name] = rule.as_object
-
-jsonSchema = json.dumps(schema)
-
-for name in all_rules.keys():
-    if name not in schema['$defs']: continue
-    if re.match(rf".*#/\$defs/{name}",jsonSchema): continue
-    schema['$defs'].pop(name)
-
-open("cobquec.auto.json", "w").write(json.dumps(schema,indent=4))
+        jsonObject['$defs'][name] = rule.as_object
+        
+jsonObject

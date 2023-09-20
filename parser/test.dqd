@@ -1,0 +1,29 @@
+Sequence s
+    constraint = constraint
+    contrast = /hey/
+    OR
+        length = 32
+        lemma = "moi"
+
+
+sequence myseq
+    Token@s t1
+        upos = 'DET'
+    Token@s t2
+        upos = 'ADJ'
+    Token@s t3
+        upos = 'NOUN'
+
+
+Token@s test
+    lemma = 'grrr'
+    DepRel d
+        head = t1
+        dep = d
+
+waf => plain
+    context
+        s
+    entities
+        test
+        s
