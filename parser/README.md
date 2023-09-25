@@ -8,3 +8,32 @@
  - Rules whose name ends with `__` never create named properties, instead their own properties will be inherited by the parent. **Those rules should either be big disjunctions (->`oneOf`) or point to a terminal (->`type:string`)**
  - Rules whose name include `__<text>` that correspond to properties will have occurrences removed from the property names (`args__one` -> property name -> `args`)
  - At the moment, one cannot write rules with nested brackets of the same type (embedding parentheses inside square brackets or the other way around is ok though)
+ - Repetitions should *not* be embedded: defining one rule as `SEQUENCE members` and another one as `members: statement__+` is *not* OK; instead, one should write `SEQUENCE members+` and `members: statement__`
+ - Plain keywords should in general be included in a rule via the definition of a terminal: prefer `SEQUENCE members` over `"sequence" members`
+ - Use indices on terminal rules to handle priority: using `3` in `GROUP.3 : /group/` vs `2` in `VARIABLE.2 : /[a-zA-Z_][a-zA-Z0-9_\.]*/` allows the parser to not rush to the more liberal regex when encountering `g` in the DQD query, thus preventing an crashing parse
+
+
+ ## Generate the cobquec schema from the grammar
+
+The grammar file must end in `.lark` and the json schema file (optional) nust end in `.json`
+
+ `python lark_to_cobquec.py dqd_grammar.lark cobquec.auto.json`
+
+
+## Generate the JS file from the grammar
+
+TO DO
+
+## Replace the files in BE and FE
+
+TO DO
+
+## Run the whole pipeline at once
+
+TO DO
+
+## Convert a DQD query to its JSON representation
+
+ `python dqd_parser.py test.dqd`
+
+The script will use the first `.lark` file it finds in its directory as the grammar file, and the first `.json` file it finds in its directory as the schema file

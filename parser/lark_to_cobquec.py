@@ -1,9 +1,8 @@
-###
-# TODO: create RuleRef collection
-###
-
 import json
+import os
 import re
+import sys
+
 
 IGNORE = {
     "_INDENT",
@@ -100,7 +99,8 @@ class Rule():
         name = re.sub(r"_([a-z])", lambda x: x[1].upper(), name)
         return name
 
-        
+
+    # This is particularly messy; needs to be rewritten        
     @property
     def as_object(self):
         if self._object:
@@ -346,39 +346,64 @@ def parse_line(line, rule):
     
     return rule
 
+
+def convert(input_file, output_file=None):
+    current_rule = None
+
+    with open(input_file) as f:
         
-current_rule = None
+        for line in f.readlines():
+            if re.match(r"^\s*$", line): continue
+            if line.startswith("%"): continue
+            current_rule = parse_line(line, current_rule)
+        
+    for _,rule in all_rules.items():
+        rule.build_references()
+        
+    schema = {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
+        "title": "Constraint-based Query Configuration",
+        "description": "A linguistic query for LCP data Representation",
+        "type": "object",
+        "$defs": {}
+    }
+        
+    for name,rule in all_rules.items():
+        if name=="start":
+            schema['properties'] = rule.as_object['properties']
+        else:
+            schema['$defs'][name] = rule.as_object
 
-with open("test_grammar.lark") as f:
-    
-    for line in f.readlines():
-        if re.match(r"^\s*$", line): continue
-        if line.startswith("%"): continue
-        current_rule = parse_line(line, current_rule)
-    
-for _,rule in all_rules.items():
-    rule.build_references()
-    
-schema = {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
-    "title": "Constraint-based Query Configuration",
-    "description": "A linguistic query for LCP data Representation",
-    "type": "object",
-    "$defs": {}
-}
-    
-for name,rule in all_rules.items():
-    if name=="start":
-        schema['properties'] = rule.as_object['properties']
-    else:
-        schema['$defs'][name] = rule.as_object
+    jsonSchema = json.dumps(schema)
 
-jsonSchema = json.dumps(schema)
+    for name in all_rules.keys():
+        if name not in schema['$defs']: continue
+        if re.match(rf".*#/\$defs/{name}",jsonSchema): continue
+        schema['$defs'].pop(name)
 
-for name in all_rules.keys():
-    if name not in schema['$defs']: continue
-    if re.match(rf".*#/\$defs/{name}",jsonSchema): continue
-    schema['$defs'].pop(name)
+    jsd = json.dumps(schema,indent=4)
+    
+    if output_file:
+        open(output_file, "w").write(jsd)
+    
+    print(jsd)
+    
+    return jsd
 
-open("cobquec.auto.json", "w").write(json.dumps(schema,indent=4))
+
+def cmdline() -> None:
+    input = next((f for f in sys.argv if f.endswith(".lark")), "")
+    output = next((f for f in sys.argv if f.endswith(".json")), "")
+    
+    print("input: ", input)
+    print("output: ", output)
+    
+    assert os.path.isfile(input), f"First argument should be a(n existing) .lark file"
+    
+    convert(input, output)
+
+
+if __name__ == "__main__":
+    cmdline()
+

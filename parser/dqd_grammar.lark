@@ -1,36 +1,96 @@
-?start: _NL* [predicate+]
+?start: _NL* [(query|results)+]
 
-predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
-                | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
-                | "group" label _NL [_INDENT label+ _DEDENT]                        -> group
-                | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
-                | BOOLEAN _NL [_INDENT (property|predicate)+ _DEDENT]               -> boolean
-                | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
-                | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
-                | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
-                | label "=> collocation" _NL [_INDENT r_coll_prop+ _DEDENT]         -> results_collocation
-property        : VARIABLE OPERATOR STRING _NL                                      -> property
-repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/                                         -> loop
-label           : VARIABLE                                                          -> label
-layer1          : VARIABLE                                                          -> layer1
-scope           : "@"VARIABLE                                                       -> scope
-result_variable : VARIABLE _NL
-r_plain_prop    : "context" _NL [_INDENT (label _NL)+ _DEDENT]                      -> result_plain_context
-                | "entities" _NL [_INDENT (label _NL)+ _DEDENT]                     -> result_plain_entities
-r_analysis_prop : "attributes" _NL [_INDENT (STRING _NL)+ _DEDENT]                  -> result_analysis_attributes
-                | "functions" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_analysis_functions
-                | "filter" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_analysis_filter
-r_coll_prop     : "center" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_coll_center
-                | "window" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_coll_window
-                | "attribute" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_coll_attribute
-                | "space" _NL [_INDENT (STRING _NL)+ _DEDENT]                       -> result_coll_space
-                | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
+query           : statement__
 
-VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-NOT_OPERATOR.1  : /(¬|NOT|!)\s?/
-BOOLEAN.1       : /(AND|OR)/
+statement__     : SEQUENCE label? repetition? _NL _INDENT members+ _DEDENT            -> sequence
+                | SET label? _NL _INDENT members+ _DEDENT                             -> set
+                | GROUP label? _NL _INDENT members+ _DEDENT                           -> group
+                | quantor__universal _NL _INDENT args__q_two _DEDENT                  -> universal_quantification
+                | quantor__existential _NL _INDENT args__q_one _DEDENT                -> existential_quantification
+                | operator__unary _NL _INDENT args__one _DEDENT                       -> logical_op_unary
+                | operator__binary _NL _INDENT args__two _DEDENT                      -> logical_op_binary
+                | operator__n_ary _NL _INDENT args__any _DEDENT                       -> logical_op_n_ary
+                | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]        -> unit
+
+members         : statement__                                                         -> members
+
+constraints     : entity operator comparison_type__ _NL                               -> comparison
+                | statement__
+
+quantor__universal   : QUANTOR_UNIVERSAL
+quantor__existential : QUANTOR_EXISTENTIAL
+
+operator__unary  : OPERATOR_UNARY
+operator__binary : OPERATOR_BINARY
+operator__n_ary  : OPERATOR_N_ARY
+
+args__q_one      : statement__ ~ 1
+args__q_two      : statement__ ~ 2
+args__one        : constraints ~ 1
+args__two        : constraints ~ 2
+args__any        : constraints constraints+
+
+results         : label RESULTS_ARROW results_type__                                 -> results
+results_type__  : "plain" _NL _INDENT context entities _DEDENT                       -> results_plain
+                | "analysis" _NL _INDENT attributes filter? functions _DEDENT        -> results_analysis
+                | "collocation" _NL _INDENT (center window|space) attribute _DEDENT  -> results_collocation
+
+context         : "context" _NL _INDENT label _NL* _DEDENT _NL*                      -> context
+entities        : "entities" _NL _INDENT entity_ref__+ _NL* _DEDENT _NL*             -> entities
+
+attributes      : "attributes" _NL _INDENT (attribute__ _NL)+ _DEDENT                -> attributes
+filter          : "filter" _NL _INDENT (filter__ _NL)+ _DEDENT                       -> filter
+functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
+
+center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
+window          : "window" _NL _INDENT range__ _DEDENT                               -> window
+space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
+attribute       : "attribute" _NL _INDENT attribute__ _DEDENT                        -> attribute
+
+entity          : VARIABLE
+operator        : OPERATOR
+
+comparison_type__ : NUMBER_EXPRESSION                                                -> math_comparison
+                  | STRING_LITERAL                                                   -> string_comparison
+                  | REGEX                                                            -> regex_comparison
+                  | VARIABLE                                                         -> entity_comparison
+
+label           : VARIABLE                                                             -> label
+layer           : VARIABLE                                                             -> layer
+part_of         : VARIABLE                                                             -> part_of
+repetition      : REPETITION                                                           -> repetition
+
+
+entity_ref__    : VARIABLE _NL*
+
+functions__     : ENUM_FUNCTIONS
+attribute__     : STRING
+filter__        : STRING
+range__         : RANGE
+
+GROUP.3               : /group/
+SET.3                 : /set/
+SEQUENCE.3            : /sequence/
+
+QUANTOR_UNIVERSAL.3   : /(ALL|!ALL|¬ALL)/
+QUANTOR_EXISTENTIAL.3 : /(EXIST|!EXIST|¬EXIST)/
+OPERATOR_UNARY.3      : /NOT/
+OPERATOR_BINARY.3     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
+OPERATOR_N_ARY.3      : /(AND|OR)/
+RESULTS_ARROW.3       : /=>/
+ENUM_FUNCTIONS.3      : /frequency|minimum|maximum|average|stddev/
+
+VARIABLE.2      : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+
 OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
+NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
+REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
+
+STRING_LITERAL  : /('.+'|".+")/
+REGEX           : /\/.+\//
+RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
 STRING          : /[^\n\r ].*/
+
 SL_COMMENT      : /#[^\r\n]+/ _NL
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 

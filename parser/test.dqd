@@ -1,29 +1,44 @@
-Sequence s
-    constraint = constraint
-    contrast = /hey/
-    OR
-        length = 32
-        lemma = "moi"
+Segment s
 
+sequence seq
+    Token@s e
+        OR
+            lemma = "every"
+            lemma = "each"
+    Token@s n
+        upos = "NOUN"
+        DepRel
+            head = v
+            dep = n
+            label = 'subj'
 
-sequence myseq
-    Token@s t1
-        upos = 'DET'
-    Token@s t2
-        upos = 'ADJ'
-    Token@s t3
-        upos = 'NOUN'
+Token@s v
+    upos = "VERB"
+    
+Token@s o
+    upos = "NOUN"
+    DepRel
+        head = v
+        dep = o
+        label = 'obj'
 
+Token@s df
+    lemma = "different"
+    upos = "ADJ"
+    DepRel
+        head = o
+        dep = df
 
-Token@s test
-    lemma = 'grrr'
-    DepRel d
-        head = t1
-        dep = d
-
-waf => plain
+results => plain
     context
         s
     entities
-        test
-        s
+        seq
+        df
+
+results2 => plain
+    context
+        s2
+    entities
+        seq2
+        df2

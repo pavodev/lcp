@@ -104,7 +104,10 @@
                 },
                 "members": {
                     "type": "array",
-                    "$ref": "#/$defs/members"
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
                 }
             }
         },
@@ -203,7 +206,10 @@
                 },
                 "members": {
                     "type": "array",
-                    "$ref": "#/$defs/members"
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
                 }
             }
         },
@@ -215,7 +221,10 @@
                 },
                 "members": {
                     "type": "array",
-                    "$ref": "#/$defs/members"
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
                 }
             }
         },
@@ -326,11 +335,91 @@
             ]
         },
         "members": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/statement__"
+            "properties": {
+                "sequence": {
+                    "type": "object",
+                    "$ref": "#/$defs/sequence"
+                },
+                "set": {
+                    "type": "object",
+                    "$ref": "#/$defs/set"
+                },
+                "group": {
+                    "type": "object",
+                    "$ref": "#/$defs/group"
+                },
+                "universalQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/universal_quantification"
+                },
+                "existentialQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/existential_quantification"
+                },
+                "logicalOpUnary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_unary"
+                },
+                "logicalOpBinary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_binary"
+                },
+                "logicalOpNAry": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_n_ary"
+                },
+                "unit": {
+                    "type": "object",
+                    "$ref": "#/$defs/unit"
+                }
             },
-            "minItems": 1
+            "oneOf": [
+                {
+                    "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
+                        "set"
+                    ]
+                },
+                {
+                    "required": [
+                        "group"
+                    ]
+                },
+                {
+                    "required": [
+                        "universalQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "existentialQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpUnary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpBinary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpNAry"
+                    ]
+                },
+                {
+                    "required": [
+                        "unit"
+                    ]
+                }
+            ]
         },
         "comparison": {
             "properties": {
