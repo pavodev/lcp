@@ -15,17 +15,18 @@ from lark.indenter import Indenter
 from lark.lexer import Token
 
 
-current_path = os.path.dirname(Path(__file__))
+# current_path = os.path.dirname(Path(__file__))
+PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parser'))
 
-print("current path", current_path)
+print("current path", PARSER_PATH)
 
-dqd_grammar = next((os.path.join(current_path,f) for f in os.listdir(current_path) if f.endswith(".lark")), "")
+dqd_grammar = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".lark")), "")
 print("dqd grammar", dqd_grammar)
 assert os.path.isfile(
     dqd_grammar
 ), f"Could not find a valid lark file in the current directory"
 dqd_grammar = open(dqd_grammar).read()
-json_schema = next((os.path.join(current_path,f) for f in os.listdir(current_path) if f.endswith(".json")), "")
+json_schema = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".json")), "")
 assert os.path.isfile(
     json_schema
 ), f"Could not find a valid json file in the current directory"

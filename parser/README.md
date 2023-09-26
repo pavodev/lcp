@@ -45,8 +45,8 @@ TO DO
 
 ## Convert a DQD query to its JSON representation
 
- `python dqd_parser.py test.dqd`
+ `python -m lcpvian dqd test.dqd`
 
-The script will use the first `.lark` file it finds in its directory as the grammar file, and the first `.json` file it finds in its directory as the schema file
+The script will use the first `.lark` and the first `.json` files it finds in `lcpvian/parser` as its grammar and schema files, respectively
 
 Drop the JSON output into the right text box at https://www.jsonschemavalidator.net/ (along with the corresponding schema on the left) to check that the schema validates it

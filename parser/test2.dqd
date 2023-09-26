@@ -1,0 +1,29 @@
+Document d
+    classCode = /^S/
+
+Segment@d s
+
+sequence seq
+    Token@s t1
+        xpos2 = "ART"
+    Token@s t2
+        xpos2 = "ADJ"
+        lemma = "true"
+    Token@s t3
+        xpos2 = "SUBST"
+
+KWIC => plain
+    context
+        s
+    entities
+        t1
+        t2
+        t3
+
+NounDist => analysis
+    attributes
+        t3.lemma
+    functions
+        frequency
+    filter
+        frequency > 1

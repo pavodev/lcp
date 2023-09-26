@@ -32,7 +32,7 @@ args__any        : constraints constraints+
 
 results         : label RESULTS_ARROW results_type__                                 -> results
 results_type__  : "plain" _NL _INDENT context entities _DEDENT                       -> results_plain
-                | "analysis" _NL _INDENT attributes filter? functions _DEDENT        -> results_analysis
+                | "analysis" _NL _INDENT attributes functions filter? _DEDENT        -> results_analysis
                 | "collocation" _NL _INDENT (center window|space) attribute _DEDENT  -> results_collocation
 
 context         : "context" _NL _INDENT label _NL* _DEDENT _NL*                      -> context
@@ -63,7 +63,7 @@ repetition      : REPETITION                                                    
 
 entity_ref__    : VARIABLE _NL*
 
-functions__     : ENUM_FUNCTIONS
+functions__     : ENUM_FUNCTIONS _NL*
 attribute__     : STRING
 filter__        : STRING
 range__         : RANGE
@@ -91,14 +91,12 @@ REGEX           : /\/.+\//
 RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
 STRING          : /[^\n\r ].*/
 
-SL_COMMENT      : /#[^\r\n]+/ _NL
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
 %import common.CNAME                                                                -> NAME
 %import common.WS_INLINE
 %declare _INDENT _DEDENT
 %ignore WS_INLINE
-%ignore SL_COMMENT
 %ignore DL_COMMENT
 
-_NL: /(\r?\n[\t ]*)+/
+_NL: /((#[^\r\n]*)?\r?\n[\t ]*)+/
