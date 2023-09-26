@@ -99,6 +99,7 @@ def _query(
     total_requested = kwargs.get(
         "total_results_requested", job.kwargs["total_results_requested"]
     )
+    just_finished = tuple(job.kwargs["current_batch"])
 
     # if from memory, we had this result cached, we just need to apply filters
     if from_memory:
@@ -110,7 +111,12 @@ def _query(
     # if not cached, we do all the aggregation and filtering of previous+current result
     else:
         all_res, to_send, n_res, search_all, show_total = _aggregate_results(
-            result, existing_results, meta_json, post_processes
+            result,
+            existing_results,
+            meta_json,
+            post_processes,
+            just_finished,
+            done_part,
         )
         first_job.meta["all_non_kwic_results"] = all_res
 
@@ -128,7 +134,6 @@ def _query(
 
     job.meta["offset_for_next_time"] = offset_for_next_time
 
-    just_finished = tuple(job.kwargs["current_batch"])
     done_part.append(just_finished)
     status = _get_status(
         total_found,
