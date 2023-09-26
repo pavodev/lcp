@@ -14,23 +14,19 @@ from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token
 
-
-# current_path = os.path.dirname(Path(__file__))
 PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parser'))
 
-print("current path", PARSER_PATH)
-
-dqd_grammar = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".lark")), "")
-print("dqd grammar", dqd_grammar)
+dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".lark")), "")
 assert os.path.isfile(
-    dqd_grammar
+    dqd_grammar_fn
 ), f"Could not find a valid lark file in the current directory"
-dqd_grammar = open(dqd_grammar).read()
-json_schema = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".json")), "")
+dqd_grammar: str = open(dqd_grammar_fn).read()
+
+json_schema_fn: str = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".json")), "")
 assert os.path.isfile(
-    json_schema
+    json_schema_fn
 ), f"Could not find a valid json file in the current directory"
-json_schema = json.loads(open(json_schema).read())
+json_schema: dict = json.loads(open(json_schema_fn).read())
 
 
 class TreeIndenter(Indenter):
@@ -53,7 +49,7 @@ def to_camel(name: str) -> str:
     return name
 
 
-def forward(schema: dict, label="") -> tuple[dict, bool]:
+def forward(schema: dict) -> tuple[dict, bool]:
     is_array = False
     while "properties" not in schema:
         if "items" in schema:
@@ -64,7 +60,7 @@ def forward(schema: dict, label="") -> tuple[dict, bool]:
                 re.sub(r".+\/", "", schema["$ref"])
             )
         elif "oneOf" in schema:
-            p = dict()
+            p: dict = {}
             for o in schema["oneOf"]:
                 f, is_array = forward(o)
                 p = {**p, **f.get("properties", {})}
@@ -94,8 +90,7 @@ def found_rule_down_the_line(property_schema: dict = {}, rule: str = "") -> bool
         elif rule_ref in json_schema.get("$defs", {}):
             return found_rule_down_the_line(json_schema["$defs"][rule_ref], rule)
 
-    else:
-        return False
+    return False
 
 
 def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
@@ -106,7 +101,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
     camel_name: str = to_camel(name)
 
     schema, is_parent_array = forward(
-        properties_parent.get(camel_name, properties_parent), label=camel_name
+        properties_parent.get(camel_name, properties_parent)
     )
 
     if schema.get("type", "") == "string" and not is_parent_array:
@@ -124,7 +119,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
 
     children_properties = schema.get("properties", schema)
 
-    values = dict()
+    values: Any = dict()
     skip_children_names = False
     for child in tree.children:
         if isinstance(child, Token):
@@ -178,7 +173,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
         else:
             values[child_name] = child_value
 
-    list_values = list(values.values())
+    list_values: list = list(values.values())
     if (
         skip_children_names
         and is_parent_array

@@ -49,4 +49,6 @@ TO DO
 
 The script will use the first `.lark` and the first `.json` files it finds in `lcpvian/parser` as its grammar and schema files, respectively
 
+Note that queries **must** close all their indentations, so make sure to include a line break at the bottom of the test dqd file as needed
+
 Drop the JSON output into the right text box at https://www.jsonschemavalidator.net/ (along with the corresponding schema on the left) to check that the schema validates it
