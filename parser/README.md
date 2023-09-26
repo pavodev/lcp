@@ -19,10 +19,21 @@ The grammar file must end in `.lark` and the json schema file (optional) nust en
 
  `python lark_to_cobquec.py dqd_grammar.lark cobquec.auto.json`
 
+Drop the JSON output into the left text box at https://www.jsonschemavalidator.net/ to check that it is a valid JSON schema
 
 ## Generate the JS file from the grammar
 
-TO DO
+Install `lark-js` on your machine if you don't have it yet:
+
+`pip install lark-js --upgrade`
+
+Then run:
+
+`lark-js dqd_grammar.lark -o dqd_parser.js`
+
+Insert a new line at the top of the file: `/* eslint-disable */` 
+
+If you get an error message complaining about `strict`, you need to remove it from the `options` defined in the js file (look for `"strict"`)
 
 ## Replace the files in BE and FE
 
@@ -37,3 +48,5 @@ TO DO
  `python dqd_parser.py test.dqd`
 
 The script will use the first `.lark` file it finds in its directory as the grammar file, and the first `.json` file it finds in its directory as the schema file
+
+Drop the JSON output into the right text box at https://www.jsonschemavalidator.net/ (along with the corresponding schema on the left) to check that the schema validates it

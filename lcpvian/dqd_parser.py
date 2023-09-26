@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
+
+from pathlib import Path
 
 from collections.abc import Iterable
 from typing import Any, ClassVar
@@ -12,52 +15,21 @@ from lark.indenter import Indenter
 from lark.lexer import Token
 
 
-dqd_grammar = r"""
-    ?start: _NL* [predicate+]
+current_path = os.path.dirname(Path(__file__))
 
-    predicate       : "sequence"scope? label? _NL [_INDENT predicate+ _DEDENT]          -> sequence
-                    | "set" label? _NL [_INDENT predicate+ _DEDENT]                     -> set
-                    | "group" label _NL [_INDENT (label _NL)+ _DEDENT]                  -> group
-                    | NOT_OPERATOR? "EXISTS" _NL [_INDENT predicate+ _DEDENT]           -> exists
-                    | BOOLEAN _NL [_INDENT (property|predicate)+ _DEDENT]               -> boolean
-                    | layer1 scope? label? _NL [_INDENT (property|predicate)+ _DEDENT]  -> layer_def
-                    | label "=> plain" _NL [_INDENT r_plain_prop+ _DEDENT]              -> results_plain
-                    | label "=> analysis" _NL [_INDENT r_analysis_prop+ _DEDENT]        -> results_analysis
-                    | label "=> collocation" _NL [_INDENT r_coll_prop+ _DEDENT]         -> results_collocation
-    property        : VARIABLE OPERATOR STRING _NL                                      -> property
-    repeat_loop     : /[\d+\*](\.\.[\d+\-\*])?/                                         -> loop
-    label           : VARIABLE                                                          -> label
-    layer1          : VARIABLE                                                          -> layer1
-    scope           : "@"VARIABLE                                                       -> scope
-    result_variable : VARIABLE _NL
-    r_plain_prop    : "context" _NL [_INDENT (label _NL)+ _DEDENT]                      -> result_plain_context
-                    | "entities" _NL [_INDENT (label _NL)+ _DEDENT]                     -> result_plain_entities
-    r_analysis_prop : "attributes" _NL [_INDENT (STRING _NL)+ _DEDENT]                  -> result_analysis_attributes
-                    | "functions" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_analysis_functions
-                    | "filter" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_analysis_filter
-    r_coll_prop     : "center" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_coll_center
-                    | "window" _NL [_INDENT (STRING _NL)+ _DEDENT]                      -> result_coll_window
-                    | "attribute" _NL [_INDENT (STRING _NL)+ _DEDENT]                   -> result_coll_attribute
-                    | "space" _NL [_INDENT (STRING _NL)+ _DEDENT]                       -> result_coll_space
-                    | "comment" _NL [_INDENT (STRING _NL)+ _DEDENT]                     -> result_coll_comment
+print("current path", current_path)
 
-    VARIABLE        : /[a-zA-Z_][a-zA-Z0-9_\.]*/
-    NOT_OPERATOR.1  : /(¬|NOT|!)\s?/
-    BOOLEAN.1       : /(AND|OR)/
-    OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
-    STRING          : /[^\n\r ].*/
-    SL_COMMENT      : /#[^\r\n]+/ _NL
-    DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
-
-    %import common.CNAME                                                                -> NAME
-    %import common.WS_INLINE
-    %declare _INDENT _DEDENT
-    %ignore WS_INLINE
-    %ignore SL_COMMENT
-    %ignore DL_COMMENT
-
-    _NL: /(\r?\n[\t ]*)+/
-"""
+dqd_grammar = next((os.path.join(current_path,f) for f in os.listdir(current_path) if f.endswith(".lark")), "")
+print("dqd grammar", dqd_grammar)
+assert os.path.isfile(
+    dqd_grammar
+), f"Could not find a valid lark file in the current directory"
+dqd_grammar = open(dqd_grammar).read()
+json_schema = next((os.path.join(current_path,f) for f in os.listdir(current_path) if f.endswith(".json")), "")
+assert os.path.isfile(
+    json_schema
+), f"Could not find a valid json file in the current directory"
+json_schema = json.loads(open(json_schema).read())
 
 
 class TreeIndenter(Indenter):
@@ -74,237 +46,155 @@ class TreeIndenter(Indenter):
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
 
 
-def merge_constraints(constraints: list[dict[str, Any]]) -> dict[str, Any]:
-    retval = {}
-    if len(constraints) == 1 and len(constraints[0]) > 1:
-        retval = {"constraints": {**constraints[0]}}
-    elif len(constraints) == 1:
-        retval = constraints[0]
-    elif len(constraints) > 1:
-        retval = {
-            "constraints": {
-                "operator": "AND",
-                "args": [
-                    (
-                        constraint.get("constraints")
-                        if len(constraint) == 1 and "constraints" in constraint
-                        else constraint
-                    )
-                    for constraint in constraints
-                ],
-            }
-        }
-    return retval
+def to_camel(name: str) -> str:
+    name = re.sub("__.*", "", name)
+    name = re.sub("_([a-z])", lambda x: x[1].upper(), name)
+    return name
 
 
-def merge_filter(filters: list[dict[str, Any] | str]) -> dict[str, Any] | str:
-    if len(filters) == 1:
-        res: dict[str, Any] | str = filters[0]
-        return res
-    elif len(filters) > 1:
-        return {"filters": {"operator": "AND", "args": filters}}
-    return {}
+def forward(schema: dict, label="") -> tuple[dict, bool]:
+    is_array = False
+    while "properties" not in schema:
+        if "items" in schema:
+            is_array = True
+            schema = schema["items"]
+        elif "$ref" in schema:
+            schema = json_schema.get("$defs", {}).get(
+                re.sub(r".+\/", "", schema["$ref"])
+            )
+        elif "oneOf" in schema:
+            p = dict()
+            for o in schema["oneOf"]:
+                f, is_array = forward(o)
+                p = {**p, **f.get("properties", {})}
+            if p:
+                schema["properties"] = p
+        else:
+            # print(f"Could not find properties, items, $ref or oneOf in {schema} for {label}")
+            break
+
+    return (schema, is_array)
 
 
-def to_dict(tree: Any, part_of: str | None = None) -> Any:
+def found_rule_down_the_line(property_schema: dict = {}, rule: str = "") -> bool:
+    if "items" in property_schema:
+        property_schema = property_schema["items"]
+
+    if "$ref" not in property_schema and "oneOf" in property_schema:
+        for o in property_schema["oneOf"]:
+            found_in_one_of = found_rule_down_the_line(o, rule)
+            if found_in_one_of:
+                return True
+
+    if "$ref" in property_schema:
+        rule_ref = re.sub(r".+\/", "", property_schema.get("$ref", ""))
+        if rule_ref == rule:
+            return True
+        elif rule_ref in json_schema.get("$defs", {}):
+            return found_rule_down_the_line(json_schema["$defs"][rule_ref], rule)
+
+    else:
+        return False
+
+
+def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
     if isinstance(tree, Token):
         return tree.value
 
-    partOf: str | list[str] | None
+    name: str = tree.data
+    camel_name: str = to_camel(name)
 
-    if tree.data == "start":
-        children = [to_dict(child) for child in tree.children]
-        return {
-            "$schema": "cobquec3.json",
-            "query": [child for child in children if "results" not in child],
-            "results": [
-                child.get("results") for child in children if "results" in child
-            ],
-        }
+    schema, is_parent_array = forward(
+        properties_parent.get(camel_name, properties_parent), label=camel_name
+    )
 
-    elif tree.data in ("sequence"):
-        partOf = [
-            str(child.children[0]) for child in tree.children if child.data == "scope"
-        ]
-        partOf = partOf[0] if len(partOf) else None
-        children = [to_dict(child, partOf) for child in tree.children]
-        others = [child for child in children if child.get("layer") is None]
-        members = [child for child in children if child.get("layer") is not None]
-        return {
-            tree.data: {
-                **(
-                    {k: v for child in others for k, v in child.items()}
-                    if others
-                    else {}
-                ),
-                "members": members,
-            }
-        }
+    if schema.get("type", "") == "string" and not is_parent_array:
+        assert (
+            len(tree.children) == 1
+        ), f"{camel_name} is a string but it has more than one child {tree.pretty()}"
+        if isinstance(tree.children[0], Token):
+            return tree.children[0].value
+        elif isinstance(tree.children[0].children[0], Token):
+            return tree.children[0].children[0].value
+        else:
+            assert (
+                False
+            ), f"Couldn't find a string for {camel_name} even going two levels deep {tree.pretty()}"
 
-    elif tree.data in ("set"):
-        children = [to_dict(child) for child in tree.children]
-        others = [child for child in children if child.get("layer") is None]
-        constraints = merge_constraints(
-            [child for child in children if child.get("layer") is not None]
-        )
-        return {
-            tree.data: {
-                **(
-                    {k: v for child in others for k, v in child.items()}
-                    if others
-                    else {}
-                ),
-                **constraints,
-            }
-        }
+    children_properties = schema.get("properties", schema)
 
-    elif tree.data in ("group"):
-        children = [to_dict(child) for child in tree.children]
-        # all children are labels, but the first one (mandatory) is the group's label
-        own_label = children[0].get("label")
-        members = [child for child in children if child.get("label") is not None][1:]
-        return {tree.data: {"label": own_label, "members": members}}
+    values = dict()
+    skip_children_names = False
+    for child in tree.children:
+        if isinstance(child, Token):
+            continue
 
-    elif tree.data in ("boolean"):
-        children = []
-        for child in tree.children:
-            _child = to_dict(child)
-            if "constraints" in _child:
-                _child = _child.get("constraints")
-            children.append(_child)
-        operator = "AND"
-        if isinstance(children[0], str) and children[0].strip() in ["AND", "OR"]:
-            operator = children[0]
-            children = children[1:]
-        return {"constraints": {"quantor": operator, "args": children}}
+        # Init some variables
+        child_schema = schema
+        is_child_array = is_parent_array
 
-    elif tree.data in ("exists"):
-        children = [to_dict(child) for child in tree.children]
-        exists = "EXISTS"
-        if isinstance(children[0], str) and children[0].strip() in ["!", "NOT", "¬"]:
-            exists = "NOT EXISTS"
-            children = children[1:]
-        return {"constraints": {"quantor": exists, "args": children}}
+        child_name = to_camel(child.data)
 
-    elif tree.data in ("layer_def"):
-        children = [to_dict(child) for child in tree.children]
-        constraints = merge_constraints(
-            [child for child in children if "constraints" in child]
-        )
-        others = [
-            child
-            for child in children
-            if "constraints" not in child and "layer1" not in child
-        ]
-        _layer = [child for child in children if "layer1" in child]
-        layer = {}
-        if _layer and _layer[0] and _layer[0]["layer1"]:
-            if _layer[0]["layer1"].lower() == "deprel":
-                layer = {"layer": "DependencyRelation"}
+        # Retrieve DQD name for Lark rule
+        if child_name not in children_properties:
+            fallback_name = to_camel(
+                next(
+                    (
+                        pn
+                        for pn, pv in schema.get("properties", schema).items()
+                        if found_rule_down_the_line(pv, child.data)
+                    ),
+                    "",
+                )
+            )
+            if fallback_name:
+                child_name = fallback_name
+                child_schema = schema
             else:
-                layer = {"layer": _layer[0]["layer1"]}
-        _part_of = {"partOf": part_of} if part_of else {}
-        return {
-            **layer,
-            **({k: v for child in others for k, v in child.items()} if others else {}),
-            **constraints,
-            **_part_of,
-        }
-    elif tree.data == "property":
-        return {
-            "constraints": {
-                "comparison": " ".join([to_dict(child) for child in tree.children])
-            }
-        }
-    elif tree.data == "label":
-        return {"label": str(tree.children[0])}
-    elif tree.data == "layer1":
-        return {"layer1": str(tree.children[0])}
-    elif tree.data == "scope":
-        return {"partOf": str(tree.children[0])}
+                skip_children_names = True
 
-    # Results
-    elif tree.data == "results_plain":
-        children = [to_dict(child) for child in tree.children]
-        return {
-            "results": {
-                "plain": {
-                    **(
-                        {k: v for child in children for k, v in child.items()}
-                        if children
-                        else {}
-                    ),
-                }
-            }
-        }
+        if child_name in children_properties:
+            child_schema = children_properties[child_name]
+            is_child_array = child_schema.get("type", "") == "array"
 
-    elif tree.data == "result_plain_context":
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: children[0].get("label")}
+        child_value = to_dict(child, child_schema)
 
-    elif tree.data == "result_plain_entities":
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: [child.get("label") for child in children]}
+        # If the child's name is already in the values, it must be an array
+        if child_name in values:
+            if isinstance(values[child_name], dict):
+                values[child_name] = [values[child_name]]
+            is_child_array = True
 
-    elif tree.data == "results_analysis":
-        children = [to_dict(child) for child in tree.children]
-        return {
-            "results": {
-                "statAnalysis": {
-                    **(
-                        {k: v for child in children for k, v in child.items()}
-                        if children
-                        else {}
-                    ),
-                }
-            }
-        }
+        if is_child_array:
+            if child_name not in values:
+                values[child_name] = []
+            # Flat list
+            if isinstance(child_value, list):
+                values[child_name] += child_value
+            else:
+                values[child_name].append(child_value)
 
-    elif tree.data in ("result_analysis_attributes", "result_analysis_functions"):
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: children}
+        else:
+            values[child_name] = child_value
 
-    elif tree.data in ("result_analysis_filter"):
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: {"comparison": merge_filter(children)}}
-
-    elif tree.data == "results_collocation":
-        children = [to_dict(child) for child in tree.children]
-        return {
-            "results": {
-                "collAnalysis": {
-                    **(
-                        {k: v for child in children for k, v in child.items()}
-                        if children
-                        else {}
-                    ),
-                }
-            }
-        }
-
-    elif tree.data in (
-        "result_coll_center",
-        "result_coll_window",
-        "result_coll_attribute",
-        "result_coll_comment",
+    list_values = list(values.values())
+    if (
+        skip_children_names
+        and is_parent_array
+        and all(isinstance(v, list) for v in list_values)
     ):
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: children[0]}
+        assert (
+            len(list_values) == 1
+        ), f"Only one child list (<>{list_values}) can be embedded in a parent list ({camel_name})"
+        values = list_values[0]
 
-    elif tree.data in ("result_coll_space"):
-        name = tree.data.split("_")[2]
-        children = [to_dict(child) for child in tree.children]
-        return {name: children}
+    return values
 
 
 def convert(dqd_query: str) -> dict[str, Any]:
     data = parser.parse(dqd_query)
-    res: dict = to_dict(data)
+    print(data.pretty())
+    res: dict = to_dict(data, {"start": json_schema})
     return res
 
 

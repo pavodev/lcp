@@ -1,0 +1,784 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
+    "title": "Constraint-based Query Configuration",
+    "description": "A linguistic query for LCP data Representation",
+    "type": "object",
+    "$defs": {
+        "query": {
+            "properties": {
+                "sequence": {
+                    "type": "object",
+                    "$ref": "#/$defs/sequence"
+                },
+                "set": {
+                    "type": "object",
+                    "$ref": "#/$defs/set"
+                },
+                "group": {
+                    "type": "object",
+                    "$ref": "#/$defs/group"
+                },
+                "universalQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/universal_quantification"
+                },
+                "existentialQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/existential_quantification"
+                },
+                "logicalOpUnary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_unary"
+                },
+                "logicalOpBinary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_binary"
+                },
+                "logicalOpNAry": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_n_ary"
+                },
+                "unit": {
+                    "type": "object",
+                    "$ref": "#/$defs/unit"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
+                        "set"
+                    ]
+                },
+                {
+                    "required": [
+                        "group"
+                    ]
+                },
+                {
+                    "required": [
+                        "universalQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "existentialQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpUnary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpBinary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpNAry"
+                    ]
+                },
+                {
+                    "required": [
+                        "unit"
+                    ]
+                }
+            ]
+        },
+        "sequence": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "repetition": {
+                    "type": "string",
+                    "$ref": "#/$defs/repetition"
+                },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
+        "statement__": {
+            "properties": {
+                "sequence": {
+                    "type": "object",
+                    "$ref": "#/$defs/sequence"
+                },
+                "set": {
+                    "type": "object",
+                    "$ref": "#/$defs/set"
+                },
+                "group": {
+                    "type": "object",
+                    "$ref": "#/$defs/group"
+                },
+                "universalQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/universal_quantification"
+                },
+                "existentialQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/existential_quantification"
+                },
+                "logicalOpUnary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_unary"
+                },
+                "logicalOpBinary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_binary"
+                },
+                "logicalOpNAry": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_n_ary"
+                },
+                "unit": {
+                    "type": "object",
+                    "$ref": "#/$defs/unit"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
+                        "set"
+                    ]
+                },
+                {
+                    "required": [
+                        "group"
+                    ]
+                },
+                {
+                    "required": [
+                        "universalQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "existentialQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpUnary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpBinary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpNAry"
+                    ]
+                },
+                {
+                    "required": [
+                        "unit"
+                    ]
+                }
+            ]
+        },
+        "set": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
+        "group": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "members": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/members"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
+        "universal_quantification": {
+            "properties": {
+                "quantor": {
+                    "type": "string",
+                    "$ref": "#/$defs/quantor__universal"
+                },
+                "args": {
+                    "type": "array",
+                    "$ref": "#/$defs/args__q_two"
+                }
+            },
+            "required": [
+                "quantor",
+                "args"
+            ]
+        },
+        "existential_quantification": {
+            "properties": {
+                "quantor": {
+                    "type": "string",
+                    "$ref": "#/$defs/quantor__existential"
+                },
+                "args": {
+                    "type": "array",
+                    "$ref": "#/$defs/args__q_one"
+                }
+            },
+            "required": [
+                "quantor",
+                "args"
+            ]
+        },
+        "logical_op_unary": {
+            "properties": {
+                "operator": {
+                    "type": "string",
+                    "$ref": "#/$defs/operator__unary"
+                },
+                "args": {
+                    "type": "array",
+                    "$ref": "#/$defs/args__one"
+                }
+            },
+            "required": [
+                "operator",
+                "args"
+            ]
+        },
+        "logical_op_binary": {
+            "properties": {
+                "operator": {
+                    "type": "string",
+                    "$ref": "#/$defs/operator__binary"
+                },
+                "args": {
+                    "type": "array",
+                    "$ref": "#/$defs/args__two"
+                }
+            },
+            "required": [
+                "operator",
+                "args"
+            ]
+        },
+        "logical_op_n_ary": {
+            "properties": {
+                "operator": {
+                    "type": "string",
+                    "$ref": "#/$defs/operator__n_ary"
+                },
+                "args": {
+                    "type": "array",
+                    "$ref": "#/$defs/args__any"
+                }
+            },
+            "required": [
+                "operator",
+                "args"
+            ]
+        },
+        "unit": {
+            "properties": {
+                "layer": {
+                    "type": "string",
+                    "$ref": "#/$defs/layer"
+                },
+                "partOf": {
+                    "type": "string",
+                    "$ref": "#/$defs/part_of"
+                },
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "constraints": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/constraints"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "layer"
+            ]
+        },
+        "members": {
+            "properties": {
+                "sequence": {
+                    "type": "object",
+                    "$ref": "#/$defs/sequence"
+                },
+                "set": {
+                    "type": "object",
+                    "$ref": "#/$defs/set"
+                },
+                "group": {
+                    "type": "object",
+                    "$ref": "#/$defs/group"
+                },
+                "universalQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/universal_quantification"
+                },
+                "existentialQuantification": {
+                    "type": "object",
+                    "$ref": "#/$defs/existential_quantification"
+                },
+                "logicalOpUnary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_unary"
+                },
+                "logicalOpBinary": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_binary"
+                },
+                "logicalOpNAry": {
+                    "type": "object",
+                    "$ref": "#/$defs/logical_op_n_ary"
+                },
+                "unit": {
+                    "type": "object",
+                    "$ref": "#/$defs/unit"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
+                        "set"
+                    ]
+                },
+                {
+                    "required": [
+                        "group"
+                    ]
+                },
+                {
+                    "required": [
+                        "universalQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "existentialQuantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpUnary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpBinary"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalOpNAry"
+                    ]
+                },
+                {
+                    "required": [
+                        "unit"
+                    ]
+                }
+            ]
+        },
+        "comparison": {
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity"
+                },
+                "operator": {
+                    "type": "string",
+                    "$ref": "#/$defs/operator"
+                },
+                "mathComparison": {
+                    "type": "string",
+                    "$ref": "#/$defs/math_comparison"
+                },
+                "stringComparison": {
+                    "type": "string",
+                    "$ref": "#/$defs/string_comparison"
+                },
+                "regexComparison": {
+                    "type": "string",
+                    "$ref": "#/$defs/regex_comparison"
+                },
+                "entityComparison": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity_comparison"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "mathComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "stringComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "regexComparison"
+                    ]
+                },
+                {
+                    "required": [
+                        "entityComparison"
+                    ]
+                }
+            ],
+            "required": [
+                "entity",
+                "operator"
+            ]
+        },
+        "constraints": {
+            "oneOf": [
+                {
+                    "type": "object",
+                    "$ref": "#/$defs/comparison"
+                },
+                {
+                    "type": "object",
+                    "$ref": "#/$defs/statement__"
+                }
+            ]
+        },
+        "quantor__universal": {
+            "type": "string",
+            "pattern": "(ALL|!ALL|\u00acALL)"
+        },
+        "quantor__existential": {
+            "type": "string",
+            "pattern": "(EXIST|!EXIST|\u00acEXIST)"
+        },
+        "operator__unary": {
+            "type": "string",
+            "pattern": "NOT"
+        },
+        "operator__binary": {
+            "type": "string",
+            "pattern": "(NAND|!AND|\u00acAND|NOR|!OR|\u00acOR|XOR|IMPLY|NIMPLY|!IMPLY|\u00acIMPLY)"
+        },
+        "operator__n_ary": {
+            "type": "string",
+            "pattern": "(AND|OR)"
+        },
+        "args__q_one": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/statement__"
+            },
+            "minItems": 1,
+            "maxItems": 1
+        },
+        "args__q_two": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/statement__"
+            },
+            "minItems": 2,
+            "maxItems": 2
+        },
+        "args__one": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/constraints"
+            },
+            "minItems": 1,
+            "maxItems": 1
+        },
+        "args__two": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/constraints"
+            },
+            "minItems": 2,
+            "maxItems": 2
+        },
+        "args__any": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/constraints"
+            },
+            "minItems": 1
+        },
+        "results": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "resultsPlain": {
+                    "type": "object",
+                    "$ref": "#/$defs/results_plain"
+                },
+                "resultsAnalysis": {
+                    "type": "object",
+                    "$ref": "#/$defs/results_analysis"
+                },
+                "resultsCollocation": {
+                    "type": "object",
+                    "$ref": "#/$defs/results_collocation"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "resultsPlain"
+                    ]
+                },
+                {
+                    "required": [
+                        "resultsAnalysis"
+                    ]
+                },
+                {
+                    "required": [
+                        "resultsCollocation"
+                    ]
+                }
+            ],
+            "required": [
+                "label"
+            ]
+        },
+        "results_plain": {
+            "properties": {
+                "context": {
+                    "type": "string",
+                    "$ref": "#/$defs/context"
+                },
+                "entities": {
+                    "type": "array",
+                    "$ref": "#/$defs/entities"
+                }
+            },
+            "required": [
+                "context",
+                "entities"
+            ]
+        },
+        "results_analysis": {
+            "properties": {
+                "attributes": {
+                    "type": "array",
+                    "$ref": "#/$defs/attributes"
+                },
+                "filter": {
+                    "type": "array",
+                    "$ref": "#/$defs/filter"
+                },
+                "functions": {
+                    "type": "array",
+                    "$ref": "#/$defs/functions"
+                }
+            },
+            "required": [
+                "attributes"
+            ]
+        },
+        "results_collocation": {
+            "properties": {
+                "center": {
+                    "type": "string",
+                    "$ref": "#/$defs/center"
+                },
+                "window": {
+                    "type": "string",
+                    "$ref": "#/$defs/window"
+                },
+                "space": {
+                    "type": "array",
+                    "$ref": "#/$defs/space"
+                },
+                "attribute": {
+                    "type": "string",
+                    "$ref": "#/$defs/attribute"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "center",
+                        "window"
+                    ]
+                },
+                {
+                    "required": [
+                        "space"
+                    ]
+                }
+            ],
+            "required": [
+                "attribute"
+            ]
+        },
+        "context": {
+            "type": "string",
+            "$ref": "#/$defs/label"
+        },
+        "entities": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/entity_ref__"
+            },
+            "minItems": 1
+        },
+        "attributes": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/attribute__"
+            },
+            "minItems": 1
+        },
+        "filter": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/filter__"
+            },
+            "minItems": 1
+        },
+        "functions": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/functions__"
+            },
+            "minItems": 1
+        },
+        "center": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "window": {
+            "type": "string",
+            "pattern": "([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)"
+        },
+        "space": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/entity_ref__"
+            },
+            "minItems": 1
+        },
+        "attribute": {
+            "type": "string",
+            "pattern": "[^\\n\\r ].*"
+        },
+        "entity": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "operator": {
+            "type": "string",
+            "pattern": "(<>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!|in)"
+        },
+        "math_comparison": {
+            "type": "string",
+            "pattern": "[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*"
+        },
+        "string_comparison": {
+            "type": "string",
+            "pattern": "('.+'|\".+\")"
+        },
+        "regex_comparison": {
+            "type": "string",
+            "pattern": "\\/.+\\/"
+        },
+        "entity_comparison": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "label": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "layer": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "part_of": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "repetition": {
+            "type": "string",
+            "pattern": "(\\d+\\.\\.(\\d+|\\*)|[1-9]+\\d*)"
+        },
+        "entity_ref__": {
+            "type": "string",
+            "pattern": "[a-zA-Z_][a-zA-Z0-9_\\.]*"
+        },
+        "functions__": {
+            "type": "string",
+            "pattern": "frequency|minimum|maximum|average|stddev"
+        },
+        "attribute__": {
+            "type": "string",
+            "pattern": "[^\\n\\r ].*"
+        },
+        "filter__": {
+            "type": "string",
+            "pattern": "[^\\n\\r ].*"
+        }
+    },
+    "properties": {
+        "query": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/query"
+            },
+            "minItems": 1
+        },
+        "results": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/results"
+            },
+            "minItems": 1
+        }
+    }
+}

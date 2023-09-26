@@ -1,6 +1,6 @@
 Segment s
 
-sequence seq
+sequence seq 1..2
     Token@s e
         OR
             lemma = "every"

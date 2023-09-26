@@ -5,6 +5,8 @@ import os
 import re
 import sys
 
+from pathlib import Path
+
 from collections.abc import Iterable
 from typing import Any, ClassVar
 
@@ -13,12 +15,15 @@ from lark.indenter import Indenter
 from lark.lexer import Token
 
 
-dqd_grammar = next((f for f in os.listdir() if f.endswith(".lark")), "")
+current_path = os.path.dirname(Path(__file__))
+
+dqd_grammar = next((f for f in os.listdir(current_path) if f.endswith(".lark")), "")
 assert os.path.isfile(
     dqd_grammar
 ), f"Could not find a valid lark file in the current directory"
 dqd_grammar = open(dqd_grammar).read()
-json_schema = next((f for f in os.listdir() if f.endswith(".json")), "")
+
+json_schema = next((f for f in os.listdir(current_path) if f.endswith(".json")), "")
 assert os.path.isfile(
     json_schema
 ), f"Could not find a valid json file in the current directory"
