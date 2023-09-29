@@ -57,7 +57,8 @@ def _aggregate_results(
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
-    current: Batch | None = None,
+    # current: Batch | None = None,
+    current: Any,
     done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
     """
