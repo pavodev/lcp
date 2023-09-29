@@ -5,8 +5,6 @@ import os
 import re
 import sys
 
-from pathlib import Path
-
 from collections.abc import Iterable
 from typing import Any, ClassVar
 

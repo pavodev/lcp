@@ -1,36 +1,47 @@
 Turn d
-    FirstName = "Martin"
-    LastName = "Schulz"
-    OR
-        test = test
-        test != test
+    IsPresident = 'no'
+    PoliticalGroup != 'NI'
 
 Segment@d s
 
-sequence np
+sequence seq
     Token@s t1
-        upos = "DET"
+        upos = 'DET'
     Token@s t2
-        upos = "ADJ"
+        upos = 'ADJ'
     Token@s t3
-        lemma = /^[A-Z]/
-        upos = "NOUN"
+        upos = 'NOUN'
+        lemma.length > 5
 
-Token@s tv
-    upos = "VERB"
+set tdeps
+    Token@s tx
+        DepRel
+            head = t3
+            dep = tx
+
+
+Token@s thead
+    upos = 'VERB'
     DepRel
-        head = tv
+        head = thead
         dep = t3
-        label = /.*(OBJ|obj)/
 
-myKWIC1 => plain
+
+KWIC1 => plain
     context
         s
     entities
-        tv
-        np
+        t1
+        t2
+        t3
 
-stat1 => analysis
+KWIC2 => plain
+    context
+        s
+    entities
+        seq
+
+Stat1 => analysis
     attributes
         t1.lemma
         t2.lemma
@@ -40,3 +51,11 @@ stat1 => analysis
     filter
         frequency > 10
 
+Stat2 => analysis
+    attributes
+        t3.lemma
+        d.OriginalLanguage
+    functions
+        frequency
+    filter
+        frequency > 10

@@ -46,9 +46,9 @@ filter          : "filter" _NL _INDENT comparison _DEDENT                       
 functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
 
 center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
-window          : "window" _NL _INDENT range__ _DEDENT                               -> window
+window          : "window" _NL _INDENT range__ _NL _DEDENT                               -> window
 space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
-attribute       : "attribute" _NL _INDENT attribute__ _DEDENT                        -> attribute
+attribute       : "attribute" _NL _INDENT attribute__ _NL _DEDENT                        -> attribute
 
 entity          : (LABEL|LAYER|DOTENTITY)
 operator        : OPERATOR
@@ -84,10 +84,10 @@ OPERATOR_N_ARY.4      : /(AND|OR)/
 RESULTS_ARROW.4       : /=>/
 ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
 
-LAYER.3          : /[A-Z_][a-zA-Z0-9_]*/
-LABEL.3          : /[a-z][a-zA-Z0-9_]*/
+DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 
-DOTENTITY        : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
+LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/
+LABEL.2          : /[a-z][a-zA-Z0-9_]*/
 
 OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
