@@ -37,7 +37,7 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import QueryMeta, RawSent, ResultSents, Results, VianKWIC
+from .typed import Batch, QueryMeta, RawSent, ResultSents, Results, VianKWIC
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -57,6 +57,8 @@ def _aggregate_results(
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
+    current: Batch | None = None,
+    done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
     """
     Combine non-kwic results for storing and for sending to frontend
@@ -66,6 +68,9 @@ def _aggregate_results(
     rs = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     freqs = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "analysis"])
+    colls = set(
+        [i for i, r in enumerate(rs, start=1) if r.get("type") == "collocation"]
+    )
     counts: defaultdict[int, int] = defaultdict(int)
 
     for line in result:
@@ -79,10 +84,25 @@ def _aggregate_results(
             continue
         if key not in existing:
             existing[key] = []
-        if key not in freqs:
+        if key not in freqs and key not in colls:
             current = cast(list, existing[key])
             current.append(rest)
             continue
+        if key in colls:
+            text, total_this_batch, e = rest
+            preexist = sum(i[1] for i in cast(list, existing[key]) if i[0] == text)
+            preexist_e = next(
+                (i[-1] for i in cast(list, existing[key]) if i[0] == text), 0
+            )
+            combined = preexist + total_this_batch
+            counts[key] = combined
+            combined_e = _combine_e(e, preexist_e, current, done)
+            fixed = [text, combined, combined_e]
+            # todo: the line below might be slow -- we could use list.remove?
+            existing[key] = [i for i in cast(list, existing[key]) if i[0] != text]
+            existing[key].append(fixed)
+            continue
+        # frequency table:
         body = cast(list, rest[:-1])
         total_this_batch = rest[-1]
         preexist = sum(i[-1] for i in cast(list, existing[key]) if i[:-1] == body)
@@ -97,6 +117,25 @@ def _aggregate_results(
     show_total = bool(kwics) or (not kwics and len(freqs) == 1)
 
     return existing, results_to_send, n_results, not bool(kwics), show_total
+
+
+def _combine_e(
+    this_time_e: int | float,
+    e_so_far: int | float,
+    current: Batch | None,
+    done: list[Batch] | None,
+):
+    """
+    Get the combined E value for collocation
+    """
+    assert current is not None and done is not None
+    if not done:
+        return this_time_e
+    current_size: int = current[-1]
+    done_size = sum(d[-1] for d in done if d != current)
+    prop = this_time_e * current_size
+    done_prop = e_so_far * done_size
+    return (prop + done_prop) / (current_size + done_size)
 
 
 def _format_kwics(

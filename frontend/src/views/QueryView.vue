@@ -10,11 +10,16 @@
         <div class="col-4">
           <div class="mb-3 mt-3">
             <label class="form-label">Corpora</label>
-            <div v-if="selectedCorpora && selectedCorpora.corpus"
+            <div
+              v-if="selectedCorpora && selectedCorpora.corpus"
               class="details-button icon-3 tooltips"
               @click.stop="switchGraph()"
               title="Show/hide corpus structure"
-              :style="{position: 'absolute', lineHeight: '40px', transform: 'translate(calc(-100% - 0.5em))'}"
+              :style="{
+                position: 'absolute',
+                lineHeight: '40px',
+                transform: 'translate(calc(-100% - 0.5em))',
+              }"
             >
               <FontAwesomeIcon :icon="['fas', 'circle-info']" />
             </div>
@@ -109,9 +114,7 @@
             </button>
             <button
               type="button"
-              v-if="
-                queryStatus == 'satisfied' && !loading
-              "
+              v-if="queryStatus == 'satisfied' && !loading"
               @click="submitFullSearch"
               class="btn btn-primary me-1"
             >
@@ -168,10 +171,7 @@
               data-bs-toggle="modal"
               data-bs-target="#corpusDetailsModal"
             />
-            <CorpusGraphView
-              :corpus="corpusGraph"
-              @graphReady="resizeGraph"
-            />
+            <CorpusGraphView :corpus="corpusGraph" @graphReady="resizeGraph" />
           </div>
         </div>
         <div class="col-8">
@@ -231,13 +231,19 @@
                   :query="queryDQD"
                   :defaultQuery="defaultQueryDQD"
                   :corpora="selectedCorpora"
-                  :invalidError="isQueryValidData && isQueryValidData.valid != true ? isQueryValidData.error : null"
+                  :invalidError="
+                    isQueryValidData && isQueryValidData.valid != true
+                      ? isQueryValidData.error
+                      : null
+                  "
                   @submit="submit"
                   @update="updateQueryDQD"
                 />
                 <p
                   class="error-text text-danger mt-3"
-                  v-if="isQueryValidData && isQueryValidData.valid != true && debug"
+                  v-if="
+                    isQueryValidData && isQueryValidData.valid != true && debug
+                  "
                 >
                   {{ isQueryValidData.error }}
                 </p>
@@ -373,24 +379,38 @@
         </div>
       </div>
     </div>
-    <div 
+    <div
       v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
-      class="tooltip bs-tooltip-auto fade show" 
-      role="tooltip" 
-      style="position: absolute; left: 50vw; transform: translate(-50%,-100%); margin: 0px; z-index: 10;" 
-      data-popper-placement="top">
-      <div class="tooltip-arrow" style="position: absolute; left: 50%;"></div>
+      class="tooltip bs-tooltip-auto fade show"
+      role="tooltip"
+      style="
+        position: absolute;
+        left: 50vw;
+        transform: translate(-50%, -100%);
+        margin: 0px;
+        z-index: 10;
+      "
+      data-popper-placement="top"
+    >
+      <div class="tooltip-arrow" style="position: absolute; left: 50%"></div>
       <div class="tooltip-inner">
         <div>
-          The first pages of results have been fetched. 
-          More results will be fetched if you move to the next page or if you hit Search whole corpus.
+          The first pages of results have been fetched. More results will be
+          fetched if you move to the next page or if you hit Search whole
+          corpus.
         </div>
-        <div style="margin-top:0.5em">
+        <div style="margin-top: 0.5em">
           <input type="checkbox" id="dontShowResultsNotif" />
           <label for="dontShowResultsNotif">Don't show this again</label>
-          <button 
+          <button
             @click="dismissResultsNotification"
-            style="border:solid 1px white; border-radius:0.5em; margin-left:0.25em; color:white; background-color:transparent;"
+            style="
+              border: solid 1px white;
+              border-radius: 0.5em;
+              margin-left: 0.25em;
+              color: white;
+              background-color: transparent;
+            "
           >
             OK
           </button>
@@ -398,9 +418,11 @@
       </div>
     </div>
 
-    <div 
-      v-if="percentageDone==100 && (!WSDataSentences || !WSDataSentences.result)"
-      style="text-align: center;"
+    <div
+      v-if="
+        percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)
+      "
+      style="text-align: center"
     >
       No results found!
     </div>
@@ -484,7 +506,9 @@
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
                     :class="
-                      plainType == 'table' || resultContainsSet(resultSet) ? 'active btn-primary' : 'btn-light'
+                      plainType == 'table' || resultContainsSet(resultSet)
+                        ? 'active btn-primary'
+                        : 'btn-light'
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
@@ -624,35 +648,37 @@
         </div>
       </div>
     </div>
-  </div>
-  <div id="nav-progress-bar" 
-    class="progress"
-    :class="loading ? 'progress-bar-striped progress-bar-animated' : ''"
-    :style="loading ? 'background-color: pink;' : ''"
-  >
-    <div 
-      class="progress-bar"
-      :class="
-        loading ? 'progress-bar-striped progress-bar-animated' : ''
-      "
-      role="progressbar"
-      aria-label="Basic example"
-      :style="`width: ${navPercentage}%`"
-      :aria-valuenow="navPercentage"
-      aria-valuemin="0"
-      aria-valuemax="100"
-      >
+    <div
+      class="lcp-progress-bar"
+      title="Refresh progress bar"
+      v-if="showLoadingBar"
+    >
+      <div
+        class="lcp-progress-bar-driver"
+        :style="`width: ${navPercentage}%;`"
+      ></div>
     </div>
   </div>
 </template>
 
 <style scoped>
-#nav-progress-bar {
+.lcp-progress-bar {
   position: fixed;
-  width: 100vw;
-  height: 0.5em;
-  top: 52px;
-  z-index: 1005;
+  width: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 3s linear;
+}
+.lcp-progress-bar-driver {
+  height: 1px;
+  width: 0%;
+  background-color: #dc6027;
+  transition: 0.2s;
+  box-shadow: 0px 0px 3px 1px #dc6027ad;
 }
 .container {
   text-align: left;
@@ -737,7 +763,8 @@ export default {
       corpusGraph: null,
       corpusModal: null,
       showGraph: false,
-      showResultsNotification: false
+      showResultsNotification: false,
+      showLoadingBar: false,
     };
   },
   components: {
@@ -746,8 +773,8 @@ export default {
     ResultsPlainTableView,
     ResultsTableView,
     EditorView,
-    CorpusGraphView
-},
+    CorpusGraphView,
+  },
   watch: {
     corpora: {
       handler() {
@@ -761,8 +788,8 @@ export default {
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
-            this.defaultQueryDQD = corpus[0].sample_query || ""
-            this.queryDQD = this.defaultQueryDQD
+            this.defaultQueryDQD = corpus[0].sample_query || "";
+            this.queryDQD = this.defaultQueryDQD;
           }
           this.preselectedCorporaId = null;
           this.validate();
@@ -790,14 +817,15 @@ export default {
       }
       // this.validate();
       if (this.selectedCorpora) {
-        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || ""
+        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
         history.pushState(
           {},
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
-        if (updateGraph) // make sure to delay the re-setting of corpusGraph
-          setTimeout(()=>this.corpusGraph = this.selectedCorpora.corpus, 1);
+        if (updateGraph)
+          // make sure to delay the re-setting of corpusGraph
+          setTimeout(() => (this.corpusGraph = this.selectedCorpora.corpus), 1);
       } else {
         history.pushState({}, null, `/query/`);
       }
@@ -848,13 +876,25 @@ export default {
         this.validate();
       }
     },
+    loading() {
+      if (this.loading) {
+        this.showLoadingBar = true;
+      } else {
+        setTimeout(() => {
+          this.showLoadingBar = false;
+        }, 1500);
+      }
+    },
   },
   methods: {
     resultContainsSet(resultSet) {
       if (!(resultSet.attributes instanceof Array)) return false;
-      let entities = resultSet.attributes.find(v=>v.name=="entities");
+      let entities = resultSet.attributes.find((v) => v.name == "entities");
       if (!entities) return false;
-      return Boolean((entities.data instanceof Array) && entities.data.find(v=>["set","group"].includes(v.type)));
+      return Boolean(
+        entities.data instanceof Array &&
+          entities.data.find((v) => ["set", "group"].includes(v.type))
+      );
     },
     updateLoading(status) {
       this.queryStatus = status;
@@ -870,11 +910,18 @@ export default {
     },
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      console.log("PageUpdate", newNResults, this.nResults, this.WSDataSentences)
-      if (newNResults > this.nResults && (
-        !this.WSDataSentences || (this.WSDataSentences && this.WSDataSentences.more_data_available)
-      )) {
-        console.log("Submit")
+      console.log(
+        "PageUpdate",
+        newNResults,
+        this.nResults,
+        this.WSDataSentences
+      );
+      if (
+        newNResults > this.nResults &&
+        (!this.WSDataSentences ||
+          (this.WSDataSentences && this.WSDataSentences.more_data_available))
+      ) {
+        console.log("Submit");
         this.nResults = newNResults;
         this.submit(null, true);
       }
@@ -990,7 +1037,7 @@ export default {
           return;
         } else if (data["action"] === "query_result") {
           // console.log("query_result", data);
-          this.updateLoading(data.status)
+          this.updateLoading(data.status);
           if (
             this.failedStatus &&
             data.result.length < this.WSDataResults.n_results
@@ -1007,7 +1054,7 @@ export default {
           return;
         } else if (data["action"] === "sentences") {
           // console.log("sentences", data);
-          this.updateLoading(data.status)
+          this.updateLoading(data.status);
           if (
             this.WSDataSentences &&
             this.WSDataSentences.first_job == data.first_job &&
@@ -1107,8 +1154,7 @@ export default {
     switchGraph() {
       if (!this.corpusGraph && this.selectedCorpora)
         this.corpusGraph = this.selectedCorpora.corpus;
-      else
-        this.corpusGraph = null;
+      else this.corpusGraph = null;
     },
     openGraphInModal() {
       if (!this.corpusGraph) return;
@@ -1121,16 +1167,15 @@ export default {
       });
       this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
         this.showGraph = false;
-        if (restoreSmallGraphWith)
-          this.corpusGraph = restoreSmallGraphWith;
+        if (restoreSmallGraphWith) this.corpusGraph = restoreSmallGraphWith;
         restoreSmallGraphWith = null;
       });
     },
     resizeGraph(container) {
       let svg = container.querySelector("svg");
-      if (svg===null) return;
+      if (svg === null) return;
       let g = svg.querySelector("g");
-      if (g===null) return;
+      if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
     submitFullSearch() {
@@ -1229,7 +1274,9 @@ export default {
     },
     dismissResultsNotification() {
       this.showResultsNotification = false;
-      const dontShowResultsNotif = document.querySelector("#dontShowResultsNotif");
+      const dontShowResultsNotif = document.querySelector(
+        "#dontShowResultsNotif"
+      );
       if (dontShowResultsNotif && dontShowResultsNotif.checked)
         localStorage.setItem("dontShowResultsNotif", true);
     }
@@ -1272,9 +1319,10 @@ export default {
         : [];
     },
     navPercentage() {
-      if (this.loading) return Math.max(this.percentageDone,this.percentageWordsDone);
+      if (this.loading)
+        return Math.max(this.percentageDone, this.percentageWordsDone);
       else return this.percentageDone;
-    }
+    },
   },
   mounted() {
     setTooltips();
