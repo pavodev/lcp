@@ -305,17 +305,25 @@ def _make_filters(
             if name != "comparison":
                 raise ValueError("expected comparion")
 
-            bits: Sequence[str | int | float] = comp.split()
-            last_bit = cast(str, bits[-1])
-            body = bits[:-1]
-            assert isinstance(body, list)
-            if last_bit.isnumeric():
-                body.append(int(last_bit))
-            elif last_bit.replace(".", "").isnumeric():
-                body.append(float(last_bit))
-            else:
-                body = bits
-            made = cast(tuple[str, str, int | str | float], tuple(body))
+            # bits: Sequence[str | int | float] = comp.split()
+            # last_bit = cast(str, bits[-1])
+            # body = bits[:-1]
+            # assert isinstance(body, list)
+            # if last_bit.isnumeric():
+            #     body.append(int(last_bit))
+            # elif last_bit.replace(".", "").isnumeric():
+            #     body.append(float(last_bit))
+            # else:
+            #     body = bits
+            # made = cast(tuple[str, str, int | str | float], tuple(body))
+            entity = comp['entity']
+            operator = comp['operator']
+            value = next(c[1] for c in comp.items() if c[0] not in ('entity','operator'))
+            if value.isnumeric():
+                value = int(value)
+            elif value.replace(".", "").isnumeric():
+                value = float(value)
+            made = cast(tuple[str, str, int | str | float], (entity,operator,value))
             fixed.append(made)
         out[idx] = fixed
     return out

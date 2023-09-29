@@ -1,29 +1,42 @@
-Document d
-    classCode = /^S/
+Turn d
+    FirstName = "Martin"
+    LastName = "Schulz"
+    OR
+        test = test
+        test != test
 
 Segment@d s
 
-sequence seq
+sequence np
     Token@s t1
-        xpos2 = "ART"
+        upos = "DET"
     Token@s t2
-        xpos2 = "ADJ"
-        lemma = "true"
+        upos = "ADJ"
     Token@s t3
-        xpos2 = "SUBST"
+        lemma = /^[A-Z]/
+        upos = "NOUN"
 
-KWIC => plain
+Token@s tv
+    upos = "VERB"
+    DepRel
+        head = tv
+        dep = t3
+        label = /.*(OBJ|obj)/
+
+myKWIC1 => plain
     context
         s
     entities
-        t1
-        t2
-        t3
+        tv
+        np
 
-NounDist => analysis
+stat1 => analysis
     attributes
+        t1.lemma
+        t2.lemma
         t3.lemma
     functions
         frequency
     filter
-        frequency > 1
+        frequency > 10
+

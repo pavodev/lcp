@@ -11,10 +11,13 @@ statement__     : SEQUENCE label? repetition? _NL _INDENT members+ _DEDENT      
                 | operator__binary _NL _INDENT args__two _DEDENT                      -> logical_op_binary
                 | operator__n_ary _NL _INDENT args__any _DEDENT                       -> logical_op_n_ary
                 | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]        -> unit
+                | LABEL _NL*                                                          -> reference
 
 members         : statement__                                                         -> members
 
-constraints     : entity operator comparison_type__ _NL                               -> comparison
+comparison      : entity operator comparison_type__ _NL                               -> comparison
+
+constraints     : comparison
                 | statement__
 
 quantor__universal   : QUANTOR_UNIVERSAL
@@ -39,7 +42,7 @@ context         : "context" _NL _INDENT label _NL* _DEDENT _NL*                 
 entities        : "entities" _NL _INDENT entity_ref__+ _NL* _DEDENT _NL*             -> entities
 
 attributes      : "attributes" _NL _INDENT (attribute__ _NL)+ _DEDENT                -> attributes
-filter          : "filter" _NL _INDENT (filter__ _NL)+ _DEDENT                       -> filter
+filter          : "filter" _NL _INDENT comparison _DEDENT                              -> filter
 functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
 
 center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
@@ -47,40 +50,42 @@ window          : "window" _NL _INDENT range__ _DEDENT                          
 space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
 attribute       : "attribute" _NL _INDENT attribute__ _DEDENT                        -> attribute
 
-entity          : VARIABLE
+entity          : (LABEL|LAYER|DOTENTITY)
 operator        : OPERATOR
 
 comparison_type__ : NUMBER_EXPRESSION                                                -> math_comparison
                   | STRING_LITERAL                                                   -> string_comparison
                   | REGEX                                                            -> regex_comparison
-                  | VARIABLE                                                         -> entity_comparison
+                  | (LABEL|LAYER|DOTENTITY)                                          -> entity_comparison
 
-label           : VARIABLE                                                             -> label
-layer           : VARIABLE                                                             -> layer
-part_of         : VARIABLE                                                             -> part_of
+label           : LABEL                                                                -> label
+layer           : LAYER                                                                -> layer
+part_of         : LABEL                                                                -> part_of
 repetition      : REPETITION                                                           -> repetition
 
-
-entity_ref__    : VARIABLE _NL*
+entity_ref__    : LABEL _NL*
 
 functions__     : ENUM_FUNCTIONS _NL*
 attribute__     : STRING
 filter__        : STRING
 range__         : RANGE
 
-GROUP.3               : /group/
-SET.3                 : /set/
-SEQUENCE.3            : /sequence/
+GROUP.4               : /group/
+SET.4                 : /set/
+SEQUENCE.4            : /sequence/
 
-QUANTOR_UNIVERSAL.3   : /(ALL|!ALL|¬ALL)/
-QUANTOR_EXISTENTIAL.3 : /(EXIST|!EXIST|¬EXIST)/
-OPERATOR_UNARY.3      : /NOT/
-OPERATOR_BINARY.3     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
-OPERATOR_N_ARY.3      : /(AND|OR)/
-RESULTS_ARROW.3       : /=>/
-ENUM_FUNCTIONS.3      : /frequency|minimum|maximum|average|stddev/
+QUANTOR_UNIVERSAL.4   : /(ALL|!ALL|¬ALL)/
+QUANTOR_EXISTENTIAL.4 : /(EXIST|!EXIST|¬EXIST)/
+OPERATOR_UNARY.4      : /NOT/
+OPERATOR_BINARY.4     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
+OPERATOR_N_ARY.4      : /(AND|OR)/
+RESULTS_ARROW.4       : /=>/
+ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
 
-VARIABLE.2      : /[a-zA-Z_][a-zA-Z0-9_\.]*/
+LAYER.3          : /[A-Z_][a-zA-Z0-9_]*/
+LABEL.3          : /[a-z][a-zA-Z0-9_]*/
+
+DOTENTITY        : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 
 OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/

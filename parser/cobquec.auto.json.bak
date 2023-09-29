@@ -507,17 +507,10 @@
             ]
         },
         "constraints": {
-            "properties": {
-                "comparison": {
-                    "type": "object",
-                    "$ref": "#/$defs/comparison"
-                }
-            },
             "oneOf": [
                 {
-                    "required": [
-                        "comparison"
-                    ]
+                    "type": "object",
+                    "$ref": "#/$defs/comparison"
                 },
                 {
                     "type": "object",
@@ -651,7 +644,7 @@
                     "$ref": "#/$defs/functions"
                 },
                 "filter": {
-                    "type": "object",
+                    "type": "string",
                     "$ref": "#/$defs/filter"
                 }
             },
@@ -715,11 +708,8 @@
             "minItems": 1
         },
         "filter": {
-            "type": "object",
-            "$ref": "#/$defs/comparison",
-            "required": [
-                "comparison"
-            ]
+            "type": "string",
+            "pattern": "[^\\n\\r ].*"
         },
         "functions": {
             "type": "array",

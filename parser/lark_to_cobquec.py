@@ -114,7 +114,13 @@ class Rule:
             return self._object
 
         self._object = {"properties": {}, "oneOf": [], "required": []}
-        if (
+        if all(isinstance(r,TermRef) for r in self.references):
+            if len(self.references) > 1:
+                self._object['type'] = "string"
+                self._object['oneOf'] = [r.as_object[0] for r in self.references]
+            else:
+                self._object, _ = self.references[0].as_object
+        elif (
             len(self.references) > 1
         ):  # Big disjunction -- assumption: all disjuncts are named rules
             if self.name.endswith(
@@ -133,21 +139,17 @@ class Rule:
                 if not self._object["oneOf"]:
                     self._object.pop("oneOf")
             else:  # If this is not a forwarding rule, return a bare oneOf
-                self._object["oneOf"] = [
-                    {"type": r[0].type, "$ref": f"#/$defs/{r[0].name}"}
-                    for r in self.references
-                    if isinstance(r[0], Ref)
-                ]
+                for r in self.references:
+                    if not isinstance(r[0], Ref): continue
+                    o = {"type": r[0].type, "$ref": f"#/$defs/{r[0].name}"}
+                    if r[0].name.endswith("__"):
+                        self._object["oneOf"].append(o)
+                    else:
+                        self._object["properties"][r[0].propertyName] = o
+                        self._object["oneOf"].append({"required": [r[0].propertyName]})
         else:
             refs = self.references[0]  # one-line rule
-            if isinstance(
-                refs, Ref
-            ):  # only rules that point to a terminal have them as their direct, only reference child
-                assert isinstance(
-                    refs, TermRef
-                ), f"Rule {self.name} reduces to a non-terminal!"
-                self._object, _ = refs.as_object
-            elif isinstance(refs, list):  # the rule does not point to a terminal
+            if isinstance(refs, list):  # the rule does not point to a terminal
                 if len(refs) == 1:
                     if isinstance(refs[0], list) and all(
                         isinstance(x, Ref) for x in refs[0]
@@ -242,7 +244,11 @@ class Rule:
     @property
     def type(self):
         assert self.references, f"Rule {self.name} has no references!"
-        if len(self.references) > 1:  # big disjunction
+        if all( # disjunction of terminal references
+            isinstance(r, TermRef) for r in self.references
+        ):
+            return "string"
+        elif len(self.references) > 1:  # big disjunction
             if self.name.endswith(
                 "__"
             ):  # forwarding: named disjunct rules count as properties ~> object
@@ -371,13 +377,13 @@ class Rule:
         # Direct reference to a string
         if (
             len(self.lines) == 1
-            and not re.match(r".*\|.*", self.lines[0])
+            # and not re.match(r".*\|.*", self.lines[0])
             and not re.match(r".*[a-z].*", self.lines[0])
         ):
-            terminal_name = next(
-                n for n in self.lines[0].split(" ") if re.match(r"^[A-Z_]+$", n)
-            )
-            self.references.append(TermRef(terminal_name))
+            terminal_names = self.lines[0].split('|')
+            for terminal_name in terminal_names:
+                cleaned_name = re.sub(r"[^A-Z_]+","",terminal_name)
+                self.references.append(TermRef(cleaned_name))
         else:
             for line in self.lines:
                 self.references.append(self.process_references_in_line(line))

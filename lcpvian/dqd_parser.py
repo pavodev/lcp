@@ -16,18 +16,17 @@ from lark.lexer import Token
 
 PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parser'))
 
-dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".lark")), "")
+dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".lark")), "")
 assert os.path.isfile(
     dqd_grammar_fn
 ), f"Could not find a valid lark file in the current directory"
 dqd_grammar: str = open(dqd_grammar_fn).read()
 
-json_schema_fn: str = next((os.path.join(PARSER_PATH,f) for f in os.listdir(PARSER_PATH) if f.endswith(".json")), "")
+json_schema_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".json")), "")
 assert os.path.isfile(
     json_schema_fn
 ), f"Could not find a valid json file in the current directory"
 json_schema: dict = json.loads(open(json_schema_fn).read())
-
 
 class TreeIndenter(Indenter):
     NL_type: str = "_NL"
@@ -50,27 +49,18 @@ def to_camel(name: str) -> str:
 
 
 def forward(schema: dict) -> tuple[dict, bool]:
-    is_array = False
-    while "properties" not in schema:
-        if "items" in schema:
-            is_array = True
-            schema = schema["items"]
-        elif "$ref" in schema:
-            schema = json_schema.get("$defs", {}).get(
-                re.sub(r".+\/", "", schema["$ref"])
-            )
-        elif "oneOf" in schema:
-            p: dict = {}
-            for o in schema["oneOf"]:
-                f, is_array = forward(o)
-                p = {**p, **f.get("properties", {})}
-            if p:
-                schema["properties"] = p
-        else:
-            # print(f"Could not find properties, items, $ref or oneOf in {schema} for {label}")
-            break
-
-    return (schema, is_array)
+    if "items" in schema:
+        return forward(schema["items"])[0], True
+    if "$ref" in schema:
+        return forward( json_schema.get("$defs", {}).get(re.sub(r".+\/", "", schema["$ref"])) )
+    
+    if "oneOf" in schema:
+        schema["properties"] = schema.get("properties", {})
+        for o in schema["oneOf"]:
+            f, _ = forward(o)
+            schema["properties"] = {**schema["properties"], **f.get("properties",{})}
+        
+    return (schema, False)
 
 
 def found_rule_down_the_line(property_schema: dict = {}, rule: str = "") -> bool:
@@ -99,7 +89,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
 
     name: str = tree.data
     camel_name: str = to_camel(name)
-
+    
     schema, is_parent_array = forward(
         properties_parent.get(camel_name, properties_parent)
     )
@@ -130,7 +120,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
         is_child_array = is_parent_array
 
         child_name = to_camel(child.data)
-
+        
         # Retrieve DQD name for Lark rule
         if child_name not in children_properties:
             fallback_name = to_camel(
@@ -148,7 +138,7 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
                 child_schema = schema
             else:
                 skip_children_names = True
-
+        
         if child_name in children_properties:
             child_schema = children_properties[child_name]
             is_child_array = child_schema.get("type", "") == "array"
@@ -189,7 +179,6 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
 
 def convert(dqd_query: str) -> dict[str, Any]:
     data = parser.parse(dqd_query)
-    print(data.pretty())
     res: dict = to_dict(data, {"start": json_schema})
     return res
 
@@ -200,6 +189,7 @@ def cmdline() -> None:
             dqd = fo.read()
     else:
         dqd = sys.argv[-1]
+    print("Tree:", parser.parse(dqd).pretty())
     print(json.dumps(convert(dqd), indent=4))
 
 
