@@ -204,7 +204,7 @@ export default {
               ? suggestValuesArray.map( (item) => Object({
                 label: item,
                 kind: monaco.languages.CompletionItemKind.Text,
-                insertText: item,
+                insertText: `"${item}"`,
                 range: range
               }))
               : [

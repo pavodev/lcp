@@ -103,6 +103,10 @@
         },
         "sequence": {
             "properties": {
+                "partOf": {
+                    "type": "string",
+                    "$ref": "#/$defs/part_of"
+                },
                 "label": {
                     "type": "string",
                     "$ref": "#/$defs/label"
@@ -588,7 +592,7 @@
             "properties": {
                 "label": {
                     "type": "string",
-                    "$ref": "#/$defs/label"
+                    "$ref": "#/$defs/label__results"
                 },
                 "resultsPlain": {
                     "type": "object",
@@ -812,6 +816,19 @@
         "repetition": {
             "type": "string",
             "pattern": "(\\d+\\.\\.(\\d+|\\*)|[1-9]+\\d*)"
+        },
+        "label__results": {
+            "oneOf": [
+                {
+                    "type": "string",
+                    "pattern": "[a-z][a-zA-Z0-9_]*"
+                },
+                {
+                    "type": "string",
+                    "pattern": "[A-Z_][a-zA-Z0-9_]*"
+                }
+            ],
+            "type": "string"
         },
         "entity_ref__": {
             "type": "string",

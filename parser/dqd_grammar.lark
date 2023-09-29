@@ -2,16 +2,16 @@
 
 query           : statement__
 
-statement__     : SEQUENCE label? repetition? _NL _INDENT members+ _DEDENT            -> sequence
-                | SET label? _NL _INDENT members+ _DEDENT                             -> set
-                | GROUP label? _NL _INDENT members+ _DEDENT                           -> group
-                | quantor__universal _NL _INDENT args__q_two _DEDENT                  -> universal_quantification
-                | quantor__existential _NL _INDENT args__q_one _DEDENT                -> existential_quantification
-                | operator__unary _NL _INDENT args__one _DEDENT                       -> logical_op_unary
-                | operator__binary _NL _INDENT args__two _DEDENT                      -> logical_op_binary
-                | operator__n_ary _NL _INDENT args__any _DEDENT                       -> logical_op_n_ary
-                | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]        -> unit
-                | LABEL _NL*                                                          -> reference
+statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ _DEDENT     -> sequence
+                | SET label? _NL _INDENT members+ _DEDENT                                   -> set
+                | GROUP label? _NL _INDENT members+ _DEDENT                                 -> group
+                | quantor__universal _NL _INDENT args__q_two _DEDENT                        -> universal_quantification
+                | quantor__existential _NL _INDENT args__q_one _DEDENT                      -> existential_quantification
+                | operator__unary _NL _INDENT args__one _DEDENT                             -> logical_op_unary
+                | operator__binary _NL _INDENT args__two _DEDENT                            -> logical_op_binary
+                | operator__n_ary _NL _INDENT args__any _DEDENT                             -> logical_op_n_ary
+                | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]              -> unit
+                | LABEL _NL*                                                                -> reference
 
 members         : statement__                                                         -> members
 
@@ -33,7 +33,7 @@ args__one        : constraints ~ 1
 args__two        : constraints ~ 2
 args__any        : constraints constraints+
 
-results         : label RESULTS_ARROW results_type__                                 -> results
+results         : label__results RESULTS_ARROW results_type__                        -> results
 results_type__  : "plain" _NL _INDENT context entities _DEDENT                       -> results_plain
                 | "analysis" _NL _INDENT attributes functions filter? _DEDENT        -> results_analysis
                 | "collocation" _NL _INDENT (center window|space) attribute _DEDENT  -> results_collocation
@@ -62,6 +62,8 @@ label           : LABEL                                                         
 layer           : LAYER                                                                -> layer
 part_of         : LABEL                                                                -> part_of
 repetition      : REPETITION                                                           -> repetition
+
+label__results  : (LABEL|LAYER)
 
 entity_ref__    : LABEL _NL*
 
