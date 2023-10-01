@@ -223,6 +223,9 @@ def _format_kwics(
 
 
 def _vian_inside_lcp(rest: Sequence) -> bool:
+    """
+    Detect whether this is a vian corpus accessed in lcp app
+    """
     for i in rest[1:]:
         if not isinstance(i, list):
             continue
@@ -289,9 +292,7 @@ def _get_all_sents(
     return out
 
 
-def _format_vian(
-    rest: Sequence,
-) -> VianKWIC:
+def _format_vian(rest: Sequence) -> VianKWIC:
     """
     Little helper to build VIAN kwic sentence data, which has time,
     document and gesture information added to the KWIC data

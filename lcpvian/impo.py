@@ -83,8 +83,7 @@ class SQLstats:
             INSERT
               INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
             VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
-            RETURNING *;
-            """
+            RETURNING *;"""
         )
 
         self.token_count: Callable[[str, str], str] = lambda x, y: dedent(

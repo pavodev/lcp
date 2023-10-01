@@ -318,7 +318,7 @@ class QueryIteration:
             self.first_job = job.id
         return job, do_sents
 
-    def submit_sents(self, query_started) -> list[str]:
+    def submit_sents(self, query_started: bool | None) -> list[str]:
         """
         Helper to submit a sentences job to the Query Service
         """
