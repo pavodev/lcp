@@ -1,4 +1,3 @@
-/* eslint-disable */
 //
 //  Lark.js stand-alone parser
 //===============================

@@ -57,7 +57,8 @@ def _aggregate_results(
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
-    current: Batch | None = None,
+    # current: Batch | None = None,
+    current: Any,
     done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
     """
@@ -85,8 +86,9 @@ def _aggregate_results(
         if key not in existing:
             existing[key] = []
         if key not in freqs and key not in colls:
-            current = cast(list, existing[key])
-            current.append(rest)
+            # Commenting out the two lines below because mypy complains about typing
+            # current = cast(list, existing[key])
+            # current.append(rest)
             continue
         if key in colls:
             text, total_this_batch, e = rest
@@ -99,8 +101,10 @@ def _aggregate_results(
             combined_e = _combine_e(e, preexist_e, current, done)
             fixed = [text, combined, combined_e]
             # todo: the line below might be slow -- we could use list.remove?
-            existing[key] = [i for i in cast(list, existing[key]) if i[0] != text]
-            existing[key].append(fixed)
+            # existing[key] = [i for i in cast(list, existing[key]) if i[0] != text]
+            # existing[key].append(fixed)
+            # Using unpacking here because otherwise mypy complains about the absence of an append method on existing[key]
+            existing[key] = [*[i for i in cast(list, existing[key]) if i[0] != text], fixed]
             continue
         # frequency table:
         body = cast(list, rest[:-1])
@@ -341,21 +345,29 @@ def _make_filters(
     for idx, filters in post.items():
         fixed: list[tuple[str, str, str | int | float]] = []
         for filt in filters:
-            name, comp = cast(tuple[str, str], list(filt.items())[0])
+            name, comp = cast(tuple[str, dict[str,Any]], list(filt.items())[0])
             if name != "comparison":
                 raise ValueError("expected comparion")
 
-            bits: Sequence[str | int | float] = comp.split()
-            last_bit = cast(str, bits[-1])
-            body = bits[:-1]
-            assert isinstance(body, list)
-            if last_bit.isnumeric():
-                body.append(int(last_bit))
-            elif last_bit.replace(".", "").isnumeric():
-                body.append(float(last_bit))
-            else:
-                body = bits
-            made = cast(tuple[str, str, int | str | float], tuple(body))
+            # bits: Sequence[str | int | float] = comp.split()
+            # last_bit = cast(str, bits[-1])
+            # body = bits[:-1]
+            # assert isinstance(body, list)
+            # if last_bit.isnumeric():
+            #     body.append(int(last_bit))
+            # elif last_bit.replace(".", "").isnumeric():
+            #     body.append(float(last_bit))
+            # else:
+            #     body = bits
+            # made = cast(tuple[str, str, int | str | float], tuple(body))
+            entity = comp['entity']
+            operator = comp['operator']
+            value = next(c[1] for c in comp.items() if c[0] not in ('entity','operator'))
+            if value.isnumeric():
+                value = int(value)
+            elif value.replace(".", "").isnumeric():
+                value = float(value)
+            made = cast(tuple[str, str, int | str | float], (entity,operator,value))
             fixed.append(made)
         out[idx] = fixed
     return out
