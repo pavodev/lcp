@@ -85,11 +85,6 @@ def _aggregate_results(
             continue
         if key not in existing:
             existing[key] = []
-        if key not in freqs and key not in colls:
-            # Commenting out the two lines below because mypy complains about typing
-            # current = cast(list, existing[key])
-            # current.append(rest)
-            continue
         if key in colls:
             text, total_this_batch, e = rest
             preexist = sum(i[1] for i in cast(list, existing[key]) if i[0] == text)
@@ -100,10 +95,6 @@ def _aggregate_results(
             counts[key] = combined
             combined_e = _combine_e(e, preexist_e, current, done)
             fixed = [text, combined, combined_e]
-            # todo: the line below might be slow -- we could use list.remove?
-            # existing[key] = [i for i in cast(list, existing[key]) if i[0] != text]
-            # existing[key].append(fixed)
-            # Using unpacking here because otherwise mypy complains about the absence of an append method on existing[key]
             existing[key] = [*[i for i in cast(list, existing[key]) if i[0] != text], fixed]
             continue
         # frequency table:

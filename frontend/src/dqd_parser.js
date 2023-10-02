@@ -14085,7 +14085,6 @@ var DATA={
   ],
   "options": {
     "debug": false,
-    "strict": false,
     "keep_all_tokens": false,
     "tree_class": null,
     "cache": false,
