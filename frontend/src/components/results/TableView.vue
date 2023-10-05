@@ -14,7 +14,7 @@
           </th>
         </tr>
         <tr>
-          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)">
+          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)" :class="col.class">
             {{ col.name }}
             <span v-if="index == sortBy">
               <FontAwesomeIcon :icon="['fas', 'arrow-up']" v-if="sortDirection == 0" />
@@ -33,6 +33,7 @@
             scope="row"
             v-for="(col, index) in attributes"
             :key="index"
+            :class="col.class"
           >
             {{ item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
           </td>
@@ -54,7 +55,8 @@
 .header-form {
   text-align: center;
 }
-.header-left {
+.header-left,
+.text-right {
   text-align: right;
 }
 table {
@@ -151,6 +153,37 @@ export default {
         data = this.data.map(row => [
           ...row,
           (row.at(-1)/sum*100.).toFixed(3)
+        ])
+      }
+      else if (this.type == "collocation") {
+        attributes.push(...[{
+          name: "mi3",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "mi",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "lmi",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "tscore",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "zscore",
+          type: "aggregrate",
+          class: "text-right",
+        }])
+        data = this.data.map(row => [
+          ...row,
+          Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(3),
+          Math.log2(row[1]/row[2]).toFixed(3),
+          (row[1]*Math.log2(row[1]/row[2])).toFixed(3),
+          ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(3),
+          ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(3)
         ])
       }
       return { attributes, data }
