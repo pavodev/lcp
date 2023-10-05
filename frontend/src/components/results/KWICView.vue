@@ -1,15 +1,15 @@
 <template>
-  <PaginationComponent
-    v-if="data"
-    style="float: right"
-    :resultCount="data.length"
-    :resultsPerPage="resultsPerPage"
-    :currentPage="currentPage"
-    @update="updatePage"
-    :key="data.length"
-    :loading="loading"
-  />
   <div id="kwic-view">
+    <PaginationComponent
+      v-if="data"
+      class="paggination"
+      :resultCount="data.length"
+      :resultsPerPage="resultsPerPage"
+      :currentPage="currentPage"
+      @update="updatePage"
+      :key="data.length"
+      :loading="loading"
+    />
     <table class="table" v-if="data">
       <thead>
         <tr>
@@ -17,7 +17,7 @@
             v-for="(group, groupIndex) in groups"
             :key="`thead-${groupIndex}`"
           >
-            <th scope="col" :class="`header-${groupIndex==0?'left':'form'}`">
+            <th scope="col" :class="`header-${groupIndex == 0 ? 'left' : 'form'}`">
               {{ groupIndex == 0 ? "Left context" : "Context" }}
             </th>
             <th scope="col" class="header-form">Match</th>
@@ -101,6 +101,7 @@
     </table>
     <PaginationComponent
       v-if="data"
+      class="paggination"
       :resultCount="data.length"
       :resultsPerPage="resultsPerPage"
       :currentPage="currentPage"
@@ -184,6 +185,9 @@
 </template>
 
 <style scoped>
+.paggination {
+  float: right;
+}
 .header-form {
   text-align: center;
 }
@@ -317,10 +321,10 @@ export default {
         if (initial === true) {
           tokenData = tokenData[0]
         }
-        groups = tokenData.map( (tokenOrArrayOfTokens) => 
-          tokenOrArrayOfTokens instanceof Array 
-            ? tokenOrArrayOfTokens 
-            : [tokenOrArrayOfTokens] 
+        groups = tokenData.map(tokenOrArrayOfTokens =>
+          tokenOrArrayOfTokens instanceof Array
+            ? tokenOrArrayOfTokens
+            : [tokenOrArrayOfTokens]
         );
       }
       return groups;
