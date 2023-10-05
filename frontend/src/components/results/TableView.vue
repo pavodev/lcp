@@ -14,7 +14,7 @@
           </th>
         </tr>
         <tr>
-          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)">
+          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)" :class="col.class">
             {{ col.name }}
             <span v-if="index == sortBy">
               <FontAwesomeIcon :icon="['fas', 'arrow-up']" v-if="sortDirection == 0" />
@@ -33,8 +33,9 @@
             scope="row"
             v-for="(col, index) in attributes"
             :key="index"
+            :class="col.class"
           >
-            {{ item[index] }}
+            {{ item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
           </td>
         </tr>
       </tbody>
@@ -54,7 +55,8 @@
 .header-form {
   text-align: center;
 }
-.header-left {
+.header-left,
+.text-right {
   text-align: right;
 }
 table {
@@ -112,8 +114,9 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
   name: "ResultsTableView",
-  props: ["data", "attributes", "corpora", "resultsPerPage", "loading"],
+  props: ["data", "attributes", "corpora", "resultsPerPage", "loading", "type"],
   data() {
+    let { attributes, data } = this.improvedAttrbutesData()
     return {
       popoverY: 0,
       popoverX: 0,
@@ -122,15 +125,69 @@ export default {
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
-      sortBy: this.attributes.length - 1,
+      sortBy: attributes.length - 1,
       sortDirection: 1,
-      filters: this.attributes.map(() => ''),
+      filters: attributes.map(() => ''),
+      additionalColumData: [],
+      calcData: data,
+      calcAttributes: attributes,
     };
   },
   components: {
     PaginationComponent,
   },
   methods: {
+    improvedAttrbutesData() {
+      // Add relative frequency to analysis
+      let attributes = this.attributes
+      let data = this.data
+      if (this.type == "analysis" && this.attributes.at(-1).name == "frequency") {
+        attributes.push({
+          name: "relative frequency",
+          type: "aggregrate",
+          textSuffix: " %",
+        })
+        let sum = data.reduce((accumulator, row) => {
+          return accumulator + row.at(-1)
+        }, 0);
+        data = this.data.map(row => [
+          ...row,
+          (row.at(-1)/sum*100.).toFixed(3)
+        ])
+      }
+      else if (this.type == "collocation") {
+        attributes.push(...[{
+          name: "mi3",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "mi",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "lmi",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "tscore",
+          type: "aggregrate",
+          class: "text-right",
+        }, {
+          name: "zscore",
+          type: "aggregrate",
+          class: "text-right",
+        }])
+        data = this.data.map(row => [
+          ...row,
+          Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(3),
+          Math.log2(row[1]/row[2]).toFixed(3),
+          (row[1]*Math.log2(row[1]/row[2])).toFixed(3),
+          ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(3),
+          ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(3)
+        ])
+      }
+      return { attributes, data }
+    },
     updatePage(currentPage) {
       this.currentPage = currentPage;
       this.$emit("updatePage", this.currentPage);
@@ -169,20 +226,20 @@ export default {
     }
   },
   computed: {
-    headToken() {
-      let token = "-";
-      let headIndex = this.columnHeaders.indexOf("head");
-      let lemmaIndex = this.columnHeaders.indexOf("lemma");
-      if (headIndex) {
-        let tokenId = this.currentToken[headIndex];
-        if (tokenId) {
-          let startId = this.data[this.currentIndex][2];
-          let tokenIndexInList = tokenId - startId;
-          token = this.data[this.currentIndex][3][tokenIndexInList][lemmaIndex];
-        }
-      }
-      return token;
-    },
+    // headToken() {
+    //   let token = "-";
+    //   let headIndex = this.columnHeaders.indexOf("head");
+    //   let lemmaIndex = this.columnHeaders.indexOf("lemma");
+    //   if (headIndex) {
+    //     let tokenId = this.currentToken[headIndex];
+    //     if (tokenId) {
+    //       let startId = this.data[this.currentIndex][2];
+    //       let tokenIndexInList = tokenId - startId;
+    //       token = this.data[this.currentIndex][3][tokenIndexInList][lemmaIndex];
+    //     }
+    //   }
+    //   return token;
+    // },
     columnHeaders() {
       let partitions = this.corpora.corpus.partitions
         ? this.corpora.corpus.partitions.values
@@ -194,7 +251,7 @@ export default {
       return columns["prepared"]["columnHeaders"];
     },
     filteredData() {
-      let filtered = this.data.filter(row => {
+      let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
           if (this.filters[index] && !data.toString().toLowerCase().includes(this.filters[index].toLowerCase())){
@@ -203,7 +260,6 @@ export default {
         })
         return res
       })
-      // console.log("Sort by", this.sortBy, this.sortDirection)
       filtered.sort((a, b) => {
         let retval = 0
         if (a[this.sortBy] > b[this.sortBy]) {

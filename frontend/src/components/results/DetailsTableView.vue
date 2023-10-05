@@ -7,14 +7,14 @@
             <th>{{ header }}</th>
           </td>
         </tr>
-        <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`">
+        <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`" :class="rowClasses(tIndex)">
           <td v-for="(column, cIndex) in columnHeaders" :key="`td-${tIndex}-${cIndex}`">
             <span v-if="column == 'head'" v-html="headToken(token, tIndex)"> </span>
             <span
               v-else
-              :class="textClasses(column, tIndex)"
+              :class="textClasses(column)"
               v-html="token[cIndex]"
-            ></span>    
+            ></span>
           </td>
         </tr>
       </tbody>
@@ -69,21 +69,23 @@ export default {
       }
       return columns["prepared"]["columnHeaders"].filter( (column) => column!="spaceAfter" );
     },
-    textClasses(item, index) {
+    textClasses(item) {
       let classes = [];
       if (item.indexOf('pos') > -1 || item.indexOf('label') > -1) {
         // classes.push('badge rounded-pill')
         classes.push('badge')
         classes.push('bg-secondary')
       }
-      if (item.indexOf('form') > -1) {
-        let startId = this.sentences[0];
-        let tokenId = startId + index;
-        let group = this.data[1].findIndex( v=>v instanceof Array ? v.includes(tokenId) : v ==tokenId );
-        if (group >= 0) classes.push(`color-group-${group}`);  
-      }
       return classes
-    }
+    },
+    rowClasses(tIndex) {
+      let classes = [];
+      let startId = this.sentences[0];
+      let tokenId = startId + tIndex;
+      let group = this.data[1].findIndex(v => v instanceof Array ? v.includes(tokenId) : v == tokenId);
+      if (group >= 0) classes.push(`tr-color-group-${group}`);
+      return classes
+    },
   },
 };
 </script>
