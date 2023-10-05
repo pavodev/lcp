@@ -148,28 +148,35 @@ nav a.router-link-exact-active {
   box-shadow: none;
 }
 
-.color-group-0 {
+.color-group-0,
+.tr-color-group-0 td {
   background-color: #ffe119;
 }
-.color-group-1 {
+.color-group-1,
+.tr-color-group-1 td {
   background-color: #4363d8;
   color: #fff;
 }
-.color-group-2 {
+.color-group-2,
+.tr-color-group-2 td {
   background-color: #f58231;
 }
-.color-group-3 {
+.color-group-3,
+.tr-color-group-3 td {
   background-color: #dcbeff;
 }
-.color-group-4 {
+.color-group-4,
+.tr-color-group-4 td {
   background-color: #800000;
   color: #fff;
 }
-.color-group-5 {
+.color-group-5,
+.tr-color-group-5 td {
   background-color: #000075;
   color: #fff;
 }
-.color-group-6 {
+.color-group-6,
+.tr-color-group-6 td {
   background-color: #a9a9a9;
 }
 .nav-tabs {
