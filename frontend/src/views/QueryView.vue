@@ -489,8 +489,7 @@
               :id="`nav-results-${index}`"
               role="tabpanel"
               :aria-labelledby="`nav-results-${index}-tab`"
-              v-for="(resultSet, index) in WSDataResults.result['0']
-                .result_sets"
+              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
               :key="`result-tab-${index}`"
             >
               <span
@@ -554,6 +553,7 @@
                 :data="WSDataResults.result[index + 1]"
                 :attributes="resultSet.attributes"
                 :resultsPerPage="resultsPerPage"
+                :type="resultSet.type"
               />
             </div>
           </div>
