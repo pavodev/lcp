@@ -61,6 +61,7 @@
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
                 Logout
+                <small>({{ userData.user.displayName }})</small>
               </a>
               <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
