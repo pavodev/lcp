@@ -3,7 +3,7 @@
     <table class="table" v-if="data">
       <thead>
         <tr>
-          <th scope="col" v-for="(col, index) in attributes" :key="index">
+          <th scope="col" v-for="(col, index) in calcAttributes" :key="index">
             <input
               type="text"
               v-model="filters[index]"
@@ -14,7 +14,7 @@
           </th>
         </tr>
         <tr>
-          <th scope="col" v-for="(col, index) in attributes" :key="index" @click="sortChange(index)" :class="col.class">
+          <th scope="col" v-for="(col, index) in calcAttributes" :key="index" @click="sortChange(index)" :class="col.class">
             {{ col.name }}
             <span v-if="index == sortBy">
               <FontAwesomeIcon :icon="['fas', 'arrow-up']" v-if="sortDirection == 0" />
@@ -31,7 +31,7 @@
         >
           <td
             scope="row"
-            v-for="(col, index) in attributes"
+            v-for="(col, index) in calcAttributes"
             :key="index"
             :class="col.class"
           >
@@ -139,51 +139,80 @@ export default {
   methods: {
     improvedAttrbutesData() {
       // Add relative frequency to analysis
-      let attributes = this.attributes
-      let data = this.data
-      if (this.type == "analysis" && this.attributes.at(-1).name == "frequency") {
+      // let attributes = this.attributes
+      // let data = this.data
+      let attributes = JSON.parse(JSON.stringify(this.attributes));
+      let data = JSON.parse(JSON.stringify(this.data));
+      if (this.type == "analysis") {
+        attributes.at(-1)["valueType"] = "float"
+        attributes.at(-1)["class"] = "text-right"
         attributes.push({
           name: "relative frequency",
           type: "aggregrate",
           textSuffix: " %",
+          class: "text-right",
+          valueType: "float",
         })
         let sum = data.reduce((accumulator, row) => {
           return accumulator + row.at(-1)
         }, 0);
         data = this.data.map(row => [
           ...row,
-          (row.at(-1)/sum*100.).toFixed(3)
+          (row.at(-1)/sum*100.).toFixed(4)
         ])
       }
       else if (this.type == "collocation") {
+        attributes[1]["valueType"] = "float"
+        attributes[1]["class"] = "text-right"
+        attributes[2]["valueType"] = "float"
+        attributes[2]["class"] = "text-right"
         attributes.push(...[{
-          name: "mi3",
+          name: "O/E",
           type: "aggregrate",
           class: "text-right",
+          valueType: "float",
         }, {
-          name: "mi",
+          name: "MI",
           type: "aggregrate",
           class: "text-right",
+          valueType: "float",
         }, {
-          name: "lmi",
+          name: "MI³",
           type: "aggregrate",
           class: "text-right",
+          valueType: "float",
         }, {
-          name: "tscore",
+          name: "local-MI",
           type: "aggregrate",
           class: "text-right",
+          valueType: "float",
         }, {
-          name: "zscore",
+          name: "t-score",
           type: "aggregrate",
           class: "text-right",
+          valueType: "float",
+        }, {
+          name: "z-score",
+          type: "aggregrate",
+          class: "text-right",
+          valueType: "float",
+        }, {
+          name: "simple-ll",
+          type: "aggregrate",
+          class: "text-right",
+          valueType: "float",
         }])
+        // row[1] = O
+        // row[2] = E
         data = this.data.map(row => [
           ...row,
-          Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(3),
-          Math.log2(row[1]/row[2]).toFixed(3),
-          (row[1]*Math.log2(row[1]/row[2])).toFixed(3),
-          ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(3),
-          ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(3)
+          (row[1]/row[2]).toFixed(4),  // O/E
+          Math.log2(row[1]/row[2]).toFixed(4),  // MI
+          Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(4),  // MI³
+          (row[1]*Math.log2(row[1]/row[2])).toFixed(4),  // local-MI
+          ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(4),  // t-score
+          ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(4),  // z-score
+          (2*(row[1]*Math.log(row[1]/row[2]) - (row[1] - row[2]))).toFixed(4),
         ])
       }
       return { attributes, data }
@@ -226,20 +255,6 @@ export default {
     }
   },
   computed: {
-    // headToken() {
-    //   let token = "-";
-    //   let headIndex = this.columnHeaders.indexOf("head");
-    //   let lemmaIndex = this.columnHeaders.indexOf("lemma");
-    //   if (headIndex) {
-    //     let tokenId = this.currentToken[headIndex];
-    //     if (tokenId) {
-    //       let startId = this.data[this.currentIndex][2];
-    //       let tokenIndexInList = tokenId - startId;
-    //       token = this.data[this.currentIndex][3][tokenIndexInList][lemmaIndex];
-    //     }
-    //   }
-    //   return token;
-    // },
     columnHeaders() {
       let partitions = this.corpora.corpus.partitions
         ? this.corpora.corpus.partitions.values
@@ -260,12 +275,18 @@ export default {
         })
         return res
       })
+      let castFunction = (value) => value.toString()
+      if (this.sortBy && this.calcAttributes[this.sortBy] && this.calcAttributes[this.sortBy].valueType == "float"){
+        castFunction = (value) => parseFloat(value)
+      }
       filtered.sort((a, b) => {
         let retval = 0
-        if (a[this.sortBy] > b[this.sortBy]) {
+        let _a = castFunction(a[this.sortBy])
+        let _b = castFunction(b[this.sortBy])
+        if (_a > _b) {
           retval = this.sortDirection == 0 ? 1 : -1
         }
-        if (a[this.sortBy] < b[this.sortBy]) {
+        if (_a < _b) {
           retval = this.sortDirection == 0 ? -1 : 1
         }
         return retval
