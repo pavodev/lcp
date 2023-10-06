@@ -39,7 +39,7 @@ export default {
   },
   methods: {
     headToken(tokenData, tIndex) {
-      let token = "- ROOT -"
+      let token = ""
       let headIndex = this.columnHeaders.indexOf("head")
       let lemmaIndex = this.columnHeaders.indexOf("lemma")
       let startId = this.sentences[0]

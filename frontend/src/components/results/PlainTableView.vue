@@ -179,6 +179,10 @@
 .paggination {
   float: right;
 }
+.paggination:after {
+  clear: both;
+  content: "";
+}
 .header-form {
   text-align: center;
 }
