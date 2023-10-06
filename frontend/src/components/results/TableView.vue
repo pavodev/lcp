@@ -268,6 +268,9 @@ export default {
       return columns["prepared"]["columnHeaders"];
     },
     filteredData() {
+      let start = this.resultsPerPage * (this.currentPage - 1);
+      let end = start + this.resultsPerPage;
+
       let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
@@ -293,7 +296,8 @@ export default {
         }
         return retval
       })
-      return filtered
+
+      return filtered.filter((row, rowIndex) => rowIndex >= start && rowIndex < end)
     },
   },
 };
