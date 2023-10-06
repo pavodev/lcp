@@ -35,13 +35,11 @@ Insert a new line at the top of the file: `/* eslint-disable */`
 
 If you get an error message complaining about `strict`, you need to remove it from the `options` defined in the js file (look for `"strict"`)
 
-## Replace the files in BE and FE
-
-TO DO
+Replace `lcpvian/frontend/src/dqd_parser.js` with the new file
 
 ## Run the whole pipeline at once
 
-TO DO
+Run `./update.sh`
 
 ## Convert a DQD query to its JSON representation
 
