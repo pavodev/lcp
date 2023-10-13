@@ -300,5 +300,10 @@ export default {
       return filtered.filter((row, rowIndex) => rowIndex >= start && rowIndex < end)
     },
   },
+  watch: {
+    data(newValue) {
+      this.calcData = newValue;
+    }
+  }
 };
 </script>
