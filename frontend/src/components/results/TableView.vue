@@ -274,7 +274,7 @@ export default {
       let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
-          if (this.filters[index] && !data.toString().toLowerCase().includes(this.filters[index].toLowerCase())){
+          if (this.filters[index] && (!data || !data.toString().toLowerCase().includes(this.filters[index].toLowerCase()))){
             res = false
           }
         })
