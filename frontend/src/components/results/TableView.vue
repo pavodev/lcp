@@ -115,7 +115,8 @@ export default {
   name: "ResultsTableView",
   props: ["data", "attributes", "corpora", "resultsPerPage", "loading", "type"],
   data() {
-    let { attributes, data } = this.improvedAttrbutesData()
+    let attributes = this.getImpovedAttibutes(this.attributes)
+    let data = this.calculateAdditionalData(this.data)
     return {
       popoverY: 0,
       popoverX: 0,
@@ -136,13 +137,39 @@ export default {
     PaginationComponent,
   },
   methods: {
-    improvedAttrbutesData() {
-      // Add relative frequency to analysis
-      let attributes = this.attributes
-      let data = this.data
+    calculateAdditionalData(data) {
       if (this.data && this.attributes) {
-        attributes = JSON.parse(JSON.stringify(this.attributes));
         data = JSON.parse(JSON.stringify(this.data));
+        if (this.type == "analysis") {
+          let sum = data.reduce((accumulator, row) => {
+            return accumulator + row.at(-1)
+          }, 0);
+          data = this.data.map(row => [
+            ...row,
+            (row.at(-1)/sum*100.).toFixed(4)
+          ])
+        }
+        else if (this.type == "collocation") {
+          // row[1] = O
+          // row[2] = E
+          data = this.data.map(row => [
+            ...row,
+            (row[1]/row[2]).toFixed(4),  // O/E
+            Math.log2(row[1]/row[2]).toFixed(4),  // MI
+            Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(4),  // MI³
+            (row[1]*Math.log2(row[1]/row[2])).toFixed(4),  // local-MI
+            ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(4),  // t-score
+            ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(4),  // z-score
+            (2*(row[1]*Math.log(row[1]/row[2]) - (row[1] - row[2]))).toFixed(4),
+          ]);
+        }
+      }
+      return data
+    },
+    getImpovedAttibutes(attributes) {
+      // Add relative frequency to analysis
+      if (this.attributes) {
+        attributes = JSON.parse(JSON.stringify(this.attributes));
         if (this.type == "analysis") {
           attributes.at(-1)["valueType"] = "float"
           attributes.at(-1)["class"] = "text-right"
@@ -153,13 +180,6 @@ export default {
             class: "text-right",
             valueType: "float",
           })
-          let sum = data.reduce((accumulator, row) => {
-            return accumulator + row.at(-1)
-          }, 0);
-          data = this.data.map(row => [
-            ...row,
-            (row.at(-1)/sum*100.).toFixed(4)
-          ])
         }
         else if (this.type == "collocation") {
           attributes[1]["valueType"] = "float"
@@ -202,23 +222,9 @@ export default {
             class: "text-right",
             valueType: "float",
           }]);
-          this.calcAttributes = attributes;
-          // row[1] = O
-          // row[2] = E
-          data = this.data.map(row => [
-            ...row,
-            (row[1]/row[2]).toFixed(4),  // O/E
-            Math.log2(row[1]/row[2]).toFixed(4),  // MI
-            Math.log2(Math.pow(row[1], 3)/row[2]).toFixed(4),  // MI³
-            (row[1]*Math.log2(row[1]/row[2])).toFixed(4),  // local-MI
-            ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(4),  // t-score
-            ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(4),  // z-score
-            (2*(row[1]*Math.log(row[1]/row[2]) - (row[1] - row[2]))).toFixed(4),
-          ]);
         }
-        this.filters = attributes.map(() => '');
       }
-      return { attributes, data }
+      return attributes
     },
     updatePage(currentPage) {
       this.currentPage = currentPage;
@@ -324,11 +330,14 @@ export default {
   },
   watch: {
     data(newValue) {
-      this.calcData = newValue;
+      this.calcData = this.calculateAdditionalData(newValue)
     },
     attributes(newValue) {
-      this.calcAttributes = newValue;
-    }
+      let attributes = this.getImpovedAttibutes(newValue)
+      this.calcAttributes = attributes
+      this.sortBy = attributes.length - 1
+      this.filters = attributes.map(() => '')
+    },
   }
 };
 </script>
