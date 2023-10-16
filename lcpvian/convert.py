@@ -37,7 +37,7 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import QueryMeta, RawSent, ResultSents, Results, VianKWIC
+from .typed import Batch, QueryMeta, RawSent, ResultSents, Results, VianKWIC
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -57,6 +57,9 @@ def _aggregate_results(
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
+    # current: Batch | None = None,
+    current: Any,
+    done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
     """
     Combine non-kwic results for storing and for sending to frontend
@@ -66,6 +69,9 @@ def _aggregate_results(
     rs = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     freqs = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "analysis"])
+    colls = set(
+        [i for i, r in enumerate(rs, start=1) if r.get("type") == "collocation"]
+    )
     counts: defaultdict[int, int] = defaultdict(int)
 
     for line in result:
@@ -79,10 +85,19 @@ def _aggregate_results(
             continue
         if key not in existing:
             existing[key] = []
-        if key not in freqs:
-            current = cast(list, existing[key])
-            current.append(rest)
+        if key in colls:
+            text, total_this_batch, e = rest
+            preexist = sum(i[1] for i in cast(list, existing[key]) if i[0] == text)
+            preexist_e = next(
+                (i[-1] for i in cast(list, existing[key]) if i[0] == text), 0
+            )
+            combined = preexist + total_this_batch
+            counts[key] = combined
+            combined_e = _combine_e(e, preexist_e, current, done)
+            fixed = [text, combined, combined_e]
+            existing[key] = [*[i for i in cast(list, existing[key]) if i[0] != text], fixed]
             continue
+        # frequency table:
         body = cast(list, rest[:-1])
         total_this_batch = rest[-1]
         preexist = sum(i[-1] for i in cast(list, existing[key]) if i[:-1] == body)
@@ -97,6 +112,25 @@ def _aggregate_results(
     show_total = bool(kwics) or (not kwics and len(freqs) == 1)
 
     return existing, results_to_send, n_results, not bool(kwics), show_total
+
+
+def _combine_e(
+    this_time_e: int | float,
+    e_so_far: int | float,
+    current: Batch | None,
+    done: list[Batch] | None,
+):
+    """
+    Get the combined E value for collocation
+    """
+    assert current is not None and done is not None
+    if not done:
+        return this_time_e
+    current_size: int = current[-1]
+    done_size = sum(d[-1] for d in done if d != current)
+    prop = this_time_e * current_size
+    done_prop = e_so_far * done_size
+    return (prop + done_prop) / (current_size + done_size)
 
 
 def _format_kwics(
@@ -184,6 +218,9 @@ def _format_kwics(
 
 
 def _vian_inside_lcp(rest: Sequence) -> bool:
+    """
+    Detect whether this is a vian corpus accessed in lcp app
+    """
     for i in rest[1:]:
         if not isinstance(i, list):
             continue
@@ -250,9 +287,7 @@ def _get_all_sents(
     return out
 
 
-def _format_vian(
-    rest: Sequence,
-) -> VianKWIC:
+def _format_vian(rest: Sequence) -> VianKWIC:
     """
     Little helper to build VIAN kwic sentence data, which has time,
     document and gesture information added to the KWIC data
@@ -301,21 +336,29 @@ def _make_filters(
     for idx, filters in post.items():
         fixed: list[tuple[str, str, str | int | float]] = []
         for filt in filters:
-            name, comp = cast(tuple[str, str], list(filt.items())[0])
+            name, comp = cast(tuple[str, dict[str,Any]], list(filt.items())[0])
             if name != "comparison":
                 raise ValueError("expected comparion")
 
-            bits: Sequence[str | int | float] = comp.split()
-            last_bit = cast(str, bits[-1])
-            body = bits[:-1]
-            assert isinstance(body, list)
-            if last_bit.isnumeric():
-                body.append(int(last_bit))
-            elif last_bit.replace(".", "").isnumeric():
-                body.append(float(last_bit))
-            else:
-                body = bits
-            made = cast(tuple[str, str, int | str | float], tuple(body))
+            # bits: Sequence[str | int | float] = comp.split()
+            # last_bit = cast(str, bits[-1])
+            # body = bits[:-1]
+            # assert isinstance(body, list)
+            # if last_bit.isnumeric():
+            #     body.append(int(last_bit))
+            # elif last_bit.replace(".", "").isnumeric():
+            #     body.append(float(last_bit))
+            # else:
+            #     body = bits
+            # made = cast(tuple[str, str, int | str | float], tuple(body))
+            entity = comp['entity']
+            operator = comp['operator']
+            value = next(c[1] for c in comp.items() if c[0] not in ('entity','operator'))
+            if value.isnumeric():
+                value = int(value)
+            elif value.replace(".", "").isnumeric():
+                value = float(value)
+            made = cast(tuple[str, str, int | str | float], (entity,operator,value))
             fixed.append(made)
         out[idx] = fixed
     return out

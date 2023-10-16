@@ -1,5 +1,23 @@
 #!/usr/bin/env python3
 
+"""
+custom rq worker for lcpvian: initialise db connection pools
+and store them on the custom job class.
+
+This allows us to submit queries to the db pool without
+restarting/recreating the pools each time.
+
+This worker should be started with `python -m lcpvian worker`.
+
+If app is compiled to C, this will use the C code. Otherwise
+it will use straight Python.
+
+`python lcpvian/worker.py` forces the use of the Python version.
+
+We can start as many workers as we want, depending on available
+resources on the deployment server.
+"""
+
 from __future__ import annotations
 
 import asyncio
@@ -26,7 +44,6 @@ load_dotenv(override=True)
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
 
 if SENTRY_DSN:
-
     import sentry_sdk
     from sentry_sdk.integrations.rq import RqIntegration
     from sentry_sdk.integrations.logging import LoggingIntegration
@@ -127,14 +144,12 @@ class MyWorker(Worker):
 
 
 async def work() -> None:
-
     with Connection():
         w = MyWorker(["internal", "query", "background"])
         w.work()
 
 
 def start_worker() -> None:
-
     try:
         if sys.version_info >= (3, 11):
             with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:

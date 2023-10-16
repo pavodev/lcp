@@ -10,11 +10,16 @@
         <div class="col-4">
           <div class="mb-3 mt-3">
             <label class="form-label">Corpora</label>
-            <div v-if="selectedCorpora && selectedCorpora.corpus"
+            <div
+              v-if="selectedCorpora && selectedCorpora.corpus"
               class="details-button icon-3 tooltips"
               @click.stop="switchGraph()"
               title="Show/hide corpus structure"
-              :style="{position: 'absolute', lineHeight: '40px', transform: 'translate(calc(-100% - 0.5em))'}"
+              :style="{
+                position: 'absolute',
+                lineHeight: '40px',
+                transform: 'translate(calc(-100% - 0.5em))',
+              }"
             >
               <FontAwesomeIcon :icon="['fas', 'circle-info']" />
             </div>
@@ -98,17 +103,26 @@
               class="btn btn-primary me-1"
               :disabled="
                 (selectedCorpora && selectedCorpora.length == 0) ||
-                loading ||
+                loading===true ||
                 (isQueryValidData != null && isQueryValidData.valid == false) ||
                 !query ||
                 !selectedLanguages
               "
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Submit
+              {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
             </button>
             <button
-              v-if="loading"
+              type="button"
+              v-if="queryStatus == 'satisfied' && !loading"
+              @click="submitFullSearch"
+              class="btn btn-primary me-1"
+            >
+              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+              Search whole corpus
+            </button>
+            <button
+              v-else-if="loading"
               type="button"
               @click="stop"
               :disabled="loading == false"
@@ -151,16 +165,13 @@
             <div></div>
           </div>
           <div class="corpus-graph" v-if="corpusGraph">
-            <FontAwesomeIcon 
-              :icon="['fas', 'expand']" 
+            <FontAwesomeIcon
+              :icon="['fas', 'expand']"
               @click="openGraphInModal"
               data-bs-toggle="modal"
               data-bs-target="#corpusDetailsModal"
             />
-            <CorpusGraphView
-              :corpus="corpusGraph"
-              @graphReady="resizeGraph"
-            />
+            <CorpusGraphView :corpus="corpusGraph" @graphReady="resizeGraph" />
           </div>
         </div>
         <div class="col-8">
@@ -218,13 +229,21 @@
               >
                 <EditorView
                   :query="queryDQD"
+                  :defaultQuery="defaultQueryDQD"
                   :corpora="selectedCorpora"
+                  :invalidError="
+                    isQueryValidData && isQueryValidData.valid != true
+                      ? isQueryValidData.error
+                      : null
+                  "
                   @submit="submit"
                   @update="updateQueryDQD"
                 />
                 <p
                   class="error-text text-danger mt-3"
-                  v-if="isQueryValidData && isQueryValidData.valid != true"
+                  v-if="
+                    isQueryValidData && isQueryValidData.valid != true && debug
+                  "
                 >
                   {{ isQueryValidData.error }}
                 </p>
@@ -285,89 +304,127 @@
         </div> -->
         <div class="col">
           <hr class="mt-5 mb-5" />
-          <h6 class="mb-3">Query result</h6>
-          <div class="progress mb-2">
-            <div
-              class="progress-bar"
-              :class="
-                loading ? 'progress-bar-striped progress-bar-animated' : ''
-              "
-              role="progressbar"
-              aria-label="Basic example"
-              :style="`width: ${percentageDone}%`"
-              :aria-valuenow="percentageDone"
-              aria-valuemin="0"
-              aria-valuemax="100"
-            >
-              {{ percentageDone.toFixed(2) }}%
+          <span v-if="debug">
+            <h6 class="mb-3">Query result</h6>
+            <div class="progress mb-2">
+              <div
+                class="progress-bar"
+                :class="
+                  loading ? 'progress-bar-striped progress-bar-animated' : ''
+                "
+                role="progressbar"
+                aria-label="Basic example"
+                :style="`width: ${percentageDone}%`"
+                :aria-valuenow="percentageDone"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ percentageDone.toFixed(2) }}%
+              </div>
             </div>
-          </div>
-          Total progress
-          <div class="progress mb-2">
-            <div
-              class="progress-bar"
-              :class="
-                loading ? 'progress-bar-striped progress-bar-animated' : ''
-              "
-              role="progressbar"
-              aria-label="Basic example"
-              :style="`width: ${percentageTotalDone}%`"
-              :aria-valuenow="percentageTotalDone"
-              aria-valuemin="0"
-              aria-valuemax="100"
-            >
-              {{ percentageTotalDone.toFixed(2) }}%
+            Total progress
+            <div class="progress mb-2">
+              <div
+                class="progress-bar"
+                :class="
+                  loading ? 'progress-bar-striped progress-bar-animated' : ''
+                "
+                role="progressbar"
+                aria-label="Basic example"
+                :style="`width: ${percentageTotalDone}%`"
+                :aria-valuenow="percentageTotalDone"
+                aria-valuemin="0"
+                aria-valuemax="100"
+              >
+                {{ percentageTotalDone.toFixed(2) }}%
+              </div>
             </div>
-          </div>
-          <div class="row mb-4">
-            <div class="col">
-              <p class="mb-1">
-                Number of results:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.total_results_so_far"
-                ></span>
-              </p>
+            <div class="row mb-4">
+              <div class="col">
+                <p class="mb-1">
+                  Number of results:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.total_results_so_far"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Projected results:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.projected_results"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Batch done:
+                  <span
+                    class="text-bold"
+                    v-html="WSDataResults.batches_done"
+                  ></span>
+                </p>
+              </div>
+              <div class="col">
+                <p class="mb-1">
+                  Status:
+                  <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
+                  <span class="text-bold" v-html="queryStatus"></span>
+                </p>
+              </div>
             </div>
-            <div class="col">
-              <p class="mb-1">
-                Projected results:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.projected_results"
-                ></span>
-              </p>
-            </div>
-            <div class="col">
-              <p class="mb-1">
-                Batch done:
-                <span
-                  class="text-bold"
-                  v-html="WSDataResults.batches_done"
-                ></span>
-              </p>
-            </div>
-            <div class="col">
-              <p class="mb-1">
-                Status:
-                <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
-                <span class="text-bold" v-html="queryStatus"></span>
-              </p>
-            </div>
-          </div>
+          </span>
+        </div>
+      </div>
+    </div>
+    <div
+      v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
+      class="tooltip bs-tooltip-auto fade show"
+      role="tooltip"
+      style="
+        position: absolute;
+        left: 50vw;
+        transform: translate(-50%, -100%);
+        margin: 0px;
+        z-index: 10;
+      "
+      data-popper-placement="top"
+    >
+      <div class="tooltip-arrow" style="position: absolute; left: 50%"></div>
+      <div class="tooltip-inner">
+        <div>
+          The first pages of results have been fetched. More results will be
+          fetched if you move to the next page or if you hit Search whole
+          corpus.
+        </div>
+        <div style="margin-top: 0.5em">
+          <input type="checkbox" id="dontShowResultsNotif" />
+          <label for="dontShowResultsNotif">Don't show this again</label>
           <button
-            type="button"
-            v-if="
-              queryStatus == 'satisfied' && !loading
+            @click="dismissResultsNotification"
+            style="
+              border: solid 1px white;
+              border-radius: 0.5em;
+              margin-left: 0.25em;
+              color: white;
+              background-color: transparent;
             "
-            @click="submitFullSearch"
-            class="btn btn-primary me-1 mb-5"
           >
-            <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-            Search whole corpus
+            OK
           </button>
         </div>
       </div>
+    </div>
+
+    <div
+      v-if="
+        percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)
+      "
+      style="text-align: center"
+    >
+      No results found!
     </div>
     <div class="container-fluid">
       <div class="row">
@@ -432,8 +489,7 @@
               :id="`nav-results-${index}`"
               role="tabpanel"
               :aria-labelledby="`nav-results-${index}-tab`"
-              v-for="(resultSet, index) in WSDataResults.result['0']
-                .result_sets"
+              v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
               :key="`result-tab-${index}`"
             >
               <span
@@ -449,14 +505,16 @@
                     @click.stop.prevent="plainType = 'table'"
                     class="btn"
                     :class="
-                      plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1]) ? 'active btn-primary' : 'btn-light'
+                      plainType == 'table' || resultContainsSet(resultSet)
+                        ? 'active btn-primary'
+                        : 'btn-light'
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
                     Plain
                   </a>
                   <a
-                    v-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                    v-if="resultContainsSet(resultSet) == false"
                     href="#"
                     @click.stop.prevent="plainType = 'kwic'"
                     class="btn"
@@ -470,7 +528,7 @@
                   </a>
                 </div>
                 <ResultsPlainTableView
-                  v-if="plainType == 'table' || resultContainsSet(WSDataSentences.result[index + 1])"
+                  v-if="plainType == 'table' || resultContainsSet(resultSet)"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -480,7 +538,7 @@
                   :loading="loading"
                 />
                 <ResultsKWICView
-                  v-else-if="resultContainsSet(WSDataSentences.result[index + 1]) == false"
+                  v-else-if="resultContainsSet(resultSet) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
                   :attributes="resultSet.attributes"
@@ -495,6 +553,7 @@
                 :data="WSDataResults.result[index + 1]"
                 :attributes="resultSet.attributes"
                 :resultsPerPage="resultsPerPage"
+                :type="resultSet.type"
               />
             </div>
           </div>
@@ -589,10 +648,38 @@
         </div>
       </div>
     </div>
+    <div
+      class="lcp-progress-bar"
+      title="Refresh progress bar"
+      v-if="showLoadingBar"
+    >
+      <div
+        class="lcp-progress-bar-driver"
+        :style="`width: ${navPercentage}%;`"
+      ></div>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.lcp-progress-bar {
+  position: fixed;
+  width: 100%;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  z-index: 2000;
+  opacity: 1;
+  transition: opacity 3s linear;
+}
+.lcp-progress-bar-driver {
+  height: 1px;
+  width: 0%;
+  background-color: #dc6027;
+  transition: 0.2s;
+  box-shadow: 0px 0px 3px 1px #dc6027ad;
+}
 .container {
   text-align: left;
 }
@@ -639,98 +726,15 @@ import ResultsKWICView from "@/components/results/KWICView.vue";
 import ResultsPlainTableView from "@/components/results/PlainTableView.vue";
 import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 export default {
   name: "QueryTestView",
   data() {
     return {
       query: "",
-      queryDQD: `Turn d
-    IsPresident = no
-    PoliticalGroup != NI
-
-Segment@d s
-
-sequence seq
-    Token@s t1
-        upos = DET
-    Token@s t2
-        upos = ADJ
-    Token@s t3
-        lemma = ^Fr.*
-        lemma.length > 5
-        upos = NOUN
-
-set tdeps
-    Token@s tx
-        DepRel
-            head = t3
-            dep = tx
-
-Token@s thead
-    upos = VERB
-    DepRel
-        head = thead
-        dep = t3
-
-
-myKWIC1 => plain
-    context
-        s
-    entities
-        t1
-        #t2
-        t3
-
-myKWIC2 => plain
-    context
-        s
-    entities
-        t1
-        t2
-        t3
-
-myStat1 => analysis
-    attributes
-        t1.lemma
-        t2.lemma
-        t3.lemma
-    functions
-        frequency
-    filter
-        frequency > 10
-
-myStat2 => analysis
-    attributes
-        t3.lemma
-        d.OriginalLanguage
-    functions
-        frequency
-    filter
-        frequency > 10
-
-myColl1 => collocation
-    center
-        t3
-    window
-        -5..+5
-    attribute
-        lemma
-
-myColl2 => collocation
-    space
-        tdeps
-    attribute
-        lemma
-    comment
-        PoS collocations of all dependends
-
-myColl3 => collocation
-    space
-        thead
-    attribute
-        lemma
-`,
+      queryDQD: "",
+      defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
       selectedCorpora: [],
@@ -746,6 +750,7 @@ myColl3 => collocation
       simultaneousMode: false,
       percentageDone: 0,
       percentageTotalDone: 0,
+      percentageWordsDone: 0,
       loading: false,
       stats: null,
       queryTest: "const noop = () => {}",
@@ -757,7 +762,9 @@ myColl3 => collocation
       queryStatus: null,
       corpusGraph: null,
       corpusModal: null,
-      showGraph: false
+      showGraph: false,
+      showResultsNotification: false,
+      showLoadingBar: false,
     };
   },
   components: {
@@ -766,8 +773,8 @@ myColl3 => collocation
     ResultsPlainTableView,
     ResultsTableView,
     EditorView,
-    CorpusGraphView
-},
+    CorpusGraphView,
+  },
   watch: {
     corpora: {
       handler() {
@@ -781,6 +788,8 @@ myColl3 => collocation
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
+            this.defaultQueryDQD = corpus[0].sample_query || "";
+            this.queryDQD = this.defaultQueryDQD;
           }
           this.preselectedCorporaId = null;
           this.validate();
@@ -806,15 +815,17 @@ myColl3 => collocation
         this.corpusGraph = null;
         updateGraph = true;
       }
-      this.validate();
+      // this.validate();
       if (this.selectedCorpora) {
+        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
         history.pushState(
           {},
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
-        if (updateGraph) // make sure to delay the re-setting of corpusGraph
-          setTimeout(()=>this.corpusGraph = this.selectedCorpora.corpus, 1);
+        if (updateGraph)
+          // make sure to delay the re-setting of corpusGraph
+          setTimeout(() => (this.corpusGraph = this.selectedCorpora.corpus), 1);
       } else {
         history.pushState({}, null, `/query/`);
       }
@@ -829,6 +840,9 @@ myColl3 => collocation
       if (this.WSDataResults) {
         if (this.WSDataResults.percentage_done) {
           this.percentageDone = this.WSDataResults.percentage_done;
+        }
+        if (this.WSDataResults.percentage_words_done) {
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done;
         }
         if (
           this.WSDataResults.total_results_so_far &&
@@ -862,11 +876,25 @@ myColl3 => collocation
         this.validate();
       }
     },
+    loading() {
+      if (this.loading) {
+        this.showLoadingBar = true;
+      } else {
+        setTimeout(() => {
+          this.showLoadingBar = false;
+        }, 1500);
+      }
+    },
   },
   methods: {
-    resultContainsSet(result) {
-      return result.length>0 && result[0] instanceof Array && result[0].length > 1 && result[0][1] instanceof Array &&
-              (result[0][1].find( r => r instanceof Array ) !== undefined);
+    resultContainsSet(resultSet) {
+      if (!(resultSet.attributes instanceof Array)) return false;
+      let entities = resultSet.attributes.find((v) => v.name == "entities");
+      if (!entities) return false;
+      return Boolean(
+        entities.data instanceof Array &&
+          entities.data.find((v) => ["set", "group"].includes(v.type))
+      );
     },
     updateLoading(status) {
       this.queryStatus = status;
@@ -882,16 +910,25 @@ myColl3 => collocation
     },
     updatePage(currentPage) {
       let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      console.log("PageUpdate", newNResults, this.nResults, this.WSDataSentences)
-      if (newNResults > this.nResults && (
-        !this.WSDataSentences || (this.WSDataSentences && this.WSDataSentences.more_data_available)
-      )) {
-        console.log("Submit")
+      console.log(
+        "PageUpdate",
+        newNResults,
+        this.nResults,
+        this.WSDataSentences
+      );
+      if (
+        newNResults > this.nResults &&
+        (!this.WSDataSentences ||
+          (this.WSDataSentences && this.WSDataSentences.more_data_available))
+      ) {
+        console.log("Submit");
         this.nResults = newNResults;
         this.submit(null, true);
       }
     },
     updateQueryDQD(queryDQD) {
+      if (this.loading)
+        this.loading = "resubmit";
       this.queryDQD = queryDQD;
       this.validate();
     },
@@ -1002,7 +1039,7 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "query_result") {
           // console.log("query_result", data);
-          this.updateLoading(data.status)
+          this.updateLoading(data.status);
           if (
             this.failedStatus &&
             data.result.length < this.WSDataResults.n_results
@@ -1019,7 +1056,7 @@ myColl3 => collocation
           return;
         } else if (data["action"] === "sentences") {
           // console.log("sentences", data);
-          this.updateLoading(data.status)
+          this.updateLoading(data.status);
           if (
             this.WSDataSentences &&
             this.WSDataSentences.first_job == data.first_job &&
@@ -1060,6 +1097,7 @@ myColl3 => collocation
             }
           }
           this.percentageDone = data.percentage_done;
+          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
@@ -1118,8 +1156,7 @@ myColl3 => collocation
     switchGraph() {
       if (!this.corpusGraph && this.selectedCorpora)
         this.corpusGraph = this.selectedCorpora.corpus;
-      else
-        this.corpusGraph = null;
+      else this.corpusGraph = null;
     },
     openGraphInModal() {
       if (!this.corpusGraph) return;
@@ -1132,16 +1169,15 @@ myColl3 => collocation
       });
       this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
         this.showGraph = false;
-        if (restoreSmallGraphWith)
-          this.corpusGraph = restoreSmallGraphWith;
+        if (restoreSmallGraphWith) this.corpusGraph = restoreSmallGraphWith;
         restoreSmallGraphWith = null;
       });
     },
     resizeGraph(container) {
       let svg = container.querySelector("svg");
-      if (svg===null) return;
+      if (svg === null) return;
       let g = svg.querySelector("g");
-      if (g===null) return;
+      if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
     submitFullSearch() {
@@ -1153,6 +1189,8 @@ myColl3 => collocation
       cleanResults = true,
       fullSearch = false
     ) {
+      if (!localStorage.getItem("dontShowResultsNotif"))
+        this.showResultsNotification = true;
       if (resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
@@ -1186,6 +1224,7 @@ myColl3 => collocation
       if (retval.status == "started") {
         this.loading = true;
         this.percentageDone = 0.001;
+        this.percentageWordsDone = 0;
       }
     },
     resume() {
@@ -1235,10 +1274,18 @@ myColl3 => collocation
       };
       useCorpusStore().fetchQueries(data);
     },
+    dismissResultsNotification() {
+      this.showResultsNotification = false;
+      const dontShowResultsNotif = document.querySelector(
+        "#dontShowResultsNotif"
+      );
+      if (dontShowResultsNotif && dontShowResultsNotif.checked)
+        localStorage.setItem("dontShowResultsNotif", true);
+    }
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useUserStore, ["userData", "roomId", "debug"]),
     ...mapState(useWsStore, ["messages"]),
     availableLanguages() {
       let retval = [];
@@ -1273,6 +1320,17 @@ myColl3 => collocation
           })
         : [];
     },
+    navPercentage() {
+      if (this.loading)
+        return Math.max(this.percentageDone, this.percentageWordsDone);
+      else return this.percentageDone;
+    },
+  },
+  mounted() {
+    setTooltips();
+  },
+  beforeUnmount() {
+    removeTooltips();
   },
 };
 </script>

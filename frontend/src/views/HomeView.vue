@@ -340,8 +340,9 @@ import CorpusGraphView from "@/components/CorpusGraphView.vue";
 import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
+import { setTooltips, removeTooltips } from "@/tooltips";
 
-import { Tooltip } from "bootstrap";
+// import { Tooltip } from "bootstrap";
 
 export default {
   name: "HomeView",
@@ -352,7 +353,7 @@ export default {
       allowProjectModalSave: false,
       modalProjectData: null,
       appName: config.appName,
-      tooltips: [],
+      // tooltips: [],
       corporaFilter: "",
       filterError: null
     };
@@ -386,6 +387,17 @@ export default {
           this.filterError = null;
         }
       }
+
+      function compare(a, b) {
+        if (a.meta.name < b.meta.name){
+          return -1;
+        }
+        if (a.meta.name > b.meta.name){
+          return 1;
+        }
+        return 0;
+      }
+      corpora = corpora.sort(compare)
       return corpora;
     },
     openCorpus(corpus) {
@@ -439,22 +451,22 @@ export default {
         });
       }
     },
-    setTooltips() {
-      this.removeTooltips();
-      const tooltipTriggerList = Array.from(
-        document.querySelectorAll(".tooltips")
-      );
-      tooltipTriggerList.forEach((tooltipTriggerEl) => {
-        let tooltipInstance = new Tooltip(tooltipTriggerEl);
-        this.tooltips.push(tooltipInstance);
-      });
-    },
-    removeTooltips() {
-      this.tooltips.forEach((tooltipInstance) => {
-        tooltipInstance.dispose();
-      });
-      this.tooltips = [];
-    },
+    // setTooltips() {
+    //   this.removeTooltips();tooltip
+    //   const tooltipTriggerList = Array.from(
+    //     document.querySelectorAll(".tooltips")
+    //   );
+    //   tooltipTriggerList.forEach((tooltipTriggerEl) => {
+    //     let tooltipInstance = new Tooltip(tooltipTriggerEl);
+    //     this.tooltips.push(tooltipInstance);
+    //   });
+    // },
+    // removeTooltips() {
+    //   this.tooltips.forEach((tooltipInstance) => {
+    //     tooltipInstance.dispose();
+    //   });
+    //   this.tooltips = [];
+    // },
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -492,13 +504,16 @@ export default {
     this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
       this.showGraph = false;
     });
-    this.setTooltips();
+    // this.setTooltips();
+    setTooltips();
   },
   updated() {
-    this.setTooltips();
+    // this.setTooltips();
+    setTooltips();
   },
   beforeUnmount() {
-    this.removeTooltips();
+    // this.removeTooltips();
+    removeTooltips();
   },
 };
 </script>

@@ -63,6 +63,7 @@ MainCorpus: TypeAlias = tuple[
     dict[str, int] | None,  # token counts -- todo: remove none when tangram fixed
     dict[str, JSON] | None,  # mapping -- todo: remove none when tangram fixed
     bool,
+    str,
 ]
 
 # what Importer.run_script can return
