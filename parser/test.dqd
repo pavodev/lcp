@@ -1,0 +1,44 @@
+Segment s
+
+sequence seq 1..2
+    Token@s e
+        OR
+            lemma = "every"
+            lemma = "each"
+    Token@s n
+        upos = "NOUN"
+        DepRel
+            head = v
+            dep = n
+            label = 'subj'
+
+Token@s v
+    upos = "VERB"
+    
+Token@s o
+    upos = "NOUN"
+    DepRel
+        head = v
+        dep = o
+        label = 'obj'
+
+Token@s df
+    lemma = "different"
+    upos = "ADJ"
+    DepRel
+        head = o
+        dep = df
+
+results => plain
+    context
+        s
+    entities
+        seq
+        df
+
+results2 => plain
+    context
+        s2
+    entities
+        seq2
+        df2

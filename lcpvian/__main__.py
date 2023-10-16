@@ -35,7 +35,7 @@ elif command == "dqd":
 elif command == "ddl":
     print("Creating DDL...")
 
-    main()
+    main(sys.argv[-1])
 
 elif command == "corpora":
     types = {"lcp", "vian", "all"}
@@ -44,7 +44,6 @@ elif command == "corpora":
     print(json.dumps(res, indent=4))
 
 elif command == "query":
-
     corpus = next((i for i in sys.argv if i.isnumeric()), "1")
     if os.path.isfile(sys.argv[-1]):
         is_json = sys.argv[-1].endswith(".json")

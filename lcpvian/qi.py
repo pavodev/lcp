@@ -132,9 +132,9 @@ class QueryIteration:
             except json.JSONDecodeError:
                 json_query = convert(self.query)
                 self.dqd = self.query
-
+        
         res = cast(list[dict[str, dict[str, Any]]], json_query.get("results", []))
-        has_kwic = any("plain" in r for r in res)
+        has_kwic = any("resultsPlain" in r for r in res)
 
         if not has_kwic:
             self.sentences = False
@@ -318,7 +318,7 @@ class QueryIteration:
             self.first_job = job.id
         return job, do_sents
 
-    def submit_sents(self, query_started) -> list[str]:
+    def submit_sents(self, query_started: bool | None) -> list[str]:
         """
         Helper to submit a sentences job to the Query Service
         """

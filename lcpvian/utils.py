@@ -475,6 +475,7 @@ def _row_to_value(
         token_counts,
         mapping,
         enabled,
+        sample_query
     ) = tup
     ver = str(current_version)
     corpus_template = cast(CorpusTemplate, template)
@@ -510,6 +511,7 @@ def _row_to_value(
         "token": fc["token"],
         "document": fc["document"],
         "column_names": cols,
+        "sample_query": sample_query,
     }
 
     together = {**corpus_template, **rest}

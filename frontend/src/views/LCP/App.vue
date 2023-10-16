@@ -48,25 +48,25 @@
             </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
+            <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
             </li>
             <li class="nav-item">
-              <router-link
-                class="nav-link"
-                to="/Shibboleth.sso/Logout"
+              <a
                 v-if="userData && userData.user && userData.user.id"
+                class="nav-link"
+                href="/Shibboleth.sso/Logout"
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
                 Logout
-                <!-- <small>({{ userData.user.displayName }})</small> -->
-              </router-link>
-              <router-link class="nav-link" to="/Shibboleth.sso/Login" v-else>
+                <small>({{ userData.user.displayName }})</small>
+              </a>
+              <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
                 Login
-              </router-link>
+              </a>
             </li>
           </ul>
         </div>
@@ -90,6 +90,7 @@ import NotificationView from "@/components/NotificationView.vue";
 export default {
   name: "AppLCP",
   data() {
+    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
     }
@@ -111,7 +112,7 @@ export default {
     NotificationView,
   },
   computed: {
-    ...mapState(useUserStore, ["userData", "roomId"]),
+    ...mapState(useUserStore, ["userData", "roomId", "debug"]),
   },
   watch: {
     userData() {

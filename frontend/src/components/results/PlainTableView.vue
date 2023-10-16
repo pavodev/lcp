@@ -1,5 +1,15 @@
 <template>
   <div id="plain-table-view">
+    <PaginationComponent
+      v-if="data"
+      class="paggination"
+      :resultCount="data.length"
+      :resultsPerPage="resultsPerPage"
+      :currentPage="currentPage"
+      @update="updatePage"
+      :key="data.length"
+      :loading="loading"
+    />
     <table class="table" v-if="data">
       <!-- <thead>
         <tr>
@@ -20,8 +30,9 @@
               :key="`form-${token.index}`"
               :class="[
                 (token.group >= 0 ? `text-bold color-group-${token.group}` : ''),
+                (token.spaceAfter === 0 ? 'nospace' : ''),
                 (currentToken && columnHeaders && currentToken[columnHeaders.indexOf('head')] == token.index ? 'highlight' : '')
-              ].join(' ')"
+              ]"
               @mousemove="showPopover(token.token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
@@ -81,6 +92,7 @@
     </table>
     <PaginationComponent
       v-if="data"
+      class="paggination"
       :resultCount="data.length"
       :resultsPerPage="resultsPerPage"
       :currentPage="currentPage"
@@ -96,14 +108,14 @@
       <table class="table popover-table">
         <thead>
           <tr>
-            <th v-for="(item, index) in columnHeaders" :key="`th-${index}`">
+            <th v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`th-${index}`">
               {{ item }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td v-for="(item, index) in columnHeaders" :key="`tr-${index}`">
+            <td v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`tr-${index}`">
               <span v-if="item == 'head'" v-html="headToken"> </span>
               <span
                 v-else
@@ -164,6 +176,13 @@
 </template>
 
 <style scoped>
+.paggination {
+  float: right;
+}
+.paggination:after {
+  clear: both;
+  content: "";
+}
 .header-form {
   text-align: center;
 }
@@ -226,6 +245,10 @@
   color: #fff;
   cursor: pointer;
 }
+.token.nospace {
+  padding-right: 0px;
+  margin-right: -2px; /* compensate for next token's padding-left */
+}
 .highlight {
   background-color: #1e999967 !important;
   color: #000 !important;
@@ -256,6 +279,7 @@ class TokenToDisplay {
 
 export default {
   name: "ResultsPlainTableView",
+  emits: ["updatePage"],
   props: [
     "data",
     "sentences",
