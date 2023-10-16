@@ -7,7 +7,6 @@
             <input
               type="text"
               v-model="filters[index]"
-              v-if="col.type != 'aggregrate'"
               class="form-control form-control-sm"
               :placeholder="`Filter by ${col.name}`"
             >
@@ -35,7 +34,7 @@
             :key="index"
             :class="col.class"
           >
-            {{ item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
+            {{ col.valueType=="float" ? this.round(item[index]) : item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
           </td>
         </tr>
       </tbody>
@@ -149,7 +148,7 @@ export default {
           attributes.at(-1)["class"] = "text-right"
           attributes.push({
             name: "relative frequency",
-            type: "aggregrate",
+            type: "aggregate",
             textSuffix: " %",
             class: "text-right",
             valueType: "float",
@@ -169,40 +168,41 @@ export default {
           attributes[2]["class"] = "text-right"
           attributes.push(...[{
             name: "O/E",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "MI",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "MI³",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "local-MI",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "t-score",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "z-score",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
           }, {
             name: "simple-ll",
-            type: "aggregrate",
+            type: "aggregate",
             class: "text-right",
             valueType: "float",
-          }])
+          }]);
+          this.calcAttributes = attributes;
           // row[1] = O
           // row[2] = E
           data = this.data.map(row => [
@@ -214,8 +214,9 @@ export default {
             ((row[1] - row[2]) / Math.sqrt(row[1])).toFixed(4),  // t-score
             ((row[1] - row[2]) / Math.sqrt(row[2])).toFixed(4),  // z-score
             (2*(row[1]*Math.log(row[1]/row[2]) - (row[1] - row[2]))).toFixed(4),
-          ])
+          ]);
         }
+        this.filters = attributes.map(() => '');
       }
       return { attributes, data }
     },
@@ -254,6 +255,9 @@ export default {
         this.sortBy = index
         this.sortDirection = 0
       }
+    },
+    round(float) {
+      return Math.round(1000*float) / 1000;
     }
   },
   computed: {
@@ -274,15 +278,33 @@ export default {
       let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
-          if (this.filters[index] && (!data || !data.toString().toLowerCase().includes(this.filters[index].toLowerCase()))){
+          let filter = v=>v.toString().toLowerCase().includes(this.filters[index].toLowerCase());
+          if (this.calcAttributes[index].valueType == "float") {
+            let match = this.filters[index].toLowerCase().match(/^\s*(=|<|>|>=|<=|!=)\s*(-?\d+(\.\d+)?)\s*$/);
+            if (match)
+              filter = v=>{
+                let comp = [];
+                if (match[1].includes("=")) comp.push(this.round(Number(v)) == Number(match[2]));
+                if (match[1].includes(">")) comp.push(this.round(Number(v)) > Number(match[2]));
+                if (match[1].includes("<")) comp.push(this.round(Number(v)) < Number(match[2]));
+                if (match[1].startsWith("!"))
+                  return !comp.reduce((x,y)=>x||y,false);
+                else
+                  return comp.reduce((x,y)=>x||y,false);
+              };
+            else
+              filter = null;
+          }
+          // if (filter && (!data || !data.toString().toLowerCase().includes(this.filters[index].toLowerCase()))){
+          if (filter && (!data || !filter(data.toString().toLowerCase()))) {
             res = false
           }
         })
         return res
       })
-      let castFunction = (value) => value.toString()
+      let castFunction = (value) => (value||"").toString()
       if (this.sortBy && this.calcAttributes[this.sortBy] && this.calcAttributes[this.sortBy].valueType == "float"){
-        castFunction = (value) => parseFloat(value)
+        castFunction = (value) => parseFloat(value||NaN)
       }
       filtered.sort((a, b) => {
         let retval = 0
@@ -303,6 +325,9 @@ export default {
   watch: {
     data(newValue) {
       this.calcData = newValue;
+    },
+    attributes(newValue) {
+      this.calcAttributes = newValue;
     }
   }
 };

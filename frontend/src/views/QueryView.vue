@@ -103,14 +103,14 @@
               class="btn btn-primary me-1"
               :disabled="
                 (selectedCorpora && selectedCorpora.length == 0) ||
-                loading ||
+                loading===true ||
                 (isQueryValidData != null && isQueryValidData.valid == false) ||
                 !query ||
                 !selectedLanguages
               "
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Submit
+              {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
             </button>
             <button
               type="button"
@@ -927,6 +927,8 @@ export default {
       }
     },
     updateQueryDQD(queryDQD) {
+      if (this.loading)
+        this.loading = "resubmit";
       this.queryDQD = queryDQD;
       this.validate();
     },
