@@ -5,7 +5,7 @@
         <div class="col">
           <Title :title="`Welcome to ${appName}`" />
         </div>
-        <!-- <div class="col mt-1 text-end">
+        <div class="col mt-1 text-end">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -15,7 +15,7 @@
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
             Add new project
           </button>
-        </div> -->
+        </div>
       </div>
     </div>
     <div class="container mt-4 text-start">
@@ -174,7 +174,7 @@
       aria-hidden="true"
       ref="vuemodal"
     >
-      <div class="modal-dialog modal-xl">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="newProjectModalLabel">New Project</h5>

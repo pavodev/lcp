@@ -171,7 +171,11 @@ async def _lama_project_create(
     """
     url = f"{os.environ['LAMA_API_URL']}/profile"
     async with ClientSession() as session:
-        async with session.post(url, json=project_data, headers=headers) as resp:
+        async with session.post(
+            url,
+            json=project_data,
+            headers=_extract_lama_headers(headers)
+        ) as resp:
             jso: JSONObject = await resp.json()
             return jso
 
