@@ -8,6 +8,7 @@
               type="text"
               v-model="filters[index]"
               class="form-control form-control-sm"
+              :class="filterErrors[index] ? 'is-invalid' : ''"
               :placeholder="`Filter by ${col.name}`"
             >
           </th>
@@ -128,6 +129,7 @@ export default {
       sortBy: attributes.length - 1,
       sortDirection: 1,
       filters: attributes.map(() => ''),
+      filterErrors: attributes.map(() => false),
       additionalColumData: [],
       calcData: data,
       calcAttributes: attributes,
@@ -259,7 +261,7 @@ export default {
       }
       else {
         this.sortBy = index
-        this.sortDirection = 0
+        this.sortDirection = 1
       }
     },
     round(float) {
@@ -281,13 +283,22 @@ export default {
       let start = this.resultsPerPage * (this.currentPage - 1);
       let end = start + this.resultsPerPage;
 
+      let matchFilters = []
+      this.filters.forEach((filter, index) => {
+        let matchCoparator = filter.match(/^\s*(=|<|>|>=|<=|!=).*$/);
+        let isRegExField = this.calcAttributes[index].valueType == "float"  // For now just float
+        let match = filter.match(/^\s*(=|<|>|>=|<=|!=)\s*(-?\d+(\.\d+)?)\s*$/);
+        matchFilters.push(match ? match : null)
+        this.filterErrors[index] = (!match && isRegExField && matchCoparator && filter.length > 0) ? true : false
+      })
+
       let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
-          let filter = v=>v.toString().toLowerCase().includes(this.filters[index].toLowerCase());
+          let filter = null;
           if (this.calcAttributes[index].valueType == "float") {
-            let match = this.filters[index].toLowerCase().match(/^\s*(=|<|>|>=|<=|!=)\s*(-?\d+(\.\d+)?)\s*$/);
-            if (match)
+            let match = matchFilters[index];
+            if (match) {
               filter = v=>{
                 let comp = [];
                 if (match[1].includes("=")) comp.push(this.round(Number(v)) == Number(match[2]));
@@ -298,8 +309,10 @@ export default {
                 else
                   return comp.reduce((x,y)=>x||y,false);
               };
-            else
-              filter = null;
+            }
+          }
+          else {
+            filter = v => v.toString().toLowerCase().includes(this.filters[index].toLowerCase());
           }
           // if (filter && (!data || !data.toString().toLowerCase().includes(this.filters[index].toLowerCase()))){
           if (filter && (!data || !filter(data.toString().toLowerCase()))) {
