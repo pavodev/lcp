@@ -460,7 +460,7 @@ export default {
           corpora: [],
         },
       };
-      let projectIds = [];
+      let projectIds = [-1];
       this.projects.forEach((project) => {
         projectIds.push(project.id);
         retval[project.id] = {
@@ -469,11 +469,12 @@ export default {
         };
       });
       this.corpora.forEach((corpus) => {
-        let project_id =
-          corpus.project && projectIds.includes(corpus.project)
-            ? corpus.project
-            : -1;
-        retval[project_id].corpora.push(corpus);
+        corpus.projects.forEach(projectId => {
+          projectId = projectId == "all" ? -1 : projectId;  // -1 for public
+          if (projectIds.includes(projectId) && !retval[projectId].corpora.includes(corpus)) {
+            retval[projectId].corpora.push(corpus);
+          }
+        })
       });
       return retval;
     }
