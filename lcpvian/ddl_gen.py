@@ -98,9 +98,16 @@ class DDL:
                                     %s
                            ORDER BY {y}) x
                     GROUP BY {x})
-             INSERT INTO {z}
+             INSERT INTO {z.rstrip("0")}
              SELECT *
                FROM ins;"""
+        )
+
+        self.m_token_n: str = dedent(
+            f"""
+                CREATE MATERIALIZED VIEW token_n AS
+                SELECT count(*) AS freq
+                  FROM token0;"""
         )
 
         self.t = "\t"
