@@ -541,14 +541,14 @@ class CTProcessor:
             anchs += self.globals.layers[child]["anchoring"]
 
         if l_name == self.globals.base_map["token"]:
-            part_ent = self.globals.base_map["segment"].lower() + "0"
+            part_ent = self.globals.base_map["segment"].lower()
             part_ent_col = f"{part_ent}_id"
 
             part_col = Column(
                 part_ent_col,
                 "uuid",
                 primary_key=True,
-                foreign_key={"table": part_ent, "column": part_ent_col},
+                foreign_key={"table": part_ent + "0", "column": part_ent_col},
             )
             table_cols.append(part_col)
             ptable = PartitionedTable(
@@ -633,14 +633,14 @@ class CTProcessor:
                 )
 
     def create_fts_table(self) -> None:
-        part_ent = self.globals.base_map["segment"].lower() + "0"
+        part_ent = self.globals.base_map["segment"].lower()
         part_ent_col = f"{part_ent}_id"
 
         part_col = Column(
             part_ent_col,
             "uuid",
             primary_key=True,
-            foreign_key={"table": part_ent, "column": part_ent_col},
+            foreign_key={"table": part_ent + "0", "column": part_ent_col},
         )
 
         fts_col = Column(
