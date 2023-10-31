@@ -541,7 +541,7 @@ class CTProcessor:
             anchs += self.globals.layers[child]["anchoring"]
 
         if l_name == self.globals.base_map["token"]:
-            part_ent = self.globals.base_map["segment"].lower()
+            part_ent = self.globals.base_map["segment"].lower() + "0"
             part_ent_col = f"{part_ent}_id"
 
             part_col = Column(
@@ -633,7 +633,7 @@ class CTProcessor:
                 )
 
     def create_fts_table(self) -> None:
-        part_ent = self.globals.base_map["segment"].lower()
+        part_ent = self.globals.base_map["segment"].lower() + "0"
         part_ent_col = f"{part_ent}_id"
 
         part_col = Column(
