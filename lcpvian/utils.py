@@ -151,26 +151,6 @@ def _check_email(email: str) -> bool:
     return bool(re.fullmatch(regex, email))
 
 
-def get_user_identifier(headers: dict[str, str | None]) -> str | None:
-    """
-    Get best possible identifier from LAMa headers
-    """
-    persistent_id: str | None = headers.get("X-Persistent-Id")
-    persistent_name: str | None = headers.get("X-Principal-Name")
-    edu_person_unique_id: str | None = headers.get("X-Edu-Person-Unique-Id")
-    mail: str | None = headers.get("X-Mail")
-
-    if persistent_id and bool(re.match("(.*)!(.*)!(.*)", persistent_id)):
-        return persistent_id
-    elif persistent_name and str(persistent_name).count("@") == 1:
-        return persistent_name
-    elif edu_person_unique_id and str(edu_person_unique_id).count("@") == 1:
-        return edu_person_unique_id
-    elif mail and _check_email(mail):
-        return mail
-    return None
-
-
 async def _lama_user_details(headers: Headers) -> JSONObject:
     """
     todo: not tested yet, but the syntax is something like this
@@ -191,7 +171,11 @@ async def _lama_project_create(
     """
     url = f"{os.environ['LAMA_API_URL']}/profile"
     async with ClientSession() as session:
-        async with session.post(url, json=project_data, headers=headers) as resp:
+        async with session.post(
+            url,
+            json=project_data,
+            headers=_extract_lama_headers(headers)
+        ) as resp:
             jso: JSONObject = await resp.json()
             return jso
 
@@ -265,7 +249,6 @@ async def _general_error_handler(
     if job:
         msg += f" -- {job}"
         jso["job"] = job
-    print(msg)
     logging.warning(msg, extra=jso)
     if user:
         connection = request.app["redis"]

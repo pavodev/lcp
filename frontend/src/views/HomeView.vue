@@ -5,7 +5,7 @@
         <div class="col">
           <Title :title="`Welcome to ${appName}`" />
         </div>
-        <!-- <div class="col mt-1 text-end">
+        <div class="col mt-1 text-end">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -15,7 +15,7 @@
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
             Add new project
           </button>
-        </div> -->
+        </div>
       </div>
     </div>
     <div class="container mt-4 text-start">
@@ -174,7 +174,7 @@
       aria-hidden="true"
       ref="vuemodal"
     >
-      <div class="modal-dialog modal-xl">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="newProjectModalLabel">New Project</h5>
@@ -460,7 +460,7 @@ export default {
           corpora: [],
         },
       };
-      let projectIds = [];
+      let projectIds = [-1];
       this.projects.forEach((project) => {
         projectIds.push(project.id);
         retval[project.id] = {
@@ -469,11 +469,12 @@ export default {
         };
       });
       this.corpora.forEach((corpus) => {
-        let project_id =
-          corpus.project && projectIds.includes(corpus.project)
-            ? corpus.project
-            : -1;
-        retval[project_id].corpora.push(corpus);
+        corpus.projects.forEach(projectId => {
+          projectId = projectId == "all" ? -1 : projectId;  // -1 for public
+          if (projectIds.includes(projectId) && !retval[projectId].corpora.includes(corpus)) {
+            retval[projectId].corpora.push(corpus);
+          }
+        })
       });
       return retval;
     }
