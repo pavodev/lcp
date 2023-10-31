@@ -78,7 +78,7 @@ class DDL:
 
         self.create_prepared_segs: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
-            CREATE TABLE prepared_{x} (
+            CREATE TABLE prepared_{x.rstrip("0")} (
                 {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
                 off_set     int,
                 content     jsonb
