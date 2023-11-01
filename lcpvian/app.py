@@ -190,7 +190,9 @@ async def create_app(test: bool = False) -> web.Application:
 
     # we keep two redis connections, for reasons
     redis_url = f"{REDIS_URL}/{REDIS_DB_INDEX}"
-    app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
+    # Danny seemed to say mypy used to need a parser_class here, but newer redis releases seem to do away with parser_class
+    # app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
+    app["aredis"] = aioredis.Redis.from_url(url=redis_url)
     app["redis"] = Redis.from_url(redis_url)
 
     # different queues for different kinds of jobs

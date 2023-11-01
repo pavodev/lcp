@@ -5,7 +5,7 @@
         <div class="col">
           <Title :title="`Welcome to ${appName}`" />
         </div>
-        <!-- <div class="col mt-1 text-end">
+        <div class="col mt-1 text-end">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
@@ -15,28 +15,8 @@
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
             Add new project
           </button>
-        </div> -->
+        </div>
       </div>
-      <!-- <div class="row mt-4">
-        <div class="col">
-          Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
-          condimentum, nisi at semper varius, risus arcu dictum felis, at
-          faucibus lacus tortor sed felis. Vivamus malesuada nulla id nisl
-          consequat porta. Nam eu erat porta ipsum suscipit ultricies sodales
-          sed nibh. Morbi fringilla scelerisque orci, quis pulvinar justo dictum
-          in. Phasellus ex tortor, tincidunt vitae dui at, accumsan placerat
-          erat. Nunc a interdum nulla. Aliquam eu nulla sed nisi mollis
-          efficitur.
-        </div>
-        <div class="col">
-          Duis et augue vitae nisl pharetra pellentesque. Sed vulputate rhoncus
-          faucibus. Cras dapibus eu est ultricies viverra. Donec non lectus
-          scelerisque, hendrerit nisl nec, blandit odio. Praesent vitae faucibus
-          risus, sit amet blandit erat. Orci varius natoque penatibus et magnis
-          dis parturient montes, nascetur ridiculus mus. Mauris sed pharetra
-          purus.
-        </div>
-      </div> -->
     </div>
     <div class="container mt-4 text-start">
       <div class="row">
@@ -121,7 +101,7 @@
                 class="col-4 mb-3"
                 v-for="corpus in filterCorpora(project.corpora)"
                 :key="corpus.id"
-                @click="openQueryWithCorpus(corpus)"
+                @click="openCorpus(corpus)"
               >
                 <div class="corpus-block">
                   <p class="title mb-0">{{ corpus.meta.name }}</p>
@@ -155,6 +135,7 @@
                   <div
                     class="details-button icon-1 tooltips"
                     title="Query corpus"
+                    @click.stop="openQueryWithCorpus(corpus)"
                   >
                     <FontAwesomeIcon
                       :icon="['fas', 'magnifying-glass-chart']"
@@ -172,9 +153,6 @@
                   </a>
                   <div
                     class="details-button icon-3 tooltips"
-                    @click.stop="openCorpus(corpus)"
-                    data-bs-toggle="modal"
-                    data-bs-target="#corpusDetailsModal"
                     title="Corpus details"
                   >
                     <FontAwesomeIcon :icon="['fas', 'circle-info']" />
@@ -196,7 +174,7 @@
       aria-hidden="true"
       ref="vuemodal"
     >
-      <div class="modal-dialog modal-xl">
+      <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="newProjectModalLabel">New Project</h5>
@@ -341,6 +319,7 @@ import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
 import { setTooltips, removeTooltips } from "@/tooltips";
+import { Modal } from "bootstrap";
 
 // import { Tooltip } from "bootstrap";
 
@@ -402,6 +381,8 @@ export default {
     },
     openCorpus(corpus) {
       this.corpusModal = corpus;
+      let modal = new Modal(document.getElementById('corpusDetailsModal'));
+      modal.show()
     },
     openQueryWithCorpus(corpus) {
       if (config.appType == "vian") {
@@ -479,7 +460,7 @@ export default {
           corpora: [],
         },
       };
-      let projectIds = [];
+      let projectIds = [-1];
       this.projects.forEach((project) => {
         projectIds.push(project.id);
         retval[project.id] = {
@@ -488,11 +469,12 @@ export default {
         };
       });
       this.corpora.forEach((corpus) => {
-        let project_id =
-          corpus.project && projectIds.includes(corpus.project)
-            ? corpus.project
-            : -1;
-        retval[project_id].corpora.push(corpus);
+        corpus.projects.forEach(projectId => {
+          projectId = projectId == "all" ? -1 : projectId;  // -1 for public
+          if (projectIds.includes(projectId) && !retval[projectId].corpora.includes(corpus)) {
+            retval[projectId].corpora.push(corpus);
+          }
+        })
       });
       return retval;
     }
