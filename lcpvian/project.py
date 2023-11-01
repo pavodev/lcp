@@ -15,8 +15,9 @@ from .utils import (
 @ensure_authorised
 async def project_create(request: web.Request) -> web.Response:
     request_data: dict[str, str] = await request.json()
-    keys = ["title", "unit", "startDate", "finishDate", "url", "description"]
+    keys = ["title", "startDate", "finishDate", "description"]
     project_data = {k: request_data[k] for k in keys}
+    project_data["unit"] = "----"  # leave it for now, need to be changed in LAMa
     res = await _lama_project_create(request.headers, project_data)
     return web.json_response(res)
 

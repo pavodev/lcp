@@ -78,7 +78,7 @@ class DDL:
 
         self.create_prepared_segs: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
-            CREATE TABLE prepared_{x} (
+            CREATE TABLE prepared_{x.rstrip("0")} (
                 {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
                 off_set     int,
                 content     jsonb
@@ -98,9 +98,16 @@ class DDL:
                                     %s
                            ORDER BY {y}) x
                     GROUP BY {x})
-             INSERT INTO {z}
+             INSERT INTO {z.rstrip("0")}
              SELECT *
                FROM ins;"""
+        )
+
+        self.m_token_n: str = dedent(
+            f"""
+                CREATE MATERIALIZED VIEW token_n AS
+                SELECT count(*) AS freq
+                  FROM token0;"""
         )
 
         self.t = "\t"
@@ -548,9 +555,17 @@ class CTProcessor:
                 part_ent_col,
                 "uuid",
                 primary_key=True,
-                foreign_key={"table": part_ent, "column": part_ent_col},
+                foreign_key={"table": part_ent + "0", "column": part_ent_col},
             )
             table_cols.append(part_col)
+            ptable = PartitionedTable(
+                table_name, table_cols, anchorings=anchs, column_part=part_ent_col
+            )
+            tables.append(ptable)
+        elif l_name == self.globals.base_map["segment"]:
+            part_ent = self.globals.base_map["segment"].lower()
+            part_ent_col = f"{part_ent}_id"
+
             ptable = PartitionedTable(
                 table_name, table_cols, anchorings=anchs, column_part=part_ent_col
             )
@@ -624,6 +639,27 @@ class CTProcessor:
                     f"unknown layer type '{layer_type}' for layer '{layer}'."
                 )
 
+    def create_fts_table(self) -> None:
+        part_ent = self.globals.base_map["segment"].lower()
+        part_ent_col = f"{part_ent}_id"
+
+        part_col = Column(
+            part_ent_col,
+            "uuid",
+            primary_key=True,
+            foreign_key={"table": part_ent + "0", "column": part_ent_col},
+        )
+
+        fts_col = Column(
+            "vector",
+            "tsvector"
+        )
+
+        ptable = PartitionedTable("fts_vector", [part_col, fts_col])
+
+        self.globals.tables.append(ptable)
+
+
     def process_schema(self) -> str:
         corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
         corpus_name = re.sub(r"_+", "_", corpus_name)
@@ -648,7 +684,7 @@ class CTProcessor:
         seg_tab = next(
             x
             for x in self.globals.tables
-            if x.name == self.globals.base_map["segment"].lower()
+            if x.name == self.globals.base_map["segment"].lower() + "0"
         )
 
         tok_pk = next(
@@ -738,6 +774,7 @@ def generate_ddl(
 
     schema_name = processor.process_schema()
     processor.process_layers()
+    processor.create_fts_table()
     processor.create_compute_prep_segs()
 
     create_schema = "\n\n".join([x for x in globs.schema])
