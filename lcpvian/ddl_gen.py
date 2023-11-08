@@ -509,6 +509,27 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
+            if (typ := vals.get("type")) == "jsonb":
+                norm_col = f"{attr}_id"
+                norm_table = Table(
+                    attr,
+                    [
+                        Column(norm_col, "int", primary_key=True),
+                        Column(attr, "jsonb", unique=True),
+                    ],
+                )
+
+                table_cols.append(
+                    Column(
+                        norm_col,
+                        "int",
+                        foreign_key={"table": attr, "column": norm_col},
+                        nullable=nullable,
+                    )
+                )
+
+                tables.append(norm_table)
+
             elif typ == "categorical":
                 if vals.get("isGlobal"):
                     table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
