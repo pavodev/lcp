@@ -135,7 +135,7 @@ def _get_progress(progfile: str) -> tuple[int, int, str, str] | None:
     return (done_bytes, total, msg, unit)
 
 
-def _ensure_word0(path: str) -> None:
+def _ensure_partitioned0(path: str) -> None:
     """
     In case the user didn't call word.csv word0.csv
     """
@@ -143,13 +143,15 @@ def _ensure_word0(path: str) -> None:
     with open(template, "r") as fo:
         data = json.load(fo)
         data = data["template"]
-    tok = data["firstClass"]["token"]
-    src = os.path.join(path, tok.lower() + ".csv")
-    if os.path.isfile(src):
-        dest = src.replace(".csv", "0.csv")
-        os.rename(src, dest)
-        print(f"Moved: {src}->{dest}")
-
+    srcs = [os.path.join(path, "fts_vector.csv")]
+    for layer in ('token','segment'):
+        lay = data["firstClass"][layer]
+        srcs.append( os.path.join(path, lay.lower() + ".csv") )
+    for src in srcs:
+        if os.path.isfile(src):
+            dest = src.replace(".csv", "0.csv")
+            os.rename(src, dest)
+            print(f"Moved: {src}->{dest}")
 
 def _correct_doc(path: str) -> None:
     """
@@ -229,7 +231,7 @@ async def upload(request: web.Request) -> web.Response:
                 ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
                 return web.json_response(ret)
 
-    _ensure_word0(os.path.join("uploads", cpath))
+    _ensure_partitioned0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
 
     return_data: dict[str, str | int] = {}
@@ -397,8 +399,12 @@ async def make_schema(request: web.Request) -> web.Response:
     # which is on the borderline of being too high in prod.
     # becomes 1/4.3b chance if we use [0] instead of [1]
     # but the schema name gets noticeably uglier, so ...
-    suffix = corpus_folder.split("-", 2)[1]
-    schema_name = f"{corpus_name}__{suffix}"
+    
+    #  suffix = corpus_folder.split("-", 2)[1]
+    suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
+    version_n = re.sub(r"[^0-9]", "", str(corpus_version))
+    
+    schema_name = f"{corpus_name}__{suffix}_{version_n}"
 
     sames = [
         i["schema_name"]
