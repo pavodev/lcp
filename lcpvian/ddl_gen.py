@@ -509,7 +509,7 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
-            if (typ := vals.get("type")) == "jsonb":
+            elif (typ := vals.get("type")) == "jsonb":
                 norm_col = f"{attr}_id"
                 norm_table = Table(
                     attr,
