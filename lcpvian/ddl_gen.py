@@ -135,6 +135,7 @@ class DDL:
             f"""
                 CREATE MATERIALIZED VIEW {x}_freq AS
                   SELECT {y}
+                       , count(*) AS freq
                     FROM {z}
                 GROUP BY CUBE ({y});"""
         )
