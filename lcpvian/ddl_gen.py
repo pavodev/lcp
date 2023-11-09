@@ -71,7 +71,8 @@ class DDL:
         self.perms: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             GRANT USAGE ON SCHEMA {x} TO {y};
-            GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
+            GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {x} GRANT SELECT ON TABLES TO {y};\n\n"""
         )
 
         self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
