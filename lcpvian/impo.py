@@ -127,6 +127,9 @@ class Importer:
         self.insert = cast(str, data["prep_seg_insert"])
         self.constraints = cast(list[str], data["constraints"])
         self.create = cast(str, data["prep_seg_create"])
+        self.m_token_freq = cast(str, data["m_token_freq"])
+        self.m_token_n = cast(str, data["m_token_n"])
+        self.m_lemma_freqs = cast(str, data["m_lemma_freqs"])
         self.refs = cast(list[str], data["refs"])
         self.n_batches = len(self.batches)
         self.num_extras = self.n_batches + len(self.constraints)
@@ -429,6 +432,22 @@ class Importer:
         inserts = [self.insert.format(batch=batch) for batch in self.batches]
         await self.process_data(inserts, self.run_script, progress=progress)
         return None
+    
+    async def collocations(
+        self
+    ) -> None:
+        """
+        Run the prepared segment scripts, potentially concurrently
+        """
+        self.update_progress("Creating materialized views for collocations...")
+        self.update_progress("- token_freq")
+        await self.run_script(self.m_token_freq)
+        self.update_progress("- token_n")
+        await self.run_script(self.m_token_n)
+        self.update_progress("- lemma_freqs")
+        await self.run_script(self.m_lemma_freqs)
+        self.update_progress("Done with collocations!")
+        return None
 
     async def create_entry_maincorpus(self) -> MainCorpus:
         """
@@ -486,4 +505,5 @@ class Importer:
             self.update_progress(f"Running:\n{strung}")
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
+        await self.collocations()
         return cast(MainCorpus, await self.create_entry_maincorpus())
