@@ -26,17 +26,15 @@
           <td scope="row">
             <span
               v-for="(token) in item"
-              class="token"
               :key="`form-${token.index}`"
-              :class="[
-                (token.group >= 0 ? `text-bold color-group-${token.group}` : ''),
-                (token.spaceAfter === 0 ? 'nospace' : ''),
-                (currentToken && columnHeaders && currentToken[columnHeaders.indexOf('head')] == token.index ? 'highlight' : '')
-              ]"
               @mousemove="showPopover(token.token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
-              {{ token.form  }}
+              <span class="token" :class="[
+                (currentToken && columnHeaders && currentToken[columnHeaders.indexOf('head')] == token.index ? 'highlight' : ''),
+                (token.group >= 0 ? `text-bold color-group-${token.group}` : '')
+              ]">{{ token.form }}</span>
+              <span class="space" v-if="token.spaceAfter !== 0">&nbsp;</span>
             </span>
             <!-- <template
               v-for="(group, groupIndex) in groups"
@@ -234,8 +232,8 @@
   text-align: center;
 }
 .token {
-  padding-left: 2px;
-  padding-right: 2px;
+  /* padding-left: 2px;
+  padding-right: 2px; */
   display: inline-block;
   transition: 0.3s all;
   border-radius: 2px;

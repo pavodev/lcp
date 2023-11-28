@@ -26,6 +26,9 @@
 .table-box {
   overflow: auto;
 }
+.table {
+  width: auto;
+}
 </style>
 
 <script>
