@@ -738,14 +738,14 @@ class CTProcessor:
         for i in range(self.globals.num_partitions):
             part = "rest" if i+1 == self.globals.num_partitions else i
 
-            statement: str = self.ddl.m_lemma_freq(part, tok_tbl)
+            statement = self.ddl.m_lemma_freq(cast(str, part), cast(str, tok_tbl))
             views.append(statement)
 
         self.globals.m_lemma_freqs = "\n".join(views)
 
         [token_tbl] = (x for x in self.globals.tables if x.name == tok_tbl+"0")
         rel_cols = ", ".join([x.name for x in token_tbl.cols if not (x.constrs.get("primary_key") or "range" in x.name)])
-        statement: str = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl+"0")
+        statement = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl+"0")
 
         self.globals.m_token_freq = f"\n\n{search_path}\n{statement}"
 
