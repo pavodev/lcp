@@ -990,6 +990,11 @@ export default {
           return;
         }
         if (data["action"] === "validate") {
+          // Validate is called after setting availableLanguages, so it's a good time to check selectedLanguages
+          this.selectedLanguages = this.selectedLanguages.filter(v=>this.availableLanguages.includes(v));
+          if (this.selectedLanguages==0) {
+            this.selectedLanguages = [this.availableLanguages[0]];
+          }
           // console.log("Query validation", data);
           if (data.kind == "dqd" && data.valid == true) {
             // console.log("Set query from server");
@@ -1300,8 +1305,8 @@ export default {
               (corpus) => corpus.meta.id == this.selectedCorpora.value
             )[0].layer
           )
-            .filter((key) => key.startsWith("Token@"))
-            .map((key) => key.replace(/Token@/, ""));
+            .filter((key) => key.startsWith("Token@") || key.startsWith("Token:"))
+            .map((key) => key.replace(/Token[@:]/, ""));
           if (retval.length == 0) {
             retval = ["en"];
           }

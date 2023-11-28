@@ -30,6 +30,9 @@ class DataNeededLater:
     constraints: list[str] = field(default_factory=list)
     prep_seg_create: str = ""
     prep_seg_insert: str = ""
+    m_token_n: str = ""
+    m_token_freq: str = ""
+    m_lemma_freqs: str = ""
     batchnames: list[str] = field(default_factory=list)
     mapping: dict[str, JSONObject] = field(default_factory=dict)
     perms: str = ""
@@ -51,6 +54,9 @@ class Globs:
         self.num_partitions: int = 0
         self.prep_seg_create: str = ""
         self.prep_seg_insert: str = ""
+        self.m_token_n: str = ""
+        self.m_token_freq: str = ""
+        self.m_lemma_freqs: str = ""
         self.batchnames: list[str] = []
         self.mapping: dict[str, JSONObject] = {}
         self.perms: str = ""
@@ -65,7 +71,8 @@ class DDL:
         self.perms: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             GRANT USAGE ON SCHEMA {x} TO {y};
-            GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};\n\n"""
+            GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};
+            ALTER DEFAULT PRIVILEGES IN SCHEMA {x} GRANT SELECT ON TABLES TO {y};\n\n"""
         )
 
         self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
@@ -103,11 +110,34 @@ class DDL:
                FROM ins;"""
         )
 
-        self.m_token_n: str = dedent(
+        self.m_token_n: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
-                CREATE MATERIALIZED VIEW token_n AS
+                CREATE MATERIALIZED VIEW {x}_n AS
                 SELECT count(*) AS freq
-                  FROM token0;"""
+                  FROM {y};"""
+        )
+
+        self.m_lemma_freq: Callable[[str, str], str] = lambda x, y: dedent(
+            f"""
+                CREATE MATERIALIZED VIEW m_lemma_freq{x} AS
+                SELECT x.lemma_id
+                     , x.freq
+                     , sum(x.freq) OVER () AS total
+                  FROM (
+                        SELECT lemma_id,
+                               count(*) AS freq
+                          FROM {y}{x}
+                         GROUP BY lemma_id) x
+                 ORDER BY x.freq DESC;"""
+        )
+
+        self.m_token_freq: Callable[[str, str, str], str] = lambda x, y, z: dedent(
+            f"""
+                CREATE MATERIALIZED VIEW {x}_freq AS
+                  SELECT {y}
+                       , count(*) AS freq
+                    FROM {z}
+                GROUP BY CUBE ({y});"""
         )
 
         self.t = "\t"
@@ -128,8 +158,8 @@ class DDL:
             "int2": 2,
             "int4": 4,
             "int8": 8,
-            "int4range": 4,
-            "int8range": 8,
+            "int4range": 17,
+            "int8range": 25,
             "smallint": 2,
             "text": 4,
             "uuid": 16,
@@ -509,6 +539,27 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
+            elif (typ := vals.get("type")) == "jsonb":
+                norm_col = f"{attr}_id"
+                norm_table = Table(
+                    attr,
+                    [
+                        Column(norm_col, "int", primary_key=True),
+                        Column(attr, "jsonb", unique=True),
+                    ],
+                )
+
+                table_cols.append(
+                    Column(
+                        norm_col,
+                        "int",
+                        foreign_key={"table": attr, "column": norm_col},
+                        nullable=nullable,
+                    )
+                )
+
+                tables.append(norm_table)
+
             elif typ == "categorical":
                 if vals.get("isGlobal"):
                     table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
@@ -675,6 +726,30 @@ class CTProcessor:
         self.globals.perms = perms
         return schema_name
 
+    def create_collocation_views(self) -> None:
+        search_path = f"\nSET search_path TO {self.schema_name};"
+        tok_tbl = self.globals.base_map["token"].lower()
+        statement: str = self.ddl.m_token_n(tok_tbl, tok_tbl + "0")
+
+        self.globals.m_token_n = f"\n\n{search_path}\n{statement}"
+
+        views = [f"\n\n{search_path}\n"]
+
+        for i in range(self.globals.num_partitions):
+            part = "rest" if i+1 == self.globals.num_partitions else i
+
+            statement: str = self.ddl.m_lemma_freq(part, tok_tbl)
+            views.append(statement)
+
+        self.globals.m_lemma_freqs = "\n".join(views)
+
+        [token_tbl] = (x for x in self.globals.tables if x.name == tok_tbl+"0")
+        rel_cols = ", ".join([x.name for x in token_tbl.cols if not (x.constrs.get("primary_key") or "range" in x.name)])
+        statement: str = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl+"0")
+
+        self.globals.m_token_freq = f"\n\n{search_path}\n{statement}"
+
+
     def create_compute_prep_segs(self) -> None:
         tok_tab = next(
             x
@@ -776,6 +851,7 @@ def generate_ddl(
     processor.process_layers()
     processor.create_fts_table()
     processor.create_compute_prep_segs()
+    processor.create_collocation_views()
 
     create_schema = "\n\n".join([x for x in globs.schema])
     create_types = "\n\n".join([x.create_DDL() for x in sorted(globs.types)])
@@ -802,6 +878,9 @@ def generate_ddl(
         formed_constraints,
         globs.prep_seg_create,
         globs.prep_seg_insert,
+        globs.m_token_n,
+        globs.m_token_freq,
+        globs.m_lemma_freqs,
         globs.batchnames,
         globs.mapping,
         globs.perms,
@@ -818,12 +897,16 @@ def main(corpus_template_path: str) -> None:
 
     # print(json.dumps(data, indent=4))
     print(data["create"])
-    for ref in data["refs"]:
+    print()
+    for ref in sorted(data["refs"]):
         print(ref)
-    for ref in data["constraints"]:
+    for ref in sorted(data["constraints"]):
         print(ref)
     print(data["prep_seg_create"])
     print(data["prep_seg_insert"])
+    print(data["m_token_n"])
+    print(data["m_token_freq"])
+    print(data["m_lemma_freqs"])
     print(data["perms"])
 
     return
