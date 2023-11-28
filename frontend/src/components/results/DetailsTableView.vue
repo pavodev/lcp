@@ -1,6 +1,6 @@
 <template>
   <div id="details-view" v-if="data">
-    <table class="table mb-5">
+    <table class="table mb-5" :class="isModal ? 'modal-table' : ''">
       <tbody>
         <tr>
           <td v-for="(header, index) in columnHeaders" :key="`tr-header-${index}`">
@@ -26,7 +26,7 @@
 .table-box {
   overflow: auto;
 }
-.table {
+.modal-table.table {
   width: auto;
 }
 </style>
@@ -34,7 +34,7 @@
 <script>
 export default {
   name: "ResultsDetailsTableView",
-  props: ["data", "sentences", "corpora"],
+  props: ["data", "sentences", "corpora", "isModal"],
   data() {
     return {
       columnHeaders: this.calcColumnHeaders()
