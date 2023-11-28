@@ -47,7 +47,7 @@
         role="tabpanel"
         aria-labelledby="nav-details-tab"
       >
-        <DetailsTableView :data="data" :sentences="sentences" :corpora="corpora" />
+        <DetailsTableView :data="data" :sentences="sentences" :corpora="corpora" :isModal="true" />
       </div>
     </div>
   </div>
