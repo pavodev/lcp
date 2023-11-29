@@ -110,9 +110,13 @@ query_kwargs = dict(
     pool_size=QUERY_MAX_NUM_CONNS,
     connect_args={
         "timeout": QUERY_TIMEOUT,
+        "connect_timeout": 100,
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
         "server_settings": {"jit": "off"},
+        "pool_recycle": 280,
+        "pool_timeout": 100,
+        "pool_pre_ping": True
     },
     echo_pool=True,
 )
