@@ -159,7 +159,7 @@ class QueryIteration:
         todo: make this not static
         """
         out: list[Batch] = []
-        all_languages = ["en", "de", "fr", "ca"]
+        all_languages = ["en", "de", "fr", "ca", "it", "rm"]
         all_langs = tuple([f"_{la}" for la in all_languages])
         langs = tuple([f"_{la}" for la in languages])
         for corpus in corpora:

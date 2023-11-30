@@ -11,7 +11,8 @@ from typing import cast
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 
-from rq.job import get_current_job
+from rq.connections import get_current_connection
+from rq.job import (get_current_job, Job)
 
 from .configure import CorpusTemplate
 from .impo import Importer
@@ -123,8 +124,18 @@ async def _db_query(
         params = {"ids": ids}
 
     name = "_upool" if store else "_pool"
-    pool = getattr(get_current_job(), name)
+    job = get_current_job()
+    pool = getattr(job, name)
     method = "begin" if store else "connect"
+
+    first_job_id = cast(str, kwargs.get("first_job", ""))
+    if first_job_id:
+        first_job: Job = Job.fetch(first_job_id, connection=get_current_connection())
+        if first_job:
+            first_job_status = first_job.get_status(refresh=True)
+            if first_job_status in ("stopped", "canceled"):
+                print("First job was stopped or canceled - not executing the query")
+                raise SQLAlchemyError("Job canceled")
 
     params = params or {}
 

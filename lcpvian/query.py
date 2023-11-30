@@ -129,6 +129,17 @@ async def _query_iteration(
     if not qi.current_batch and qi.no_more_data:
         return await qi.no_batch()
 
+    # Handle cases where the query was canceled or stopped prematurely
+    if qi.first_job:
+        first_job: Job = Job.fetch(qi.first_job, connection=qi.app["redis"])
+        first_job_status = first_job.get_status(refresh=True)
+        if first_job_status in ("stopped", "canceled") or qi.first_job in qi.app["canceled"]:
+            if qi.first_job not in qi.app["canceled"]:
+                qi.app["canceled"].append(qi.first_job)
+            qi.app["query_service"].cancel_running_jobs(qi.user, qi.room)
+            print(f"Query was stopped: {qi.first_job} -- preventing update")
+            return await qi.no_batch()
+
     qi.make_query()
 
     # print query info to terminal for first batch only
