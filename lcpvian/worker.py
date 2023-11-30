@@ -112,9 +112,12 @@ query_kwargs = dict(
         "timeout": QUERY_TIMEOUT,
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
-        "server_settings": {"jit": "off"},
+        "server_settings": {"jit": "off"}
     },
     echo_pool=True,
+    pool_recycle=3600,
+    pool_timeout=3600,
+    pool_pre_ping=True,
 )
 upload_kwargs = dict(
     pool_size=UPLOAD_MAX_NUM_CONNS,
@@ -125,6 +128,9 @@ upload_kwargs = dict(
         "server_settings": {"jit": "off"},
     },
     echo_pool=True,
+    pool_recycle=3600,
+    pool_timeout=3600,
+    pool_pre_ping=True,
 )
 if not UPLOAD_POOL:
     upload_kwargs["pool_class"] = NullPool
