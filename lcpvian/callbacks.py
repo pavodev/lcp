@@ -286,7 +286,22 @@ def _query(
     job.meta["payload"] = jso
     job.save_meta()  # type: ignore
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    dump: str = json.dumps(jso, cls=CustomEncoder)
+    if len(dump) > 31999999:
+        jso.update({
+            "status": "failed",
+            "kind": "Failed",
+            "value": "Too much data to handle in a single transaction",
+            "action": "failed",
+            "full": False,
+            "result": dict()
+        })
+        print("Too much data to handle in a single transaction, sending an error message")
+        dump = json.dumps(jso, cls=CustomEncoder)
+        first_job.cancel()
+        job.cancel()
+
+    connection.publish(PUBSUB_CHANNEL, dump)
     return None
 
 
@@ -404,7 +419,22 @@ def _sentences(
         "percentage_words_done": words_done,
     }
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+    dump: str = json.dumps(jso, cls=CustomEncoder)
+    if len(dump) > 31999999:
+        jso.update({
+            "status": "failed",
+            "kind": "Failed",
+            "value": "Too much data to handle in a single transaction",
+            "action": "failed",
+            "full": False,
+            "result": dict()
+        })
+        print(f"Too much data to handle in a single transaction, sending an error message and canceling base job {base.id}")
+        dump = json.dumps(jso, cls=CustomEncoder)
+        base.cancel()
+        job.cancel()
+
+    connection.publish(PUBSUB_CHANNEL, dump)
     return None
 
 

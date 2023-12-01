@@ -159,7 +159,7 @@ class QueryIteration:
         todo: make this not static
         """
         out: list[Batch] = []
-        all_languages = ["en", "de", "fr", "ca"]
+        all_languages = ["en", "de", "fr", "ca", "it", "rm"]
         all_langs = tuple([f"_{la}" for la in all_languages])
         langs = tuple([f"_{la}" for la in languages])
         for corpus in corpora:
@@ -368,7 +368,7 @@ class QueryIteration:
         batch = batch.rstrip("0123456789")
         if batch.endswith("rest"):
             batch = batch[:-4]
-        for lan in ["de", "en", "fr", "ca"]:
+        for lan in ["de", "en", "fr", "ca", "it"]:
             if batch.endswith(f"_{lan}"):
                 return lan
         return None
