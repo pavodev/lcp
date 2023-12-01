@@ -251,6 +251,8 @@ class Column(DDL):
             return ""
         elif self.type == "int4range" or self.type == "int8range":
             return self._idx_constr.format("USING gist", self.name)
+        elif self.type == "tsvector":
+            return self._idx_constr.format("USING rum", self.name)
         else:
             return self._idx_constr.format("", self.name)
 
