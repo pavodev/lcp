@@ -18,6 +18,7 @@ import shutil
 import traceback
 
 from datetime import datetime
+from io import TextIOWrapper
 from types import TracebackType
 from typing import Any, Unpack, cast
 from uuid import uuid4
@@ -227,7 +228,7 @@ def _query(
 
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_kwic_lines = min(max_kwic, total_found)
-
+    
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -305,6 +306,64 @@ def _query(
     return None
 
 
+def _kwic_to_file(
+    result: Results,
+    first_job_id: str,
+    corpus_cols: list[str]
+) -> None:
+    """
+    Append kwic lines to a file on storage
+    """
+    
+    if not os.path.exists("results"):
+        os.makedirs("results")
+    
+    result_sets = result[0]["result_sets"]
+    result_files: list[TextIOWrapper] = []
+        
+    for key, value in result.items():
+        if int(key) in (-1,0): continue
+    
+        filename = f"kwic_{str(key)}_{first_job_id}.tsv"
+        path = os.path.join("results", filename)
+        f: TextIOWrapper
+        if not os.path.isfile(path):
+            f = open(path, "w")
+            f.write("\t".join(["label_plain_results","segment_id","entities","tokens"]))
+            f.write("\n")
+        else:
+            f = open(path, "a")
+        result_files.append(f)
+        
+        n_result = int(key) - 1
+        kwic_name = result_sets[n_result].get("name")
+        entities = next((x for x in result_sets[n_result].get("attributes", []) if x.get("name") == "entities"), dict()).get("data", [])
+        
+        for (sid, matches) in value:
+            first_token_id, prep_seg = result[-1][sid]
+            matching_entities = {n['name']: ([] if n.get("type") in ("sequence","set") else 0) for n in entities}
+            
+            tokens = list()
+            for n, token in enumerate(prep_seg):
+                token_id = int(first_token_id) + n
+                for n_m, m in enumerate(matches):
+                    if isinstance(m, int):
+                        if m == token_id:
+                            matching_entities[entities[n_m]['name']] = token_id
+                    elif isinstance(m, list):
+                        if token_id in m:
+                            matching_entities[entities[n_m]['name']].append(token_id)
+                token_dict = {corpus_cols[n_col]: col for n_col, col in enumerate(token)}
+                token_dict["token_id"] = token_id
+                tokens.append(token_dict)
+            
+            f.write("\t".join([kwic_name,sid,json.dumps(matching_entities),json.dumps(tokens)]))
+            f.write("\n")
+            
+    for f in result_files:
+        f.close()
+
+
 def _sentences(
     job: Job,
     connection: RedisConnection[bytes],
@@ -365,6 +424,7 @@ def _sentences(
             full,
         )
 
+
     more_data = not job.kwargs["no_more_data"]
     submit_query = job.kwargs["start_query_from_sents"]
     if submit_query and more_data:
@@ -402,7 +462,7 @@ def _sentences(
         more_data = base.meta["total_results_so_far"] >= total_requested
 
     jso = {
-        "result": to_send,
+        # "result": to_send,
         "status": status,
         "action": "sentences",
         "full": full,
@@ -418,6 +478,12 @@ def _sentences(
         "percentage_done": perc_done,
         "percentage_words_done": words_done,
     }
+    
+    # Full request: generate file
+    if full and job.kwargs.get("corpus_cols"):
+        _kwic_to_file(to_send, job.kwargs["first_job"], job.kwargs["corpus_cols"])
+    else:
+        jso["result"] = to_send
 
     dump: str = json.dumps(jso, cls=CustomEncoder)
     if len(dump) > 31999999:

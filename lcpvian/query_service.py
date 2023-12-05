@@ -28,6 +28,7 @@ from typing import final, Unpack, cast
 
 from aiohttp import web
 from redis import Redis as RedisConnection
+from rq import Callback
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
@@ -185,12 +186,16 @@ class QueryService:
             if job is not None:
                 return job, submitted
 
-        job = self.app[queue].enqueue(
+        print("timeout", self.timeout)
+        query_callback = Callback(_query, timeout=(2*self.timeout if kwargs["full"] else self.timeout))
+        # job = self.app[queue].enqueue(
+        job = self.app[queue].enqueue_call(
             _db_query,
-            on_success=_query,
+            on_success=query_callback,
             on_failure=_general_failure,
             result_ttl=self.query_ttl,
-            job_timeout=self.timeout,
+            timeout=self.timeout,
+            # success_callback_timeout=(2*self.timeout if kwargs["full"] else self.timeout),
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
@@ -329,6 +334,10 @@ class QueryService:
             if ids:
                 return ids
 
+        print("corpus_cols in kwargs", kwargs.get("corpus_cols", "NA"))
+        print("timeout", (2*self.timeout if kwargs["full"] else self.timeout))
+        print("queue", queue)
+
         job = self.app[queue].enqueue(
             _db_query,
             on_success=_sentences,
@@ -336,10 +345,12 @@ class QueryService:
             result_ttl=self.query_ttl,
             depends_on=kwargs["depends_on"],
             job_timeout=self.timeout,
+            success_callback_timeout=(2*self.timeout if kwargs["full"] else self.timeout),
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
         )
+        # import pdb; pdb.set_trace()
         return [job.id]
 
     def _attempt_sent_from_cache(self, hashed: str, **kwargs) -> list[str]:

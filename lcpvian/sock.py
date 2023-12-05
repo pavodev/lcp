@@ -216,7 +216,7 @@ async def _handle_message(
             payload.pop(drop, None)
 
     if action in simples or sent_allowed:
-        if action == "sentences" and len(cast(Results, payload["result"])) < 3:
+        if action == "sentences" and len(cast(Results, payload.get("result",[]))) < 3:
             pass
         else:
             await push_msg(

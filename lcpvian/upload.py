@@ -318,6 +318,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     template = request_data["template"]
     room = request_data.get("room", None)
+    print("request_data", request_data)
     projects = request_data.get("projects")
     special = {"lcp", "vian", "all"}
     project = next(i for i in projects if i not in special)
@@ -339,6 +340,8 @@ async def make_schema(request: web.Request) -> web.Response:
         # logging.error(msg, extra=error)
         error["message"] = f"{msg} -- {err}"
         return web.json_response(error)
+    
+    print("status", status)
 
     # user_id = status["account"]["eduPersonId"]
     user_acc = cast(dict[str, dict | str], status["account"])

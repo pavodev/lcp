@@ -196,9 +196,9 @@ async def create_app(test: bool = False) -> web.Application:
     app["redis"] = Redis.from_url(redis_url)
 
     # different queues for different kinds of jobs
-    app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)
-    app["query"] = Queue("query", connection=app["redis"])
-    app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
+    app["internal"] = Queue("internal", connection=app["redis"], job_timeout=1000, default_timeout=1000)
+    app["query"] = Queue("query", connection=app["redis"], job_timeout=1000, default_timeout=1000)
+    app["background"] = Queue("background", connection=app["redis"], job_timeout=1000, default_timeout=1000)
 
     # so far unused, we could potentially provide users with detailed feedback by
     # exploiting the 'failed job registry' provided by RQ.

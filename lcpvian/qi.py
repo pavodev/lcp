@@ -353,6 +353,19 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
+        if self.full:
+            conf: dict[str,Any] = self.app["config"].get(str(next((x for x in self.corpora), -1)),{})
+            seg_col: str = conf.get("segment","")
+            seg_map = conf.get("mapping",{}).get("layer",{}).get(seg_col,{})
+            if "partitions" in seg_map:
+                lg: str = next((x for x in self.languages), "")
+                seg_map = seg_map["partitions"].get(lg, {})
+            prepared = seg_map.get("prepared",{})
+            print("prepared", prepared)
+            corpus_cols: list[str] = prepared.get("columnHeaders",[])
+            kwargs["corpus_cols"] = corpus_cols
+            print("full and corpus_cols", corpus_cols)
+            
         queue = "query" if not self.full else "background"
         qs = self.app["query_service"]
         sents_jobs = qs.sentences(
