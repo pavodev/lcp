@@ -6,6 +6,7 @@ run.cpython*
 build/
 worker.cpython*
 uploads/*
+results/*
 .coverage
 .env
 *.so

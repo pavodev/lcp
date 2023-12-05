@@ -52,12 +52,55 @@ OPS = {
 }
 
 
+def _prepare_existing(res: Results, kwics: set[int], colls: set[int]) -> dict:
+    out: dict = {}
+    for k, v in res.items():
+        k = int(k)
+        if k < 1 or k in kwics:
+            continue
+        if k not in out:
+            out[k] = {}
+        if k in colls:
+            for text, total, e in v:
+                if text not in out[k]:
+                    out[k][text] = (total, e)
+                else:
+                    print("Todo: if this happens, we need to combine scores")
+                    pretotal, pree = out[k][text]
+                    out[k][text] = (total + pretotal, (e + pree / 2))
+        else:
+            for r in v:
+                body = r[:-1]
+                if tuple(body) not in out[k]:
+                    out[k][tuple(body)] = 0
+                out[k][tuple(body)] += r[-1]
+    return out
+
+
+def _unfold(exist: dict, kwics: set[int], colls: set[int]) -> Results:
+    out: Results = {}
+    for k, v in exist.items():
+        k = int(k)
+        if k < 1:
+            continue
+        if k in kwics:
+            continue
+        if k not in out:
+            out[k] = []
+        if k in colls:
+            for text, (a, b) in v.items():
+                out[k].append([text, a, b])
+        else:
+            for body, score in v.items():
+                out[k].append(list(body) + [score])
+    return out
+
+
 def _aggregate_results(
     result: list,
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
-    # current: Batch | None = None,
     current: Any,
     done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
@@ -74,6 +117,11 @@ def _aggregate_results(
     )
     counts: defaultdict[int, int] = defaultdict(int)
 
+    minus_one = existing.get(-1, {})
+    zero = existing.get(0, {})
+
+    precalcs: dict = _prepare_existing(existing, kwics, colls)
+
     for line in result:
         key = int(line[0])
         rest: list[Any] = line[1]
@@ -85,27 +133,30 @@ def _aggregate_results(
             continue
         if key not in existing:
             existing[key] = []
+        if key not in precalcs:
+            precalcs[key] = {}
         if key in colls:
             text, total_this_batch, e = rest
-            preexist = sum(i[1] for i in cast(list, existing[key]) if i[0] == text)
-            preexist_e = next(
-                (i[-1] for i in cast(list, existing[key]) if i[0] == text), 0
-            )
+            preexist, preexist_e = precalcs[key].get(text, (0, 0))
             combined = preexist + total_this_batch
             counts[key] = combined
             combined_e = _combine_e(e, preexist_e, current, done)
-            fixed = [text, combined, combined_e]
-            existing[key] = [*[i for i in cast(list, existing[key]) if i[0] != text], fixed]
+            precalcs[key][text] = (combined, combined_e)
             continue
         # frequency table:
         body = cast(list, rest[:-1])
         total_this_batch = rest[-1]
-        preexist = sum(i[-1] for i in cast(list, existing[key]) if i[:-1] == body)
+        # need_update = body in precalcs[key]
+        preexist = precalcs[key].get(
+            tuple(body), 0
+        )
         combined = preexist + total_this_batch
+        precalcs[key][tuple(body)] = combined
         counts[key] = combined
-        existing[key] = [i for i in cast(list, existing[key]) if i[:-1] != body]
-        body.append(combined)
-        cast(list, existing[key]).append(body)
+        
+    existing = _unfold(precalcs, kwics, colls)
+    existing[-1] = minus_one
+    existing[0] = zero
 
     results_to_send = _apply_filters(existing, post_processes)
 
@@ -336,7 +387,7 @@ def _make_filters(
     for idx, filters in post.items():
         fixed: list[tuple[str, str, str | int | float]] = []
         for filt in filters:
-            name, comp = cast(tuple[str, dict[str,Any]], list(filt.items())[0])
+            name, comp = cast(tuple[str, dict[str, Any]], list(filt.items())[0])
             if name != "comparison":
                 raise ValueError("expected comparion")
 
@@ -351,14 +402,16 @@ def _make_filters(
             # else:
             #     body = bits
             # made = cast(tuple[str, str, int | str | float], tuple(body))
-            entity = comp['entity']
-            operator = comp['operator']
-            value = next(c[1] for c in comp.items() if c[0] not in ('entity','operator'))
+            entity = comp["entity"]
+            operator = comp["operator"]
+            value = next(
+                c[1] for c in comp.items() if c[0] not in ("entity", "operator")
+            )
             if value.isnumeric():
                 value = int(value)
             elif value.replace(".", "").isnumeric():
                 value = float(value)
-            made = cast(tuple[str, str, int | str | float], (entity,operator,value))
+            made = cast(tuple[str, str, int | str | float], (entity, operator, value))
             fixed.append(made)
         out[idx] = fixed
     return out
