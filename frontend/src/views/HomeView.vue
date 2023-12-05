@@ -425,11 +425,19 @@ export default {
     async saveModalProject() {
       let retval = await useProjectStore().create(this.modalProjectData);
       if (retval) {
-        useUserStore().fetchUserData();
-        useNotificationStore().add({
-          type: "success",
-          text: `The project is successfully created`,
-        });
+        if (retval.status == false){
+          useNotificationStore().add({
+            type: "error",
+            text: retval.msg,
+          });
+        }
+        else {
+          useUserStore().fetchUserData();
+          useNotificationStore().add({
+            type: "success",
+            text: `The project is successfully created`,
+          });
+        }
       }
     },
     // setTooltips() {
