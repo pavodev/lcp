@@ -37,7 +37,7 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import Batch, QueryMeta, RawSent, ResultSents, Results, VianKWIC
+from .typed import Batch, QueryMeta, RawSent, ResultSents, ResultsValue, Results, VianKWIC
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -60,6 +60,7 @@ def _prepare_existing(res: Results, kwics: set[int], colls: set[int]) -> dict:
             continue
         if k not in out:
             out[k] = {}
+        v = cast(list, v)
         if k in colls:
             for text, total, e in v:
                 if text not in out[k]:
@@ -89,10 +90,12 @@ def _unfold(exist: dict, kwics: set[int], colls: set[int]) -> Results:
             out[k] = []
         if k in colls:
             for text, (a, b) in v.items():
-                out[k].append([text, a, b])
+                ok = cast(list, out[k])
+                ok.append([text, a, b])
         else:
             for body, score in v.items():
-                out[k].append(list(body) + [score])
+                ok = cast(list, out[k])
+                ok.append(list(body) + [score])
     return out
 
 
@@ -117,8 +120,8 @@ def _aggregate_results(
     )
     counts: defaultdict[int, int] = defaultdict(int)
 
-    minus_one = existing.get(-1, {})
-    zero = existing.get(0, {})
+    minus_one: ResultsValue = existing.get(-1, cast(ResultsValue, {}))
+    zero: ResultsValue = existing.get(0, cast(ResultsValue, {}))
 
     precalcs: dict = _prepare_existing(existing, kwics, colls)
 
