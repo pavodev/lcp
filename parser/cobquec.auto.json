@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
+    "$id": "https://liri.linguistik.uzh.ch/cobquec5.schema.json",
     "title": "Constraint-based Query Configuration",
     "description": "A linguistic query for LCP data Representation",
     "type": "object",
@@ -631,7 +631,7 @@
         "results_plain": {
             "properties": {
                 "context": {
-                    "type": "string",
+                    "type": "array",
                     "$ref": "#/$defs/context"
                 },
                 "entities": {
@@ -701,8 +701,11 @@
             ]
         },
         "context": {
-            "type": "string",
-            "$ref": "#/$defs/label"
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/context__"
+            },
+            "minItems": 1
         },
         "entities": {
             "type": "array",
@@ -770,7 +773,7 @@
         },
         "operator": {
             "type": "string",
-            "pattern": "(<>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!|in)"
+            "pattern": "(<(-|\\d+(\\.\\.\\d+)?)?>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!|in)"
         },
         "math_comparison": {
             "type": "string",
@@ -831,6 +834,10 @@
             "type": "string"
         },
         "entity_ref__": {
+            "type": "string",
+            "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
+        "context__": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
         },

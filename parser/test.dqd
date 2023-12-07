@@ -1,44 +1,39 @@
-Segment s
+Segment:en s_en
 
-sequence seq 1..2
-    Token@s e
-        OR
-            lemma = "every"
-            lemma = "each"
-    Token@s n
-        upos = "NOUN"
-        DepRel
-            head = v
-            dep = n
-            label = 'subj'
+Token@s_en tv_en
+	upos = "VERB"
 
-Token@s v
-    upos = "VERB"
-    
-Token@s o
-    upos = "NOUN"
-    DepRel
-        head = v
-        dep = o
-        label = 'obj'
+Token@s_en to_en
+	upos = "NOUN"
+	DepRel
+		head = to_en
+		dep = tv_en
+		label = "obj"
 
-Token@s df
-    lemma = "different"
-    upos = "ADJ"
-    DepRel
-        head = o
-        dep = df
 
-results => plain
-    context
-        s
-    entities
-        seq
-        df
+Segment:de s_de
+	s_de <-> s_en
 
-results2 => plain
-    context
-        s2
-    entities
-        seq2
-        df2
+Token@s_de tv_de
+	upos = "VERB"
+	tv_de <-> tv_en
+
+Token@s_de to_de
+	upos = "NOUN"
+	DepRel
+		head = to_en
+		dep = tv_en
+		label = "obj"
+	to_de <-> to_en
+
+
+myKWIC1 => plain
+	context
+		s_de
+		s_en
+	entities
+		tv_en
+		tv_de
+		to_en
+		to_de
+
