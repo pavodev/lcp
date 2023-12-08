@@ -57,7 +57,8 @@ def process_brackets(node: Any) -> dict:
         if at == "word":
             at = "form" # hack
         value: str = next(c for c in query.children if isinstance(c, Token)).value
-        return {'comparison': {'entity': at, 'operator': op, 'regexComparison': value}}
+        comparison_type: str = "stringComparison" if nget(query,"modifier") and get_leaf_value(nget(query,"modifier")) == "%l" else "regexComparison"
+        return {'comparison': {'entity': at, 'operator': op, comparison_type: value}}
     
         
     elif section:
