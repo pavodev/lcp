@@ -132,7 +132,7 @@ def process_node(node: Any, members: list, conf: dict[str,Any] = {'token': "Toke
         
         elif bracket_node:
             constraints: dict = process_brackets(bracket_node)
-            token["unit"]["constraints"] = constraints
+            token["unit"]["constraints"] = [constraints]
             quantifier = nget(bracket_node, "quantifier")
             
         range = process_quantifier(quantifier, range)
