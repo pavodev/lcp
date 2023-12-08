@@ -20,7 +20,7 @@ def nget(node: Any, prop: str) -> Any:
     return out
 
 
-def process_quantifier(quantifier, range) -> tuple[int,int]:
+def process_quantifier(quantifier, range) -> list[int]:
     if quantifier:
         r: Any = nget(quantifier, "range")
         if r:
@@ -73,9 +73,16 @@ def process_brackets(node: Any) -> dict:
             return {'logicalOpNAry': {'operator': operator, 'args': [processed_section, process_brackets(vp)]}}
         else:
             return processed_section
+        
+    return {}
 
 
 def process_node(node: Any, members: list, conf: dict[str,Any] = {'token': "Token"}) -> None:
+    
+    token: dict[str,Any] = {"unit": {"layer": conf['token']}}
+    range: list[int] = [1,1]
+    label: Any = nget(node, "label")
+    quantifier: Any = None
     
     if node.data == "brackets": # Parentheses
         
@@ -84,16 +91,13 @@ def process_node(node: Any, members: list, conf: dict[str,Any] = {'token': "Toke
         for cn in children_nodes:
             process_node(cn, tmp_members, conf)
         
-        label: Any = nget(node, "label")
-        
-        range: tuple[int,int] = [1,1]
-        quantifier: Any = nget(node, "quantifier")
+        quantifier = nget(node, "quantifier")
         range = process_quantifier(quantifier, range)
         
         if len(tmp_members) == 0:
             return
         elif len(tmp_members) == 1 and range == [1,1]:
-            token: dict = tmp_members[0]
+            token = tmp_members[0]
             if label:
                 token["unit"]["label"] = get_leaf_value(label)
             members.append(token)
@@ -109,17 +113,12 @@ def process_node(node: Any, members: list, conf: dict[str,Any] = {'token': "Toke
         
     elif node.data == "node":
         
-        token: dict[str,Any] = {"unit": {"layer": conf['token']}}
-        range: tuple[int,int] = [1,1]
-        
-        label: Any = nget(node, "label")
         if label:
             token["unit"]["label"] = get_leaf_value(label)
 
         empty_node: Any = nget(node, "empty_node")
         string_node: Any = nget(node, "string_node")
         bracket_node: Any = nget(node, "bracket_node")
-        quantifier: Any = None
         
         if string_node:
             comp: str = get_leaf_value(string_node)
@@ -140,11 +139,10 @@ def process_node(node: Any, members: list, conf: dict[str,Any] = {'token': "Toke
         if range == [1,1]:
             members.append(token)
         else:
-            s: dict[str,Any] = {'sequence': {
+            members.append({'sequence': {
                 'members': [token],
                 'repetition': f"{str(range[0])}..{'*' if range[1] == -1 else str(range[1])}"
-            }}
-            members.append(s)
+            }})
 
 
 # cqp is a Lark tree
