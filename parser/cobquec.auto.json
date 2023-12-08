@@ -43,6 +43,10 @@
                     "type": "object",
                     "$ref": "#/$defs/unit"
                 },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
+                },
                 "reference": {
                     "type": "string",
                     "$ref": "#/$defs/reference"
@@ -92,6 +96,11 @@
                 {
                     "required": [
                         "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "cqp"
                     ]
                 },
                 {
@@ -162,6 +171,10 @@
                     "type": "object",
                     "$ref": "#/$defs/unit"
                 },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
+                },
                 "reference": {
                     "type": "string",
                     "$ref": "#/$defs/reference"
@@ -211,6 +224,11 @@
                 {
                     "required": [
                         "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "cqp"
                     ]
                 },
                 {
@@ -356,9 +374,31 @@
                 "layer"
             ]
         },
+        "cqp": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "cqp": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/cqp__"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
         "reference": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
+        "cqp__": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/cqp__"
+            },
+            "minItems": 1
         },
         "members": {
             "properties": {
@@ -397,6 +437,10 @@
                 "unit": {
                     "type": "object",
                     "$ref": "#/$defs/unit"
+                },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
                 },
                 "reference": {
                     "type": "string",
@@ -447,6 +491,11 @@
                 {
                     "required": [
                         "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "cqp"
                     ]
                 },
                 {
