@@ -130,7 +130,7 @@ class QueryIteration:
                 json_query = json.loads(self.query)
                 json_query = json.loads(json.dumps(json_query, sort_keys=True))
             except json.JSONDecodeError:
-                json_query = convert(self.query)
+                json_query = convert(self.query, self.config)
                 self.dqd = self.query
         
         res = cast(list[dict[str, dict[str, Any]]], json_query.get("results", []))

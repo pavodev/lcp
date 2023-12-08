@@ -11,10 +11,7 @@ statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ 
                 | operator__binary _NL _INDENT args__two _DEDENT                              -> logical_op_binary
                 | operator__n_ary _NL _INDENT args__any _DEDENT                               -> logical_op_n_ary
                 | layer(":"partition)?("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT] -> unit
-                | "```cqp" label? _NL _INDENT cqp__ _DEDENT "```" _NL                         -> cqp
                 | LABEL _NL*                                                                  -> reference
-
-cqp__           : (ANYTHING _NL|_INDENT cqp__ _DEDENT)+
 
 members         : statement__                                                         -> members
 
@@ -104,8 +101,6 @@ RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
 STRING          : /[^\n\r ].*/
 
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
-
-ANYTHING        : /.+/
 
 %import common.CNAME                                                                -> NAME
 %import common.WS_INLINE

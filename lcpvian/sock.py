@@ -385,11 +385,11 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     if request.app["mypy"]:
         while True:
             msg = await ws.receive()
-            await _handle_sock(ws, msg, sockets, request.app["query_service"])
+            await _handle_sock(ws, msg, sockets, request.app["query_service"], request.app["config"])
     else:
         # mypyc bug?
         async for msg in ws:
-            await _handle_sock(ws, msg, sockets, request.app["query_service"])
+            await _handle_sock(ws, msg, sockets, request.app["query_service"], request.app["config"])
 
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
@@ -398,7 +398,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
 
 async def _handle_sock(
-    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService
+    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService, conf: dict[str,Any]
 ) -> None:
     """
     Handle an incoming message based on its `action`
@@ -471,6 +471,7 @@ async def _handle_sock(
 
     # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":
+        payload["config"] = conf
         resp = await validate(**payload)
         await push_msg(sockets, session_id, resp, just=ident)
 

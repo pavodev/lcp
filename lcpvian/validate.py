@@ -23,7 +23,8 @@ async def validate(
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
     except json.JSONDecodeError:
         try:
-            json_query = convert(query)
+            conf: dict = kwargs.get("config", {}).get(kwargs.get("corpus"))
+            json_query = convert(query, conf)
             result = {
                 "kind": "dqd",
                 "valid": True,

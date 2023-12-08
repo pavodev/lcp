@@ -1254,6 +1254,7 @@ export default {
       useWsStore().sendWSMessage({
         action: "validate",
         query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
+        corpus: this.selectedCorpora.value
       });
     },
     saveQuery() {
