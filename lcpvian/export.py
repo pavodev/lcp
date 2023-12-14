@@ -1,6 +1,7 @@
 import json
 
 from aiohttp import web
+from asyncio import sleep
 from typing import cast
 from rq.job import Job
 
@@ -17,12 +18,21 @@ async def export(request: web.Request) -> web.Response:
     
     job = Job.fetch(hashed, connection=request.app["redis"])
     
-    print("Job meta", [str(k) for k in job.meta.keys])
+    finished_jobs = [Job.fetch(jid, connection=request.app["redis"]) for jid in request.app["query"].finished_job_registry.get_job_ids()]
+    associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == hashed]
     
-    kwargs = job.kwargs
+    response = web.StreamResponse(
+        status=200,
+        reason='OK',
+        headers={'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename=results.txt'},
+    )
+    await response.prepare(request)
     
-    room = cast(str, kwargs.get("room", ""))
-    user = cast(str, kwargs.get("user", ""))
+    for j in [job, *associated_jobs]:
+        for line in j.result:
+            await response.write(f"{str(line)}\n".encode('utf-8'))
     
-    response = {"action": "export", "user": user, "room": room, "hashed": hashed}
-    return web.json_response(response)
+    # import pdb; pdb.set_trace()
+    await response.write_eof()
+    return response
+    

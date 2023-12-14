@@ -112,6 +112,17 @@
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
             </button>
+
+            <button
+              type="button"
+              v-if="queryStatus == 'satisfied' && !loading && debug"
+              @click="exportResults"
+              class="btn btn-primary me-1"
+            >
+              <FontAwesomeIcon :icon="['fas', 'file-export']" />
+              Export
+            </button>
+
             <button
               type="button"
               v-if="queryStatus == 'satisfied' && !loading"
@@ -728,6 +739,8 @@ import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
 import { setTooltips, removeTooltips } from "@/tooltips";
 
+import config from '@/config'
+
 export default {
   name: "QueryTestView",
   data() {
@@ -1184,6 +1197,18 @@ export default {
       let g = svg.querySelector("g");
       if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
+    },
+    async exportResults() {
+      const hashed = this.WSDataResults.first_job || this.WSDataResults.job
+      const a = document.createElement('a'); 
+      a.innerText = "test.txt";
+      a.title = "test.txt";
+      a.download = "test.txt";
+      a.target = "_blank";
+      a.href = `${config.apiUrl}/export/${hashed}`;
+      document.body.appendChild(a);
+      a.click(); 
+      a.remove();
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
