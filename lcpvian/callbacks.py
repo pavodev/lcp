@@ -546,8 +546,8 @@ def _upload(
     gui: bool = job.kwargs["gui"]
     msg_id = str(uuid4())
 
-    if not room or not result:
-        return None
+    # if not room or not result:
+    #     return None
     jso = {
         "user": user,
         "room": room,

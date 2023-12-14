@@ -135,18 +135,17 @@ def to_dict(tree: Any, properties_parent: dict = {}, conf: dict[str, Any] | None
         
         if child_name == "cqp":
             label_child: Any = next((c for c in child.children if not isinstance(c, Token) and c.data=="label"), None)
+            part_of_child: Any = next((c for c in child.children if not isinstance(c, Token) and c.data=="part_of"), None)
             cqp_rules: Any = next(c for c in child.children if not isinstance(c, Token) and c.data=="cqp__")
             cqp_str: str = re.sub(r"(^|\n)\s*cqp__", "", cqp_rules.pretty() )
             cqp: Any = cqp_parser.parse(cqp_str)
             cqp_obj: dict[str, Any] = cqp_to_json( cqp , conf )
             if cqp_obj:
-                
+                o = cqp_obj.get("sequence", cqp_obj.get("unit", {}))
                 if label_child:
-                    if "sequence" in cqp_obj:
-                        cqp_obj["sequence"]["label"] = label_child.children[0].value
-                    elif "unit" in cqp_obj:
-                        cqp_obj["unit"]["label"] = label_child.children[0].value
-                        
+                    o["label"] = label_child.children[0].value
+                if part_of_child:
+                    o["partOf"] = part_of_child.children[0].value
                 return cqp_obj
             else:
                 continue

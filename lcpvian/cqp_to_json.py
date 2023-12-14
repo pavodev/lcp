@@ -24,13 +24,13 @@ def process_quantifier(quantifier, range) -> list[int]:
     if quantifier:
         r: Any = nget(quantifier, "range")
         if r:
-            if nget(r, "RANGE_EXACT"):
-                n: int = int(get_leaf_value(r))
-                range = [n,n]
+            n_exact: int = int(next((c.value for c in r.children if isinstance(c,Token) and c.type == "RANGE_EXACT"), -1))
+            if n_exact >= 0:
+                range = [n_exact,n_exact]
             else:
-                min: int = int(next(c.value for c in r.children if isinstance(c,Token) and c.type == "RANGE_MIN"))
-                max: int = int(next(c.value for c in r.children if isinstance(c,Token) and c.type == "RANGE_MAX"))
-                range = [min,max]      
+                min: int = int(next((c.value for c in r.children if isinstance(c,Token) and c.type == "RANGE_MIN"), 0))
+                max: int = int(next((c.value for c in r.children if isinstance(c,Token) and c.type == "RANGE_MAX"), -1))
+                range = [min,max]
         else:
             value: str = get_leaf_value(quantifier)
             if value == "+":

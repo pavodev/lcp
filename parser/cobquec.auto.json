@@ -354,6 +354,10 @@
                     "type": "string",
                     "$ref": "#/$defs/layer"
                 },
+                "partition": {
+                    "type": "string",
+                    "$ref": "#/$defs/partition"
+                },
                 "partOf": {
                     "type": "string",
                     "$ref": "#/$defs/part_of"
@@ -379,6 +383,10 @@
                 "label": {
                     "type": "string",
                     "$ref": "#/$defs/label"
+                },
+                "partOf": {
+                    "type": "string",
+                    "$ref": "#/$defs/part_of"
                 },
                 "cqp": {
                     "type": "array",
@@ -862,6 +870,10 @@
             "pattern": "[A-Z_][a-zA-Z0-9_]*"
         },
         "part_of": {
+            "type": "string",
+            "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
+        "partition": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
         },

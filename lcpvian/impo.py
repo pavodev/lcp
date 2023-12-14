@@ -465,6 +465,7 @@ class Importer:
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)
         rows = cast(list[MainCorpus], await task)
+        # The row is now in main.corpus, time to update the app's config?
         return rows[0]
 
     async def drop_similar(self) -> None:

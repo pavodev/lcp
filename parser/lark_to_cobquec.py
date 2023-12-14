@@ -289,9 +289,14 @@ class Rule:
 
     def process_references_in_line(self, line):
         line = re.sub(r"[\s\t]+", " ", line)
+
         line = re.sub(
-            r"(?<![a-z_])((\"[^\"]+\")|[_A-Z]+)[+?*]?(?![a-z])", "", line
-        )  # remove literals
+            r"\".+?\"", "", line
+        )  # remove quote literals
+
+        line = re.sub(
+            r"(?<![a-z_])[_A-Z]+[+?*]?(?![a-z])", "", line
+        )  # remove literal references
 
         line = re.sub(
             r"\s+([|+?*~\])0-9.])", "\\1", line
