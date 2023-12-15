@@ -57,6 +57,9 @@ from .utils import (
 )
 
 
+PUBSUB_LIMIT = int(os.getenv("PUBSUB_LIMIT", 31999999))
+
+
 def _query(
     job: Job,
     connection: RedisConnection[bytes],
@@ -287,7 +290,7 @@ def _query(
     job.save_meta()  # type: ignore
 
     dump: str = json.dumps(jso, cls=CustomEncoder)
-    if len(dump) > 31999999:
+    if len(dump) > PUBSUB_LIMIT:
         jso.update({
             "status": "failed",
             "kind": "Failed",
@@ -420,7 +423,7 @@ def _sentences(
     }
 
     dump: str = json.dumps(jso, cls=CustomEncoder)
-    if len(dump) > 31999999:
+    if len(dump) > PUBSUB_LIMIT:
         jso.update({
             "status": "failed",
             "kind": "Failed",

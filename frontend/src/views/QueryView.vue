@@ -115,7 +115,7 @@
 
             <button
               type="button"
-              v-if="queryStatus == 'satisfied' && !loading && debug"
+              v-if="queryStatus in {'satisfied':1,'finished':1} && !loading && debug"
               @click="exportResults"
               class="btn btn-primary me-1"
             >
