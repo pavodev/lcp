@@ -111,15 +111,6 @@ async def handle_redis_response(
         logging.error(str(err), extra=extra)
 
 
-def pubsub_callback(uuid: str, callback: Callable, app: web.Application) -> None:
-    """
-    Run callback in response to messages signed with the uuid and return a clearer for the callback
-    """
-    app["pubsub_callbacks"]: dict[str,Callable] = app.get("pubsub_callbacks", {})
-    app["pubsub_callbacks"][uuid] = callback
-    return None
-
-
 async def listen_to_redis(app: web.Application) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
@@ -266,12 +257,6 @@ async def _handle_message(
 
     if to_submit is not None:
         await to_submit
-
-    if action == "callback":
-        uuid: str = payload.get("uuid")
-        callback: Callable | None = app.get("pubsub_callbacks", {}).get(uuid)
-        if callable(callback):
-            await callback(json.dumps(payload))
 
     return None
 

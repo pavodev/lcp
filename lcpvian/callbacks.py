@@ -377,6 +377,11 @@ def _sentences(
     if len(to_send) < 3 and not submit_query:
         print(f"No results found for {table} kwic -- skipping WS message")
         return None
+    
+    # if we previously sent a warning about there being too much data, stop here
+    if base.meta.get("been_warned"):
+        print("Processed too much data -- skipping WS message")
+        return None
 
     trues = {"true", "1", "y", "yes"}
     use_cache = os.getenv("USE_CACHE", "true").lower() in trues
@@ -432,10 +437,10 @@ def _sentences(
             "full": False,
             "result": dict()
         })
-        print(f"Too much data to handle in a single transaction, sending an error message and canceling base job {base.id}")
+        print(f"Too much data to handle in a single transaction, sending an error message")
         dump = json.dumps(jso, cls=CustomEncoder)
-        base.cancel()
-        job.cancel()
+        base.meta["been_warned"] = True
+        base.save_meta()
 
     connection.publish(PUBSUB_CHANNEL, dump)
     return None
