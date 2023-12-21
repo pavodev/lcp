@@ -265,7 +265,10 @@ export default {
       }
     },
     round(float) {
-      return Math.round(1000*float) / 1000;
+      if (float < 0.001) 
+        return Number.parseFloat(float).toExponential(2);
+      else
+        return Math.round(1000*float) / 1000;
     }
   },
   computed: {
