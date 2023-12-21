@@ -115,12 +115,12 @@
 
             <button
               type="button"
-              v-if="queryStatus in {'satisfied':1,'finished':1} && !loading && debug"
+              v-if="queryStatus in {'satisfied':1,'finished':1} && !loading"
               @click="exportResults"
               class="btn btn-primary me-1"
             >
               <FontAwesomeIcon :icon="['fas', 'file-export']" />
-              Export
+              Export preview
             </button>
 
             <button

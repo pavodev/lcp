@@ -233,7 +233,19 @@
           <div class="modal-body text-start" v-if="corpusModal">
             <div class="row">
               <div class="col-5">
-                <p class="title mb-0">{{ corpusModal.meta.name }}</p>
+                <div class="title mb-0">
+                  <span>{{ corpusModal.meta.name }}</span>
+                  <div
+                    class="icon-1 btn btn-primary btn-sm horizontal-space"
+                    title="Query corpus"
+                    @click="openQueryWithCorpus(corpusModal)"
+                    data-bs-dismiss="modal"
+                  >
+                    <FontAwesomeIcon
+                      :icon="['fas', 'magnifying-glass-chart']"
+                    />
+                  </div>
+                </div>
                 <p class="author mb-0" v-if="corpusModal.meta.author">
                   by {{ corpusModal.meta.author }}
                 </p>
@@ -581,5 +593,8 @@ details-button:disabled {
 }
 .details-button.icon-3 {
   right: 90px;
+}
+.horizontal-space {
+  margin: 0em 1em;
 }
 </style>
