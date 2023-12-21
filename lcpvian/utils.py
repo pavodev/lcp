@@ -667,7 +667,9 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
 
 
 def _publish_msg(connection: RedisConnection, message: JSONObject, msg_id: str) -> None:
-
+    """
+    Store a message with msg_id as key, and notify listener
+    """
     if not isinstance(message, (str, bytes)):
         message = json.dumps(message, cls=CustomEncoder)
     connection.set(msg_id, message)
