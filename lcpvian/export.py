@@ -17,18 +17,23 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
     entities: list = entities_attributes.get("data", [])
     sid, matches = args
     first_token_id, prep_seg = sentences[sid]
-    matching_entities: dict[str,Any] = {n['name']: ([] if n.get("type") in ("sequence","set") else 0) for n in entities}
+    matching_entities: dict[str,int|list[int]]
+    for n in entities:
+        if n.get("type") in ("sequence","set"):
+            matching_entities[n['name']] = cast(list[int], [])
+        else:
+            matching_entities[n['name']] = 0
 
-    tokens = list()
+    tokens: list[dict] = list()
     for n, token in enumerate(prep_seg):
         token_id = int(first_token_id) + n
         for n_m, m in enumerate(matches):
             if isinstance(m, int):
                 if m == token_id:
-                    matching_entities[entities[n_m]['name']] = token_id
+                    matching_entities[entities[n_m]['name']] = cast(int, token_id)
             elif isinstance(m, list):
                 if token_id in m:
-                    me: list = matching_entities[entities[n_m]['name']]
+                    me: list[int] = cast(list[int], matching_entities[entities[n_m]['name']])
                     me.append(token_id)
         token_dict = {columns[n_col]: col for n_col, col in enumerate(token)}
         token_dict["token_id"] = token_id
@@ -118,12 +123,15 @@ async def export(request: web.Request) -> web.StreamResponse:
     for n, data in job.meta.get("all_non_kwic_results", {}).items():
         if n in (0,-1):
             continue
-        info = meta[n-1]
-        name = info.get("name","")
-        type = info.get("type","")
-        attr = info.get("attributes", [])
+        info: dict = meta[n-1]
+        name: str = info.get("name","")
+        type: str = info.get("type","")
+        attr: list[dict] = info.get("attributes", [])
         for line in data:
-            d: dict = {attr[n].get("name"): v for n, v in enumerate(line)}
+            d: dict[str,list] = {}
+            for n, v in enumerate(line):
+                attr_name: str = attr[n].get("name", f"entry_{n}")
+                d[attr_name] = v
             await response.write(("\t".join([str(n),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
     
     await response.write_eof()
