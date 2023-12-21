@@ -17,7 +17,7 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
     entities: list = entities_attributes.get("data", [])
     sid, matches = args
     first_token_id, prep_seg = sentences[sid]
-    matching_entities: dict[str,list|int] = {n['name']: ([] if n.get("type") in ("sequence","set") else 0) for n in entities}
+    matching_entities: dict[str,Any] = {n['name']: ([] if n.get("type") in ("sequence","set") else 0) for n in entities}
 
     tokens = list()
     for n, token in enumerate(prep_seg):
@@ -28,7 +28,8 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
                     matching_entities[entities[n_m]['name']] = token_id
             elif isinstance(m, list):
                 if token_id in m:
-                    cast(list, matching_entities[entities[n_m]['name']]).append(token_id)
+                    me: list = matching_entities[entities[n_m]['name']]
+                    me.append(token_id)
         token_dict = {columns[n_col]: col for n_col, col in enumerate(token)}
         token_dict["token_id"] = token_id
         tokens.append(token_dict)
