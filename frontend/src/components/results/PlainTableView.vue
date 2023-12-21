@@ -23,6 +23,9 @@
           :key="resultIndex"
           :data-index="resultIndex"
         >
+          <button @click="copyToClip(item)">
+            <FontAwesomeIcon :icon="['fas', 'copy']" />
+          </button>
           <td scope="row">
             <span
               v-for="(token) in item"
@@ -260,6 +263,8 @@
 import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 
+import Utils from "@/utils.js";
+
 class TokenToDisplay {
   constructor(tokenArray, index, groups, columnHeaders) {
     if (!(tokenArray instanceof Array) || tokenArray.length < 2)
@@ -406,6 +411,9 @@ export default {
       }
       return classes;
     },
+    copyToClip(item) {
+      Utils.copyToClip(item);
+    }
   },
   computed: {
     headToken() {
