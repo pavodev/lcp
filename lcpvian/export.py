@@ -17,10 +17,10 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
     entities: list = entities_attributes.get("data", [])
     sid, matches = args
     first_token_id, prep_seg = sentences[sid]
-    matching_entities: dict[str,int|list[int]]
+    matching_entities: dict[str,int|list[int]] = {}
     for n in entities:
         if n.get("type") in ("sequence","set"):
-            matching_entities[n['name']] = cast(list[int], [])
+            matching_entities[n['name']] = []
         else:
             matching_entities[n['name']] = 0
 
@@ -120,10 +120,11 @@ async def export(request: web.Request) -> web.StreamResponse:
         await kwic([job, *associated_jobs], response, request.app["config"])
 
     # Write non-KWIC results
-    for n, data in job.meta.get("all_non_kwic_results", {}).items():
-        if n in (0,-1):
+    for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+        # import pdb; pdb.set_trace()
+        if n_type in (0,-1):
             continue
-        info: dict = meta[n-1]
+        info: dict = meta[n_type-1]
         name: str = info.get("name","")
         type: str = info.get("type","")
         attr: list[dict] = info.get("attributes", [])
@@ -132,7 +133,7 @@ async def export(request: web.Request) -> web.StreamResponse:
             for n, v in enumerate(line):
                 attr_name: str = attr[n].get("name", f"entry_{n}")
                 d[attr_name] = v
-            await response.write(("\t".join([str(n),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
+            await response.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
     
     await response.write_eof()
     return response
