@@ -201,8 +201,7 @@ async def create_app(test: bool = False) -> web.Application:
     pubsub_limit = redis_settings.config_get(limit)[limit]
     redis_settings.quit()
     _pieces = pubsub_limit.split()
-    sleep_time = int(_pieces[-1])
-    app["redis_pubsub_limit"] = int(_pieces[-3])
+    sleep_time = int(_pieces[-1]) + 2
     app["redis_pubsub_limit_sleep"] = sleep_time
     retry_policy: Retry = Retry(ConstantBackoff(sleep_time), 3)
     async_retry_policy: AsyncRetry = AsyncRetry(ConstantBackoff(sleep_time), 3)
@@ -224,10 +223,6 @@ async def create_app(test: bool = False) -> web.Application:
     )
     app["redis"].set("timebytes", json.dumps([]))
     app["_redis_url"] = redis_url
-    total_parts_by_id: dict[str, int] = {}
-    app["total_parts_by_id"] = total_parts_by_id
-    chunk_parts: defaultdict[str, dict[int, bytes]] = defaultdict(dict)
-    app["chunk_parts"] = chunk_parts
 
     # different queues for different kinds of jobs
     app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)

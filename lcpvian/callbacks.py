@@ -15,7 +15,6 @@ from __future__ import annotations
 import json
 import os
 import shutil
-import time
 import traceback
 
 from datetime import datetime
@@ -55,7 +54,6 @@ from .utils import (
     _decide_can_send,
     _time_remaining,
     _publish_msg,
-    PUBSUB_CHANNEL,
     TRUES,
 )
 
@@ -242,6 +240,8 @@ def _query(
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_kwic_lines = min(max_kwic, total_found)
 
+    action = "query_result"
+
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -251,7 +251,7 @@ def _query(
             "room": room,
             "status": status,
             "job": job.id,
-            "action": "query_result",
+            "action": action,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
@@ -309,7 +309,8 @@ def _query(
             connection.set(msg_id, dumped)
         connection.expire(msg_id, MESSAGE_TTL)
         return None
-    return _publish_msg(connection, dumped)
+
+    return _publish_msg(connection, dumped, msg_id)
 
 
 def _sentences(
@@ -412,10 +413,12 @@ def _sentences(
     if status == "finished" and more_data:
         more_data = base.meta["total_results_so_far"] >= total_requested
 
+    action = "sentences"
+
     jso = {
         "result": to_send,
         "status": status,
-        "action": "sentences",
+        "action": action,
         "full": full,
         "more_data_available": more_data,
         "submit_query": submit_payload if submit_query else False,
@@ -442,7 +445,7 @@ def _sentences(
 
     job.save_meta()
 
-    return _publish_msg(connection, dumped)
+    return _publish_msg(connection, dumped, msg_id)
 
 
 def _document(
@@ -454,6 +457,7 @@ def _document(
     """
     When a user requests a document, we give it to them via websocket
     """
+    action = "document"
     user = cast(str, kwargs.get("user", job.kwargs["user"]))
     room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
     if not room:
@@ -464,14 +468,14 @@ def _document(
     msg_id = str(uuid4())
     jso = {
         "document": result,
-        "action": "document",
+        "action": action,
         "user": user,
         "room": room,
         "msg_id": msg_id,
         "corpus": job.kwargs["corpus"],
         "doc_id": job.kwargs["doc"],
     }
-    return _publish_msg(connection, jso)
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _document_ids(
@@ -489,16 +493,17 @@ def _document_ids(
         return None
     msg_id = str(uuid4())
     formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
+    action = "document_ids"
     jso = {
         "document_ids": formatted,
-        "action": "document_ids",
+        "action": action,
         "user": user,
         "msg_id": msg_id,
         "room": room,
         "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
     }
-    return _publish_msg(connection, jso)
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _schema(
@@ -515,12 +520,13 @@ def _schema(
     if not room:
         return None
     msg_id = str(uuid4())
+    action = "uploaded"
     jso = {
         "user": user,
         "status": "success" if not result else "error",
         "project": job.kwargs["project"],
         "project_name": job.kwargs["project_name"],
-        "action": "uploaded",
+        "action": action,
         "gui": job.kwargs.get("gui", False),
         "room": room,
         "msg_id": msg_id,
@@ -528,7 +534,7 @@ def _schema(
     if result:
         jso["error"] = result
 
-    return _publish_msg(connection, jso)
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _upload(
@@ -549,6 +555,7 @@ def _upload(
     is_vian: bool = job.kwargs["is_vian"]
     gui: bool = job.kwargs["gui"]
     msg_id = str(uuid4())
+    action = "uploaded"
 
     # if not room or not result:
     #     return None
@@ -561,14 +568,14 @@ def _upload(
         "entry": _row_to_value(result, project=project),
         "status": "success" if not result else "error",
         "project": project,
-        "action": "uploaded",
+        "action": action,
         "gui": gui,
         "msg_id": msg_id,
     }
     if result:
         jso["error"] = result
 
-    return _publish_msg(connection, jso)
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _upload_failure(
@@ -582,6 +589,7 @@ def _upload_failure(
     Cleanup on upload fail, and maybe send ws message
     """
     print(f"Upload failure: {typ} : {value}: {traceback}")
+    msg_id = str(uuid4())
 
     project: str
     user: str
@@ -608,19 +616,22 @@ def _upload_failure(
     except Exception as err:
         print(f"cannot format object: {trace} / {err}")
 
+    action = "upload_fail"
+
     if user and room:
         jso = {
             "user": user,
             "room": room,
             "project": project,
-            "action": "upload_fail",
+            "action": action,
             "status": "failed",
             "job": job.id,
+            "msg_id": msg_id,
             "traceback": form_error,
             "kind": str(typ),
             "value": str(value),
         }
-        return _publish_msg(connection, jso)
+        return _publish_msg(connection, jso, msg_id)
 
 
 def _general_failure(
@@ -633,7 +644,9 @@ def _general_failure(
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
+    msg_id = str(uuid4())
     form_error = str(trace)
+    action = "failed"
     try:
         form_error = "".join(traceback.format_tb(trace))
     except Exception as err:
@@ -649,7 +662,8 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
-            "action": "failed",
+            "action": action,
+            "msg_id": msg_id,
             "traceback": form_error,
             "job": job.id,
             **job.kwargs,
@@ -659,7 +673,7 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    return _publish_msg(connection, jso)
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _queries(
@@ -692,9 +706,7 @@ def _queries(
             dct: dict[str, Any] = dict(zip(cols, x))
             queries.append(dct)
         jso["queries"] = queries
-    made = json.dumps(jso, cls=CustomEncoder)
-    connection.publish(PUBSUB_CHANNEL, made)
-    return None
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _config(
@@ -706,6 +718,7 @@ def _config(
     """
     Run by worker: make config data
     """
+    action = "set_config"
     fixed: Config = {}
     msg_id = str(uuid4())
     for tup in result:
@@ -721,9 +734,9 @@ def _config(
     jso: dict[str, str | bool | Config] = {
         "config": fixed,
         "_is_config": True,
-        "action": "set_config",
+        "action": action,
         "msg_id": msg_id,
     }
     if publish:
-        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+        _publish_msg(connection, jso, msg_id)
     return jso

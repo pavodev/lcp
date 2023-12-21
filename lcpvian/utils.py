@@ -10,7 +10,6 @@ import logging
 import math
 import os
 import re
-import time
 import traceback
 
 from collections import Counter, defaultdict
@@ -62,6 +61,8 @@ from .typed import (
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
 TRUES = {"true", "1", "y", "yes"}
+
+MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
 
 class Interrupted(Exception):
@@ -271,133 +272,6 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
     await _general_error_handler("unregistered", exc, request)
 
 
-def _get_bytesize(message: dict | str | bytes | int | None) -> int:
-    if message is None:
-        return 0
-    if isinstance(message, (float, int)) and message <= 0.0:
-        return 0
-    if isinstance(message, (float, int)) and message > 0.0:
-        return message
-    if isinstance(message, bytes):
-        return len(message)
-    if isinstance(message, str):
-        return len(message.encode("utf-8"))
-    if isinstance(message, dict):
-        s: str = json.dumps(message, ensure_ascii=False, cls=CustomEncoder)
-        return len(s.encode("utf-8"))
-    raise Exception(f"todo: should not be here: {type(message)}")
-
-
-def _get_timebytes(
-    red: RedisConnection, sleep: int | float, bytes_to_send: int | None, limit: int
-) -> int | float:
-    """
-    Get bytes sent in the last minute, and time one must wait before sending
-    an object of bytes_to_send size
-    """
-    now = datetime.now()
-    key = "timebytes"
-    td = timedelta(seconds=sleep)
-    raw = red.get(key)
-    assert isinstance(raw, (str, bytes))
-    data = json.loads(raw)
-    every = [(datetime.fromisoformat(x), y) for x, y in data]
-    recent = list(sorted([(x, y) for x, y in every if x > (now - td)]))
-    recent_size = sum([a[-1] for a in recent])
-    to_set = [list(a) for a in recent]
-    if bytes_to_send:
-        to_set.append([now.isoformat(), bytes_to_send])
-    red.set(key, json.dumps(to_set, cls=CustomEncoder))
-    together = bytes_to_send + recent_size
-    form_to_send = (
-        round(bytes_to_send * 1e-6, 2) if bytes_to_send is not None else "zero"
-    )
-    form_limit = round(limit * 1e-6, 2)
-    form_together = round(together * 1e-6, 2)
-    form_recent = round(recent_size * 1e-6, 2)
-    if together < limit:
-        print(f"Under limit: {form_together} MB / {form_limit} MB")
-        return 0.0
-    if bytes_to_send is not None and bytes_to_send >= limit:
-        print(f"Over limit simple: {form_to_send} MB / {form_limit} MB")
-        return sleep
-    if not bytes_to_send or bytes_to_send <= 0.0:
-        return 0.0
-
-    free_space = 0
-    for time_queued, size in recent:
-        free_space += size
-        if free_space > bytes_to_send:
-            ago = now - time_queued
-            ts = math.ceil((td - ago).total_seconds())
-            print(
-                f"wait={ts} -- {form_to_send} MB to send, {form_limit} MB limit, {form_recent} MB queued, {form_together} MB together"
-            )
-            return ts
-    print(
-        f"Default case: wait={sleep} -- {form_to_send} MB to send, {form_limit} MB limit, {form_recent} MB queued, {form_together} MB together"
-    )
-    return sleep
-
-
-async def _chunk_message(msg: bytes, app: web.Application) -> dict[str, bytes]:
-    """
-    Handle a message that is being sent through pubsub in chunks of bytes
-    rather than a serialised JSON object
-
-    If this is the last needed chunk, combine everything into the original
-    JSON-like object expected by redis subscribe listener.
-
-    If this isn't the last message, we store the info until the last piece arrives.
-    """
-    total_parts_by_id: dict[str, int] = app["total_parts_by_id"]
-    parts: defaultdict[str, dict[int, bytes]] = app["chunk_parts"]
-    pieces = msg.split(b"#", 5)
-    _, _, uu, n, total, data = pieces
-    uid = uu.decode("utf-8")
-    if uid not in total_parts_by_id:
-        total_parts_by_id[uid] = int(total)
-
-    parts[uid][int(n)] = data
-
-    if total_parts_by_id.get(uid, -1) != len(parts[uid]):
-        return {}
-
-    elif int(total) == total_parts_by_id.get(uid, -1):
-        print(f"Finished chunking: {len(parts[uid])} chunks")
-        joined = b""
-        for k, v in sorted(parts[uid].items()):
-            joined += v
-        # message = joined.decode("utf-8")
-        del app["chunk_parts"][uid]
-        del app["total_parts_by_id"][uid]
-        return {"data": joined}
-    print("Warning: should never get here -- debug if this occurs")
-    return {}
-
-
-def _get_wait(
-    message: JSON | bytes,
-    red: RedisConnection,
-    limit: int,
-    sleep: int,
-) -> float | int:
-    """
-    if we can send 2000 bytes per minute
-    and in the past minute we have sent 500
-    we have to wait 15 seconds to have totally free space
-    """
-    if isinstance(message, int) and message == -1:
-        print("No message data -- only checking current status")
-
-    bytes_to_send: int = _get_bytesize(message)
-
-    if bytes_to_send <= 0.0:
-        return 0.0
-
-    return _get_timebytes(red, sleep, bytes_to_send, limit)
-
-
 def _get_status(
     n_results: int,
     total_results_requested: int,
@@ -494,7 +368,6 @@ def _handle_large_msg(strung: str, limit: int) -> list[bytes] | list[str]:
     if limit == -1:
         return [strung]
 
-    limit = math.ceil(limit * 0.95)
     enc: bytes = strung.encode("utf-8")
 
     if len(enc) < limit:
@@ -793,27 +666,11 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _publish_msg(connection: RedisConnection, message: JSONObject) -> None:
+def _publish_msg(connection: RedisConnection, message: JSONObject, msg_id: str) -> None:
 
     if not isinstance(message, (str, bytes)):
         message = json.dumps(message, cls=CustomEncoder)
-
-    conf_keyname = "client-output-buffer-limit"
-    pubsub_limit = connection.config_get(conf_keyname)[conf_keyname]
-    _pieces = pubsub_limit.split()
-    limit = int(_pieces[-3])
-    sleep = int(_pieces[-1])
-
-    res: list[bytes] | list[str] = _handle_large_msg(message, limit)
-    tot_size = sum(len(x) for x in res)
-
-    for i, piece in enumerate(res, start=1):
-        perce = round((len(piece) * 100.0) / tot_size, 2)
-        wait = _get_wait(piece, connection, limit, sleep)
-        if len(res) > 1:
-            print(f"Sending chunk {i}/{len(res)} -- {perce}% (wait: {wait})")
-        if wait > 0.0:
-            time.sleep(wait)
-        assert isinstance(piece, (str, bytes))
-        connection.publish(PUBSUB_CHANNEL, piece)
+    connection.set(msg_id, message)
+    connection.expire(msg_id, MESSAGE_TTL)
+    connection.publish(PUBSUB_CHANNEL, json.dumps({"msg_id": msg_id}))
     return None
