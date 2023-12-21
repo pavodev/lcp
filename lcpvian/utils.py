@@ -7,18 +7,20 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import math
 import os
 import re
+import time
 import traceback
 
-from collections import Counter
+from collections import Counter, defaultdict
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
-from typing import Any, cast, final, Literal, TypeAlias
+from typing import Any, cast, TypeAlias
 
-from uuid import UUID
+from uuid import UUID, uuid4
 
 try:
     from aiohttp import web, ClientSession
@@ -28,22 +30,19 @@ except ImportError:
 
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis import Redis as RedisConnection
-from redis.asyncio.connection import BaseParser
 
-try:
-    del BaseParser.__slots__  # type: ignore
-except AttributeError:
-    pass
+from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser
 
-from redis.asyncio.connection import HiredisParser, PythonParser
-
-try:
-    del HiredisParser.__slots__  # type: ignore
-    del PythonParser.__slots__  # type: ignore
-except AttributeError:
-    pass
 
 from redis.utils import HIREDIS_AVAILABLE
+
+if HIREDIS_AVAILABLE:
+    DefaultParser = _AsyncHiredisParser
+else:
+    DefaultParser = _AsyncRESP3Parser
+
+ParserClass = DefaultParser
+
 from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.job import Job
@@ -62,6 +61,8 @@ from .typed import (
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
+TRUES = {"true", "1", "y", "yes"}
+
 
 class Interrupted(Exception):
     """
@@ -77,6 +78,8 @@ class CustomEncoder(json.JSONEncoder):
     """
 
     def default(self, obj: Any) -> JSON:
+        if isinstance(obj, bytes):
+            return obj.decode("utf-8")
         if isinstance(obj, UUID):
             return obj.hex
         elif isinstance(obj, (datetime, date)):
@@ -172,9 +175,7 @@ async def _lama_project_create(
     url = f"{os.environ['LAMA_API_URL']}/profile"
     async with ClientSession() as session:
         async with session.post(
-            url,
-            json=project_data,
-            headers=_extract_lama_headers(headers)
+            url, json=project_data, headers=_extract_lama_headers(headers)
         ) as resp:
             jso: JSONObject = await resp.json()
             return jso
@@ -270,6 +271,133 @@ async def handle_lama_error(exc: Exception, request: web.Request) -> None:
     await _general_error_handler("unregistered", exc, request)
 
 
+def _get_bytesize(message: dict | str | bytes | int | None) -> int:
+    if message is None:
+        return 0
+    if isinstance(message, (float, int)) and message <= 0.0:
+        return 0
+    if isinstance(message, (float, int)) and message > 0.0:
+        return message
+    if isinstance(message, bytes):
+        return len(message)
+    if isinstance(message, str):
+        return len(message.encode("utf-8"))
+    if isinstance(message, dict):
+        s: str = json.dumps(message, ensure_ascii=False, cls=CustomEncoder)
+        return len(s.encode("utf-8"))
+    raise Exception(f"todo: should not be here: {type(message)}")
+
+
+def _get_timebytes(
+    red: RedisConnection, sleep: int | float, bytes_to_send: int | None, limit: int
+) -> int | float:
+    """
+    Get bytes sent in the last minute, and time one must wait before sending
+    an object of bytes_to_send size
+    """
+    now = datetime.now()
+    key = "timebytes"
+    td = timedelta(seconds=sleep)
+    raw = red.get(key)
+    assert isinstance(raw, (str, bytes))
+    data = json.loads(raw)
+    every = [(datetime.fromisoformat(x), y) for x, y in data]
+    recent = list(sorted([(x, y) for x, y in every if x > (now - td)]))
+    recent_size = sum([a[-1] for a in recent])
+    to_set = [list(a) for a in recent]
+    if bytes_to_send:
+        to_set.append([now.isoformat(), bytes_to_send])
+    red.set(key, json.dumps(to_set, cls=CustomEncoder))
+    together = bytes_to_send + recent_size
+    form_to_send = (
+        round(bytes_to_send * 1e-6, 2) if bytes_to_send is not None else "zero"
+    )
+    form_limit = round(limit * 1e-6, 2)
+    form_together = round(together * 1e-6, 2)
+    form_recent = round(recent_size * 1e-6, 2)
+    if together < limit:
+        print(f"Under limit: {form_together} MB / {form_limit} MB")
+        return 0.0
+    if bytes_to_send is not None and bytes_to_send >= limit:
+        print(f"Over limit simple: {form_to_send} MB / {form_limit} MB")
+        return sleep
+    if not bytes_to_send or bytes_to_send <= 0.0:
+        return 0.0
+
+    free_space = 0
+    for time_queued, size in recent:
+        free_space += size
+        if free_space > bytes_to_send:
+            ago = now - time_queued
+            ts = math.ceil((td - ago).total_seconds())
+            print(
+                f"wait={ts} -- {form_to_send} MB to send, {form_limit} MB limit, {form_recent} MB queued, {form_together} MB together"
+            )
+            return ts
+    print(
+        f"Default case: wait={sleep} -- {form_to_send} MB to send, {form_limit} MB limit, {form_recent} MB queued, {form_together} MB together"
+    )
+    return sleep
+
+
+async def _chunk_message(msg: bytes, app: web.Application) -> dict[str, bytes]:
+    """
+    Handle a message that is being sent through pubsub in chunks of bytes
+    rather than a serialised JSON object
+
+    If this is the last needed chunk, combine everything into the original
+    JSON-like object expected by redis subscribe listener.
+
+    If this isn't the last message, we store the info until the last piece arrives.
+    """
+    total_parts_by_id: dict[str, int] = app["total_parts_by_id"]
+    parts: defaultdict[str, dict[int, bytes]] = app["chunk_parts"]
+    pieces = msg.split(b"#", 5)
+    _, _, uu, n, total, data = pieces
+    uid = uu.decode("utf-8")
+    if uid not in total_parts_by_id:
+        total_parts_by_id[uid] = int(total)
+
+    parts[uid][int(n)] = data
+
+    if total_parts_by_id.get(uid, -1) != len(parts[uid]):
+        return {}
+
+    elif int(total) == total_parts_by_id.get(uid, -1):
+        print(f"Finished chunking: {len(parts[uid])} chunks")
+        joined = b""
+        for k, v in sorted(parts[uid].items()):
+            joined += v
+        # message = joined.decode("utf-8")
+        del app["chunk_parts"][uid]
+        del app["total_parts_by_id"][uid]
+        return {"data": joined}
+    print("Warning: should never get here -- debug if this occurs")
+    return {}
+
+
+def _get_wait(
+    message: JSON | bytes,
+    red: RedisConnection,
+    limit: int,
+    sleep: int,
+) -> float | int:
+    """
+    if we can send 2000 bytes per minute
+    and in the past minute we have sent 500
+    we have to wait 15 seconds to have totally free space
+    """
+    if isinstance(message, int) and message == -1:
+        print("No message data -- only checking current status")
+
+    bytes_to_send: int = _get_bytesize(message)
+
+    if bytes_to_send <= 0.0:
+        return 0.0
+
+    return _get_timebytes(red, sleep, bytes_to_send, limit)
+
+
 def _get_status(
     n_results: int,
     total_results_requested: int,
@@ -351,12 +479,45 @@ async def gather(
         raise err
 
 
+def _handle_large_msg(strung: str, limit: int) -> list[bytes] | list[str]:
+    """
+    Before we publish a message to redis pubsub, check if it's larger
+    than the pubsub limit. If it is, we break it into chunks, wait between
+    each publish, then join them back together on the other side
+
+    strung is a serialised JSON object, return a list str/bytes to send,
+    with a wait time determined by redis config in between each
+    """
+    # just a bit of extra room around our redis hard limit
+    buffer = 100
+
+    if limit == -1:
+        return [strung]
+
+    limit = math.ceil(limit * 0.95)
+    enc: bytes = strung.encode("utf-8")
+
+    if len(enc) < limit:
+        return [strung]
+    cz = limit - buffer
+    n_chunks = math.ceil(len(enc) / cz)
+    chunks: list[bytes] = [enc[0 + i : cz + i] for i in range(0, len(enc), cz)]
+    out: list[bytes] = []
+    uu = str(uuid4())[:8]
+    for i, chunk in enumerate(chunks, start=1):
+        formed = f"#CHUNK#{uu}#{i}#{n_chunks}#".encode("utf-8")
+        formed += chunk
+        out.append(formed)
+    return out
+
+
 async def push_msg(
     sockets: Websockets,
     session_id: str,
-    msg: JSONObject,
+    msg: JSONObject | bytes,
     skip: tuple[str | None, str] | None = None,
     just: tuple[str | None, str] | None = None,
+    **kwargs,
 ) -> None:
     """
     Send JSON websocket message to one or more users/rooms
@@ -375,7 +536,10 @@ async def push_msg(
             if just and (room, user_id) != just:
                 continue
             try:
-                await conn.send_json(msg)
+                if isinstance(msg, bytes):
+                    await conn.send_bytes(msg)
+                else:
+                    await conn.send_json(msg)
             except ConnectionResetError:
                 print(f"Connection reset: {room}/{user_id}")
                 pass
@@ -458,7 +622,7 @@ def _row_to_value(
         token_counts,
         mapping,
         enabled,
-        sample_query
+        sample_query,
     ) = tup
     ver = str(current_version)
     corpus_template = cast(CorpusTemplate, template)
@@ -629,38 +793,27 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-@final
-class WorkingParser(HiredisParser):
-    """
-    This is just a hack that allows mypy to work with async redis-py
-    """
+def _publish_msg(connection: RedisConnection, message: JSONObject) -> None:
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
-        return super().__init__(*args, **kwargs)
+    if not isinstance(message, (str, bytes)):
+        message = json.dumps(message, cls=CustomEncoder)
 
-    def on_connect(self, *args: Any, **kwargs: Any) -> None:
-        super().on_connect(*args, **kwargs)
-        return None
+    conf_keyname = "client-output-buffer-limit"
+    pubsub_limit = connection.config_get(conf_keyname)[conf_keyname]
+    _pieces = pubsub_limit.split()
+    limit = int(_pieces[-3])
+    sleep = int(_pieces[-1])
 
-    def on_disconnect(self, *args: Any, **kwargs: Any) -> None:
-        super().on_disconnect(*args, **kwargs)
-        return None
+    res: list[bytes] | list[str] = _handle_large_msg(message, limit)
+    tot_size = sum(len(x) for x in res)
 
-    async def read_from_socket(self) -> Literal[True]:
-        return await super().read_from_socket()
-
-    async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
-        return False
-
-
-@final
-class WorkingPythonParser(PythonParser):
-    """
-    This is also just a hack that allows mypy to work with async redis-py
-    """
-
-    async def can_read_destructive(self, *args: Any, **kwargs: Any) -> bool:
-        return False
-
-
-ParserClass = WorkingParser if HIREDIS_AVAILABLE else WorkingPythonParser
+    for i, piece in enumerate(res, start=1):
+        perce = round((len(piece) * 100.0) / tot_size, 2)
+        wait = _get_wait(piece, connection, limit, sleep)
+        if len(res) > 1:
+            print(f"Sending chunk {i}/{len(res)} -- {perce}% (wait: {wait})")
+        if wait > 0.0:
+            time.sleep(wait)
+        assert isinstance(piece, (str, bytes))
+        connection.publish(PUBSUB_CHANNEL, piece)
+    return None

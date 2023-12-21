@@ -7,15 +7,16 @@ Register URLs and endpoints, add redis, query_service, websockets, etc.
 from __future__ import annotations
 
 import importlib
+import json
 import logging
 import os
 import sys
 
-from collections import defaultdict, deque
-
 import aiohttp_cors
 import asyncio
 import uvloop
+
+from collections import defaultdict, deque
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
@@ -23,6 +24,10 @@ from aiohttp_catcher import Catcher, catch
 from dotenv import load_dotenv
 from redis import Redis
 from redis import asyncio as aioredis
+from redis.asyncio.retry import Retry as AsyncRetry
+from redis.backoff import ConstantBackoff
+from redis.exceptions import ConnectionError
+from redis.retry import Retry
 from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 from rq.registry import FailedJobRegistry
@@ -41,7 +46,7 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import ParserClass, handle_lama_error, handle_timeout
+from .utils import TRUES, handle_lama_error, handle_timeout
 from .video import video
 
 load_dotenv(override=True)
@@ -190,17 +195,45 @@ async def create_app(test: bool = False) -> web.Application:
     for url, method, func in endpoints:
         cors.add(cors.add(app.router.add_resource(url)).add_route(method, func))
 
-    # we keep two redis connections, for reasons
-    redis_url = f"{REDIS_URL}/{REDIS_DB_INDEX}"
+    redis_url: str = f"{REDIS_URL}/{REDIS_DB_INDEX}"
+    redis_settings = Redis.from_url(redis_url)
+    limit = "client-output-buffer-limit"
+    pubsub_limit = redis_settings.config_get(limit)[limit]
+    redis_settings.quit()
+    _pieces = pubsub_limit.split()
+    sleep_time = int(_pieces[-1])
+    app["redis_pubsub_limit"] = int(_pieces[-3])
+    app["redis_pubsub_limit_sleep"] = sleep_time
+    retry_policy: Retry = Retry(ConstantBackoff(sleep_time), 3)
+    async_retry_policy: AsyncRetry = AsyncRetry(ConstantBackoff(sleep_time), 3)
+
     # Danny seemed to say mypy used to need a parser_class here, but newer redis releases seem to do away with parser_class
     # app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
-    app["aredis"] = aioredis.Redis.from_url(url=redis_url)
-    app["redis"] = Redis.from_url(redis_url)
+    app["aredis"] = aioredis.Redis.from_url(
+        redis_url,
+        health_check_interval=10,
+        # parser_class=ParserClass,
+        retry_on_error=[ConnectionError],
+        retry=async_retry_policy,
+    )
+    app["redis"] = Redis.from_url(
+        redis_url,
+        health_check_interval=10,
+        retry_on_error=[ConnectionError],
+        retry=retry_policy,
+    )
+    app["redis"].set("timebytes", json.dumps([]))
+    app["_redis_url"] = redis_url
+    total_parts_by_id: dict[str, int] = {}
+    app["total_parts_by_id"] = total_parts_by_id
+    chunk_parts: defaultdict[str, dict[int, bytes]] = defaultdict(dict)
+    app["chunk_parts"] = chunk_parts
 
     # different queues for different kinds of jobs
     app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)
     app["query"] = Queue("query", connection=app["redis"])
     app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
+    app["_use_cache"] = os.getenv("USE_CACHE", "1").lower() in TRUES
 
     # so far unused, we could potentially provide users with detailed feedback by
     # exploiting the 'failed job registry' provided by RQ.

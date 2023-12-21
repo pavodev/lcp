@@ -28,6 +28,7 @@ from typing import final, Unpack, cast
 
 from aiohttp import web
 from redis import Redis as RedisConnection
+from rq import Callback
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
@@ -47,7 +48,7 @@ from .callbacks import (
 from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
-from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
+from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder, TRUES
 
 
 # The query in get_config is complex because we inject the possible values of the global attributes in corpus_template
@@ -113,10 +114,13 @@ class QueryService:
     def __init__(self, app: web.Application) -> None:
         self.app = app
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+        self.whole_corpus_timeout = int(
+            os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999)
+        )
+        self.callback_timeout = int(os.getenv("QUERY_CALLBACK_TIMEOUT", 5000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
-        trues = {"true", "1", "y", "yes"}
-        self.use_cache = os.getenv("USE_CACHE", "true").lower() in trues
+        self.use_cache = app["_use_cache"]
 
     async def send_all_data(self, job: Job, **kwargs) -> bool:
         """
@@ -185,12 +189,14 @@ class QueryService:
             if job is not None:
                 return job, submitted
 
+        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
+
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_query,
-            on_failure=_general_failure,
+            on_success=Callback(_query, timeout),
+            on_failure=Callback(_general_failure, timeout),
             result_ttl=self.query_ttl,
-            job_timeout=self.timeout,
+            job_timeout=timeout,
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
@@ -259,8 +265,8 @@ class QueryService:
                 pass
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_document_ids,
-            on_failure=_general_failure,
+            on_success=Callback(_document_ids, self.timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             args=(query, {}),
             kwargs=kwargs,
         )
@@ -301,8 +307,8 @@ class QueryService:
         }
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_document,
-            on_failure=_general_failure,
+            on_success=Callback(_document, self.timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query, params),
@@ -329,13 +335,15 @@ class QueryService:
             if ids:
                 return ids
 
+        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
+
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_sentences,
-            on_failure=_general_failure,
+            on_success=Callback(_sentences, timeout),
+            on_failure=Callback(_general_failure, timeout),
             result_ttl=self.query_ttl,
             depends_on=kwargs["depends_on"],
-            job_timeout=self.timeout,
+            job_timeout=timeout,
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
@@ -395,9 +403,9 @@ class QueryService:
                 pass
         job = self.app["internal"].enqueue(
             _db_query,
-            on_success=_config,
+            on_success=Callback(_config, self.callback_timeout),
             job_id=job_id,
-            on_failure=_general_failure,
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query,),
@@ -428,8 +436,8 @@ class QueryService:
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
-            on_success=_queries,
-            on_failure=_general_failure,
+            on_success=Callback(_queries, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query.strip(), params),
@@ -465,8 +473,8 @@ class QueryService:
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
-            on_success=_queries,
-            on_failure=_general_failure,
+            on_success=Callback(_queries, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             job_timeout=self.timeout,
             args=(query, params),
             kwargs=kwargs,
@@ -493,8 +501,8 @@ class QueryService:
         }
         job: Job = self.app[queue].enqueue(
             _upload_data,
-            on_success=_upload,
-            on_failure=_upload_failure,
+            on_success=Callback(_upload, self.callback_timeout),
+            on_failure=Callback(_upload_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
             args=(project, user, room, self.app["_debug"]),
@@ -528,8 +536,8 @@ class QueryService:
             # schema job remembered for one day?
             result_ttl=60 * 60 * 24,
             job_timeout=self.timeout,
-            on_success=_schema,
-            on_failure=_upload_failure,
+            on_success=Callback(_schema, self.callback_timeout),
+            on_failure=Callback(_upload_failure, self.callback_timeout),
             args=(create, schema_name, drops),
             kwargs=kwargs,
         )

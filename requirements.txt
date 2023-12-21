@@ -17,10 +17,10 @@ yarl==1.9.2
 pycares==4.3.0
 # asyncio speedup
 uvloop==0.17.0
-redis<5.0.0
+redis==5.0.1
 asyncpg==0.27.0
-rq==1.14.1
-types-redis<5.0.0
+rq==1.15.1
+types-redis==4.6.0.11
 lark==1.1.5
 py7zr==0.20.5
 gunicorn==20.1.0

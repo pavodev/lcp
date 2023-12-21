@@ -83,7 +83,7 @@ UserQuery: TypeAlias = tuple[
 ]
 
 # what redis sends to the listener
-RedisMessage: TypeAlias = dict[str, str | bytes | None] | None | str
+RedisMessage: TypeAlias = dict[str, str | bytes | None] | None | str | bytes
 
 # metadata we generate about a query
 QueryMeta: TypeAlias = dict[str, list[JSONObject]]

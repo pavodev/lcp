@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import time
 import traceback
 
 from datetime import datetime
@@ -53,11 +54,14 @@ from .utils import (
     _get_total_requested,
     _decide_can_send,
     _time_remaining,
+    _publish_msg,
     PUBSUB_CHANNEL,
+    TRUES,
 )
 
 
 PUBSUB_LIMIT = int(os.getenv("PUBSUB_LIMIT", 31999999))
+MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
 
 def _query(
@@ -212,6 +216,13 @@ def _query(
 
     msg_id = str(uuid4())  # todo: hash instead?
 
+    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
+
+    # todo: this should no longer happen, as we send a progress update message instead?
+    do_full = is_full and status != "finished"
+    if do_full:
+        can_send = False
+
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
@@ -278,6 +289,7 @@ def _query(
             "user": user,
             "room": room,
             "duration": duration,
+            "batches_done": batches_done_string,
             "total_duration": total_duration,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
@@ -289,23 +301,15 @@ def _query(
     job.meta["payload"] = jso
     job.save_meta()  # type: ignore
 
-    dump: str = json.dumps(jso, cls=CustomEncoder)
-    if len(dump) > PUBSUB_LIMIT:
-        jso.update({
-            "status": "failed",
-            "kind": "Failed",
-            "value": "Too much data to handle in a single transaction",
-            "action": "failed",
-            "full": False,
-            "result": dict()
-        })
-        print("Too much data to handle in a single transaction, sending an error message")
-        dump = json.dumps(jso, cls=CustomEncoder)
-        first_job.cancel()
-        job.cancel()
+    dumped = json.dumps(jso, cls=CustomEncoder)
 
-    connection.publish(PUBSUB_CHANNEL, dump)
-    return None
+    # todo: just update progress here, but do not send the rest
+    if use_cache and not can_send and False:
+        if not connection.get(msg_id):
+            connection.set(msg_id, dumped)
+        connection.expire(msg_id, MESSAGE_TTL)
+        return None
+    return _publish_msg(connection, dumped)
 
 
 def _sentences(
@@ -377,14 +381,13 @@ def _sentences(
     if len(to_send) < 3 and not submit_query:
         print(f"No results found for {table} kwic -- skipping WS message")
         return None
-    
+
     # if we previously sent a warning about there being too much data, stop here
     if base.meta.get("been_warned"):
         print("Processed too much data -- skipping WS message")
         return None
 
-    trues = {"true", "1", "y", "yes"}
-    use_cache = os.getenv("USE_CACHE", "true").lower() in trues
+    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
 
     if not use_cache:
         perc_done = depended.meta["payload"]["percentage_done"]
@@ -427,23 +430,19 @@ def _sentences(
         "percentage_words_done": words_done,
     }
 
-    dump: str = json.dumps(jso, cls=CustomEncoder)
-    if len(dump) > PUBSUB_LIMIT:
-        jso.update({
-            "status": "failed",
-            "kind": "Failed",
-            "value": "Too much data to handle in a single transaction",
-            "action": "failed",
-            "full": False,
-            "result": dict()
-        })
-        print(f"Too much data to handle in a single transaction, sending an error message")
-        dump = json.dumps(jso, cls=CustomEncoder)
-        base.meta["been_warned"] = True
-        base.save_meta()
+    # todo: just update progress here, but do not send the rest
+    dumped = json.dumps(jso, cls=CustomEncoder)
 
-    connection.publish(PUBSUB_CHANNEL, dump)
-    return None
+    if use_cache and not can_send and False:
+        if not connection.get(msg_id):
+            connection.set(msg_id, dumped)
+        connection.expire(msg_id, MESSAGE_TTL)
+        print("not returning sentences because searching whole corpus")
+        return
+
+    job.save_meta()
+
+    return _publish_msg(connection, dumped)
 
 
 def _document(
@@ -472,8 +471,7 @@ def _document(
         "corpus": job.kwargs["corpus"],
         "doc_id": job.kwargs["doc"],
     }
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso)
 
 
 def _document_ids(
@@ -500,8 +498,7 @@ def _document_ids(
         "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
     }
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso)
 
 
 def _schema(
@@ -531,8 +528,7 @@ def _schema(
     if result:
         jso["error"] = result
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso)
 
 
 def _upload(
@@ -572,8 +568,7 @@ def _upload(
     if result:
         jso["error"] = result
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso)
 
 
 def _upload_failure(
@@ -625,8 +620,7 @@ def _upload_failure(
             "kind": str(typ),
             "value": str(value),
         }
-        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+        return _publish_msg(connection, jso)
 
 
 def _general_failure(
@@ -665,8 +659,7 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso)
 
 
 def _queries(

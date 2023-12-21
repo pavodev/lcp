@@ -24,7 +24,8 @@ import logging
 import os
 import traceback
 
-from collections.abc import Callable, Coroutine
+from collections import defaultdict
+from collections.abc import Coroutine
 from typing import Any, Sized, cast
 
 try:
@@ -37,6 +38,8 @@ from aiohttp.http_websocket import WSMessage
 from rq.job import Job
 
 from redis.asyncio.client import PubSub
+from redis.exceptions import ConnectionError
+
 
 from .query import query
 from .query_service import QueryService
@@ -44,7 +47,12 @@ from .utils import push_msg
 from .validate import validate
 
 from .typed import JSONObject, RedisMessage, Results, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
+from .utils import (
+    PUBSUB_CHANNEL,
+    _filter_corpora,
+    _set_config,
+    _chunk_message,
+)
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -58,6 +66,11 @@ async def _process_message(
     Check that a WS message contains data, and is not a subscribe message,
     then handle it if so.
     """
+
+    chnk = isinstance(message, dict) and message.get("data", "").startswith(b"#CHUNK#")
+    if chnk:
+        message = await _chunk_message(message["data"], app)
+
     await asyncio.sleep(0.1)
     if not message or not isinstance(message, dict):
         return
@@ -73,7 +86,7 @@ async def _process_message(
 
 
 async def handle_redis_response(
-    channel: PubSub, app: web.Application, test: bool = False
+    channel: PubSub, app: web.Application, test: bool = False, retries: int = 5
 ) -> None:
     """
     If redis publishes a message, it gets picked up here in an async loop
@@ -85,19 +98,34 @@ async def handle_redis_response(
     message: RedisMessage = None
 
     try:
-        if app.get("mypy", False) is True:
-            async for message in channel.listen():
-                await _process_message(message, channel, app)
-                if message and test is True:
-                    return None
-        else:
-            while True:
-                message = await channel.get_message(
-                    ignore_subscribe_messages=True, timeout=2.0
-                )
-                await _process_message(message, channel, app)
-                if message and test is True:
-                    return None
+        while True:
+            await asyncio.sleep(0.1)
+            try:
+                if app.get("mypy", False) is True:
+                    async for message in channel.listen():
+                        if message is None:
+                            continue
+                        await _process_message(message, channel, app)
+                        if message and test is True:
+                            return None
+                else:
+                    while True:
+                        await asyncio.sleep(0.1)
+                        message = await channel.get_message(
+                            ignore_subscribe_messages=True, timeout=10.0
+                        )
+                        if message is None:
+                            continue
+                        await _process_message(message, channel, app)
+                        if message and test is True:
+                            return None
+            except ConnectionError as err:
+                print("Possibly too much data for redis pubsub?", err)
+                print("If this happens, debug utils._get_wait and/or restart pubsub")
+
+                print("Pausing for restart")
+                await asyncio.sleep(app["redis_pubsub_limit_sleep"])
+                print("Finished restart")
 
     except asyncio.TimeoutError as err:
         print(f"Warning: timeout in websocket listener ({err})")
@@ -116,15 +144,23 @@ async def listen_to_redis(app: web.Application) -> None:
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender, All the try/except logic is shutdown logic only
     """
-    async with app["aredis"].pubsub() as channel:
-        await channel.subscribe(PUBSUB_CHANNEL)
+    while True:
         try:
-            await handle_redis_response(channel, app, test=False)
+            async with app["aredis"].pubsub() as channel:
+                await channel.subscribe(PUBSUB_CHANNEL)
+                await handle_redis_response(channel, app, test=False)
+        except ConnectionError as err:
+            print("Connection error in listen_to_redis", err)
         except KeyboardInterrupt:
             pass
         except Exception as err:
             raise err
-        await channel.unsubscribe(PUBSUB_CHANNEL)
+        try:
+            print("Attempt unsubscribe")
+            await channel.unsubscribe(PUBSUB_CHANNEL)
+            print("unsubscribe success")
+        except:
+            pass
         try:
             await app["aredis"].quit()
         except Exception:
@@ -133,6 +169,8 @@ async def listen_to_redis(app: web.Application) -> None:
             app["redis"].quit()
         except Exception:
             pass
+        await asyncio.sleep(0.1)
+    return None
 
 
 async def _handle_error(
@@ -176,9 +214,16 @@ async def _handle_message(
 
     # for non-errors, we attach a msg_id to all messages, and store the message with
     # this key in redis so that the FE can retrieve it by /get_message endpoint anytime
-    if action not in errors and "msg_id" in payload and "no_restart" not in payload:
+    if (
+        action not in errors
+        and "msg_id" in payload
+        and "no_restart" not in payload
+        and app["_use_cache"]
+        # and False
+    ):
         uu = payload["msg_id"]
-        app["redis"].set(uu, json.dumps(payload))
+        if not app["redis"].get(uu):
+            app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
 
     if action == "sentences":
@@ -283,7 +328,10 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
 
 
 async def _handle_query(
-    app: web.Application, payload: JSONObject, user: str, room: str
+    app: web.Application,
+    payload: JSONObject,
+    user: str,
+    room: str,
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -321,7 +369,13 @@ async def _handle_query(
 
     if do_full:
         prog = cast(dict[str, Any], payload["progress"])
-        await push_msg(app["websockets"], room, prog, skip=None, just=(room, user))
+        await push_msg(
+            app["websockets"],
+            room,
+            prog,
+            skip=None,
+            just=(room, user),
+        )
 
     if not can_send:
         print("Not sending WS message!")
@@ -356,7 +410,13 @@ async def _handle_query(
             "simultaneous",
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
-        await push_msg(app["websockets"], room, payload, skip=None, just=(room, user))
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
 
     if to_submit is not None:
         await to_submit
@@ -385,11 +445,15 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     if request.app["mypy"]:
         while True:
             msg = await ws.receive()
-            await _handle_sock(ws, msg, sockets, request.app["query_service"], request.app["config"])
+            await _handle_sock(
+                ws, msg, sockets, request.app["query_service"], request.app["config"]
+            )
     else:
         # mypyc bug?
         async for msg in ws:
-            await _handle_sock(ws, msg, sockets, request.app["query_service"], request.app["config"])
+            await _handle_sock(
+                ws, msg, sockets, request.app["query_service"], request.app["config"]
+            )
 
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
@@ -398,7 +462,11 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
 
 async def _handle_sock(
-    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService, conf: dict[str,Any]
+    ws: web.WebSocketResponse,
+    msg: WSMessage,
+    sockets: Websockets,
+    qs: QueryService,
+    conf: dict[str, Any],
 ) -> None:
     """
     Handle an incoming message based on its `action`
@@ -498,7 +566,7 @@ async def ws_cleanup(sockets: Websockets) -> None:
 
     Send a message to other users about it, too
     """
-    interval = 3600
+    interval = 3600 * 48
     while True:
         for room, conns in sockets.items():
             to_close = set()
