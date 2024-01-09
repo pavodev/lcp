@@ -848,6 +848,15 @@ export default {
       ) {
         this.selectedLanguages = [this.availableLanguages[0]];
       }
+      // Switched which corpus is selected: clear results
+      if (this.selectedCorpora) {
+        this.percentageDone = 0;
+        this.percentageTotalDone = 0;
+        this.failedStatus = false;
+        this.loading = false;
+        this.WSDataResults = {};
+        this.WSDataSentences = {};
+      }
     },
     WSDataResults() {
       if (this.WSDataResults) {
