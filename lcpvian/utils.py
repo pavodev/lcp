@@ -35,6 +35,8 @@ from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser
 
 from redis.utils import HIREDIS_AVAILABLE
 
+DefaultParser: Any
+
 if HIREDIS_AVAILABLE:
     DefaultParser = _AsyncHiredisParser
 else:
@@ -666,7 +668,7 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _publish_msg(connection: RedisConnection, message: JSONObject, msg_id: str) -> None:
+def _publish_msg(connection: RedisConnection, message: JSONObject | str | bytes, msg_id: str) -> None:
     """
     Store a message with msg_id as key, and notify listener
     """

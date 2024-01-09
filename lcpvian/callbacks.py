@@ -575,7 +575,7 @@ def _upload(
     if result:
         jso["error"] = result
 
-    return _publish_msg(connection, jso, msg_id)
+    return _publish_msg(connection, cast(JSONObject, jso), msg_id)
 
 
 def _upload_failure(
@@ -738,5 +738,5 @@ def _config(
         "msg_id": msg_id,
     }
     if publish:
-        _publish_msg(connection, jso, msg_id)
+        _publish_msg(connection, cast(JSONObject, jso), msg_id)
     return jso
