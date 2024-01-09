@@ -262,7 +262,7 @@
 <script>
 import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
-
+import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
 
 class TokenToDisplay {
@@ -413,6 +413,10 @@ export default {
     },
     copyToClip(item) {
       Utils.copyToClip(item);
+      useNotificationStore().add({
+        type: "success",
+        text: "Copied to clipboard",
+      });
     }
   },
   computed: {
