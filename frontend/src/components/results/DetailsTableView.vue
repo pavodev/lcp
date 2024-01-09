@@ -23,6 +23,16 @@
 </template>
 
 <style>
+.modal {
+  width: unset !important;
+  max-width: calc(100vw - 2em);
+  left: 50vw;
+  transform: translateX(-50%);
+}
+.modal-content {
+  padding-left: 1em;
+  padding-right: 1em;
+}
 .table-box {
   overflow: auto;
 }
