@@ -24,7 +24,6 @@ import logging
 import os
 import traceback
 
-from collections import defaultdict
 from collections.abc import Coroutine
 from typing import Any, Sized, cast
 
@@ -46,13 +45,8 @@ from .query_service import QueryService
 from .utils import push_msg
 from .validate import validate
 
-from .typed import JSONObject, RedisMessage, Results, Websockets
-from .utils import (
-    PUBSUB_CHANNEL,
-    _filter_corpora,
-    _set_config,
-    _chunk_message,
-)
+from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
+from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -66,11 +60,6 @@ async def _process_message(
     Check that a WS message contains data, and is not a subscribe message,
     then handle it if so.
     """
-
-    chnk = isinstance(message, dict) and message.get("data", "").startswith(b"#CHUNK#")
-    if chnk:
-        message = await _chunk_message(message["data"], app)
-
     await asyncio.sleep(0.1)
     if not message or not isinstance(message, dict):
         return
@@ -78,7 +67,9 @@ async def _process_message(
         return
     if not message.get("data"):
         return
-    payload = json.loads(cast(bytes, message["data"]))
+    data = json.loads(cast(bytes, message["data"]))
+    raw: bytes = app["redis"].get(data["msg_id"])
+    payload: JSONObject = json.loads(raw)
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
@@ -121,11 +112,7 @@ async def handle_redis_response(
                             return None
             except ConnectionError as err:
                 print("Possibly too much data for redis pubsub?", err)
-                print("If this happens, debug utils._get_wait and/or restart pubsub")
-
-                print("Pausing for restart")
                 await asyncio.sleep(app["redis_pubsub_limit_sleep"])
-                print("Finished restart")
 
     except asyncio.TimeoutError as err:
         print(f"Warning: timeout in websocket listener ({err})")
@@ -256,7 +243,7 @@ async def _handle_message(
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
     if action == "sentences":
-        drops = ["can_send", "submit_query"]
+        drops = ("can_send", "submit_query")
         for drop in drops:
             payload.pop(drop, None)
 
@@ -368,7 +355,7 @@ async def _handle_query(
         to_submit = query(None, manual=payload, app=app)
 
     if do_full:
-        prog = cast(dict[str, Any], payload["progress"])
+        prog = cast(dict[str, JSON], payload["progress"])
         await push_msg(
             app["websockets"],
             room,
