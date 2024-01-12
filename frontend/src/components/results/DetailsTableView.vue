@@ -11,10 +11,15 @@
           <td v-for="(column, cIndex) in columnHeaders" :key="`td-${tIndex}-${cIndex}`">
             <span v-if="column == 'head'" v-html="headToken(token, tIndex)"> </span>
             <span
-              v-else
+              v-else-if="typeof(token[cIndex]) in {string:1,number:1}"
               :class="textClasses(column)"
               v-html="token[cIndex]"
             ></span>
+            <span
+              v-else
+              :class="objectClasses(token[cIndex])"
+              v-html="objectColumn(token[cIndex])"
+            > </span>
           </td>
         </tr>
       </tbody>
@@ -38,6 +43,32 @@
 }
 .modal-table.table {
   width: auto;
+}
+.object-column {
+  display: block;
+  height: 1.5em;
+  overflow-y: hidden;
+}
+.object-column button {
+  float: right;
+  margin-top: -0.25em;
+}
+.object-column button::before {
+  content: "▶";
+}
+.object-column pre {
+  display: block;
+  margin-top: -1.25em;
+}
+.object-column.unfolded {
+  height: unset;
+  overflow-y: visible;
+}
+.object-column.unfolded button::before {
+  content: "▼";
+}
+.object-column.unfolded pre {
+  margin-top: 0;
 }
 </style>
 
@@ -99,6 +130,19 @@ export default {
       if (group >= 0) classes.push(`tr-color-group-${group}`);
       return classes
     },
+    objectClasses(content) {
+      if (content)
+        return ['object-column'];
+      else
+        return [''];
+    },
+    objectColumn(content) {
+      if (content)
+        return `<button onclick="this.parentNode.classList.toggle('unfolded')"> </button>
+          <pre>${JSON.stringify(content,null,2).replace(/\n/g,'<br>')}</pre>`;
+      else
+        return '';
+    }
   },
 };
 </script>
