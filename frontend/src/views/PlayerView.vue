@@ -432,6 +432,7 @@
                     :query="queryDQD"
                     :corpora="selectedCorpora"
                     @update="updateQueryDQD"
+                    @submit="submitQuery"
                     :key="editorIndex"
                   />
                   <p

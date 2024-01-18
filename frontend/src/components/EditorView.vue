@@ -367,7 +367,7 @@ export default {
     //   editor.layout()
     // })
 
-    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, ()=>this.$emit("submit"));
+    editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, ()=>console.log("Enter") || this.$emit("submit"));
 
     // Generate a command ID for manual triggering of autocompletion
     // eslint-disable-next-line no-unused-vars

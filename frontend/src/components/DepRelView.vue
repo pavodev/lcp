@@ -17,6 +17,9 @@
   * >>> svg .link-text {
     font-size: 9px;
   }
+  * >>> svg g.text-form text.label-root {
+    text-decoration: underline;
+  }
   * >>> svg g.text-pos {
     font-size: 80%;
     font-weight: bold;
@@ -265,11 +268,12 @@ export default {
     })
 
     svg.append("g")
+    .attr("class", "text-form")
       .selectAll("text")
       .data(this.tokens)
       .join("text")
       // .attr("class", d => (d.id >= this.data[1] && d.id <= this.data.at(-1)) ? "text-bold text-danger" : "")
-      .attr("class", d => d.group )
+      .attr("class", (d,i) => d.group + ' ' + (this.sentences && this.sentences[1] ? `label-${this.sentences[1][i][5]}` : '') )
       .text(d => d.form)
       .attr("x", (d, index) => (this.tokenSpace * index + d.sumX))
       .attr("y", 10 + maxLevel*15)

@@ -90,12 +90,12 @@ RESULTS_ARROW.4       : /=>/
 ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
 
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
+NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
 
 LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/
 LABEL.2          : /[a-z][a-zA-Z0-9_]*/
 
 OPERATOR.1      : /(<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
-NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
 REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
 
 STRING_LITERAL  : /('.+'|".+")/
