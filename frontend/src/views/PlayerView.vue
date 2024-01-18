@@ -646,13 +646,13 @@ export default {
 
 sequence@s
 	Token t1
-		upos = DET
+		upos = "DET"
 	Token t2
-		upos = NOUN
+		upos = "NOUN"
 
 Gesture g
 	agent = s.agent
-	type = PG
+	type = "PG"
 	start >= s.start - 3s
 	end <= s.end + 3s
 
