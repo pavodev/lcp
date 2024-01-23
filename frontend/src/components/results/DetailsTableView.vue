@@ -33,6 +33,7 @@
   max-width: calc(100vw - 2em);
   left: 50vw;
   transform: translateX(-50%);
+  min-width: 50vw;
 }
 .modal-content {
   padding-left: 1em;
@@ -42,7 +43,7 @@
   overflow: auto;
 }
 .modal-table.table {
-  width: auto;
+  width: 100%;
 }
 .object-column {
   display: block;
