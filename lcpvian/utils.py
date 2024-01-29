@@ -12,14 +12,16 @@ import os
 import re
 import traceback
 
-from collections import Counter, defaultdict
+from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 from typing import Any, cast, TypeAlias
 
-from uuid import UUID, uuid4
+from uuid import uuid4
+
+import numpy as np
 
 try:
     from aiohttp import web, ClientSession
@@ -77,14 +79,19 @@ class Interrupted(Exception):
 
 class CustomEncoder(json.JSONEncoder):
     """
-    UUID and time to string, otherwise normal serialisation
+    Fix numpy objects and dates, otherwise normal serialisation
     """
 
-    def default(self, obj: Any) -> JSON:
+    def default(self, obj: Any):
         if isinstance(obj, bytes):
             return obj.decode("utf-8")
-        if isinstance(obj, UUID):
-            return obj.hex
+        if isinstance(obj, np.integer):
+            return int(obj)
+        if isinstance(obj, np.floating):
+            return float(obj)
+        # todo -- are we sure this isn't needed?:
+        # ifisinstance(obj, uuid.UUID):
+        #   return str(obj)
         elif isinstance(obj, (datetime, date)):
             return obj.isoformat()
         default: JSON = json.JSONEncoder.default(self, obj)
@@ -668,7 +675,9 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _publish_msg(connection: RedisConnection, message: JSONObject | str | bytes, msg_id: str) -> None:
+def _publish_msg(
+    connection: RedisConnection, message: JSONObject | str | bytes, msg_id: str
+) -> None:
     """
     Store a message with msg_id as key, and notify listener
     """
