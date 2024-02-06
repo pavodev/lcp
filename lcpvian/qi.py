@@ -27,7 +27,7 @@ be. Then the process repeats...
 
 import json
 import os
-
+import re
 # import logging
 import sys
 
@@ -356,7 +356,7 @@ class QueryIteration:
         queue = "query" if not self.full else "background"
         qs = self.app["query_service"]
         sents_jobs = qs.sentences(
-            self.sents_query(), depends_on=to_use, queue=queue, **kwargs
+            self.sents_query(), meta=self.meta_query(), depends_on=to_use, queue=queue, **kwargs
         )
         return sents_jobs
 
@@ -372,6 +372,79 @@ class QueryIteration:
             if batch.endswith(f"_{lan}"):
                 return lan
         return None
+
+    def _parent_of(self, child: str, parent: str) -> bool:
+        if not self.current_batch:
+            raise ValueError("Need batch")
+        config = self.config[str(self.current_batch[0])]
+        child_layer = config["layer"].get(child)
+        parent_layer = config["layer"].get(parent)
+        if not child_layer or not parent_layer:
+            return False
+        while parent_layer and (parents_child := parent_layer.get("contains")):
+            if parents_child == child:
+                return True
+            parent_layer = config["layer"].get(parents_child)
+        return False
+
+    def meta_query(self) -> str:
+        """
+        Build a query to fetch meta of connected layers, with a placeholder param :ids
+
+        The placeholder cannot be calculated until the associated query job
+        has finished, so we get those in jobfuncs._db_query with _get_sent_ids
+        """
+        if not self.current_batch:
+            raise ValueError("Need batch")
+        config = self.config[str(self.current_batch[0])]
+        seg = cast(str, config["segment"])
+        batch_suffix = re.match(rf"{config['token'].lower()}([0-9]+|rest)$", str(self.current_batch[2]))
+        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
+        parents_with_meta = [k for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")]
+
+        schema = self.current_batch[1]
+        lang = self._determine_language(self.current_batch[2])
+        name = seg.strip()
+        underlang = f"_{lang}" if lang else ""
+        seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
+
+        s_char_range = f"WITH s AS (SELECT char_range FROM {schema}.{seg_name} seg WHERE seg.{name}_id = ANY(:ids))"
+
+        selects = []
+        froms = ["s"]
+        wheres = []
+        joins = []
+        for layer in parents_with_meta:
+            layer_mapping = config["mapping"]["layer"].get(layer,{})
+            partitions = layer_mapping.get("partitions")
+            alignment = layer_mapping.get("alignment", {})
+            relation = layer_mapping.get("relation", alignment.get("relation", layer.lower()))
+            if not relation:
+                continue
+            if lang and partitions:
+                interim_relation = partitions.get(lang,{}).get("relation")
+                if not interim_relation:
+                    continue
+                joins.append(f"{schema}.{interim_relation} {layer}_meta_{lang} ON {layer}_meta_{lang}.char_range @> s.char_range")
+                selects.append(f"jsonb_build_array({layer}_meta_{lang}.char_range) AS {layer}_range")
+                wheres.append(f"{layer}_meta.alignment_id = ANY({layer}_meta_{lang}.alignment_id)")
+            else:
+                wheres.append(f"{layer}_meta.char_range @> s.char_range")
+                selects.append(f"jsonb_build_array({layer}_meta.char_range) AS {layer}_range")
+            froms.append(f"{schema}.{relation} {layer}_meta")
+            selects.append(f"{layer}_meta.meta AS {layer}_meta")
+
+        selects_formed = ", ".join(selects)
+        froms_formed = ", ".join(froms)
+        wheres_formed = " AND ".join(wheres)
+        joins_formed = " JOIN ".join(joins)
+        joins_formed = "" if not joins_formed else f" JOIN {joins_formed}"
+
+        meta = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
+
+        script = f"{s_char_range} {meta}"
+
+        return script
 
     def sents_query(self) -> str:
         """

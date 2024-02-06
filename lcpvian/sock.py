@@ -231,11 +231,11 @@ async def _handle_message(
 
     can_send = payload.get("can_send", True)
 
-    sent_allowed = action == "sentences" and can_send
+    sent_allowed = action in ("sentences","meta") and can_send
     to_submit: None | Coroutine = None
 
     if (
-        action == "sentences"
+        action in ("sentences","meta")
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):

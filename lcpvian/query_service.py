@@ -39,6 +39,7 @@ from .callbacks import (
     _document_ids,
     _general_failure,
     _upload_failure,
+    _meta,
     _queries,
     _query,
     _schema,
@@ -319,6 +320,7 @@ class QueryService:
     def sentences(
         self,
         query: str,
+        meta: str = "",
         queue: str = "query",
         **kwargs: int | bool | str | None | list[str],
     ) -> list[str]:
@@ -328,16 +330,21 @@ class QueryService:
             hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
         )
         kwargs["sentences_query"] = query
-        job: Job
+        hashed_meta = str(
+            hash((meta, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
+        )
+        job_sent: Job
 
         if self.use_cache:
             ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
+            if meta:
+                ids += self._attempt_meta_from_cache(hashed_meta, **kwargs)
             if ids:
                 return ids
 
         timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
 
-        job = self.app[queue].enqueue(
+        job_sent = self.app[queue].enqueue(
             _db_query,
             on_success=Callback(_sentences, timeout),
             on_failure=Callback(_general_failure, timeout),
@@ -348,7 +355,52 @@ class QueryService:
             args=(query,),
             kwargs=kwargs,
         )
-        return [job.id]
+        
+        return_jobs = [job_sent.id]
+
+        if meta:
+            kwargs["meta_query"] = meta
+            job_meta: Job = self.app[queue].enqueue(
+                _db_query,
+                on_success=Callback(_meta, timeout),
+                on_failure=Callback(_general_failure, timeout),
+                result_ttl=self.query_ttl,
+                depends_on=kwargs["depends_on"],
+                job_timeout=timeout,
+                job_id=hashed_meta,
+                args=(meta,),
+                kwargs=kwargs,
+            )
+            return_jobs.append(job_meta.id)
+        
+        return return_jobs
+
+    def _attempt_meta_from_cache(self, hashed: str, **kwargs) -> list[str]:
+        """
+        Try to return meta from redis cache, instead of doing a new query
+        """
+        jobs: list[str] = []
+        kwa: dict[str, int | bool | str | None] = {}
+        job: Job
+        try:
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            self.app["redis"].expire(job.id, self.query_ttl)
+            if job.get_status() == "finished":
+                print("Meta found in redis memory. Retrieving...")
+                kwa = {
+                    "full": cast(bool, kwargs["full"]),
+                    "user": cast(str, kwargs["user"]),
+                    "room": cast(str | None, kwargs["room"]),
+                    "from_memory": True,
+                    "total_results_requested": cast(
+                        int, kwargs["total_results_requested"]
+                    ),
+                }
+                _meta(job, self.app["redis"], job.result, **kwa)
+                return [job.id]
+        except NoSuchJobError:
+            pass
+        return jobs
 
     def _attempt_sent_from_cache(self, hashed: str, **kwargs) -> list[str]:
         """
