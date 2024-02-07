@@ -1140,7 +1140,6 @@ export default {
             this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
             this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
           }
-          console.log("WSDataMeta", this.WSDataMeta);
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {

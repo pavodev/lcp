@@ -322,6 +322,8 @@ def _meta(
     """
     Process meta data and send via websocket
     """
+    if not result:
+        return None
     # total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
@@ -353,12 +355,14 @@ def _meta(
     # to_send: Results
 
     # replace this with actual upstream handling of column names
-    columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
-    columns = [p.split(" AS ")[1].strip() for p in columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
-    to_send = {"-2": {}}
+    pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
+    if not pre_columns:
+        return None
+    columns: list[str] = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
+    to_send: dict[str, dict] = {"-2": {}}
     for res in result:
         seg_id = "0"
-        segment = {layer: {} for layer in columns if not layer.endswith("_id")}
+        segment: dict[str,dict] = {layer: {} for layer in columns if not layer.endswith("_id")}
         for n, layer in enumerate(columns):
             if layer.endswith("_id"):
                 if layer == "seg_id":
