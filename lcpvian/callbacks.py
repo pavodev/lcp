@@ -353,7 +353,7 @@ def _meta(
     # to_send: Results
 
     # replace this with actual upstream handling of column names
-    columns = re.match(r".+SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
+    columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
     columns = [p.split(" AS ")[1].strip() for p in columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
     to_send = {"-2": {}}
     for res in result:

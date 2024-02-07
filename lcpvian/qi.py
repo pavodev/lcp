@@ -398,27 +398,25 @@ class QueryIteration:
             raise ValueError("Need batch")
         config = self.config[str(self.current_batch[0])]
         seg = cast(str, config["segment"])
-        batch_suffix = re.match(rf"{config['token'].lower()}([0-9]+|rest)$", str(self.current_batch[2]))
-        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
-        parents_with_meta = [k for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")]
-
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
+        batch_suffix = re.match(rf"{config['token'].lower()}{underlang}([0-9]+|rest)$", str(self.current_batch[2]))
         seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
 
-        s_char_range = f"WITH s AS (SELECT {name}_id, char_range FROM {schema}.{seg_name} seg WHERE seg.{name}_id = ANY(:ids))"
+        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
+        parents_with_meta = [k for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")]
 
         selects = [f"s.{name}_id AS seg_id"]
-        froms = ["s"]
-        wheres = []
+        froms = [f"{schema}.{seg_name} s"]
+        wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
         for layer in parents_with_meta:
             layer_mapping = config["mapping"]["layer"].get(layer,{})
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
-            relation = layer_mapping.get("relation", alignment.get("relation", layer.lower()))
+            relation = alignment.get("relation") if alignment else layer_mapping.get("relation", layer.lower())
             if not relation:
                 continue
             if lang and partitions:
@@ -426,25 +424,23 @@ class QueryIteration:
                 if not interim_relation:
                     continue
                 joins.append(f"{schema}.{interim_relation} {layer}_{lang} ON {layer}_{lang}.char_range @> s.char_range")
-                # selects.append(f"lower({layer}_meta_{lang}.char_range) AS {layer}_lower_range")
-                # selects.append(f"upper({layer}_meta_{lang}.char_range) AS {layer}_upper_range")
-                wheres.append(f"{layer}.alignment_id = ANY({layer}_{lang}.alignment_id)")
+                joins.append(f"{schema}.{relation} {layer} ON {layer}_{lang}.alignment_id = {layer}.alignment_id")
             else:
-                wheres.append(f"{layer}.char_range @> s.char_range")
+                joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
+                # wheres.append(f"{layer}.char_range @> s.char_range")
                 # selects.append(f"lower({layer}_meta.char_range) AS {layer}_lower_range")
                 # selects.append(f"upper({layer}_meta.char_range) AS {layer}_upper_range")
-            froms.append(f"{schema}.{relation} {layer}")
+            # froms.append(f"{schema}.{relation} {layer}")
             selects.append(f"{layer}.meta AS {layer}")
-            selects.append(f"{layer}.{layer.lower()}_id AS {layer}_id")
+            selects.append(f"{layer}.{'alignment' if alignment else layer.lower()}_id AS {layer}_id")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
         joins_formed = " JOIN ".join(joins)
         joins_formed = "" if not joins_formed else f" JOIN {joins_formed}"
-        meta = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
-        script = f"{s_char_range} {meta}"
-        # print("meta script", script)
+        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
+        print("meta script", script)
         return script
 
     def sents_query(self) -> str:

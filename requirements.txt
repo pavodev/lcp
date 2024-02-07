@@ -38,3 +38,4 @@ types-psutil==5.9.5.12
 SQLAlchemy==2.0.15
 greenlet==2.0.2
 paramiko==3.2.0
+numpy==1.26.4
