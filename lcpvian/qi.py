@@ -408,9 +408,9 @@ class QueryIteration:
         underlang = f"_{lang}" if lang else ""
         seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
 
-        s_char_range = f"WITH s AS (SELECT char_range FROM {schema}.{seg_name} seg WHERE seg.{name}_id = ANY(:ids))"
+        s_char_range = f"WITH s AS (SELECT {name}_id, char_range FROM {schema}.{seg_name} seg WHERE seg.{name}_id = ANY(:ids))"
 
-        selects = []
+        selects = [f"s.{name}_id AS seg_id"]
         froms = ["s"]
         wheres = []
         joins = []
@@ -425,25 +425,26 @@ class QueryIteration:
                 interim_relation = partitions.get(lang,{}).get("relation")
                 if not interim_relation:
                     continue
-                joins.append(f"{schema}.{interim_relation} {layer}_meta_{lang} ON {layer}_meta_{lang}.char_range @> s.char_range")
-                selects.append(f"jsonb_build_array({layer}_meta_{lang}.char_range) AS {layer}_range")
-                wheres.append(f"{layer}_meta.alignment_id = ANY({layer}_meta_{lang}.alignment_id)")
+                joins.append(f"{schema}.{interim_relation} {layer}_{lang} ON {layer}_{lang}.char_range @> s.char_range")
+                # selects.append(f"lower({layer}_meta_{lang}.char_range) AS {layer}_lower_range")
+                # selects.append(f"upper({layer}_meta_{lang}.char_range) AS {layer}_upper_range")
+                wheres.append(f"{layer}.alignment_id = ANY({layer}_{lang}.alignment_id)")
             else:
-                wheres.append(f"{layer}_meta.char_range @> s.char_range")
-                selects.append(f"jsonb_build_array({layer}_meta.char_range) AS {layer}_range")
-            froms.append(f"{schema}.{relation} {layer}_meta")
-            selects.append(f"{layer}_meta.meta AS {layer}_meta")
+                wheres.append(f"{layer}.char_range @> s.char_range")
+                # selects.append(f"lower({layer}_meta.char_range) AS {layer}_lower_range")
+                # selects.append(f"upper({layer}_meta.char_range) AS {layer}_upper_range")
+            froms.append(f"{schema}.{relation} {layer}")
+            selects.append(f"{layer}.meta AS {layer}")
+            selects.append(f"{layer}.{layer.lower()}_id AS {layer}_id")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
         joins_formed = " JOIN ".join(joins)
         joins_formed = "" if not joins_formed else f" JOIN {joins_formed}"
-
         meta = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
-
         script = f"{s_char_range} {meta}"
-
+        # print("meta script", script)
         return script
 
     def sents_query(self) -> str:

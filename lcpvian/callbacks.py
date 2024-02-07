@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import traceback
 
@@ -350,7 +351,27 @@ def _meta(
     # # in full mode, we need to combine all the sentences into one message when finished
     # get_all_sents = full and status == "finished"
     # to_send: Results
-    to_send = result
+
+    # replace this with actual upstream handling of column names
+    columns = re.match(r".+SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
+    columns = [p.split(" AS ")[1].strip() for p in columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
+    to_send = {"-2": {}}
+    for res in result:
+        seg_id = "0"
+        segment = {layer: {} for layer in columns if not layer.endswith("_id")}
+        for n, layer in enumerate(columns):
+            if layer.endswith("_id"):
+                if layer == "seg_id":
+                    seg_id = res[n+1]
+                else:
+                    layer_name = layer.rstrip("_id")
+                    segment[layer_name]["id"] = str(res[n+1])
+            else:
+                segment[layer] = {**(segment[layer]), **(res[n+1])}
+        to_send["-2"][str(seg_id)] = segment
+
+    if not to_send["-2"]:
+        return None
 
     # if full:
     #     current_lines = 0

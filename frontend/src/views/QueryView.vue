@@ -542,6 +542,7 @@
                   v-if="plainType == 'table' || resultContainsSet(resultSet)"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
+                  :meta="WSDataMeta"
                   :attributes="resultSet.attributes"
                   :corpora="selectedCorpora"
                   @updatePage="updatePage"
@@ -552,6 +553,7 @@
                   v-else-if="resultContainsSet(resultSet) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
+                  :meta="WSDataMeta"
                   :attributes="resultSet.attributes"
                   :corpora="selectedCorpora"
                   @updatePage="updatePage"
@@ -563,6 +565,7 @@
                 v-else-if="resultSet.type != 'plain'"
                 :data="WSDataResults.result[index + 1]"
                 :attributes="resultSet.attributes"
+                :meta="WSDataMeta"
                 :resultsPerPage="resultsPerPage"
                 :type="resultSet.type"
               />
@@ -753,6 +756,7 @@ export default {
       selectedCorpora: [],
       isQueryValidData: null,
       WSDataResults: "",
+      WSDataMeta: {},
       WSDataSentences: "",
       pageSize: 100,
       nResults: 200,
@@ -855,6 +859,7 @@ export default {
         this.failedStatus = false;
         this.loading = false;
         this.WSDataResults = {};
+        this.WSDataMeta = {};
         this.WSDataSentences = {};
       }
     },
@@ -1129,6 +1134,13 @@ export default {
           //   this.loading = false;
           // }
           return;
+        } else if (data["action"] == "meta") {
+          const meta = data.result["-2"]; // change this?
+          for (let layer in meta) {
+            this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
+            this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
+          }
+          console.log("WSDataMeta", this.WSDataMeta);
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {

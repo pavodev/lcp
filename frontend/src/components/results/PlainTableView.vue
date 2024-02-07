@@ -28,6 +28,14 @@
           </button>
           <td scope="row">
             <span
+              v-if="Object.keys(meta)"
+              style="margin-right: 0.5em"
+              @mousemove="showMeta(resultIndex, $event)"
+              @mouseleave="closeMeta"
+            >
+              <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+            </span>
+            <span
               v-for="(token) in item"
               :key="`form-${token.index}`"
               @mousemove="showPopover(token.token, resultIndex, $event)"
@@ -127,6 +135,31 @@
                 "
                 v-html="currentToken[index]"
               ></span>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div
+      class="popover-liri"
+      v-if="currentMeta"
+      :style="{top: popoverY + 'px', left: popoverX + 'px' }"
+    >
+      <table class="table popover-table">
+        <thead>
+          <tr>
+            <th v-for="(_, layer) in currentMeta" :key="`th-${layer}`">
+              {{ layer }}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td v-for="(meta, layer) in currentMeta" :key="`tr-${layer}-value`">
+              <span
+                v-html="Object.entries(meta).map( ([name,value])=>`<strong>${name}:</strong> ${value}` ).join('<br>')"
+              >
+              </span>
             </td>
           </tr>
         </tbody>
@@ -264,6 +297,7 @@ import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
+import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 
 class TokenToDisplay {
   constructor(tokenArray, index, groups, columnHeaders) {
@@ -287,6 +321,7 @@ export default {
     "data",
     "sentences",
     "attributes",
+    "meta",
     "corpora",
     "resultsPerPage",
     "loading",
@@ -297,6 +332,7 @@ export default {
       popoverX: 0,
       currentToken: null,
       currentResultIndex: null,
+      currentMeta: null,
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
@@ -307,7 +343,8 @@ export default {
   components: {
     ResultsDetailsModalView,
     PaginationComponent,
-  },
+    FontAwesomeIcon
+},
   methods: {
     // getGroups1(data) {
     //   let groups = [];
@@ -356,6 +393,18 @@ export default {
     closePopover() {
       this.currentToken = null;
       this.currentResultIndex = null;
+    },
+    showMeta(resultIndex, event) {
+      this.closePopover();
+      resultIndex =
+        resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+      const sentenceId = this.data[resultIndex][0];
+      this.currentMeta = this.meta[sentenceId];
+      this.popoverY = event.clientY + 10;
+      this.popoverX = event.clientX + 10;
+    },
+    closeMeta() {
+      this.currentMeta = null;
     },
     showModal(index) {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
