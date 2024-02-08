@@ -406,7 +406,10 @@ class QueryIteration:
         seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
 
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
-        parents_with_meta = [k for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")]
+        parents_with_meta = {k:None for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")}
+        # Make sure to include Document in there, even if it's not a parent of Segment
+        if config["layer"][config["document"]].get("attributes",{}).get("meta"):
+            parents_with_meta[config["document"]] = None
 
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
@@ -423,22 +426,24 @@ class QueryIteration:
                 interim_relation = partitions.get(lang,{}).get("relation")
                 if not interim_relation:
                     continue
-                joins.append(f"{schema}.{interim_relation} {layer}_{lang} ON {layer}_{lang}.char_range @> s.char_range")
-                joins.append(f"{schema}.{relation} {layer} ON {layer}_{lang}.alignment_id = {layer}.alignment_id")
+                if alignment and relation:
+                    # The partition table is aligned to a main document table
+                    joins.append(f"{schema}.{interim_relation} {layer}_{lang} ON {layer}_{lang}.char_range @> s.char_range")
+                    joins.append(f"{schema}.{relation} {layer} ON {layer}_{lang}.alignment_id = {layer}.alignment_id")
+                else:
+                    # This is the main document table for this partition
+                    joins.append(f"{schema}.{interim_relation} {layer} ON {layer}.char_range @> s.char_range")
             else:
                 joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
-                # wheres.append(f"{layer}.char_range @> s.char_range")
-                # selects.append(f"lower({layer}_meta.char_range) AS {layer}_lower_range")
-                # selects.append(f"upper({layer}_meta.char_range) AS {layer}_upper_range")
-            # froms.append(f"{schema}.{relation} {layer}")
             selects.append(f"{layer}.meta AS {layer}")
             prefix_id: str
             if alignment:
-                'alignment'
-            elif layer == config["document"]:
+                prefix_id = 'alignment'
+            # not sure about this: open subtitles has move.document_id but swissdox has article.article_id
+            elif layer == config["document"] and not partitions:
                 prefix_id = "document"
             else:
-                layer.lower()
+                prefix_id = layer.lower()
             selects.append(f"{layer}.{prefix_id}_id AS {layer}_id")
 
         selects_formed = ", ".join(selects)

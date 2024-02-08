@@ -364,6 +364,8 @@ def _meta(
         seg_id = "0"
         segment: dict[str,dict] = {layer: {} for layer in columns if not layer.endswith("_id")}
         for n, layer in enumerate(columns):
+            if not res[n+1]:
+                continue
             if layer.endswith("_id"):
                 if layer == "seg_id":
                     seg_id = res[n+1]
@@ -372,8 +374,10 @@ def _meta(
                     segment[layer_name]["id"] = str(res[n+1])
             else:
                 segment[layer] = {**(segment[layer]), **(res[n+1])}
-        if segment:
-            to_send["-2"][str(seg_id)] = segment
+        segment = {k: v for k, v in segment.items() if v and [x for x in v if x != "id"]}
+        if not segment:
+            continue
+        to_send["-2"][str(seg_id)] = segment
 
     if not to_send["-2"]:
         return None
@@ -430,11 +434,10 @@ def _meta(
     # can_send = not full or status == "finished"
 
     msg_id = str(uuid4())  # todo: hash instead!
-    # if "sent_job_ws_messages" not in base.meta:
-    #     base.meta["sent_job_ws_messages"] = {}
-    # base.meta["sent_job_ws_messages"][msg_id] = None
-    # base.meta["_sent_jobs"][job.id] = None
-    # base.save_meta()
+    if "meta_job_ws_messages" not in base.meta:
+        base.meta["meta_job_ws_messages"] = {}
+    base.meta["meta_job_ws_messages"][msg_id] = None
+    base.save_meta()
 
     # if status == "finished" and more_data:
     #     more_data = base.meta["total_results_so_far"] >= total_requested

@@ -151,8 +151,10 @@ class QueryService:
         failed = False
         tasks: list[Coroutine] = [self.app["aredis"].publish(PUBSUB_CHANNEL, strung)]
 
-        for msg in job.meta.get("sent_job_ws_messages", {}):
-            print(f"Retrieving sentences message: {msg}")
+        sent_and_meta_msgs = {**job.meta.get("sent_job_ws_messages", {}), **job.meta.get("meta_job_ws_messages", {})}
+        for msg in sent_and_meta_msgs:
+            # print(f"Retrieving sentences message: {msg}")
+            print(f"Retrieving sentences or metadata message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
                 failed = True

@@ -28,7 +28,7 @@
           </button>
           <td scope="row">
             <span
-              v-if="Object.keys(meta)"
+              v-if="Object.keys(meta).length"
               style="margin-right: 0.5em"
               @mousemove="showMeta(resultIndex, $event)"
               @mouseleave="closeMeta"
