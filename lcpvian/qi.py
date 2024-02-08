@@ -432,7 +432,14 @@ class QueryIteration:
                 # selects.append(f"upper({layer}_meta.char_range) AS {layer}_upper_range")
             # froms.append(f"{schema}.{relation} {layer}")
             selects.append(f"{layer}.meta AS {layer}")
-            selects.append(f"{layer}.{'alignment' if alignment else layer.lower()}_id AS {layer}_id")
+            prefix_id: str
+            if alignment:
+                'alignment'
+            elif layer == config["document"]:
+                prefix_id = "document"
+            else:
+                layer.lower()
+            selects.append(f"{layer}.{prefix_id}_id AS {layer}_id")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)

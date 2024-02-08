@@ -372,7 +372,8 @@ def _meta(
                     segment[layer_name]["id"] = str(res[n+1])
             else:
                 segment[layer] = {**(segment[layer]), **(res[n+1])}
-        to_send["-2"][str(seg_id)] = segment
+        if segment:
+            to_send["-2"][str(seg_id)] = segment
 
     if not to_send["-2"]:
         return None
