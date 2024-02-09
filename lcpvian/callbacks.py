@@ -359,22 +359,32 @@ def _meta(
     if not pre_columns:
         return None
     columns: list[str] = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
+    layers: dict[str,None] = {c.split("_")[0]: None for c in columns if not c.endswith("_id")}
     to_send: dict[str, dict] = {"-2": {}}
     for res in result:
         seg_id = "0"
-        segment: dict[str,dict] = {layer: {} for layer in columns if not layer.endswith("_id")}
-        for n, layer in enumerate(columns):
+        segment: dict[str,dict] = {layer: {} for layer in layers}
+        for n, layer_prop in enumerate(columns):
             if not res[n+1]:
                 continue
-            if layer.endswith("_id"):
-                if layer == "seg_id":
-                    seg_id = res[n+1]
-                else:
-                    layer_name = layer.rstrip("_id")
-                    segment[layer_name]["id"] = str(res[n+1])
+            if layer_prop == "seg_id":
+                seg_id = res[n+1]
             else:
-                segment[layer] = {**(segment[layer]), **(res[n+1])}
-        segment = {k: v for k, v in segment.items() if v and [x for x in v if x != "id"]}
+                m = re.match(rf"^([^_]+)_(.+)$", layer_prop)
+                if not m:
+                    continue
+                layer, prop = m.groups()
+                if prop == "meta":
+                    meta: dict
+                    if isinstance(res[n+1], str):
+                        meta = json.loads(res[n+1])
+                    else:
+                        meta = res[n+1]
+                    segment[layer] = {**(segment[layer]), **meta}
+                else:
+                    if any(isinstance(res[n+1], type) for type in [str,bool,dict,list,tuple]):
+                        segment[layer][prop] = res[n+1]
+        segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}
         if not segment:
             continue
         to_send["-2"][str(seg_id)] = segment

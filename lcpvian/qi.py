@@ -406,17 +406,18 @@ class QueryIteration:
         seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
 
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
-        parents_with_meta = {k:None for k in parents_of_seg if config["layer"][k].get("attributes",{}).get("meta")}
+        parents_with_attributes = {k:None for k in parents_of_seg if config["layer"][k].get("attributes")}
         # Make sure to include Document in there, even if it's not a parent of Segment
-        if config["layer"][config["document"]].get("attributes",{}).get("meta"):
-            parents_with_meta[config["document"]] = None
+        if config["layer"][config["document"]].get("attributes"):
+            parents_with_attributes[config["document"]] = None
 
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
-        for layer in parents_with_meta:
+        for layer in parents_with_attributes:
             layer_mapping = config["mapping"]["layer"].get(layer,{})
+            attributes = config["layer"][layer]["attributes"]
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
             relation = alignment.get("relation") if alignment else layer_mapping.get("relation", layer.lower())
@@ -435,7 +436,11 @@ class QueryIteration:
                     joins.append(f"{schema}.{interim_relation} {layer} ON {layer}.char_range @> s.char_range")
             else:
                 joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
-            selects.append(f"{layer}.meta AS {layer}")
+            for attr in attributes:
+                if re.match(f".*[^A-Z][A-Z]", attr):
+                    continue
+                sql_attr: str = re.sub(f"([^A-Z])([A-Z])",lambda m: f"{m[1]}_{m[2].lower()}", attr)
+                selects.append(f"{layer}.{sql_attr} AS {layer}_{attr}")
             prefix_id: str
             if alignment:
                 prefix_id = 'alignment'
@@ -449,8 +454,8 @@ class QueryIteration:
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
-        joins_formed = " JOIN ".join(joins)
-        joins_formed = "" if not joins_formed else f" JOIN {joins_formed}"
+        joins_formed = " LEFT JOIN ".join(joins) # left join = include non-empty entities even if other ones are empty
+        joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
         script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
         print("meta script", script)
         return script
