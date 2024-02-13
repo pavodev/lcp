@@ -3,7 +3,7 @@
     <div class="container">
       <div class="row mt-4">
         <div class="col">
-          <Title :title="`Welcome to ${appName}`" />
+          <Title :title="appName" />
         </div>
         <div class="col mt-1 text-end">
           <button

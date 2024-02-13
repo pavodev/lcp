@@ -67,7 +67,7 @@ if (process.env.APP_TYPE == "vian") {
 else {
   if (process.env.NODE_ENV === "production") {
     config = {
-      appName: "LCP",
+      appName: "catchphrase",
       apiUrl: "https://lcp.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
       appDomain: "lcp.linguistik.uzh.ch",
@@ -77,7 +77,7 @@ else {
     };
   } else if (process.env.NODE_ENV === "test") {
     config = {
-      appName: "LCP",
+      appName: "catchphrase",
       apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
       appDomain: "lcp.test.linguistik.uzh.ch",
@@ -87,7 +87,7 @@ else {
     };
   } else if (process.env.NODE_ENV === "dev") {
     config = {
-      appName: "LCP",
+      appName: "catchphrase",
       apiUrl: "http://localhost:9090",
       appDomain: "lcp.dev.linguistik.uzh.ch",
       environment: "development",
@@ -97,7 +97,7 @@ else {
   } else {
     // development
     config = {
-      appName: "LCP",
+      appName: "catchphrase",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
