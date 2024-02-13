@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">Catch Phrase</a>
+        <a class="navbar-brand" href="/">catchphrase</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -123,6 +123,9 @@ export default {
 </script>
 
 <style scoped>
+.navbar-brand {
+  font-style: italic;
+}
 .version-number {
   font-size: 80% !important;
   opacity: 0.75;

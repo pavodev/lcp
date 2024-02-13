@@ -17,3 +17,11 @@ export default {
   props: ["title"],
 }
 </script>
+<style>
+#title-view {
+  font-style: italic;
+}
+/* #title-view h2::before {
+  content: '://';
+} */
+</style>
