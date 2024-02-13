@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">LCP</a>
+        <a class="navbar-brand" href="/">Catch Phrase</a>
         <button
           class="navbar-toggler"
           type="button"
