@@ -437,10 +437,8 @@ class QueryIteration:
             else:
                 joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
             for attr in attributes:
-                if re.match(f".*[^A-Z][A-Z]", attr):
-                    continue
-                sql_attr: str = re.sub(f"([^A-Z])([A-Z])",lambda m: f"{m[1]}_{m[2].lower()}", attr)
-                selects.append(f"{layer}.{sql_attr} AS {layer}_{attr}")
+                # Quote attribute name (is arbitrary)
+                selects.append(f"{layer}.\"{attr}\" AS {layer}_{attr}")
             prefix_id: str
             if alignment:
                 prefix_id = 'alignment'

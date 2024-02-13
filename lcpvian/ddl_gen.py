@@ -259,10 +259,13 @@ class Column(DDL):
 
 class Table(DDL):
     def __init__(
-        self, name: str, cols: list[Column], anchorings: list[str] | None = None
+        self, name: str, cols: list[Column], anchorings: list[str] | None = None, parent: str | None = None
     ) -> None:
         super().__init__()
-        self.name = name.strip()
+        name = name.strip()
+        if parent:
+            name = f"{parent.strip()}_{name}"
+        self.name = name
         self.header_txt = f"CREATE TABLE {self.name} ("
         self.cols = cols
         self.tabwidth = 8
@@ -510,13 +513,18 @@ class CTProcessor:
 
         return ordered
 
-    @staticmethod
     def _process_attributes(
+        self,
         attr_structure: abc.ItemsView[str, Any],
         tables: list[Table],
         table_cols: list[Column],
         types: list[Type],
+        entity_name: str
     ) -> tuple[list[Table], list[Column]]:
+
+        if attr_structure:
+            self.globals.mapping["layer"][entity_name]["attributes"] = {}
+
         for attr, vals in attr_structure:
             nullable = vals.get("nullable", False) or False
             # TODO: make this working also for e.g. "isGlobal" & "text"
@@ -528,13 +536,15 @@ class CTProcessor:
                         Column(norm_col, "int", primary_key=True),
                         Column(attr, "text", unique=True),
                     ],
+                    parent=entity_name.lower()
                 )
+                self.globals.mapping["layer"][entity_name]["attributes"][attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
                     Column(
                         norm_col,
                         "int",
-                        foreign_key={"table": attr, "column": norm_col},
+                        foreign_key={"table": norm_table.name, "column": norm_col},
                         nullable=nullable,
                     )
                 )
@@ -549,13 +559,15 @@ class CTProcessor:
                         Column(norm_col, "int", primary_key=True),
                         Column(attr, "jsonb", unique=True),
                     ],
+                    parent=entity_name.lower()
                 )
+                self.globals.mapping["layer"][entity_name]["attributes"][attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
                     Column(
                         norm_col,
                         "int",
-                        foreign_key={"table": attr, "column": norm_col},
+                        foreign_key={"table": norm_table.name, "column": norm_col},
                         nullable=nullable,
                     )
                 )
@@ -572,9 +584,13 @@ class CTProcessor:
 
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
+                self.globals.mapping["layer"][entity_name]["hasMeta"] = True
 
             else:
                 raise Exception(f"unknown type for attribute: '{attr}'")
+
+        if not self.globals.mapping["layer"][entity_name].get("attributes"):
+            self.globals.mapping["layer"][entity_name].pop("attributes",None)
 
         return tables, table_cols
 
@@ -593,7 +609,7 @@ class CTProcessor:
             table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
 
         tables, table_cols = self._process_attributes(
-            l_params.get("attributes", {}).items(), tables, table_cols, types
+            l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
         )
 
         anchs = [k for k, v in l_params.get("anchoring", {}).items() if v]
@@ -658,7 +674,7 @@ class CTProcessor:
         table_cols.append(target_col)
 
         tables, table_cols = self._process_attributes(
-            l_params.get("attributes", {}).items(), tables, table_cols, types
+            l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
         )
 
         table = Table(table_name, table_cols)
@@ -682,7 +698,9 @@ class CTProcessor:
         return Column(name, typ, nullable=nullable)
 
     def process_layers(self) -> None:
+        self.globals.mapping["layer"] = {}
         for layer, params in self.layers.items():
+            self.globals.mapping["layer"][layer] = {}
             if (layer_type := params.get("layerType")) in ["unit", "span"]:
                 self._process_unitspan({layer: params})
             elif layer_type == "relation":
@@ -779,23 +797,17 @@ class CTProcessor:
         )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
 
-        mapd: dict[str, Any] = {}
-        mapd["layer"] = {}
+        mapd: dict[str, JSONObject] = self.globals.mapping
         tokname = self.globals.base_map["token"]
-        mapd["layer"][self.globals.base_map["segment"]] = {}
         batchname = f"{tokname}<batch>"
-        mapd["layer"][tokname] = {
-            "batches": self.globals.num_partitions,
-            "relation": batchname,
+        mapd["layer"][tokname]["batches"] = self.globals.num_partitions
+        mapd["layer"][tokname]["relation"] = batchname
+        segname = self.globals.base_map["segment"]
+        mapd["layer"][segname]["prepared"] = {
+            "relation": ("prepared_" + seg_tab.name),
+            "columnHeaders": rel_cols_names
         }
-        mapd["layer"][self.globals.base_map["segment"]]["prepared"] = {}
-        mapd["layer"][self.globals.base_map["segment"]]["prepared"]["relation"] = (
-            "prepared_" + seg_tab.name
-        )
-        mapd["layer"][self.globals.base_map["segment"]]["prepared"][
-            "columnHeaders"
-        ] = rel_cols_names
-        mapd["layer"][self.globals.base_map["segment"]]["relation"] = seg_tab.name
+        mapd["layer"][segname]["relation"] = seg_tab.name
         self.globals.mapping = mapd
 
         # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
@@ -855,6 +867,11 @@ def generate_ddl(
     processor.create_compute_prep_segs()
     processor.create_collocation_views()
 
+    # Remove empty mappings
+    for layer, mappings in globs.mapping["layer"].items():
+        if not mappings:
+            globs.mapping["layer"].pop(layer)
+
     create_schema = "\n\n".join([x for x in globs.schema])
     create_types = "\n\n".join([x.create_DDL() for x in sorted(globs.types)])
     create_tbls = "\n\n".join([x.create_tbl() for x in sorted(globs.tables)])
@@ -910,6 +927,8 @@ def main(corpus_template_path: str) -> None:
     print(data["m_token_freq"])
     print(data["m_lemma_freqs"])
     print(data["perms"])
+
+    print("Mapping:", data["mapping"])
 
     return
     # need to comment out the below for mypy
