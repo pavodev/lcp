@@ -402,8 +402,16 @@ class QueryIteration:
         lang = self._determine_language(self.current_batch[2])
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
-        batch_suffix = re.match(rf"{config['token'].lower()}{underlang}([0-9]+|rest)$", str(self.current_batch[2]))
-        seg_name = f"{name}{underlang}{batch_suffix[1] if batch_suffix else ''}".lower()
+        batch_suffix: str = ""
+        token: str = config['token']
+        token_mapping = config['mapping']['layer'][token]
+        n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
+        if n_batches > 1:
+            batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
+            batch_match = re.match(rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower())
+            if batch_match:
+                batch_suffix = batch_match[1]
+        seg_name = f"{name}{underlang}{batch_suffix}".lower()
 
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
         parents_with_attributes = {k:None for k in parents_of_seg if config["layer"][k].get("attributes")}
