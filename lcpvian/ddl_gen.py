@@ -522,8 +522,11 @@ class CTProcessor:
         entity_name: str
     ) -> tuple[list[Table], list[Column]]:
 
-        if attr_structure:
-            self.globals.mapping["layer"][entity_name]["attributes"] = {}
+        entity_mapping: dict[str, JSONObject | bool] = cast(
+            dict[str,JSONObject | bool],
+            self.globals.mapping["layer"][entity_name]
+        )
+        map_attr: dict = {}
 
         for attr, vals in attr_structure:
             nullable = vals.get("nullable", False) or False
@@ -538,7 +541,7 @@ class CTProcessor:
                     ],
                     parent=entity_name.lower()
                 )
-                self.globals.mapping["layer"][entity_name]["attributes"][attr] = {"name": norm_table.name, "type": "relation"}
+                map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
                     Column(
@@ -561,7 +564,7 @@ class CTProcessor:
                     ],
                     parent=entity_name.lower()
                 )
-                self.globals.mapping["layer"][entity_name]["attributes"][attr] = {"name": norm_table.name, "type": "relation"}
+                map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
                     Column(
@@ -584,14 +587,15 @@ class CTProcessor:
 
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
-                self.globals.mapping["layer"][entity_name]["hasMeta"] = True
+                entity_mapping["hasMeta"] = True
 
             else:
                 raise Exception(f"unknown type for attribute: '{attr}'")
 
-        if not self.globals.mapping["layer"][entity_name].get("attributes"):
-            self.globals.mapping["layer"][entity_name].pop("attributes",None)
+        if map_attr:
+            entity_mapping["attributes"] = map_attr
 
+        self.globals.mapping["layer"][entity_name] = cast(dict[str, Any], entity_mapping)
         return tables, table_cols
 
     def _process_unitspan(self, entity: dict[str, dict[str, Any]]) -> None:
@@ -698,9 +702,9 @@ class CTProcessor:
         return Column(name, typ, nullable=nullable)
 
     def process_layers(self) -> None:
-        self.globals.mapping["layer"] = {}
+        self.globals.mapping["layer"] = cast(dict[str, Any], {})
         for layer, params in self.layers.items():
-            self.globals.mapping["layer"][layer] = {}
+            self.globals.mapping["layer"][layer] = cast(dict[str, Any], {})
             if (layer_type := params.get("layerType")) in ["unit", "span"]:
                 self._process_unitspan({layer: params})
             elif layer_type == "relation":
@@ -797,7 +801,7 @@ class CTProcessor:
         )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
 
-        mapd: dict[str, JSONObject] = self.globals.mapping
+        mapd: dict[str, Any] = self.globals.mapping
         tokname = self.globals.base_map["token"]
         batchname = f"{tokname}<batch>"
         mapd["layer"][tokname]["batches"] = self.globals.num_partitions
