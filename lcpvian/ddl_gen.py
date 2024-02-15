@@ -147,7 +147,7 @@ class DDL:
 
         self.anchoring = {
             "location": ("2d_coord", "point"),
-            "stream": ("char_range", "int4range"),
+            "string": ("char_range", "int4range"),
             "time": ("frame_range", "int4range"),
         }
 
@@ -585,6 +585,12 @@ class CTProcessor:
                     types.append(enum_type)
                     table_cols.append(Column(attr, attr, nullable=nullable))
 
+            elif typ == "date":
+                table_cols.append(Column(attr, "date", nullable=nullable))
+
+            elif typ == "number":
+                table_cols.append(Column(attr, "float", nullable=nullable))
+
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
                 entity_mapping["hasMeta"] = True
@@ -609,9 +615,8 @@ class CTProcessor:
         # create primary key column (if table that will be used to partition -> UUID)
         if l_name == self.globals.base_map["segment"]:
             table_cols.append(Column(f"{table_name}_id", "uuid", primary_key=True))
-        else:
+        elif l_name in self.globals.base_map.values():
             table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
-
         tables, table_cols = self._process_attributes(
             l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
         )
