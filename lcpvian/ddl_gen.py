@@ -147,7 +147,7 @@ class DDL:
 
         self.anchoring = {
             "location": ("2d_coord", "point"),
-            "string": ("char_range", "int4range"),
+            "stream": ("char_range", "int4range"),
             "time": ("frame_range", "int4range"),
         }
 
