@@ -116,8 +116,9 @@
             <button
               type="button"
               v-if="queryStatus in {'satisfied':1,'finished':1} && !loading"
-              @click="exportResults"
               class="btn btn-primary me-1"
+              data-bs-toggle="modal"
+              data-bs-target="#exportModal"
             >
               <FontAwesomeIcon :icon="['fas', 'file-export']" />
               Export preview
@@ -578,6 +579,54 @@
     <!-- Modal -->
     <div
       class="modal fade"
+      id="exportModal"
+      tabindex="-1"
+      aria-labelledby="exportModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="exportModalLabel">Export results</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body text-start">
+            <label for="exportFormat" class="form-label">Format</label>
+            <select
+              class="form-control"
+              id="exportFormat"
+              v-model="exportFormat"
+            >
+              <option value="swissdox">SwissDoxVis</option>
+              <option value="tsv">TSV</option>
+            </select>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+            <button
+              type="button"
+              @click="exportResults"
+              class="btn btn-primary me-1"
+            >
+              Export
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="modal fade"
       id="saveQueryModal"
       tabindex="-1"
       aria-labelledby="saveQueryModalLabel"
@@ -763,6 +812,7 @@ export default {
       currentResults: 0,
       selectedLanguages: ["en"],
       queryName: "",
+      exportFormat: "",
       currentTab: "dqd",
       simultaneousMode: false,
       percentageDone: 0,
@@ -1225,7 +1275,7 @@ export default {
       a.title = "test.txt";
       a.download = "test.txt";
       a.target = "_blank";
-      a.href = `${config.apiUrl}/export/${hashed}`;
+      a.href = `${config.apiUrl}/export/${hashed}?format=${this.exportFormat}`;
       document.body.appendChild(a);
       a.click(); 
       a.remove();

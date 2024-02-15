@@ -6,7 +6,11 @@ from rq.job import Job
 from typing import Any, cast
 from .utils import ensure_authorised
 
+import csv
 import json
+import os
+import re
+import zipfile
 
 CHUNKS = 1000000 # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
@@ -44,13 +48,17 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
 
 async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
 
-    sentence_jobs = [j for j in jobs if j.kwargs.get("sentences_query")]
+    sentence_jobs = [j for j in jobs if j.kwargs.get("sentences_query") and not j.kwargs.get("meta_query")]
     other_jobs = [j for j in jobs if j not in sentence_jobs]
 
     buffer: str = ""
     for j in other_jobs:
 
-        corpus_index: str = str(j.kwargs.get("current_batch")[0])
+        if 'current_batch' not in j.kwargs:
+            continue
+        corpus_index: str = str(j.kwargs["current_batch"][0])
+        if not corpus_index:
+            continue
         segment_mapping = config[corpus_index]['mapping']['layer'][config[corpus_index]['segment']]
         columns: list = []
         if "partitions" in segment_mapping and 'languages' in j.kwargs:
@@ -89,20 +97,82 @@ async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
         await resp.write(buffer.encode("utf-8"))
 
 
+async def export_swissdox(jobs: list[Job], corpus_index: str, resp: web.StreamResponse, config) -> None:
+
+    meta_jobs: list[Job] = [j for j in jobs if j.kwargs.get("meta_query")]
+    sentence_jobs: list[Job] = [j for j in jobs if j.kwargs.get("sentences_query") and not j in meta_jobs]
+    other_jobs: list[Job] = [j for j in jobs if j not in sentence_jobs and j not in meta_jobs]
+
+    document_layer: str = config[str(corpus_index)]["firstClass"]["document"]
+
+    documents: dict[str,Any] = {"columns": set(), "rows": []}
+    for j in meta_jobs:
+        pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", j.kwargs.get("meta_query",""))
+        if not pre_columns:
+            continue
+        column_names = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")]
+        doc_columns: dict[str,int] = {
+            p.lstrip(f"{document_layer}_"): n+1
+            for n, p in enumerate(column_names)
+            if p.startswith(f"{document_layer}_")
+        }
+        if not doc_columns:
+            continue
+        if not documents["columns"]:
+            documents["columns"]= {k for k in doc_columns if k != "meta"}
+        for res in j.result:
+            doc: dict[str,Any] = {}
+            for col_name, ncol in doc_columns.items():
+                if col_name == "meta":
+                    meta_obj: dict
+                    if isinstance(res[ncol], str):
+                        meta_obj = json.loads(res[ncol])
+                    else:
+                        meta_obj = res[ncol]
+                    for k,v in meta_obj.items():
+                        documents["columns"].add(k)
+                        doc[k] = v
+                else:
+                    doc[col_name] = res[ncol]
+            documents["rows"].append(doc)
+
+    if not os.path.exists(f"results/{corpus_index}"):
+        os.mkdir(f"results/{corpus_index}")
+
+    with open(f"results/{corpus_index}/document.tsv", "w") as d:
+        r = csv.writer(d, delimiter="\t", quotechar="\b")
+        columns = [c for c in documents["columns"]]
+        r.writerow(columns)
+        for row in documents["rows"]:
+            r.writerow([row.get(cl,"") for cl in columns])
+    # tokens = open(f"results/{corpus_index}/tokens.csv", "w")
+
+    has_named_entities = True
+    if has_named_entities:
+        pass
+        # named_entities =  open(f"results/{corpus_index}/named_entities.csv", "w")
+
+    with zipfile.ZipFile(f"results/{corpus_index}/swissdox.zip", mode="w") as archive:
+        archive.write(f"results/{corpus_index}/document.tsv", "document.tsv")
+
+    with open(f"results/{corpus_index}/swissdox.zip", "rb") as f:
+        while True:
+            data = f.read(8192)
+            if not data:
+                break
+            await resp.write(data)
+
+    return None
+
 @ensure_authorised
 async def export(request: web.Request) -> web.StreamResponse:
     """
     Fetch arbitrary JSON data from redis
     """
     hashed: str = request.match_info["hashed"]
-    
-    response: web.StreamResponse = web.StreamResponse(
-        status=200,
-        reason='OK',
-        headers={'Content-Type': 'application/octet-stream', 'Content-Disposition': 'attachment; filename=results.txt'},
-    )
-    await response.prepare(request)
-    
+    format: str = request.rel_url.query.get('format', 'tsv')
+    print("export format", format)
+
     conn = request.app["redis"]
     job: Job = Job.fetch(hashed, connection=conn)
     finished_jobs = [
@@ -113,28 +183,38 @@ async def export(request: web.Request) -> web.StreamResponse:
 
     meta = job.kwargs.get("meta_json", {}).get("result_sets", {})
 
-    await response.write((("\t".join(["index","type","label","data"])+f"\n")).encode("utf-8"))
-
-    # Write KWIC results
-    if next((m for m in meta if m.get("type")=="plain"),None):
-        await kwic([job, *associated_jobs], response, request.app["config"])
-
-    # Write non-KWIC results
-    for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
-        # import pdb; pdb.set_trace()
-        if n_type in (0,-1):
-            continue
-        info: dict = meta[n_type-1]
-        name: str = info.get("name","")
-        type: str = info.get("type","")
-        attr: list[dict] = info.get("attributes", [])
-        for line in data:
-            d: dict[str,list] = {}
-            for n, v in enumerate(line):
-                attr_name: str = attr[n].get("name", f"entry_{n}")
-                d[attr_name] = v
-            await response.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
+    filename = f"{job.kwargs.get('current_batch')[1]}.{'zip' if format=='swissdox' else 'txt'}"
+    response: web.StreamResponse = web.StreamResponse(
+        status=200,
+        reason='OK',
+        headers={'Content-Type': 'application/octet-stream', 'Content-Disposition': f'attachment; filename={filename}'},
+    )
+    await response.prepare(request)
     
+    if format == "swissdox":
+        await export_swissdox([job, *associated_jobs], job.kwargs.get("current_batch")[0], response, request.app["config"])
+    else:
+        await response.write((("\t".join(["index","type","label","data"])+f"\n")).encode("utf-8"))
+
+        # Write KWIC results
+        if next((m for m in meta if m.get("type")=="plain"),None):
+            await kwic([job, *associated_jobs], response, request.app["config"])
+
+        # Write non-KWIC results
+        for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+            # import pdb; pdb.set_trace()
+            if n_type in (0,-1):
+                continue
+            info: dict = meta[n_type-1]
+            name: str = info.get("name","")
+            type: str = info.get("type","")
+            attr: list[dict] = info.get("attributes", [])
+            for line in data:
+                d: dict[str,list] = {}
+                for n, v in enumerate(line):
+                    attr_name: str = attr[n].get("name", f"entry_{n}")
+                    d[attr_name] = v
+                await response.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
+
     await response.write_eof()
     return response
-    
