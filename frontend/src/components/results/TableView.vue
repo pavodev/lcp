@@ -33,9 +33,10 @@
             scope="row"
             v-for="(col, index) in calcAttributes"
             :key="index"
-            :class="col.class"
+            :class="[(col.class||''), (item[index] < this.roundBelow ? 'round' : '')]"
           >
-            {{ col.valueType=="float" ? this.round(item[index]) : item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
+            {{ col.valueType=="float" ? this.round(item[index]) : item[index] }}
+            <template v-if="col.textSuffix">{{ col.textSuffix }}</template>
           </td>
         </tr>
       </tbody>
@@ -107,6 +108,21 @@ table {
 .highlight {
   background-color: #1e999967;
 }
+td.round {
+  visibility: hidden;
+}
+td.round::after {
+  content: '< 0.001';
+  display: block;
+  float: right;
+  visibility: visible;
+}
+td.round:hover {
+  visibility: visible;
+}
+td.round:hover::after {
+  display: none;
+}
 </style>
 
 <script>
@@ -133,6 +149,7 @@ export default {
       additionalColumData: [],
       calcData: data,
       calcAttributes: attributes,
+      roundBelow: 0.001
     };
   },
   components: {
@@ -265,7 +282,7 @@ export default {
       }
     },
     round(float) {
-      if (float < 0.001) 
+      if (float < this.roundBelow)
         return Number.parseFloat(float).toExponential(2);
       else
         return Math.round(1000*float) / 1000;
