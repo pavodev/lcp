@@ -735,7 +735,10 @@ class CTProcessor:
             "tsvector"
         )
 
-        ptable = PartitionedTable("fts_vector", [part_col, fts_col])
+        part_ent = self.globals.base_map["segment"].lower()
+        part_ent_col = f"{part_ent}_id"
+
+        ptable = PartitionedTable("fts_vector", [part_col, fts_col], column_part=part_ent_col)
 
         self.globals.tables.append(ptable)
 
