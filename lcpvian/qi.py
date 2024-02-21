@@ -450,8 +450,8 @@ class QueryIteration:
             prefix_id: str
             if alignment:
                 prefix_id = 'alignment'
-            # not sure about this: open subtitles has move.document_id but swissdox has article.article_id
-            elif layer == config["document"] and not partitions:
+            # hard-coded exception management -- change document_id for movie_id in open subtitles
+            elif layer == config["document"] and layer.lower() == "movie": # not partitions:
                 prefix_id = "document"
             else:
                 prefix_id = layer.lower()
