@@ -406,11 +406,11 @@ class QueryIteration:
         token: str = config['token']
         token_mapping = config['mapping']['layer'][token]
         n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
-        if n_batches > 1:
-            batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
-            batch_match = re.match(rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower())
-            if batch_match:
-                batch_suffix = batch_match[1]
+        # if n_batches > 1:
+        batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
+        batch_match = re.match(rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower())
+        if batch_match:
+            batch_suffix = batch_match[1]
         seg_name = f"{name}{underlang}{batch_suffix}".lower()
 
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
