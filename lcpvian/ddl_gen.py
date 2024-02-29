@@ -581,6 +581,7 @@ class CTProcessor:
                 if vals.get("isGlobal"):
                     table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
                 else:
+                    assert "values" in vals, f"List of values is needed when type is categorical ({entity_name}:{attr})"
                     enum_type = Type(attr, vals["values"])
                     types.append(enum_type)
                     table_cols.append(Column(attr, attr, nullable=nullable))
@@ -615,7 +616,7 @@ class CTProcessor:
         # create primary key column (if table that will be used to partition -> UUID)
         if l_name == self.globals.base_map["segment"]:
             table_cols.append(Column(f"{table_name}_id", "uuid", primary_key=True))
-        elif l_name in self.globals.base_map.values():
+        else:
             table_cols.append(Column(f"{table_name}_id", "int", primary_key=True))
         tables, table_cols = self._process_attributes(
             l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
@@ -879,8 +880,9 @@ def generate_ddl(
     processor.create_compute_prep_segs()
     processor.create_collocation_views()
 
-    # Remove empty mappings
-    for layer, mappings in globs.mapping["layer"].items():
+    # Remove empty mappings (use * keys to avoid "dictionary changed size during iteration" error)
+    for layer in [*globs.mapping["layer"].keys()]:
+        mappings = globs.mapping["layer"].get(layer)
         if not mappings:
             globs.mapping["layer"].pop(layer)
 

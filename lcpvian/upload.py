@@ -424,8 +424,17 @@ async def make_schema(request: web.Request) -> web.Response:
     template["projects"] = [proj_id]
     template["schema_name"] = schema_name
 
-    pieces = generate_ddl(template)
-    pieces["template"] = template
+    try:
+        pieces = generate_ddl(template)
+        pieces["template"] = template
+    except Exception as err:
+        tb = traceback.format_exc()
+        msg = f"Could not create schema:"
+        error = {"traceback": tb, "status": "failed"}
+        # logging.error(msg, extra=error)
+        error["message"] = f"{msg} -- {err}"
+        print(error["message"])
+        return web.json_response(error)
 
     corpus_path = os.path.join(proj_id, schema_name)
 
