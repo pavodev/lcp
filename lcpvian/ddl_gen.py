@@ -590,7 +590,7 @@ class CTProcessor:
                 table_cols.append(Column(attr, "date", nullable=nullable))
 
             elif typ == "number":
-                table_cols.append(Column(attr, "float", nullable=nullable))
+                table_cols.append(Column(attr, "int", nullable=nullable))
 
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
