@@ -403,9 +403,9 @@ class QueryIteration:
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
         batch_suffix: str = ""
-        token: str = config['token']
-        token_mapping = config['mapping']['layer'][token]
-        n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
+        # token: str = config['token']
+        # token_mapping = config['mapping']['layer'][token]
+        # n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
         # if n_batches > 1:
         batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
         batch_match = re.match(rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower())
@@ -419,18 +419,34 @@ class QueryIteration:
         if config["layer"][config["document"]].get("attributes"):
             parents_with_attributes[config["document"]] = None
 
+        parents_with_attributes[seg] = None
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
         for layer in parents_with_attributes:
             layer_mapping = config["mapping"]["layer"].get(layer,{})
-            attributes = config["layer"][layer]["attributes"]
+            attributes = config["layer"][layer].get("attributes", [])
+            for attr in attributes:
+                # Quote attribute name (is arbitrary)
+                selects.append(f"{'s' if layer == seg else layer}.\"{attr}\" AS {layer}_{attr}")
+            if layer == seg or not attributes:
+                continue
+            prefix_id: str
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
             relation = alignment.get("relation") if alignment else layer_mapping.get("relation", layer.lower())
             if not relation:
                 continue
+            if alignment:
+                prefix_id = 'alignment'
+            # hard-coded exception management -- change document_id for movie_id in open subtitles
+            elif layer == config["document"] and layer.lower() == "movie": # not partitions:
+                prefix_id = "document"
+            else:
+                prefix_id = layer.lower()
+            selects.append(f"{layer}.{prefix_id}_id AS {layer}_id")
+            # join tables
             if lang and partitions:
                 interim_relation = partitions.get(lang,{}).get("relation")
                 if not interim_relation:
@@ -444,18 +460,6 @@ class QueryIteration:
                     joins.append(f"{schema}.{interim_relation} {layer} ON {layer}.char_range @> s.char_range")
             else:
                 joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
-            for attr in attributes:
-                # Quote attribute name (is arbitrary)
-                selects.append(f"{layer}.\"{attr}\" AS {layer}_{attr}")
-            prefix_id: str
-            if alignment:
-                prefix_id = 'alignment'
-            # hard-coded exception management -- change document_id for movie_id in open subtitles
-            elif layer == config["document"] and layer.lower() == "movie": # not partitions:
-                prefix_id = "document"
-            else:
-                prefix_id = layer.lower()
-            selects.append(f"{layer}.{prefix_id}_id AS {layer}_id")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
