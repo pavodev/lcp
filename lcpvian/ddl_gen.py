@@ -839,7 +839,7 @@ class CTProcessor:
             + f"\n                     ) AS toks\n                FROM {{batch}}\n                "
             + "\n                ".join(
                 [
-                    f"JOIN {fk['table']} USING ({fk['column']})"
+                    f"{'JOIN' if fk['table'] == 'form' else 'LEFT JOIN'} {fk['table']} USING ({fk['column']})"
                     for x in rel_cols
                     if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
                 ]
