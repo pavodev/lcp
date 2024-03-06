@@ -52,7 +52,7 @@ else:
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
-from .utils import push_msg
+from .utils import _determine_language, push_msg
 
 if sys.version_info <= (3, 9):
     QI_KWARGS = dict()
@@ -365,13 +365,7 @@ class QueryIteration:
         """
         Helper to find language from batch
         """
-        batch = batch.rstrip("0123456789")
-        if batch.endswith("rest"):
-            batch = batch[:-4]
-        for lan in ["de", "en", "fr", "ca", "it"]:
-            if batch.endswith(f"_{lan}"):
-                return lan
-        return None
+        return _determine_language(batch)
 
     def _parent_of(self, child: str, parent: str) -> bool:
         if not self.current_batch:
@@ -419,14 +413,15 @@ class QueryIteration:
         if config["layer"][config["document"]].get("attributes"):
             parents_with_attributes[config["document"]] = None
 
-        parents_with_attributes[seg] = None
+        parents_with_attributes[seg] = None     # Also query the segment layer itself
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
         for layer in parents_with_attributes:
             layer_mapping = config["mapping"]["layer"].get(layer,{})
-            attributes = config["layer"][layer].get("attributes", [])
+            attributes: dict[str,Any] = {k: None for k in config["layer"][layer].get("attributes", {})}
+            attributes['char_range'] = None # Also query char_range (won't make it through FE but can be reused from cache)
             for attr in attributes:
                 # Quote attribute name (is arbitrary)
                 selects.append(f"{'s' if layer == seg else layer}.\"{attr}\" AS {layer}_{attr}")

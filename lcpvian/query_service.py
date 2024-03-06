@@ -24,7 +24,7 @@ import json
 import os
 
 from collections.abc import Coroutine
-from typing import final, Unpack, cast
+from typing import Any, final, Unpack, cast
 
 from aiohttp import web
 from redis import Redis as RedisConnection
@@ -47,7 +47,7 @@ from .callbacks import (
     _upload,
 )
 from .convert import _apply_filters
-from .jobfuncs import _db_query, _upload_data, _create_schema
+from .jobfuncs import _db_query, _upload_data, _create_schema, _swissdox_export
 from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
 from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder, TRUES
 
@@ -205,6 +205,39 @@ class QueryService:
             kwargs=kwargs,
         )
         return cast(Job, job), True
+
+    async def swissdox_query(
+        self,
+        query: str,
+        queue: str = "background",
+        **kwargs: Unpack[QueryArgs],  # type: ignore
+    ) -> Job:
+        """
+        Here we send the query to RQ and therefore to redis
+        """
+        hashed = str(hash(query))
+        job: Job | None
+
+        if self.use_cache:
+            try:
+                job = Job.fetch(hashed, connection=self.app["redis"])
+                if job is not None:
+                    return cast(Job, job)
+            except:
+                pass
+
+        job = self.app[queue].enqueue(
+            _db_query,
+            # on_success=Callback(_query, self.timeout),
+            on_failure=Callback(_general_failure, self.timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            job_id=hashed,
+            args=(query,),
+            kwargs=kwargs,
+        )
+        return cast(Job, job)
+
 
     async def _attempt_query_from_cache(
         self, hashed: str, **kwargs
@@ -376,6 +409,26 @@ class QueryService:
             return_jobs.append(job_meta.id)
         
         return return_jobs
+
+    def swissdox_export(
+        self,
+        job_ids: dict[str,str],
+        corpus_index: str,
+        documents: dict[str,Any],
+        underlang: str,
+        **kwargs
+    ) -> None:
+        depends_on = [Job.fetch(jid, connection=self.app["redis"]) for jid in job_ids.values()]
+        self.app["background"].enqueue(
+            _swissdox_export,
+            on_failure=Callback(_general_failure, self.timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            depends_on=depends_on,
+            args=(job_ids,corpus_index,documents,self.app['config'][str(corpus_index)],underlang),
+            kwargs=kwargs
+        )
+        return None
 
     def _attempt_meta_from_cache(self, hashed: str, **kwargs) -> list[str]:
         """

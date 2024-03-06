@@ -622,6 +622,18 @@ def format_query_params(
     return query, tuple(out)
 
 
+def _determine_language(batch: str) -> str | None:
+    """
+    Helper to find language from batch
+    """
+    batch = batch.rstrip("0123456789")
+    if batch.endswith("rest"):
+        batch = batch[:-4]
+    for lan in ["de", "en", "fr", "ca", "it"]:
+        if batch.endswith(f"_{lan}"):
+            return lan
+    return None
+
 def _get_first_job(job: Job, connection: RedisConnection[bytes]) -> Job:
     """
     Helper to get the base job from a group of query jobs

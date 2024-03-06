@@ -4,13 +4,10 @@ from aiohttp import web
 from asyncio import sleep
 from rq.job import Job
 from typing import Any, cast
-from .utils import ensure_authorised
+from .utils import _determine_language, ensure_authorised
 
-import csv
 import json
-import os
 import re
-import zipfile
 
 CHUNKS = 1000000 # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
@@ -97,22 +94,27 @@ async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
         await resp.write(buffer.encode("utf-8"))
 
 
-async def export_swissdox(jobs: list[Job], corpus_index: str, resp: web.StreamResponse, config) -> None:
+async def export_swissdox(
+    jobs: list[Job],
+    corpus_index: str,
+    underlang: str,
+    resp: web.StreamResponse,
+    config,
+    qs = None
+) -> None:
 
     meta_jobs: list[Job] = [j for j in jobs if j.kwargs.get("meta_query")]
-    sentence_jobs: list[Job] = [j for j in jobs if j.kwargs.get("sentences_query") and not j in meta_jobs]
-    other_jobs: list[Job] = [j for j in jobs if j not in sentence_jobs and j not in meta_jobs]
 
     document_layer: str = config[str(corpus_index)]["firstClass"]["document"]
 
-    documents: dict[str,Any] = {"columns": set(), "rows": []}
+    documents: dict[str,Any] = {"columns": set(), "rows": [], "ranges": []}
     for j in meta_jobs:
-        pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", j.kwargs.get("meta_query",""))
-        if not pre_columns:
+        cols_from_sql = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", j.kwargs.get("meta_query",""))
+        if not cols_from_sql:
             continue
-        column_names = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")]
+        column_names = [p.split(" AS ")[1].strip() for p in cols_from_sql[1].split(", ")]
         doc_columns: dict[str,int] = {
-            p.lstrip(f"{document_layer}_"): n+1
+            p[len(f"{document_layer}_"):]: n+1
             for n, p in enumerate(column_names)
             if p.startswith(f"{document_layer}_")
         }
@@ -123,7 +125,9 @@ async def export_swissdox(jobs: list[Job], corpus_index: str, resp: web.StreamRe
         for res in j.result:
             doc: dict[str,Any] = {}
             for col_name, ncol in doc_columns.items():
-                if col_name == "meta":
+                if col_name == "char_range":
+                    documents["ranges"].append(res[ncol])
+                elif col_name == "meta":
                     meta_obj: dict
                     if isinstance(res[ncol], str):
                         meta_obj = json.loads(res[ncol])
@@ -136,31 +140,55 @@ async def export_swissdox(jobs: list[Job], corpus_index: str, resp: web.StreamRe
                     doc[col_name] = res[ncol]
             documents["rows"].append(doc)
 
-    if not os.path.exists(f"results/{corpus_index}"):
-        os.mkdir(f"results/{corpus_index}")
+    doc_multi_range = ",".join( [f"[{r.lower},{r.upper})" for r in documents['ranges']] )
+    doc_multi_range = "'{" + doc_multi_range + "}'::int8multirange"
+    schema: str = cast(str, config[str(corpus_index)]["schema_path"])
 
-    with open(f"results/{corpus_index}/document.tsv", "w") as d:
-        r = csv.writer(d, delimiter="\t", quotechar="\b")
-        columns = [c for c in documents["columns"]]
-        r.writerow(columns)
-        for row in documents["rows"]:
-            r.writerow([row.get(cl,"") for cl in columns])
-    # tokens = open(f"results/{corpus_index}/tokens.csv", "w")
+    seg_table: str = cast(str, config[str(corpus_index)]["firstClass"]["segment"])
+    query_prepared_segments: str = f"""SELECT * FROM {schema}.prepared_{seg_table}{underlang} ps
+        CROSS JOIN {schema}.{seg_table}{underlang}0 sg
+        WHERE ps.{seg_table.lower()}_id = sg.{seg_table.lower()}_id
+        AND {doc_multi_range} @> sg.char_range;"""
 
-    has_named_entities = True
-    if has_named_entities:
-        pass
-        # named_entities =  open(f"results/{corpus_index}/named_entities.csv", "w")
+    ne_table = "namedentity"
+    ne_mapping = config[str(corpus_index)]['mapping']['layer']['NamedEntity']
+    if 'partitions' in ne_mapping and underlang:
+        ne_mapping = ne_mapping['partitions'][underlang[1:]]
+    if 'relation' in ne_mapping:
+        ne_table = ne_mapping['relation']
+    ne_cols = ["id"]
+    ne_selects = ["ne.namedentity_id AS id"]
+    ne_joins = []
+    ne_wheres = [f"{doc_multi_range} @> ne.char_range"]
+    for attr_name, attr_values in config[str(corpus_index)]['layer']['NamedEntity']['attributes'].items():
+        ne_cols.append(attr_name)
+        if attr_values.get("type", "") == "text":
+            ne_selects.append(f"ne_{attr_name}.{attr_name} AS {attr_name}")
+            ne_joins.append(f"{schema}.{ne_mapping['attributes'][attr_name]['name']} AS ne_{attr_name}")
+            ne_wheres.append(f"ne.{attr_name}_id = ne_{attr_name}.{attr_name}_id")
+            pass
+        else:
+            ne_selects.append(f"ne.{attr_name} AS {attr_name}")
 
-    with zipfile.ZipFile(f"results/{corpus_index}/swissdox.zip", mode="w") as archive:
-        archive.write(f"results/{corpus_index}/document.tsv", "document.tsv")
+    ne_selects_str = ", ".join( ne_selects )
+    ne_joins_str = "\n".join( ne_joins )
+    if ne_joins_str:
+        ne_joins_str = f"\n        CROSS JOIN {ne_joins_str}"
+    ne_wheres_str = "\n        AND ".join( ne_wheres )
+    query_named_entities: str = f"""SELECT {ne_selects_str}
+        FROM {schema}.{ne_table} ne {ne_joins_str}
+        WHERE {ne_wheres_str};"""
 
-    with open(f"results/{corpus_index}/swissdox.zip", "rb") as f:
-        while True:
-            data = f.read(8192)
-            if not data:
-                break
-            await resp.write(data)
+    prepared_segments_job = await qs.swissdox_query(query_prepared_segments)
+    named_entities_job = await qs.swissdox_query(query_named_entities)
+
+    qs.swissdox_export(
+        {'prepared_segments': str(prepared_segments_job.id), 'named_entities': str(named_entities_job.id)},
+        corpus_index,
+        documents,
+        underlang,
+        ne_cols = ne_cols
+    )
 
     return None
 
@@ -192,7 +220,10 @@ async def export(request: web.Request) -> web.StreamResponse:
     await response.prepare(request)
     
     if format == "swissdox":
-        await export_swissdox([job, *associated_jobs], job.kwargs.get("current_batch")[0], response, request.app["config"])
+        underlang: str = _determine_language( job.kwargs.get("current_batch")[2] ) or ""
+        if underlang:
+            underlang = f"_{underlang}"
+        await export_swissdox([job, *associated_jobs], job.kwargs.get("current_batch")[0], underlang, response, request.app["config"], qs=request.app["query_service"])
     else:
         await response.write((("\t".join(["index","type","label","data"])+f"\n")).encode("utf-8"))
 
@@ -202,7 +233,6 @@ async def export(request: web.Request) -> web.StreamResponse:
 
         # Write non-KWIC results
         for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
-            # import pdb; pdb.set_trace()
             if n_type in (0,-1):
                 continue
             info: dict = meta[n_type-1]
