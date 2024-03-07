@@ -3,22 +3,22 @@
     <table class="table mb-5" :class="isModal ? 'modal-table' : ''">
       <tbody>
         <tr>
-          <td v-for="(header, index) in columnHeaders" :key="`tr-header-${index}`">
+          <td v-for="(header, index) in filteredColumnHeaders" :key="`tr-header-${index}`">
             <th>{{ header }}</th>
           </td>
         </tr>
         <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`" :class="rowClasses(tIndex)">
-          <td v-for="(column, cIndex) in columnHeaders" :key="`td-${tIndex}-${cIndex}`">
+          <td v-for="(column, cIndex) in filteredColumnHeaders" :key="`td-${tIndex}-${cIndex}`">
             <span v-if="column == 'head'" v-html="headToken(token, tIndex)"> </span>
             <span
-              v-else-if="typeof(token[cIndex]) in {string:1,number:1}"
-              :class="textClasses(column)"
-              v-html="token[cIndex]"
+              v-else-if="isJson(token[cIndex])"
+              :class="objectClasses(token[cIndex])"
+              v-html="objectColumn(token[cIndex])"
             ></span>
             <span
               v-else
-              :class="objectClasses(token[cIndex])"
-              v-html="objectColumn(token[cIndex])"
+              :class="textClasses(column)"
+              v-html="token[cIndex]"
             > </span>
           </td>
         </tr>
@@ -76,10 +76,10 @@
 <script>
 export default {
   name: "ResultsDetailsTableView",
-  props: ["data", "sentences", "corpora", "isModal"],
+  props: ["data", "sentences", "corpora", "columnHeaders", "isModal"],
   data() {
     return {
-      columnHeaders: this.calcColumnHeaders()
+      filteredColumnHeaders: this.columnHeaders.filter(ch=>ch!="spaceAfter")
     }
   },
   methods: {
@@ -131,6 +131,19 @@ export default {
       if (group >= 0) classes.push(`tr-color-group-${group}`);
       return classes
     },
+    isJson(content) {
+      if (content instanceof Object && Object.keys(content).length > 0)
+        return true;
+      let isJson = false;
+      try {
+        let json = JSON.parse(content);
+        isJson = json instanceof Object && Object.keys(json).length > 0;
+      }
+      catch {
+        return false;
+      }
+      return isJson;
+    },
     objectClasses(content) {
       if (content)
         return ['object-column'];
@@ -138,9 +151,10 @@ export default {
         return [''];
     },
     objectColumn(content) {
+      const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
       if (content)
         return `<button onclick="this.parentNode.classList.toggle('unfolded')"> </button>
-          <pre>${JSON.stringify(content,null,2).replace(/\n/g,'<br>')}</pre>`;
+          <pre>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
       else
         return '';
     }

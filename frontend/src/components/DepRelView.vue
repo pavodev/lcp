@@ -88,7 +88,7 @@ const browserText = (function () {
 
 export default {
   name: "DepRelView",
-  props: ["data", "sentences"],
+  props: ["data", "sentences", "columnHeaders"],
   data(){
     const { tokens, links } = this.buildGraphData(this.data, this.sentences)
     return {
@@ -112,17 +112,22 @@ export default {
         : groups[tokenIdOrArray] = tokenIdOrArray in groups ? groups[tokenIdOrArray] : groupId
       )
 
+      let form_id = this.columnHeaders.indexOf("form");
+      let lemma_id = this.columnHeaders.indexOf("lemma");
+      let pos_id = this.columnHeaders.findIndex(v=>v.endsWith("pos"));
+      let head_id = this.columnHeaders.indexOf("head");
+      let label_id = this.columnHeaders.indexOf("label");
       // Compile tokens and link matrix
       sentences[1].forEach((token, index) => {
-        let textWidth = browserText.getWidth(token[0], 12, "Arial")
-        let typeWidth = browserText.getWidth(token[2], 12, "Arial")
+        let textWidth = browserText.getWidth(token[form_id], 12, "Arial")
+        let typeWidth = browserText.getWidth(token[pos_id], 12, "Arial")
         let currentTokenId = startId + index
         tokens.push({
           id: currentTokenId,
           // name: startId + index
-          form: token[0],
-          lemma: token[1],
-          pos: token[2],
+          form: token[form_id],
+          lemma: token[lemma_id],
+          pos: token[pos_id],
           width: textWidth,
           sumX: sumX,
           group: currentTokenId in groups ? `color-group-${groups[currentTokenId]}` : ''
@@ -130,10 +135,10 @@ export default {
         sumX += Math.max(textWidth, typeWidth)
 
         // Matrix
-        if (token[4]) {
+        if (head_id) {
           let currentTokenIndex = index
-          let targetTokenIndex = token[4] - startId
-          let targetTokenId = token[4]
+          let targetTokenIndex = token[head_id] - startId
+          let targetTokenId = token[head_id]
           let indexLevel = Math.abs(targetTokenIndex - currentTokenIndex)
 
           if (!(indexLevel in linksDict)) {
@@ -143,7 +148,7 @@ export default {
           linksDict[indexLevel].push({
             source: currentTokenId,
             target: targetTokenId,
-            label: token[5],
+            label: token[label_id],
             originalLevel: indexLevel,
           })
         }
@@ -187,7 +192,6 @@ export default {
           })
         })
       })
-
       return { tokens, links }
     },
     // calcArc(link) {
@@ -214,7 +218,9 @@ export default {
       let sourceIndex = link.source - startId
       let targetIndex = link.target - startId
       let startX = this.tokens[sourceIndex].sumX + this.tokens[sourceIndex].width/2 + sourceIndex*this.tokenSpace
-      let endX = this.tokens[targetIndex ].sumX + this.tokens[targetIndex].width/2 + targetIndex*this.tokenSpace
+      if (!(targetIndex in this.tokens))
+        return [startX,startX+4,0,'start'];
+      let endX = this.tokens[targetIndex].sumX + this.tokens[targetIndex].width/2 + targetIndex*this.tokenSpace
       let arrowPlacment = 'end';
       if (startX > endX) {
         let tmp = startX
@@ -230,9 +236,9 @@ export default {
     const totalWidth = this.tokens[countTokens - 1].sumX + this.tokens[countTokens - 1].width + countTokens*this.tokenSpace + 100
 
     let maxLevel = Math.max(...Object.values(this.links).map(link => link.level))
-    var margin = { top: 20, right: 50, bottom: 20, left: 50 },
+    var margin = { top: 40, right: 50, bottom: 20, left: 50 },
       width = totalWidth - margin.left - margin.right,
-      height = 90 + maxLevel*15 - margin.top - margin.bottom;
+      height = 110 + maxLevel*15 - margin.top - margin.bottom;
 
     d3.select("div#dep-rel-view").html('')
     const svg = d3.select("div#dep-rel-view").append("svg")
@@ -267,13 +273,14 @@ export default {
       f.append("feComposite").attr("in", "SourceGraphic")
     })
 
+    let label_id = this.columnHeaders.indexOf("label");
     svg.append("g")
     .attr("class", "text-form")
       .selectAll("text")
       .data(this.tokens)
       .join("text")
       // .attr("class", d => (d.id >= this.data[1] && d.id <= this.data.at(-1)) ? "text-bold text-danger" : "")
-      .attr("class", (d,i) => d.group + ' ' + (this.sentences && this.sentences[1] ? `label-${this.sentences[1][i][5]}` : '') )
+      .attr("class", (d,i) => d.group + ' ' + (this.sentences && this.sentences[1] ? `label-${this.sentences[1][i][label_id]}` : '') )
       .text(d => d.form)
       .attr("x", (d, index) => (this.tokenSpace * index + d.sumX))
       .attr("y", 10 + maxLevel*15)
@@ -329,7 +336,7 @@ export default {
     let links = svg.append("g")
       .attr("class", "links")
       .selectAll(".deprel-link")
-      .data(this.links)
+      .data(this.links.filter( l => l.label != "root" ))
       .enter()
       .append("g")
       .attr("class", d => `link-type-${d.label}`)

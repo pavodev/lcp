@@ -543,6 +543,7 @@
                   v-if="plainType == 'table' || resultContainsSet(resultSet)"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
+                  :languages="selectedLanguages"
                   :meta="WSDataMeta"
                   :attributes="resultSet.attributes"
                   :corpora="selectedCorpora"
@@ -554,6 +555,7 @@
                   v-else-if="resultContainsSet(resultSet) == false"
                   :data="WSDataSentences.result[index + 1]"
                   :sentences="WSDataSentences.result[-1]"
+                  :languages="selectedLanguages"
                   :meta="WSDataMeta"
                   :attributes="resultSet.attributes"
                   :corpora="selectedCorpora"
@@ -565,6 +567,7 @@
               <ResultsTableView
                 v-else-if="resultSet.type != 'plain'"
                 :data="WSDataResults.result[index + 1]"
+                :languages="selectedLanguages"
                 :attributes="resultSet.attributes"
                 :meta="WSDataMeta"
                 :resultsPerPage="resultsPerPage"

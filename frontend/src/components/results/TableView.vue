@@ -130,7 +130,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
   name: "ResultsTableView",
-  props: ["data", "attributes", "corpora", "resultsPerPage", "loading", "type"],
+  props: ["data", "languages", "attributes", "corpora", "resultsPerPage", "loading", "type"],
   data() {
     let attributes = this.getImpovedAttibutes(this.attributes)
     let data = this.calculateAdditionalData(this.data)

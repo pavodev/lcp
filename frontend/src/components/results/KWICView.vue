@@ -164,6 +164,7 @@
                 :data="data[modalIndex]"
                 :sentences="sentences[data[modalIndex][0]]"
                 :corpora="corpora"
+                :languages="languages"
                 :key="modalIndex"
                 v-if="modalVisible"
               />
@@ -273,6 +274,7 @@ export default {
   props: [
     "data",
     "sentences",
+    "languages",
     "attributes",
     "corpora",
     "resultsPerPage",

@@ -38,7 +38,7 @@
         aria-labelledby="nav-dependency-tab"
         v-if="hasDepRel"
       >
-        <DepRelView :data="data" :sentences="sentences" />
+        <DepRelView :data="data" :sentences="sentences" :columnHeaders="columnHeaders" />
       </div>
       <div
         class="tab-pane fade"
@@ -47,7 +47,7 @@
         role="tabpanel"
         aria-labelledby="nav-details-tab"
       >
-        <DetailsTableView :data="data" :sentences="sentences" :corpora="corpora" :isModal="true" />
+        <DetailsTableView :data="data" :sentences="sentences" :columnHeaders="columnHeaders" :corpora="corpora" :isModal="true" />
       </div>
     </div>
   </div>
@@ -66,18 +66,19 @@ import DetailsTableView from "@/components/results/DetailsTableView.vue";
 
 export default {
   name: "ResultsDetailsModalView",
-  props: ["data", "sentences", "corpora"],
+  props: ["data", "sentences", "languages", "corpora"],
   data() {
-    let deprel = false;
-    for (let i in this.sentences[1]){
-      let token = this.sentences[1][i]
-      if (token[4]) {
-        deprel = true
-        break;
-      }
+    let lang = (this.languages||[])[0];
+    let segment = this.corpora.corpus.segment;
+    let mapping = this.corpora.corpus.mapping.layer[segment];
+    if (lang && "partitions" in mapping) {
+      mapping = mapping.partitions[lang]
     }
+    let columnHeaders = mapping.prepared.columnHeaders;
+    let deprel = Object.values(columnHeaders).indexOf("head") >= 0;
     return {
       hasDepRel: deprel,
+      columnHeaders: columnHeaders
     }
   },
   components: {
