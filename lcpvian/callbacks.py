@@ -18,6 +18,7 @@ import re
 import shutil
 import traceback
 
+from asyncpg import Range
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Unpack, cast
@@ -324,35 +325,12 @@ def _meta(
     """
     if not result:
         return None
-    # total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job.kwargs["first_job"], connection=connection)
     depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
-    # full = cast(bool, kwargs.get("full", job.kwargs.get("full", False)))
-    # meta_json = depended.kwargs["meta_json"]
-    # is_vian = depended.kwargs.get("is_vian", False)
-    # resume = cast(bool, job.kwargs.get("resume", False))
-    # offset = cast(int, job.kwargs.get("offset", 0) if resume else -1)
-    # prev_offset = cast(int, depended.meta.get("latest_offset", -1))
-    # max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
-    # current_lines = cast(
-    #     int, kwargs.get("current_kwic_lines", job.kwargs["current_kwic_lines"])
-    # )
-
-    # if prev_offset > offset and not kwargs.get("from_memory"):
-    #     offset = prev_offset if resume else -1
-    # total_to_get = job.kwargs.get("needed", total_requested)
-
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
     status = depended.meta["_status"]
-    # latest_offset = max(offset, 0) + total_to_get
-    # depended.meta["latest_offset"] = latest_offset
-    # depended.save_meta()
-
-    # # in full mode, we need to combine all the sentences into one message when finished
-    # get_all_sents = full and status == "finished"
-    # to_send: Results
 
     # replace this with actual upstream handling of column names
     pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
@@ -380,10 +358,14 @@ def _meta(
                         meta = json.loads(res[n+1])
                     else:
                         meta = res[n+1]
+                    if not isinstance(meta, dict):
+                        continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
                     if any(isinstance(res[n+1], type) for type in [str,bool,dict,list,tuple]):
                         segment[layer][prop] = res[n+1]
+                    elif isinstance(res[n+1], Range):
+                        segment[layer][prop] = [res[n+1].lower,res[n+1].upper]
         segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}
         if not segment:
             continue
@@ -392,65 +374,11 @@ def _meta(
     if not to_send["-2"]:
         return None
 
-    # if full:
-    #     current_lines = 0
-
-    # if get_all_sents:
-    #     to_send = _get_all_sents(
-    #         job, base, is_vian, meta_json, max_kwic, current_lines, full, connection
-    #     )
-    # else:
-    #     to_send = _format_kwics(
-    #         depended.result,
-    #         meta_json,
-    #         result,
-    #         total_to_get,
-    #         is_vian,
-    #         True,
-    #         offset,
-    #         max_kwic,
-    #         current_lines,
-    #         full,
-    #     )
-
-    # more_data = not job.kwargs["no_more_data"]
-    # submit_query = job.kwargs["start_query_from_sents"]
-    # if submit_query and more_data:
-    #     status = "partial"
-
-    # # if to_send contains only {0: meta, -1: sentences} or less
-    # if len(to_send) < 3 and not submit_query:
-    #     print(f"No results found for {table} kwic -- skipping WS message")
-    #     return None
-
-    # # if we previously sent a warning about there being too much data, stop here
-    # if base.meta.get("been_warned"):
-    #     print("Processed too much data -- skipping WS message")
-    #     return None
-
-    # use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
-
-    # if not use_cache:
-    #     perc_done = depended.meta["payload"]["percentage_done"]
-    #     words_done = depended.meta["payload"]["percentage_words_done"]
-    # else:
-    #     perc_done = base.meta["progress_info"]["percentage_done"]
-    #     words_done = base.meta["progress_info"]["percentage_words_done"]
-
-    # submit_payload = depended.meta["payload"]
-    # submit_payload["full"] = full
-    # submit_payload["total_results_requested"] = total_requested
-
-    # can_send = not full or status == "finished"
-
     msg_id = str(uuid4())  # todo: hash instead!
     if "meta_job_ws_messages" not in base.meta:
         base.meta["meta_job_ws_messages"] = {}
     base.meta["meta_job_ws_messages"][msg_id] = None
     base.save_meta()
-
-    # if status == "finished" and more_data:
-    #     more_data = base.meta["total_results_so_far"] >= total_requested
 
     action = "meta"
 
@@ -458,31 +386,16 @@ def _meta(
         "result": to_send,
         "status": status,
         "action": action,
-        # "full": full,
-        # "more_data_available": more_data,
-        # "submit_query": submit_payload if submit_query else False,
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
         "table": table,
         "first_job": base.id,
         "msg_id": msg_id,
-        # "can_send": can_send,
-        # "percentage_done": perc_done,
-        # "percentage_words_done": words_done,
     }
 
     # # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
-
-    # if use_cache and not can_send and False:
-    #     if not connection.get(msg_id):
-    #         connection.set(msg_id, dumped)
-    #     connection.expire(msg_id, MESSAGE_TTL)
-    #     print("not returning sentences because searching whole corpus")
-    #     return
-
-    # job.save_meta()
 
     return _publish_msg(connection, dumped, msg_id)
 

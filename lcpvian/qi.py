@@ -381,6 +381,19 @@ class QueryIteration:
             parent_layer = config["layer"].get(parents_child)
         return False
 
+    def _is_time_anchored(self, layer) -> bool:
+        if not self.current_batch:
+            raise ValueError("Need batch")
+        config = self.config[str(self.current_batch[0])]
+        layer_config = config["layer"].get(layer)
+        if not layer_config:
+            return False
+        if "anchoring" in layer_config:
+            return layer_config['anchoring'].get("time", False)
+        if "contains" in layer_config:
+            return self._is_time_anchored(layer_config.get("contains", config['firstClass']['token']))
+        return False
+
     def meta_query(self) -> str:
         """
         Build a query to fetch meta of connected layers, with a placeholder param :ids
@@ -419,20 +432,21 @@ class QueryIteration:
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
         for layer in parents_with_attributes:
+            alias = layer
             layer_mapping = config["mapping"]["layer"].get(layer,{})
             attributes: dict[str,Any] = {k: None for k in config["layer"][layer].get("attributes", {})}
-            attributes['char_range'] = None # Also query char_range (won't make it through FE but can be reused from cache)
-            for attr in attributes:
-                # Quote attribute name (is arbitrary)
-                selects.append(f"{'s' if layer == seg else layer}.\"{attr}\" AS {layer}_{attr}")
-            if layer == seg or not attributes:
-                continue
             prefix_id: str
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
             relation = alignment.get("relation") if alignment else layer_mapping.get("relation", layer.lower())
-            if not relation:
-                continue
+            if not relation and lang and partitions:
+                relation = partitions.get(lang, {}).get("relation")
+            if layer == seg:
+                # The segment table is the main from table aliased as 's' so make sure to use it
+                alias = "s"
+                relation = None
+                partitions = None
+                alignment = None
             if alignment:
                 prefix_id = 'alignment'
             # hard-coded exception management -- change document_id for movie_id in open subtitles
@@ -440,21 +454,34 @@ class QueryIteration:
                 prefix_id = "document"
             else:
                 prefix_id = layer.lower()
-            selects.append(f"{layer}.{prefix_id}_id AS {layer}_id")
+            # Select the ID
+            selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
+            for attr in attributes:
+                # Quote attribute name (is arbitrary)
+                selects.append(f"{alias}.\"{attr}\" AS {layer}_{attr}")
+            # Will get char_range from the appropriate table
+            char_range_table: str = alias
             # join tables
             if lang and partitions:
                 interim_relation = partitions.get(lang,{}).get("relation")
                 if not interim_relation:
+                    # This should never happen?
                     continue
                 if alignment and relation:
                     # The partition table is aligned to a main document table
-                    joins.append(f"{schema}.{interim_relation} {layer}_{lang} ON {layer}_{lang}.char_range @> s.char_range")
-                    joins.append(f"{schema}.{relation} {layer} ON {layer}_{lang}.alignment_id = {layer}.alignment_id")
+                    joins.append(f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range")
+                    joins.append(f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id")
+                    char_range_table = f"{alias}_{lang}"
                 else:
                     # This is the main document table for this partition
-                    joins.append(f"{schema}.{interim_relation} {layer} ON {layer}.char_range @> s.char_range")
-            else:
-                joins.append(f"{schema}.{relation} {layer} ON {layer}.char_range @> s.char_range")
+                    joins.append(f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range")
+            elif relation:
+                joins.append(f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range")
+            # Get char_range from the main table
+            selects.append(f"{char_range_table}.\"char_range\" AS {layer}_char_range")
+            # And frame_range if applicable
+            if self._is_time_anchored(layer):
+                selects.append(f"{char_range_table}.\"frame_range\" AS {layer}_frame_range")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
