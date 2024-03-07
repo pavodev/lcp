@@ -50,6 +50,14 @@ export default {
       graphIndex: 0,
       mermaidConfig: {
         theme: "neutral",
+        // themeVariables: {
+        //   'primaryColor': '#BB2528',
+        //   'primaryTextColor': '#fff',
+        //   'primaryBorderColor': '#7C0000',
+        //   'lineColor': '#F8B229',
+        //   'secondaryColor': '#006100',
+        //   'tertiaryColor': '#fff'
+        // }
       }
     };
   },
@@ -64,6 +72,8 @@ export default {
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
+          style: "fill:#FFF,stroke:#000,stroke-width:1px",
+          edgeType: "round"
         },
       ];
       let partOfs = {};
@@ -77,7 +87,8 @@ export default {
             let attributeData = {
               id: attributeId,
               text: text,
-              edgeType: "circle",
+              edgeType: "round",
+              style: "fill:#FBD573,stroke:#333,stroke-width:2px",
             };
             if ("entity" in attributes && attributes.entity in corpus.layer) {
               attributeData.next = [`l-${attributes.entity.toLowerCase().replace(/@/gi, "_")}`];
@@ -116,7 +127,8 @@ export default {
             data.push({
               id: metaId,
               text: meta.replace(/@/gi, "_"),
-              edgeType: "circle",
+              edgeType: "round",
+              style: "fill:#f9f,stroke:#333,stroke-width:4px",
             });
             next.push(metaId);
             link.push("---")
