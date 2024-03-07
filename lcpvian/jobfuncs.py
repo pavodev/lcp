@@ -160,15 +160,13 @@ async def _swissdox_export(
     config: dict[str,Any] = {},
     underlang: str = "",
     **kwargs: str | None | int | float | bool | list[str],
-) -> list[tuple] | tuple | list[JSONObject] | JSONObject | list[MainCorpus] | list[
-    UserQuery
-] | list[Sentence] | None:
+) -> None:
     """
     The function queued by RQ, which executes our DB query
     """
 
-    prepared_segments_job: Job = Job.fetch(job_ids['prepared_segments'], connection=get_current_connection())
-    named_entities_job: Job = Job.fetch(job_ids['named_entities'], connection=get_current_connection())
+    prepared_segments_job: Job = Job.fetch(job_ids["prepared_segments"], connection=get_current_connection())
+    named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=get_current_connection())
 
     if not os.path.exists(f"results/{corpus_index}"):
         os.mkdir(f"results/{corpus_index}")
@@ -180,24 +178,24 @@ async def _swissdox_export(
         for row in documents["rows"]:
             r.writerow([row.get(cl,"") for cl in columns])
 
-    with open(f"results/{corpus_index}/tokens.tsv", "w") as t:
-        seg: str = config['segment']
-        segment_mapping: dict[str,Any] = config['mapping']['layer'][seg]
+    with open(f"results/{corpus_index}/tokens.tsv", "w") as tk:
+        seg: str = config["segment"]
+        segment_mapping: dict[str,Any] = config["mapping"]["layer"][seg]
         prepared_segment_cols: list[str]
-        if 'partitions' in segment_mapping and underlang:
-            prepared_segment_cols = segment_mapping['partitions'][underlang[1:]]['prepared']['columnHeaders']
+        if "partitions" in segment_mapping and underlang:
+            prepared_segment_cols = segment_mapping["partitions"][underlang[1:]]["prepared"]["columnHeaders"]
         else:
-            prepared_segment_cols = segment_mapping['prepared']['columnHeaders']
-        r = csv.writer(t, delimiter="\t", quotechar="\b")
-        r.writerow(['segment_id', *prepared_segment_cols])
+            prepared_segment_cols = segment_mapping["prepared"]["columnHeaders"]
+        r = csv.writer(tk, delimiter="\t", quotechar="\b")
+        r.writerow(["segment_id", *prepared_segment_cols])
         for row in prepared_segments_job.result:
             sid: str = str(row[0])
             for token in row[2]:
                 r.writerow( [sid, *token] )
 
-    with open(f"results/{corpus_index}/namedentities.tsv", "w") as t:
+    with open(f"results/{corpus_index}/namedentities.tsv", "w") as ne:
         ne_cols: list[str] = cast(list[str], kwargs.get("ne_cols", []))
-        r = csv.writer(t, delimiter="\t", quotechar="\b")
+        r = csv.writer(ne, delimiter="\t", quotechar="\b")
         r.writerow(ne_cols)
         for row in named_entities_job.result:
             r.writerow(row)
