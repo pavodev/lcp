@@ -4,10 +4,12 @@ import csv
 import json
 import logging
 import os
+import pandas
 import shutil
 import traceback
 import zipfile
 
+from asyncpg import Range
 from typing import Any, cast
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -171,37 +173,65 @@ async def _swissdox_export(
     if not os.path.exists(f"results/{corpus_index}"):
         os.mkdir(f"results/{corpus_index}")
 
-    with open(f"results/{corpus_index}/documents.tsv", "w") as d:
-        r = csv.writer(d, delimiter="\t", quotechar="\b")
-        columns = [c for c in documents["columns"]]
-        r.writerow(columns)
-        for row in documents["rows"]:
-            r.writerow([row.get(cl,"") for cl in columns])
+    ne_dict: dict[tuple[str,str],str] = {}
 
-    with open(f"results/{corpus_index}/tokens.tsv", "w") as tk:
-        seg: str = config["segment"]
-        segment_mapping: dict[str,Any] = config["mapping"]["layer"][seg]
-        prepared_segment_cols: list[str]
-        if "partitions" in segment_mapping and underlang:
-            prepared_segment_cols = segment_mapping["partitions"][underlang[1:]]["prepared"]["columnHeaders"]
-        else:
-            prepared_segment_cols = segment_mapping["prepared"]["columnHeaders"]
-        r = csv.writer(tk, delimiter="\t", quotechar="\b")
-        r.writerow(["segment_id", *prepared_segment_cols])
-        for row in prepared_segments_job.result:
-            sid: str = str(row[0])
-            for token in row[2]:
-                r.writerow( [sid, *token] )
+    # Documents
+    doc_columns = [c for c in documents["columns"] if c != "id"]
+    doc_indices = []
+    doc_rows = []
+    doc_attrs = config["layer"][config["document"]]["attributes"]
+    for n, row in enumerate(documents["rows"]):
+        id = row.pop("id", n)
+        doc_indices.append(str(id))
+        # Sanitize types -- should do the same for all dfs
+        formed_row = []
+        for cl in doc_columns:
+            c = row.get(cl,"")
+            type = doc_attrs.get(cl, doc_attrs.get("meta", {}).get(cl, {})).get("type")
+            if type == "integer":
+                c = int(c or 0)
+            elif type in ("text","string"):
+                c = str(c)
+            elif cl == "char_range" and isinstance(c, Range):
+                c = str(c)
+            formed_row.append(c)
+        doc_rows.append(formed_row)
+    doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
+    doc_pandas.to_feather(f"results/{corpus_index}/documents.feather")
 
-    with open(f"results/{corpus_index}/namedentities.tsv", "w") as ne:
-        ne_cols: list[str] = cast(list[str], kwargs.get("ne_cols", []))
-        r = csv.writer(ne, delimiter="\t", quotechar="\b")
-        r.writerow(ne_cols)
-        for row in named_entities_job.result:
-            r.writerow(row)
+    # Tokens
+    seg: str = config["segment"]
+    segment_mapping: dict[str,Any] = config["mapping"]["layer"][seg]
+    tok_columns: list[str] = ["segment_id"]
+    if "partitions" in segment_mapping and underlang:
+        tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"]["columnHeaders"]
+    else:
+        tok_columns += segment_mapping["prepared"]["columnHeaders"]
+    tok_indices = []
+    tok_rows = []
+    for row in prepared_segments_job.result:
+        sid: str = str(row[0])
+        for n, token in enumerate(row[2]):
+            tok_indices.append( str(n + int(row[1])) )
+            tok_rows.append( [sid, *token] )
+    tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
+    tok_pandas.to_feather(f"results/{corpus_index}/tokens.feather")
 
+    # Named entities
+    ne_nid = next(n for n, c in enumerate(kwargs.get("ne_cols", [])) if c == "id")
+    ne_colums: list[str] = [str(c) for n, c in enumerate(kwargs.get("ne_cols", [])) if n != ne_nid]
+    ne_indices = []
+    ne_rows = []
+    for row in named_entities_job.result:
+        ne_indices.append(str(row[ne_nid]))
+        ne_rows.append([str(r) for n, r in enumerate(row) if n != ne_nid])
+    ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_colums)
+    ne_pandas.to_feather(f"results/{corpus_index}/namedentities.feather")
+
+    # Zip file
     with zipfile.ZipFile(f"results/{corpus_index}/swissdox.zip", mode="w") as archive:
-        archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
+        # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
+        archive.write(f"results/{corpus_index}/documents.feather", "documents.feather")
         archive.write(f"results/{corpus_index}/tokens.tsv", "tokens.tsv")
         archive.write(f"results/{corpus_index}/namedentities.tsv", "namedentities.tsv")
 

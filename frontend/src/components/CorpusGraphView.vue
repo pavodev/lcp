@@ -128,7 +128,7 @@ export default {
               id: metaId,
               text: meta.replace(/@/gi, "_"),
               edgeType: "round",
-              style: "fill:#f9f,stroke:#333,stroke-width:4px",
+              style: "fill:#FBD573,stroke:#333,stroke-width:2px",
             });
             next.push(metaId);
             link.push("---")

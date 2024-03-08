@@ -125,9 +125,7 @@ async def export_swissdox(
         for res in j.result:
             doc: dict[str,Any] = {}
             for col_name, ncol in doc_columns.items():
-                if col_name == "char_range":
-                    documents["ranges"].append(res[ncol])
-                elif col_name == "meta":
+                if col_name == "meta":
                     meta_obj: dict
                     if isinstance(res[ncol], str):
                         meta_obj = json.loads(res[ncol])
@@ -138,6 +136,8 @@ async def export_swissdox(
                         doc[k] = v
                 else:
                     doc[col_name] = res[ncol]
+                    if col_name == "char_range":
+                        documents["ranges"].append(res[ncol])
             documents["rows"].append(doc)
 
     doc_multi_range = ",".join( [f"[{r.lower},{r.upper})" for r in documents['ranges']] )
@@ -156,8 +156,8 @@ async def export_swissdox(
         ne_mapping = ne_mapping['partitions'][underlang[1:]]
     if 'relation' in ne_mapping:
         ne_table = ne_mapping['relation']
-    ne_cols = ["id"]
-    ne_selects = ["ne.namedentity_id AS id"]
+    ne_cols = ["id", "char_range"]
+    ne_selects = ["ne.namedentity_id AS id", "ne.char_range AS char_range"]
     ne_joins = []
     ne_wheres = [f"{doc_multi_range} @> ne.char_range"]
     for attr_name, attr_values in config[str(corpus_index)]['layer']['NamedEntity']['attributes'].items():
