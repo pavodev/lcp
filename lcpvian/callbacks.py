@@ -19,10 +19,10 @@ import shutil
 import traceback
 
 from asyncpg import Range
-from datetime import datetime
+from datetime import datetime, date
 from types import TracebackType
 from typing import Any, Unpack, cast
-from uuid import uuid4
+from uuid import uuid4, UUID
 
 from redis import Redis as RedisConnection
 from rq.job import Job
@@ -362,8 +362,8 @@ def _meta(
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if any(isinstance(res[n+1], type) for type in [str,bool,dict,list,tuple]):
-                        segment[layer][prop] = res[n+1]
+                    if any(isinstance(res[n+1], type) for type in [int,str,bool,dict,list,tuple,UUID,date]):
+                        segment[layer][prop] = str(res[n+1])
                     elif isinstance(res[n+1], Range):
                         segment[layer][prop] = [res[n+1].lower,res[n+1].upper]
         segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}

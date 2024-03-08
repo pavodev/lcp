@@ -434,7 +434,7 @@ class QueryIteration:
         for layer in parents_with_attributes:
             alias = layer
             layer_mapping = config["mapping"]["layer"].get(layer,{})
-            attributes: dict[str,Any] = {k: None for k in config["layer"][layer].get("attributes", {})}
+            attributes: dict[str,Any] = {k:v for k,v in config["layer"][layer].get("attributes", {}).items()}
             prefix_id: str
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
@@ -456,8 +456,13 @@ class QueryIteration:
                 prefix_id = layer.lower()
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
-            for attr in attributes:
+            for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
+                attr_name = f"\"{attr}\""
+                # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+                if attr == "meta":
+                    lb, rb = '{', '}'
+                    attr_name = f"({attr_name} #>> '{lb}{rb}')::jsonb"
                 selects.append(f"{alias}.\"{attr}\" AS {layer}_{attr}")
             # Will get char_range from the appropriate table
             char_range_table: str = alias
