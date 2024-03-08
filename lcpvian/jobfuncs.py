@@ -218,8 +218,8 @@ async def _swissdox_export(
     tok_pandas.to_feather(f"results/{corpus_index}/tokens.feather")
 
     # Named entities
-    ne_nid = next(n for n, c in enumerate(kwargs.get("ne_cols", [])) if c == "id")
-    ne_colums: list[str] = [str(c) for n, c in enumerate(kwargs.get("ne_cols", [])) if n != ne_nid]
+    ne_nid = next(n for n, c in enumerate(cast(list, kwargs.get("ne_cols", []))) if c == "id")
+    ne_colums: list[str] = [str(c) for n, c in enumerate(cast(list, kwargs.get("ne_cols", []))) if n != ne_nid]
     ne_indices = []
     ne_rows = []
     for row in named_entities_job.result:
