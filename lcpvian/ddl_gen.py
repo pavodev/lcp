@@ -817,10 +817,10 @@ class CTProcessor:
         mapd["layer"][tokname]["relation"] = batchname
         segname = self.globals.base_map["segment"]
         mapd["layer"][segname]["prepared"] = {
-            "relation": ("prepared_" + seg_tab.name),
+            "relation": ("prepared_" + segname),
             "columnHeaders": rel_cols_names
         }
-        mapd["layer"][segname]["relation"] = seg_tab.name
+        mapd["layer"][segname]["relation"] = segname+"<batch>"
         self.globals.mapping = mapd
 
         # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())

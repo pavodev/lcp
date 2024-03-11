@@ -11,3 +11,4 @@ results/*
 .env
 *.so
 *.c
+frontend/public/media/

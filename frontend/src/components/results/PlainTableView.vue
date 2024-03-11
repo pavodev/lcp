@@ -100,6 +100,7 @@
               Details
             </button>
           </td>
+          <td :class="['audioplayer','audioplayer-'+resultIndex, playIndex == resultIndex ? 'visible' : '']"></td>
         </tr>
       </tbody>
     </table>
@@ -327,6 +328,17 @@ span.action-button:hover {
 *[class^="color-group-"] {
   border-radius: 2px;
 }
+.audioplayer {
+  display: none;
+  position: absolute;
+  width: 50vw;
+  right: 10em;
+  height: 32px;
+  padding: 0px;
+}
+.audioplayer.visible {
+  display: block;
+}
 </style>
 
 <script>
@@ -335,6 +347,9 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+
+import WaveSurfer from 'wavesurfer.js'
+import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
 
 class TokenToDisplay {
   constructor(tokenArray, index, groups, columnHeaders) {
@@ -375,7 +390,8 @@ export default {
       modalIndex: null,
       currentPage: 1,
       groups: this.data ? this.getGroups(this.data[0], true) : [],
-      randInt: Math.floor(Math.random() * 1000)
+      randInt: Math.floor(Math.random() * 1000),
+      playIndex: -1
     };
   },
   components: {
@@ -524,8 +540,8 @@ export default {
         // corpus tamplete,
         let filename = meta[this.corpora.corpus.firstClass.document].audio
         let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
-        let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25. - 3
-        let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25. + 3
+        let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25. - 2
+        let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25. + 2
         // console.log(filename, startTime, endTime)
         // let startTime = meta["Utterance"].start
         // let endTime = meta[this.corpora.corpus.firstClass.segment].end
@@ -539,6 +555,37 @@ export default {
               this.$refs.audioplayer.pause();
             }
           };
+          try {
+            const wavesurfer = WaveSurfer.create({
+              container: `.audioplayer-${resultIndex}`,
+              waveColor: '#4F4A85',
+              progressColor: '#383351',
+              // url: `/media/${filename}`,
+              media: this.$refs.audioplayer, // <- this is the important part
+              height: 32
+            })
+            wavesurfer.on('interaction', () => {
+              wavesurfer.play()
+            })
+            // Initialize the Regions plugin
+            const wsRegions = wavesurfer.registerPlugin(RegionsPlugin.create())
+            // Create some regions at specific time ranges
+            wavesurfer.on('decode', () => {
+              // Regions
+              wsRegions.addRegion({
+                start: startTime,
+                end: endTime,
+                content: '',
+                color: 'rgba(255, 0, 0, 0.1)',
+                drag: false,
+                resize: false,
+              })
+            })
+          }
+          catch (e){
+            console.log("Couldn't create the waveform", e);
+          }
+          this.playIndex = resultIndex;
         }
       }
     },
