@@ -117,7 +117,7 @@ You can now go back to lcpvian and use node 19:
 
 ```bash
 cd lcpvian
-nvm use 0.10
+nvm use 19
 ```
 
 Then, if you haven't before, install the frontend:
