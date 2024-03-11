@@ -23,15 +23,19 @@
           :key="resultIndex"
           :data-index="resultIndex"
         >
-          <button @click="copyToClip(item)">
-            <FontAwesomeIcon :icon="['fas', 'copy']" />
-          </button>
-          <td scope="row">
+          <td scope="row" class="results">
+            <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
+              <FontAwesomeIcon :icon="['fas', 'copy']" />
+            </span>
+            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="hasAudio(resultIndex)">
+              <FontAwesomeIcon :icon="['fas', 'play']" />
+            </span>
             <span
               v-if="Object.keys(meta).length"
               style="margin-right: 0.5em"
               @mousemove="showMeta(resultIndex, $event)"
               @mouseleave="closeMeta"
+              class="icon-info ms-2"
             >
               <FontAwesomeIcon :icon="['fas', 'circle-info']" />
             </span>
@@ -85,7 +89,7 @@
               {{ token[0] }}
             </span> -->
           </td>
-          <td>
+          <td class="buttons">
             <button
               type="button"
               class="btn btn-secondary btn-sm"
@@ -207,10 +211,42 @@
         </div>
       </div>
     </div>
+    <audio controls ref="audioplayer" class="d-none">
+        <source src="/test.mp3" type="audio/mpeg">
+        Your browser does not support the audio element.
+    </audio>
   </div>
 </template>
 
 <style scoped>
+td.icons {
+  min-width: 100px;
+}
+td.buttons {
+  min-width: 100px;
+}
+td.results {
+  width: 100%;
+}
+span.action-button {
+  cursor: pointer;
+  margin-right: 0.5em;
+  color: #fff;
+  transition: 0.3s all;
+  background-color: #2a7f62;
+  display: inline-block;
+  width: 28px;
+  text-align: center;
+  padding: 2px;
+  border-radius: 5px;
+}
+span.action-button:hover {
+  opacity: 0.7;
+}
+.icon-info {
+  cursor: pointer;
+  color: #676767;
+}
 .paggination {
   float: right;
 }
@@ -468,7 +504,44 @@ export default {
         type: "success",
         text: "Copied to clipboard",
       });
-    }
+    },
+    hasAudio(resultIndex) {
+      resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+      const sentenceId = this.data[resultIndex][0];
+      let meta = this.meta[sentenceId];
+      let retval = false;
+      if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
+        retval = true;
+      }
+      return retval;
+    },
+    playAudio(resultIndex) {
+      this.$refs.audioplayer.pause();
+      resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+      const sentenceId = this.data[resultIndex][0];
+      let meta = this.meta[sentenceId];
+      if (meta) {
+        // corpus tamplete,
+        let filename = meta[this.corpora.corpus.firstClass.document].audio
+        let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
+        let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25. - 3
+        let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25. + 3
+        // console.log(filename, startTime, endTime)
+        // let startTime = meta["Utterance"].start
+        // let endTime = meta[this.corpora.corpus.firstClass.segment].end
+        if (filename) {
+          // TODO: get path from config
+          this.$refs.audioplayer.src = `/media/${filename}`;
+          this.$refs.audioplayer.currentTime = startTime;
+          this.$refs.audioplayer.play();
+          this.$refs.audioplayer.ontimeupdate = () => {
+            if (this.$refs.audioplayer.currentTime >= endTime) {
+              this.$refs.audioplayer.pause();
+            }
+          };
+        }
+      }
+    },
   },
   computed: {
     headToken() {
