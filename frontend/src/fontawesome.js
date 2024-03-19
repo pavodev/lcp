@@ -6,14 +6,18 @@ import {
   faBackward,
   faBackwardStep,
   faBarcode,
+  faCaretLeft,
+  faCaretRight,
   faChartSimple,
   faCircleInfo,
   faCircleNodes,
   faCirclePlus,
+  faCircleQuestion,
   faCopy,
   faExpand,
   faFileExport,
   faForward,
+  faGear,
   faHouse,
   faLink,
   faMagnifyingGlass,
@@ -40,14 +44,18 @@ library.add(faArrowUp);
 library.add(faBackward);
 library.add(faBackwardStep);
 library.add(faBarcode);
+library.add(faCaretLeft);
+library.add(faCaretRight);
 library.add(faChartSimple);
 library.add(faCircleInfo);
 library.add(faCircleNodes);
 library.add(faCirclePlus);
+library.add(faCircleQuestion);
 library.add(faCopy);
 library.add(faExpand);
 library.add(faFileExport);
 library.add(faForward);
+library.add(faGear);
 library.add(faHouse);
 library.add(faLink);
 library.add(faMagnifyingGlass);

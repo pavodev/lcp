@@ -31,6 +31,15 @@
                 Query
               </router-link>
             </li>
+            <li class="nav-item">
+              <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
+                <FontAwesomeIcon
+                  :icon="['fas', 'circle-question']"
+                  class="me-1"
+                />
+                Manual
+              </a>
+            </li>
             <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query-test">
                 <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
