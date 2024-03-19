@@ -216,9 +216,9 @@ async def _lama_user_details(headers: Headers) -> JSONObject:
     """
     todo: not tested yet, but the syntax is something like this
     """
-    url = f"{os.environ['LAMA_API_URL']}/user/details"
+    url = f"{os.environ['LAMA_API_URL']}/user/details/v2"
     async with ClientSession() as session:
-        async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
+        async with session.post(url, data=_extract_lama_headers(headers)) as resp:
             jso: JSONObject = await resp.json()
             jso["max_kwic"] = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
             return jso
