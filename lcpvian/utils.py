@@ -435,9 +435,11 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     # assert needed for mypy
     assert isinstance(payload["config"], dict)
     print(f"Config loaded: {len(payload['config'])} corpora")
-    app["config"].update(payload["config"])
+    app["config"] = payload["config"]
     payload["action"] = "update_config"
     await push_msg(app["websockets"], "", payload)
+    app["redis"].set("app_config", json.dumps(payload["config"]))
+    app["redis"].expire("app_config", MESSAGE_TTL)
     return None
 
 

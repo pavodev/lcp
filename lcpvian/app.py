@@ -144,6 +144,15 @@ async def create_app(test: bool = False) -> web.Application:
         )
         .and_call(handle_lama_error)
     )
+    # await catcher.add_scenario(
+    #     catch(AuthError)
+    #     .with_status_code(403)
+    #     .and_stringify()
+    #     .with_additional_fields(
+    #         {"message": "Authentical..."}
+    #     )
+    #     .and_call(handle_lama_error)
+    # )
 
     app = web.Application(middlewares=[catcher.middleware])
     app["mypy"] = C_COMPILED
@@ -171,6 +180,8 @@ async def create_app(test: bool = False) -> web.Application:
     # here we store corpus_id: config
     conf: dict[str, CorpusConfig] = {}
     app["config"] = conf
+
+    # app["auth"] = Authenticator(app)
 
     endpoints: list[tuple[str, str, Endpoint]] = [
         ("/check-file-permissions", "GET", check_file_permissions),

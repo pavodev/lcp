@@ -592,7 +592,7 @@
         },
         "quantor__existential": {
             "type": "string",
-            "pattern": "(EXIST|!EXIST|\u00acEXIST)"
+            "pattern": "(EXISTS?|!EXISTS?|\u00acEXISTS?|NOT EXISTS?)"
         },
         "operator__unary": {
             "type": "string",

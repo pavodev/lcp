@@ -540,8 +540,8 @@ export default {
         // corpus tamplete,
         let filename = meta[this.corpora.corpus.firstClass.document].audio
         let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
-        let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25. - 2
-        let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25. + 2
+        let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25.
+        let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25.
         // console.log(filename, startTime, endTime)
         // let startTime = meta["Utterance"].start
         // let endTime = meta[this.corpora.corpus.firstClass.segment].end
@@ -549,19 +549,19 @@ export default {
           // TODO: get path from config
           this.$refs.audioplayer.src = `/media/${filename}`;
           this.$refs.audioplayer.currentTime = startTime;
-          this.$refs.audioplayer.play();
           this.$refs.audioplayer.ontimeupdate = () => {
             if (this.$refs.audioplayer.currentTime >= endTime) {
               this.$refs.audioplayer.pause();
             }
           };
+          this.$refs.audioplayer.play();
           try {
             const wavesurfer = WaveSurfer.create({
               container: `.audioplayer-${resultIndex}`,
               waveColor: '#4F4A85',
               progressColor: '#383351',
-              // url: `/media/${filename}`,
-              media: this.$refs.audioplayer, // <- this is the important part
+              url: `/media/${filename}`,
+              // media: this.$refs.audioplayer, // <- this is the important part
               height: 32
             })
             wavesurfer.on('interaction', () => {
