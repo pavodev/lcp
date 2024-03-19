@@ -1,9 +1,10 @@
+from aiohttp import web
 
 class Authentication:
     
     def __init__(self, app: web.Application) -> None:
         self.app = app
-        self.all_corpora = app.all_corpora
+        # self.all_corpora = app.all_corpora
         
     def basic(self):
         pass
@@ -17,4 +18,5 @@ class Authentication:
     def query(self, corpora):
         self.check_user_ok()
         for c in self.all_corpora:
-            assert c in user.projects
+            pass
+            # assert c in user.projects
