@@ -57,7 +57,7 @@ from sqlalchemy.sql import text
 
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
-from .utils import format_query_params, gather
+from .utils import _format_config_query,format_query_params, gather
 
 
 class SQLstats:
@@ -78,13 +78,18 @@ class SQLstats:
             WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
         )
 
-        self.main_corp: str = dedent(
-            f"""
-            INSERT
-              INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-            VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
-            RETURNING *;"""
-        )
+        self.main_corp: str = _format_config_query(dedent(
+            """
+            WITH mc AS (
+                INSERT
+                INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
+                VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
+                RETURNING *
+            )
+            SELECT {selects}
+            FROM mc
+            {join} WHERE mc.enabled = true;"""
+        ))
 
         self.token_count: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
@@ -507,4 +512,6 @@ class Importer:
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
         await self.collocations()
-        return cast(MainCorpus, await self.create_entry_maincorpus())
+        # run the config glob_attr
+        main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
+        return main_corp

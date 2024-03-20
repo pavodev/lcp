@@ -40,6 +40,7 @@ from redis.asyncio.client import PubSub
 from redis.exceptions import ConnectionError
 
 
+from .configure import _get_batches
 from .query import query
 from .query_service import QueryService
 from .utils import push_msg
@@ -278,7 +279,9 @@ async def _handle_message(
     if action == "uploaded":
         vian = cast(bool, payload["is_vian"])
         user_data = cast(JSONObject | None, payload["user_data"])
-        app["config"][str(payload["id"])] = payload["entry"]
+        conf = payload["entry"]
+        conf["_batches"] = _get_batches(conf)
+        app["config"][str(payload["id"])] = conf
         if payload.get("gui"):
             filt = _filter_corpora(app["config"], vian, user_data)
             payload["config"] = cast(JSONObject, filt)

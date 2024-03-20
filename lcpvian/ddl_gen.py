@@ -743,6 +743,21 @@ class CTProcessor:
 
         self.globals.tables.append(ptable)
 
+        mapd: dict[str, Any] = self.globals.mapping
+        mapd["hasFTS"] = True
+        tok_tab = next(
+            x
+            for x in self.globals.tables
+            if x.name == self.globals.base_map["token"].lower() + "0"
+        )
+        rel_cols = [
+            x.name.rstrip("_id")
+            for x in tok_tab.cols
+            if not (x.constrs.get("primary_key") or x.name.endswith("range"))
+        ]
+        mapd["FTSvectorCols"] = {n: rc for n, rc in enumerate(rel_cols, start=1)}
+        self.globals.mapping = mapd
+
 
     def process_schema(self) -> str:
         corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())

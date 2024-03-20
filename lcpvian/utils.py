@@ -68,6 +68,54 @@ TRUES = {"true", "1", "y", "yes"}
 
 MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
+# The query in get_config is complex because we inject the possible values of the global attributes in corpus_template
+CONFIG_SELECT = """
+mc.corpus_id,
+mc.name,
+mc.current_version,
+mc.version_history,
+mc.description,
+mc.corpus_template::jsonb || a.glob_attr::jsonb AS corpus_template,
+mc.schema_path,
+mc.token_counts,
+mc.mapping,
+mc.enabled,
+mc.sample_query
+"""
+CONFIG_JOIN = """CROSS JOIN
+(SELECT
+    json_build_object('glob_attr', jsonb_object_agg(
+        t4.typ,
+        case
+            when array_length(t4.labels,1)=1 then to_json(t4.labels[1])
+            else to_json(t4.labels)
+        end
+    )) AS glob_attr
+    FROM
+        (SELECT
+            pg_type.typname AS typ,
+            array_agg(pg_enum.enumlabel) AS labels
+            FROM pg_enum
+            JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
+            JOIN
+                (SELECT
+                    DISTINCT t2each.key AS typname
+                    FROM
+                        (SELECT
+                            t1each.key AS layer,
+                            t1each.value->>'attributes' AS attributes
+                            FROM
+                                (SELECT corpus_template->>'layer' AS lay FROM main.corpus) t1,
+                                json_each(t1.lay::json) t1each
+                        ) t2,
+                        json_each(t2.attributes::json) t2each
+                    WHERE
+                        t2each.value->>'isGlobal' = 'true'
+                ) t3 ON t3.typname = pg_type.typname
+            GROUP BY typ
+        ) t4
+) a
+"""
 
 class Interrupted(Exception):
     """
@@ -426,6 +474,14 @@ async def push_msg(
                 print(f"Connection reset: {room}/{user_id}")
                 pass
             sent_to.add((room, user_id))
+
+
+def _format_config_query(template: str) -> str:
+    """
+    Select the appropriate fields from main.corpus
+    and inject the possible values of the global attributes in corpus_template
+    """
+    return template.format(selects=CONFIG_SELECT, join=CONFIG_JOIN)
 
 
 async def _set_config(payload: JSONObject, app: web.Application) -> None:
