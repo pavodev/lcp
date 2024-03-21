@@ -42,7 +42,7 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
     return (kwic_name,sid,matching_entities,tokens)
 
 
-async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
+async def kwic(jobs: list[Job], resp: Any, config):
 
     sentence_jobs = [j for j in jobs if j.kwargs.get("sentences_query") and not j.kwargs.get("meta_query")]
     other_jobs = [j for j in jobs if j not in sentence_jobs]
