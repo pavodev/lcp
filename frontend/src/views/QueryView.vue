@@ -794,7 +794,6 @@ import EditorView from "@/components/EditorView.vue";
 import CorpusGraphView from "@/components/CorpusGraphView.vue";
 import { setTooltips, removeTooltips } from "@/tooltips";
 
-import config from '@/config'
 
 export default {
   name: "QueryTestView",
@@ -1272,16 +1271,8 @@ export default {
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
     async exportResults() {
-      const hashed = this.WSDataResults.first_job || this.WSDataResults.job
-      const a = document.createElement('a'); 
-      a.innerText = "test.txt";
-      a.title = "test.txt";
-      a.download = "test.txt";
-      a.target = "_blank";
-      a.href = `${config.apiUrl}/export/${hashed}?format=${this.exportFormat}`;
-      document.body.appendChild(a);
-      a.click(); 
-      a.remove();
+      // TODO: check whether all the results have already been fetched first?
+      this.submit(null, true, false, /*full=*/true, /*to_export=*/{'tsv':'dump', 'swissdox':'swissdox'}[this.exportFormat||'dump']);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
@@ -1290,7 +1281,8 @@ export default {
       event,
       resumeQuery = false,
       cleanResults = true,
-      fullSearch = false
+      fullSearch = false,
+      to_export = false
     ) {
       if (!localStorage.getItem("dontShowResultsNotif"))
         this.showResultsNotification = true;
@@ -1322,6 +1314,9 @@ export default {
       }
       if (fullSearch) {
         data["full"] = true;
+      }
+      if (to_export) {
+        data["to_export"] = to_export;
       }
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {

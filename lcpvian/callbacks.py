@@ -12,6 +12,7 @@ calls to Queue.enqueue in query_service.py
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -26,6 +27,7 @@ from uuid import uuid4, UUID
 
 from redis import Redis as RedisConnection
 from rq.job import Job
+from rq.registry import FinishedJobRegistry
 
 from .configure import _get_batches
 from .convert import (
@@ -34,6 +36,7 @@ from .convert import (
     _apply_filters,
     _get_all_sents,
 )
+from .export import export_dump, export_swissdox
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -48,6 +51,7 @@ from .typed import (
 from .utils import (
     CustomEncoder,
     Interrupted,
+    _determine_language,
     _get_status,
     _row_to_value,
     _get_associated_query_job,
@@ -497,8 +501,53 @@ def _sentences(
     base.meta["_sent_jobs"][job.id] = None
     base.save_meta()
 
-    if status == "finished" and more_data:
-        more_data = base.meta["total_results_so_far"] >= total_requested
+    if status == "finished":
+        if more_data:
+            more_data = base.meta["total_results_so_far"] >= total_requested
+        if to_export := base.meta.get("to_export", False):
+            done_batches = {x for x in depended.kwargs.get("done_batches", [])}
+            done_batches.add(depended.kwargs.get("current_batch"))
+            all_batches_done = len(done_batches) == len(depended.kwargs.get("all_batches", []))
+            if all_batches_done:
+                export_format = to_export.get("format", "")
+                print("All batches done! Ready to start exporting")
+                finished_registries = [
+                    FinishedJobRegistry(name='query', connection=connection),
+                    FinishedJobRegistry(name='background', connection=connection)
+                ]
+                finished_jobs = [
+                    Job.fetch(jid, connection=connection)
+                    for jid in [
+                        j
+                        for registry in finished_registries
+                        for j in registry.get_job_ids()
+                    ]
+                ]
+                associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == job.kwargs["first_job"]]
+                corpus_conf = to_export.get("config", {})
+                # TODO: use jobs instead of directly calling the export functions via asyncio.run
+                # in those jobs' callbacks, publish an 'export' message and intercept it in sock.py:
+                # if swissdox export, then run the required additional queries
+                if export_format == "dump":
+                    with open(f"./results/dump_{job.kwargs['first_job']}.tsv", "w") as file:
+                        asyncio.run(export_dump(
+                            file,
+                            base,
+                            associated_jobs,
+                            base.kwargs.get("meta_json", {}).get("result_sets", {}),
+                            corpus_conf
+                        ))
+                elif export_format == "swissdox":
+                    underlang = _determine_language( base.kwargs.get("current_batch")[2] ) or ""
+                    if underlang:
+                        underlang = f"_{underlang}"
+                    asyncio.run(export_swissdox(
+                        [job, *associated_jobs],
+                        str(base.kwargs.get("corpora", ['1'])[0]),
+                        underlang,
+                        corpus_conf,
+                        qs = None # need to get access to query service
+                    ))
 
     action = "sentences"
 

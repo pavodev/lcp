@@ -4,7 +4,6 @@ from aiohttp import web
 from asyncio import sleep
 from rq.job import Job
 from typing import Any, cast
-from .utils import _determine_language, ensure_authorised
 
 import json
 import re
@@ -56,7 +55,7 @@ async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
         corpus_index: str = str(j.kwargs["current_batch"][0])
         if not corpus_index:
             continue
-        segment_mapping = config[corpus_index]['mapping']['layer'][config[corpus_index]['segment']]
+        segment_mapping = config['mapping']['layer'][config['segment']]
         columns: list = []
         if "partitions" in segment_mapping and 'languages' in j.kwargs:
             lg = j.kwargs['languages'][0]
@@ -86,26 +85,25 @@ async def kwic(jobs: list[Job], resp: web.StreamResponse, config):
                 # queries with lots of matches can only output a small subset of lines
                 continue
             if len(f"{buffer}{line}\n") > CHUNKS:
-                await resp.write(buffer.encode("utf-8"))
+                resp.write(buffer)
                 await sleep(0.01) # Give the machine some time to breathe!
                 buffer = ""
             buffer += f"{line}\n"
     if buffer:
-        await resp.write(buffer.encode("utf-8"))
+        resp.write(buffer)
 
 
 async def export_swissdox(
     jobs: list[Job],
     corpus_index: str,
     underlang: str,
-    resp: web.StreamResponse,
     config,
     qs = None
 ) -> None:
 
     meta_jobs: list[Job] = [j for j in jobs if j.kwargs.get("meta_query")]
 
-    document_layer: str = config[str(corpus_index)]["firstClass"]["document"]
+    document_layer: str = config["firstClass"]["document"]
 
     documents: dict[str,Any] = {"columns": set(), "rows": [], "ranges": []}
     for j in meta_jobs:
@@ -142,16 +140,16 @@ async def export_swissdox(
 
     doc_multi_range = ",".join( [f"[{r.lower},{r.upper})" for r in documents['ranges']] )
     doc_multi_range = "'{" + doc_multi_range + "}'::int8multirange"
-    schema: str = cast(str, config[str(corpus_index)]["schema_path"])
+    schema: str = cast(str, config["schema_path"])
 
-    seg_table: str = cast(str, config[str(corpus_index)]["firstClass"]["segment"])
+    seg_table: str = cast(str, config["firstClass"]["segment"])
     query_prepared_segments: str = f"""SELECT * FROM {schema}.prepared_{seg_table}{underlang} ps
         CROSS JOIN {schema}.{seg_table}{underlang}0 sg
         WHERE ps.{seg_table.lower()}_id = sg.{seg_table.lower()}_id
         AND {doc_multi_range} @> sg.char_range;"""
 
     ne_table = "namedentity"
-    ne_mapping = config[str(corpus_index)]['mapping']['layer']['NamedEntity']
+    ne_mapping = config['mapping']['layer']['NamedEntity']
     if 'partitions' in ne_mapping and underlang:
         ne_mapping = ne_mapping['partitions'][underlang[1:]]
     if 'relation' in ne_mapping:
@@ -160,7 +158,7 @@ async def export_swissdox(
     ne_selects = ["ne.namedentity_id AS id", "ne.char_range AS char_range"]
     ne_joins = []
     ne_wheres = [f"{doc_multi_range} @> ne.char_range"]
-    for attr_name, attr_values in config[str(corpus_index)]['layer']['NamedEntity']['attributes'].items():
+    for attr_name, attr_values in config['layer']['NamedEntity']['attributes'].items():
         ne_cols.append(attr_name)
         if attr_values.get("type", "") == "text":
             ne_selects.append(f"ne_{attr_name}.{attr_name} AS {attr_name}")
@@ -192,59 +190,31 @@ async def export_swissdox(
 
     return None
 
-@ensure_authorised
-async def export(request: web.Request) -> web.StreamResponse:
-    """
-    Fetch arbitrary JSON data from redis
-    """
-    hashed: str = request.match_info["hashed"]
-    format: str = request.rel_url.query.get('format', 'tsv')
-    print("export format", format)
 
-    conn = request.app["redis"]
-    job: Job = Job.fetch(hashed, connection=conn)
-    finished_jobs = [
-        *[Job.fetch(jid, connection=conn) for jid in request.app["query"].finished_job_registry.get_job_ids()],
-        *[Job.fetch(jid, connection=conn) for jid in request.app["background"].finished_job_registry.get_job_ids()],
-    ]
-    associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == hashed]
+async def export_dump(
+    output: Any, # has a .write method
+    job: Job,
+    associated_jobs: list[Job],
+    meta: dict,
+    config: dict
+) -> None:
+    output.write((("\t".join(["index","type","label","data"])+f"\n")))
 
-    meta = job.kwargs.get("meta_json", {}).get("result_sets", {})
+    # Write KWIC results
+    if next((m for m in meta if m.get("type")=="plain"),None):
+        await kwic([job, *associated_jobs], output, config)
 
-    filename = f"{job.kwargs.get('current_batch')[1]}.{'zip' if format=='swissdox' else 'txt'}"
-    response: web.StreamResponse = web.StreamResponse(
-        status=200,
-        reason='OK',
-        headers={'Content-Type': 'application/octet-stream', 'Content-Disposition': f'attachment; filename={filename}'},
-    )
-    await response.prepare(request)
-    
-    if format == "swissdox":
-        underlang: str = _determine_language( job.kwargs.get("current_batch")[2] ) or ""
-        if underlang:
-            underlang = f"_{underlang}"
-        await export_swissdox([job, *associated_jobs], job.kwargs.get("current_batch")[0], underlang, response, request.app["config"], qs=request.app["query_service"])
-    else:
-        await response.write((("\t".join(["index","type","label","data"])+f"\n")).encode("utf-8"))
-
-        # Write KWIC results
-        if next((m for m in meta if m.get("type")=="plain"),None):
-            await kwic([job, *associated_jobs], response, request.app["config"])
-
-        # Write non-KWIC results
-        for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
-            if n_type in (0,-1):
-                continue
-            info: dict = meta[n_type-1]
-            name: str = info.get("name","")
-            type: str = info.get("type","")
-            attr: list[dict] = info.get("attributes", [])
-            for line in data:
-                d: dict[str,list] = {}
-                for n, v in enumerate(line):
-                    attr_name: str = attr[n].get("name", f"entry_{n}")
-                    d[attr_name] = v
-                await response.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n").encode("utf-8"))
-
-    await response.write_eof()
-    return response
+    # Write non-KWIC results
+    for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+        if n_type in (0,-1):
+            continue
+        info: dict = meta[n_type-1]
+        name: str = info.get("name","")
+        type: str = info.get("type","")
+        attr: list[dict] = info.get("attributes", [])
+        for line in data:
+            d: dict[str,list] = {}
+            for n, v in enumerate(line):
+                attr_name: str = attr[n].get("name", f"entry_{n}")
+                d[attr_name] = v
+            output.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n"))

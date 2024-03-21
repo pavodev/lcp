@@ -36,7 +36,6 @@ from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
 from .document import document, document_ids
-from .export import export
 from .lama_user_data import lama_user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke, project_create
@@ -195,7 +194,6 @@ async def create_app(test: bool = False) -> web.Application:
         ("/project/{project}/api/create", "POST", project_api_create),
         ("/project/{project}/api/{key}/revoke", "POST", project_api_revoke),
         ("/query", "POST", query),
-        ("/export/{hashed}", "GET", export),
         ("/settings", "GET", lama_user_data),
         ("/store", "POST", store_query),
         ("/upload", "POST", upload),

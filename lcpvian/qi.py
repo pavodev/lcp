@@ -192,16 +192,23 @@ class QueryIteration:
         languages = set(langs)
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
-        first_job = ""
+        first_job_id = ""
         total_duration = 0.0
         total_results_so_far = 0
         needed = total_requested
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
-            first_job = prev.kwargs.get("first_job") or previous
+            first_job_id = prev.kwargs.get("first_job") or previous
             total_duration = prev.kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
+            if request_data.get("to_export", False):
+                first_job = prev if first_job_id == previous else Job.fetch(first_job_id, connection=request.app["redis"])
+                first_job.meta["to_export"] = {
+                    'format': str(request_data['to_export']),
+                    'config': request.app['config'][str(first_job.kwargs.get("corpora",[None])[0])]
+                }
+                first_job.save_meta()
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -225,7 +232,7 @@ class QueryIteration:
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
             "total_duration": total_duration,
-            "first_job": first_job,
+            "first_job": first_job_id,
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
