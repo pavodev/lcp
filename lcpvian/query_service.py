@@ -358,16 +358,16 @@ class QueryService:
         
         return return_jobs
 
-    def swissdox_export(
+    async def swissdox_export(
         self,
         job_ids: dict[str,str],
         corpus_index: str,
         documents: dict[str,Any],
         underlang: str,
         **kwargs
-    ) -> None:
+    ) -> Job:
         depends_on = [Job.fetch(jid, connection=self.app["redis"]) for jid in job_ids.values()]
-        self.app["background"].enqueue(
+        return self.app["background"].enqueue(
             _swissdox_export,
             on_failure=Callback(_general_failure, self.timeout),
             result_ttl=self.query_ttl,
@@ -376,7 +376,6 @@ class QueryService:
             args=(job_ids,corpus_index,documents,self.app['config'][str(corpus_index)],underlang),
             kwargs=kwargs
         )
-        return None
 
     def _attempt_meta_from_cache(self, hashed: str, **kwargs) -> list[str]:
         """

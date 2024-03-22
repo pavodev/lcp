@@ -157,21 +157,21 @@ async def _db_query(
 
 async def _swissdox_export(
     job_ids: dict[str,str],
-    corpus_index: str = "",
     documents: dict[str,Any] = {},
     config: dict[str,Any] = {},
     underlang: str = "",
     **kwargs: str | None | int | float | bool | list[str],
 ) -> None:
     """
-    The function queued by RQ, which executes our DB query
+    Take all the results from the relevant jobs and write them to storage
     """
-
     prepared_segments_job: Job = Job.fetch(job_ids["prepared_segments"], connection=get_current_connection())
     named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=get_current_connection())
 
-    if not os.path.exists(f"results/{corpus_index}"):
-        os.mkdir(f"results/{corpus_index}")
+    path = os.path.join("results",config['meta'].get('name', 'anonymous_corpus'))
+
+    if not os.path.exists(path):
+        os.mkdir(path)
 
     ne_dict: dict[tuple[str,str],str] = {}
 
@@ -197,7 +197,7 @@ async def _swissdox_export(
             formed_row.append(c)
         doc_rows.append(formed_row)
     doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
-    doc_pandas.to_feather(f"results/{corpus_index}/documents.feather")
+    doc_pandas.to_feather(os.path.join(path,"documents.feather"))
 
     # Tokens
     seg: str = config["segment"]
@@ -215,7 +215,7 @@ async def _swissdox_export(
             tok_indices.append( str(n + int(row[1])) )
             tok_rows.append( [sid, *token] )
     tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
-    tok_pandas.to_feather(f"results/{corpus_index}/tokens.feather")
+    tok_pandas.to_feather(os.path.join(path,"tokens.feather"))
 
     # Named entities
     ne_nid = next(n for n, c in enumerate(cast(list, kwargs.get("ne_cols", []))) if c == "id")
@@ -226,13 +226,13 @@ async def _swissdox_export(
         ne_indices.append(str(row[ne_nid]))
         ne_rows.append([str(r) for n, r in enumerate(row) if n != ne_nid])
     ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_colums)
-    ne_pandas.to_feather(f"results/{corpus_index}/namedentities.feather")
+    ne_pandas.to_feather(os.path.join(path,"namedentities.feather"))
 
     # Zip file
-    with zipfile.ZipFile(f"results/{corpus_index}/swissdox.zip", mode="w") as archive:
+    with zipfile.ZipFile(os.path.join(path,"swissdox.zip"), mode="w") as archive:
         # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
-        archive.write(f"results/{corpus_index}/documents.feather", "documents.feather")
-        archive.write(f"results/{corpus_index}/tokens.tsv", "tokens.tsv")
-        archive.write(f"results/{corpus_index}/namedentities.tsv", "namedentities.tsv")
+        archive.write(os.path.join(path,"documents.feather"), "documents.feather")
+        archive.write(os.path.join(path,"tokens.feather"), "tokens.feather")
+        archive.write(os.path.join(path,"namedentities.feather"), "namedentities.feather")
 
     return None

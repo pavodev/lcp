@@ -12,7 +12,6 @@ calls to Queue.enqueue in query_service.py
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
@@ -27,7 +26,6 @@ from uuid import uuid4, UUID
 
 from redis import Redis as RedisConnection
 from rq.job import Job
-from rq.registry import FinishedJobRegistry
 
 from .configure import _get_batches
 from .convert import (
@@ -36,7 +34,6 @@ from .convert import (
     _apply_filters,
     _get_all_sents,
 )
-from .export import export_dump, export_swissdox
 from .typed import (
     MainCorpus,
     JSONObject,
@@ -51,7 +48,6 @@ from .typed import (
 from .utils import (
     CustomEncoder,
     Interrupted,
-    _determine_language,
     _get_status,
     _row_to_value,
     _get_associated_query_job,
@@ -234,6 +230,8 @@ def _query(
 
     if "_sent_jobs" not in first_job.meta:
         first_job.meta["_sent_jobs"] = {}
+    if "_meta_jobs" not in first_job.meta:
+        first_job.meta["_meta_jobs"] = {}
 
     first_job.save_meta()  # type: ignore
 
@@ -248,6 +246,11 @@ def _query(
 
     action = "query_result"
 
+    export_payload = {}
+    all_batches_done = len(done_part) == len(job.kwargs['all_batches'])
+    if all_batches_done and (to_export := first_job.meta.get("to_export", False)):
+        export_payload = to_export
+
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -258,6 +261,7 @@ def _query(
             "status": status,
             "job": job.id,
             "action": action,
+            "export": export_payload,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
@@ -382,6 +386,9 @@ def _meta(
     if "meta_job_ws_messages" not in base.meta:
         base.meta["meta_job_ws_messages"] = {}
     base.meta["meta_job_ws_messages"][msg_id] = None
+    base.meta["_meta_jobs"][job.id] = None
+    base.save_meta()
+
     base.save_meta()
 
     action = "meta"
@@ -469,6 +476,9 @@ def _sentences(
     if submit_query and more_data:
         status = "partial"
 
+    if status == "finished" and more_data:
+        more_data = base.meta["total_results_so_far"] >= total_requested
+
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
         print(f"No results found for {table} kwic -- skipping WS message")
@@ -500,54 +510,6 @@ def _sentences(
     base.meta["sent_job_ws_messages"][msg_id] = None
     base.meta["_sent_jobs"][job.id] = None
     base.save_meta()
-
-    if status == "finished":
-        if more_data:
-            more_data = base.meta["total_results_so_far"] >= total_requested
-        if to_export := base.meta.get("to_export", False):
-            done_batches = {x for x in depended.kwargs.get("done_batches", [])}
-            done_batches.add(depended.kwargs.get("current_batch"))
-            all_batches_done = len(done_batches) == len(depended.kwargs.get("all_batches", []))
-            if all_batches_done:
-                export_format = to_export.get("format", "")
-                print("All batches done! Ready to start exporting")
-                finished_registries = [
-                    FinishedJobRegistry(name='query', connection=connection),
-                    FinishedJobRegistry(name='background', connection=connection)
-                ]
-                finished_jobs = [
-                    Job.fetch(jid, connection=connection)
-                    for jid in [
-                        j
-                        for registry in finished_registries
-                        for j in registry.get_job_ids()
-                    ]
-                ]
-                associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == job.kwargs["first_job"]]
-                corpus_conf = to_export.get("config", {})
-                # TODO: use jobs instead of directly calling the export functions via asyncio.run
-                # in those jobs' callbacks, publish an 'export' message and intercept it in sock.py:
-                # if swissdox export, then run the required additional queries
-                if export_format == "dump":
-                    with open(f"./results/dump_{job.kwargs['first_job']}.tsv", "w") as file:
-                        asyncio.run(export_dump(
-                            file,
-                            base,
-                            associated_jobs,
-                            base.kwargs.get("meta_json", {}).get("result_sets", {}),
-                            corpus_conf
-                        ))
-                elif export_format == "swissdox":
-                    underlang = _determine_language( base.kwargs.get("current_batch")[2] ) or ""
-                    if underlang:
-                        underlang = f"_{underlang}"
-                    asyncio.run(export_swissdox(
-                        [job, *associated_jobs],
-                        str(base.kwargs.get("corpora", ['1'])[0]),
-                        underlang,
-                        corpus_conf,
-                        qs = None # need to get access to query service
-                    ))
 
     action = "sentences"
 
@@ -844,6 +806,14 @@ def _queries(
         jso["queries"] = queries
     return _publish_msg(connection, jso, msg_id)
 
+
+def _export_complete(
+    job: Job,
+    connection: RedisConnection[bytes],
+    result: list[UserQuery] | None,
+) -> None:
+    print("export complete!")
+    return None
 
 def _config(
     job: Job,

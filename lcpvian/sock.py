@@ -41,6 +41,7 @@ from redis.exceptions import ConnectionError
 
 
 from .configure import _get_batches, CorpusConfig
+from .export import export
 from .query import query
 from .query_service import QueryService
 from .utils import push_msg
@@ -288,6 +289,22 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
+        export_payload: JSONObject = cast(JSONObject, payload.get("export", {}))
+        if export_payload:
+            job: Job = await export(app, export_payload, cast(str, payload["first_job"]))
+            export_msg: JSONObject = cast(JSONObject, {
+                "room": room,
+                "user": user,
+                "action": "started_export",
+                "job_id": str(job.id)
+            })
+            await push_msg(
+                app["websockets"],
+                room,
+                export_msg,
+                skip=None,
+                just=(room, user),
+            )
         await _handle_query(app, payload, user, room)
 
     if to_submit is not None:
@@ -379,6 +396,7 @@ async def _handle_query(
             "n_users",
             "status",
             "word_count",
+            "export",
             "full",
             "first_job",
             "is_vian",

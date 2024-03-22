@@ -2,12 +2,22 @@
 
 from aiohttp import web
 from asyncio import sleep
+from rq import Callback
+from rq.connections import get_current_connection
 from rq.job import Job
+from rq.registry import FinishedJobRegistry
 from typing import Any, cast
 
+from .callbacks import _export_complete, _general_failure
+from .jobfuncs import _swissdox_export
+from .typed import JSONObject
+from .utils import _determine_language
+
+import asyncio
 import json
 import re
 
+EXPORT_TTL = 5000
 CHUNKS = 1000000 # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
 def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_meta: dict) -> tuple[str,str,dict,list]:
@@ -41,9 +51,7 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
 
     return (kwic_name,sid,matching_entities,tokens)
 
-
 async def kwic(jobs: list[Job], resp: Any, config):
-
     sentence_jobs = [j for j in jobs if j.kwargs.get("sentences_query") and not j.kwargs.get("meta_query")]
     other_jobs = [j for j in jobs if j not in sentence_jobs]
 
@@ -51,9 +59,6 @@ async def kwic(jobs: list[Job], resp: Any, config):
     for j in other_jobs:
 
         if 'current_batch' not in j.kwargs:
-            continue
-        corpus_index: str = str(j.kwargs["current_batch"][0])
-        if not corpus_index:
             continue
         segment_mapping = config['mapping']['layer'][config['segment']]
         columns: list = []
@@ -93,13 +98,72 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
+async def export_dump(
+    filepath: str,
+    job_id: str,
+    config: dict
+) -> None:
+    """
+    Read the results from all the query, sentence and meta jobs and write them in dump.tsv
+    """
+    output = open(filepath, "w")
+    output.write((("\t".join(["index","type","label","data"])+f"\n")))
+
+    conn = get_current_connection()
+    job = Job.fetch(job_id, connection=conn)
+    finished_jobs = [
+        Job.fetch(jid, connection=conn)
+        for registry in [
+            FinishedJobRegistry(name=x, connection=conn)
+            for x in ("queue","background")
+        ]
+        for jid in registry.get_job_ids()
+    ]
+    associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == job_id]
+
+    meta = job.kwargs.get("meta_json", {}).get("result_sets", {})
+
+    # Write KWIC results
+    if next((m for m in meta if m.get("type")=="plain"),None):
+        await kwic([job, *associated_jobs], output, config)
+
+    # Write non-KWIC results
+    for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+        if n_type in (0,-1):
+            continue
+        info: dict = meta[n_type-1]
+        name: str = info.get("name","")
+        type: str = info.get("type","")
+        attr: list[dict] = info.get("attributes", [])
+        for line in data:
+            d: dict[str,list] = {}
+            for n, v in enumerate(line):
+                attr_name: str = attr[n].get("name", f"entry_{n}")
+                d[attr_name] = v
+            output.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n"))
+
+    output.close()
+
+
 async def export_swissdox(
-    jobs: list[Job],
-    corpus_index: str,
+    app: web.Application,
+    first_job_id: str,
     underlang: str,
     config,
-    qs = None
-) -> None:
+) -> Job:
+    """
+    Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
+    Return a job depending on the former to execute _swissdox_export (see jobfuncs)
+    """
+    finished_jobs = [
+        Job.fetch(jid, connection=app["redis"])
+        for registry in [
+            FinishedJobRegistry(name=x, connection=app["redis"])
+            for x in ("queue","background")
+        ]
+        for jid in registry.get_job_ids()
+    ]
+    jobs = [j for j in finished_jobs if j.id == first_job_id or j.kwargs.get("first_job") == first_job_id]
 
     meta_jobs: list[Job] = [j for j in jobs if j.kwargs.get("meta_query")]
 
@@ -177,44 +241,70 @@ async def export_swissdox(
         FROM {schema}.{ne_table} ne {ne_joins_str}
         WHERE {ne_wheres_str};"""
 
-    prepared_segments_job = await qs.swissdox_query(query_prepared_segments)
-    named_entities_job = await qs.swissdox_query(query_named_entities)
+    prepared_segments_job = await app["query_service"].swissdox_query(query_prepared_segments)
+    named_entities_job = await app["query_service"].swissdox_query(query_named_entities)
+    depends_on = [prepared_segments_job.id, named_entities_job.id]
 
-    qs.swissdox_export(
-        {'prepared_segments': str(prepared_segments_job.id), 'named_entities': str(named_entities_job.id)},
-        corpus_index,
-        documents,
-        underlang,
-        ne_cols = ne_cols
+    return app["background"].enqueue(
+        _swissdox_export,
+        on_failure=Callback(_general_failure, EXPORT_TTL),
+        result_ttl=EXPORT_TTL,
+        job_timeout=EXPORT_TTL,
+        depends_on=depends_on,
+        args=(
+            {'prepared_segments': prepared_segments_job.id, 'named_entities': named_entities_job.id},
+            documents,
+            config,
+            underlang
+        ),
+        kwargs={'ne_cols': ne_cols}
     )
 
-    return None
 
+async def export(
+    app: web.Application,
+    payload: JSONObject,
+    first_job_id: str
+) -> Job:
+    """
+    Schedule job(s) to export data to storage
+    Called in sock.py after the last batch was queried
+    """
+    export_format = payload.get("format", "")
+    print("All batches done! Ready to start exporting")
+    corpus_conf = payload.get("config", {})
+    # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
+    first_job = Job.fetch(first_job_id, connection=app["redis"])
+    job: Job
+    if export_format == "dump":
+        depends_on = [
+            jid
+            for ks in ("_sent_jobs", "_meta_jobs")
+            for jid in first_job.meta.get(ks, {}).keys()
+        ]
+        print("Scheduled dump export depending on", depends_on)
+        job = app["background"].enqueue(
+            export_dump,
+            on_success=Callback(_export_complete, EXPORT_TTL),
+            on_failure=Callback(_general_failure, EXPORT_TTL),
+            result_ttl=EXPORT_TTL,
+            job_timeout=EXPORT_TTL,
+            depends_on=depends_on,
+            args=(
+                f"./results/dump_{first_job_id}.tsv",
+                first_job_id,
+                corpus_conf
+            )
+        )
+    elif export_format == "swissdox":
+        underlang = _determine_language( first_job.kwargs.get("current_batch")[2] ) or ""
+        if underlang:
+            underlang = f"_{underlang}"
+        job = await export_swissdox(
+            app,
+            first_job_id,
+            underlang,
+            corpus_conf
+        )
 
-async def export_dump(
-    output: Any, # has a .write method
-    job: Job,
-    associated_jobs: list[Job],
-    meta: dict,
-    config: dict
-) -> None:
-    output.write((("\t".join(["index","type","label","data"])+f"\n")))
-
-    # Write KWIC results
-    if next((m for m in meta if m.get("type")=="plain"),None):
-        await kwic([job, *associated_jobs], output, config)
-
-    # Write non-KWIC results
-    for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
-        if n_type in (0,-1):
-            continue
-        info: dict = meta[n_type-1]
-        name: str = info.get("name","")
-        type: str = info.get("type","")
-        attr: list[dict] = info.get("attributes", [])
-        for line in data:
-            d: dict[str,list] = {}
-            for n, v in enumerate(line):
-                attr_name: str = attr[n].get("name", f"entry_{n}")
-                d[attr_name] = v
-            output.write(("\t".join([str(n_type),type,name,json.dumps(d)])+f"\n"))
+    return job
