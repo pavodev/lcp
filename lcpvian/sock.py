@@ -72,6 +72,8 @@ async def _process_message(
     data = json.loads(cast(bytes, message["data"]))
     raw: bytes = app["redis"].get(data["msg_id"])
     payload: JSONObject = json.loads(raw)
+    payload['user'] = data.get('user', payload.get('user',''))
+    payload['room'] = data.get('room', payload.get('room',''))
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
