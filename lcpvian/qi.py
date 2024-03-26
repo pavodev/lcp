@@ -28,6 +28,7 @@ be. Then the process repeats...
 import json
 import os
 import re
+
 # import logging
 import sys
 
@@ -203,12 +204,18 @@ class QueryIteration:
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
             if request_data.get("to_export", False):
-                first_job = prev if first_job_id == previous else Job.fetch(first_job_id, connection=request.app["redis"])
+                first_job: Job = (
+                    prev
+                    if first_job_id == previous
+                    else Job.fetch(first_job_id, connection=request.app["redis"])
+                )
                 first_job.meta["to_export"] = {
-                    'format': str(request_data['to_export']),
-                    'config': request.app['config'][str(first_job.kwargs.get("corpora",[None])[0])]
+                    "format": str(request_data["to_export"]),
+                    "config": request.app["config"][
+                        str(first_job.kwargs.get("corpora", [None])[0])
+                    ],
                 }
-                first_job.save_meta()
+                first_job.save_meta()  # type: ignore
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -362,8 +369,12 @@ class QueryIteration:
         )
         queue = "query" if not self.full else "background"
         qs = self.app["query_service"]
-        sents_jobs = qs.sentences(
-            self.sents_query(), meta=self.meta_query(), depends_on=to_use, queue=queue, **kwargs
+        sents_jobs: list[str] = qs.sentences(
+            self.sents_query(),
+            meta=self.meta_query(),
+            depends_on=to_use,
+            queue=queue,
+            **kwargs,
         )
         return sents_jobs
 
@@ -388,7 +399,7 @@ class QueryIteration:
             parent_layer = config["layer"].get(parents_child)
         return False
 
-    def _is_time_anchored(self, layer) -> bool:
+    def _is_time_anchored(self, layer: str) -> bool:
         if not self.current_batch:
             raise ValueError("Need batch")
         config = self.config[str(self.current_batch[0])]
@@ -396,9 +407,11 @@ class QueryIteration:
         if not layer_config:
             return False
         if "anchoring" in layer_config:
-            return layer_config['anchoring'].get("time", False)
+            return layer_config["anchoring"].get("time", False)
         if "contains" in layer_config:
-            return self._is_time_anchored(layer_config.get("contains", config['firstClass']['token']))
+            return self._is_time_anchored(
+                layer_config.get("contains", config["firstClass"]["token"])
+            )
         return False
 
     def meta_query(self) -> str:
@@ -411,7 +424,7 @@ class QueryIteration:
         if not self.current_batch:
             raise ValueError("Need batch")
         config = self.config[str(self.current_batch[0])]
-        seg = cast(str, config["segment"])
+        seg = config["segment"]
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
         name = seg.strip()
@@ -422,30 +435,40 @@ class QueryIteration:
         # n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
         # if n_batches > 1:
         batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
-        batch_match = re.match(rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower())
+        batch_match = re.match(
+            rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower()
+        )
         if batch_match:
             batch_suffix = batch_match[1]
         seg_name = f"{name}{underlang}{batch_suffix}".lower()
 
-        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg,k)]
-        parents_with_attributes = {k:None for k in parents_of_seg if config["layer"][k].get("attributes")}
+        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg, k)]
+        parents_with_attributes = {
+            k: None for k in parents_of_seg if config["layer"][k].get("attributes")
+        }
         # Make sure to include Document in there, even if it's not a parent of Segment
         if config["layer"][config["document"]].get("attributes"):
             parents_with_attributes[config["document"]] = None
 
-        parents_with_attributes[seg] = None     # Also query the segment layer itself
+        parents_with_attributes[seg] = None  # Also query the segment layer itself
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
         for layer in parents_with_attributes:
             alias = layer
-            layer_mapping = config["mapping"]["layer"].get(layer,{})
-            attributes: dict[str,Any] = {k:v for k,v in config["layer"][layer].get("attributes", {}).items()}
+            layer_mapping = config["mapping"]["layer"].get(layer, {})
+            attributes: dict[str, Any] = {
+                k: v for k, v in config["layer"][layer].get("attributes", {}).items()
+            }
             prefix_id: str
             partitions = layer_mapping.get("partitions")
             alignment = layer_mapping.get("alignment", {})
-            relation = alignment.get("relation") if alignment else layer_mapping.get("relation", layer.lower())
+            relation = (
+                alignment.get("relation")
+                if alignment
+                else layer_mapping.get("relation", layer.lower())
+            )
             if not relation and lang and partitions:
                 relation = partitions.get(lang, {}).get("relation")
             if layer == seg:
@@ -455,9 +478,11 @@ class QueryIteration:
                 partitions = None
                 alignment = None
             if alignment:
-                prefix_id = 'alignment'
+                prefix_id = "alignment"
             # hard-coded exception management -- change document_id for movie_id in open subtitles
-            elif layer == config["document"] and layer.lower() == "movie": # not partitions:
+            elif (
+                layer == config["document"] and layer.lower() == "movie"
+            ):  # not partitions:
                 prefix_id = "document"
             else:
                 prefix_id = layer.lower()
@@ -465,40 +490,52 @@ class QueryIteration:
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
             for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
-                attr_name = f"\"{attr}\""
+                attr_name = f'"{attr}"'
                 # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
                 if attr == "meta":
-                    lb, rb = '{', '}'
+                    lb, rb = "{", "}"
                     attr_name = f"({attr_name} #>> '{lb}{rb}')::jsonb"
-                selects.append(f"{alias}.\"{attr}\" AS {layer}_{attr}")
+                selects.append(f'{alias}."{attr}" AS {layer}_{attr}')
             # Will get char_range from the appropriate table
             char_range_table: str = alias
             # join tables
             if lang and partitions:
-                interim_relation = partitions.get(lang,{}).get("relation")
+                interim_relation = partitions.get(lang, {}).get("relation")
                 if not interim_relation:
                     # This should never happen?
                     continue
                 if alignment and relation:
                     # The partition table is aligned to a main document table
-                    joins.append(f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range")
-                    joins.append(f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id")
+                    joins.append(
+                        f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
+                    )
+                    joins.append(
+                        f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
+                    )
                     char_range_table = f"{alias}_{lang}"
                 else:
                     # This is the main document table for this partition
-                    joins.append(f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range")
+                    joins.append(
+                        f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range"
+                    )
             elif relation:
-                joins.append(f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range")
+                joins.append(
+                    f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
+                )
             # Get char_range from the main table
-            selects.append(f"{char_range_table}.\"char_range\" AS {layer}_char_range")
+            selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
             # And frame_range if applicable
             if self._is_time_anchored(layer):
-                selects.append(f"{char_range_table}.\"frame_range\" AS {layer}_frame_range")
+                selects.append(
+                    f'{char_range_table}."frame_range" AS {layer}_frame_range'
+                )
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
-        joins_formed = " LEFT JOIN ".join(joins) # left join = include non-empty entities even if other ones are empty
+        joins_formed = " LEFT JOIN ".join(
+            joins
+        )  # left join = include non-empty entities even if other ones are empty
         joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
         script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
         print("meta script", script)
@@ -516,7 +553,7 @@ class QueryIteration:
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
         config = self.config[str(self.current_batch[0])]
-        seg = cast(str, config["segment"])
+        seg = config["segment"]
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
         seg_name = f"prepared_{name}{underlang}"

@@ -8,16 +8,18 @@ import asyncio
 from collections import defaultdict
 from collections.abc import Awaitable, Callable
 from datetime import datetime
-from typing import Any, Mapping, TypeAlias
+from typing import Any, Mapping, TypeAlias, TypedDict
 from uuid import UUID
 
 from aiohttp import web
 from rq.job import Job
+from pydantic import JsonValue
+
 
 from .configure import CorpusConfig
 
 # arbitrary json we know nothing about
-JSON: TypeAlias = dict[str, "JSON"] | list["JSON"] | str | int | float | bool | None
+JSON: TypeAlias = JsonValue
 
 # json when we know it is an object at least
 JSONObject: TypeAlias = dict[str, JSON]
@@ -122,9 +124,6 @@ Iteration: TypeAlias = tuple[
     Job | None, str | None, dict[str, str | bool | None], list[str]
 ]
 
-# todo: finish this one
-QueryArgs: TypeAlias = Any
-
 # one of the main endpoint functions like query(), upload()
 Endpoint: TypeAlias = Callable[
     [web.Request], Awaitable[web.Response | web.WebSocketResponse]
@@ -134,3 +133,30 @@ Endpoint: TypeAlias = Callable[
 VianKWIC: TypeAlias = tuple[
     int | str, list[int], int | str, str | None, str | None, list[list[int]]
 ]
+
+
+class BaseArgs(TypedDict, total=False):
+    user: str
+    room: str | None
+
+
+class QueryArgs(BaseArgs):
+    full: bool
+    post_processes: Any
+    current_kwic_lines: Any
+    from_memory: bool
+
+
+class DocIDArgs(BaseArgs):
+    corpus_id: int
+
+
+class SentJob(BaseArgs, total=False):
+    depends_on: str | list[str]
+    from_memory: bool
+    full: bool
+    meta_query: str
+    needed: bool
+    offset: int
+    sentences_query: str
+    total_results_requested: int

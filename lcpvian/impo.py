@@ -37,8 +37,6 @@ Look at upload._get_progress to understand how the pgoress info is parsed
 
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import os
@@ -57,7 +55,7 @@ from sqlalchemy.sql import text
 
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
-from .utils import _format_config_query,format_query_params, gather
+from .utils import _format_config_query, format_query_params, gather
 
 
 class SQLstats:
@@ -78,8 +76,9 @@ class SQLstats:
             WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
         )
 
-        self.main_corp: str = _format_config_query(dedent(
-            """
+        self.main_corp: str = _format_config_query(
+            dedent(
+                """
             WITH mc AS (
                 INSERT
                 INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
@@ -89,7 +88,8 @@ class SQLstats:
             SELECT {selects}
             FROM mc
             {join} WHERE mc.enabled = true;"""
-        ))
+            )
+        )
 
         self.token_count: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
@@ -102,9 +102,9 @@ class Table:
     def __init__(
         self, schema: str, name: str, columns: list[str] | None = None
     ) -> None:
-        self.schema = schema
-        self.name = name
-        self.columns = columns
+        self.schema: str = schema
+        self.name: str = name
+        self.columns: list[str] | None = columns
 
     def col_repr(self) -> str:
         if self.columns:
@@ -323,7 +323,7 @@ class Importer:
         gathered: list[Any] = []
         cs: float | int = 0.0
         first: str | int = ""
-        more: list[RunScript] | list[()] = []
+        more: list[RunScript] | list[Any] = []
         give: bool = cast(bool, kwargs.get("give", False))
         mname = method.__name__
         progs = "Doing {} {} tasks {}...({}MB vs {}GB)"
@@ -381,8 +381,7 @@ class Importer:
         *args: Any,
         give: bool = False,
         progress: str | None = None,
-        # todo: params could get a more general type if it is used for anything else:
-        params: Params = None,
+        params: dict[str, str] = {},
     ) -> RunScript:
         """
         Run a simple script, and return the result if give
@@ -393,9 +392,9 @@ class Importer:
         """
 
         base: dict[str, str] = {}
-        out: list[tuple]
+        out: list[tuple[Any, ...]]
         params = params or base
-        ares: list[Row] | str | None
+        ares: list[Row[Any]] | str | None
         async with self.pool.begin() as conn:
             # bit of a hack to deal with sqlalchemy problem with prepared_statements
             if script.count(";") > 1:
@@ -437,10 +436,8 @@ class Importer:
         inserts = [self.insert.format(batch=batch) for batch in self.batches]
         await self.process_data(inserts, self.run_script, progress=progress)
         return None
-    
-    async def collocations(
-        self
-    ) -> None:
+
+    async def collocations(self) -> None:
         """
         Run the prepared segment scripts, potentially concurrently
         """
@@ -459,9 +456,9 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
-        params = dict(
+        params: dict[str, str] = dict(
             name=self.name,
-            ver=self.version,
+            ver=str(self.version),
             template=json.dumps(dict(self.template)),
             schema=self.schema,
             counts=json.dumps(self.token_count),

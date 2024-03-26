@@ -15,14 +15,11 @@ The logic is basically:
     6. Process repeats until query is satisfied/finished
 
 """
-from __future__ import annotations
 
 import json
 import logging
 import os
 import traceback
-
-from collections.abc import Sequence
 
 from typing import cast
 
@@ -48,7 +45,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
+    dones = cast(list[tuple[int, str, str, int]], prev_job.kwargs["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = cast(int, prev_job.meta["total_results_so_far"])
     tot_req = qi.total_results_requested
@@ -64,7 +61,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
 
-    prev = cast(Sequence, prev_job.kwargs["current_batch"])
+    prev = cast(Batch, tuple(prev_job.kwargs["current_batch"]))
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)
@@ -133,7 +130,10 @@ async def _query_iteration(
     if qi.first_job:
         first_job: Job = Job.fetch(qi.first_job, connection=qi.app["redis"])
         first_job_status = first_job.get_status(refresh=True)
-        if first_job_status in ("stopped", "canceled") or qi.first_job in qi.app["canceled"]:
+        if (
+            first_job_status in ("stopped", "canceled")
+            or qi.first_job in qi.app["canceled"]
+        ):
             if qi.first_job not in qi.app["canceled"]:
                 qi.app["canceled"].append(qi.first_job)
             qi.app["query_service"].cancel_running_jobs(qi.user, qi.room)

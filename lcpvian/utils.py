@@ -2,8 +2,6 @@
 utils.py: all miscellaneous helpers and tools used by backend
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -55,7 +53,6 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
-    RunScript,
     Websockets,
 )
 
@@ -114,6 +111,7 @@ CONFIG_JOIN = """CROSS JOIN
 ) a
 """
 
+
 class Interrupted(Exception):
     """
     Used when a user interrupts a query from frontend
@@ -127,7 +125,7 @@ class CustomEncoder(json.JSONEncoder):
     Fix numpy objects and dates, otherwise normal serialisation
     """
 
-    def default(self, obj: Any):
+    def default(self, obj: Any) -> JSON:
         if isinstance(obj, bytes):
             return obj.decode("utf-8")
         if isinstance(obj, np.integer):
@@ -143,7 +141,7 @@ class CustomEncoder(json.JSONEncoder):
         return default
 
 
-def ensure_authorised(func: Callable) -> Callable:
+def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     auth decorator, still wip
     """
@@ -234,6 +232,7 @@ async def _lama_project_create(
         ) as resp:
             jso: JSONObject = await resp.json()
             return jso
+
 
 async def _lama_project_update(
     headers: Headers, project_id: str, project_data: dict[str, str]
@@ -383,8 +382,8 @@ async def sem_coro(
 
 
 async def gather(
-    n: int, tasks: list[Coroutine], name: str | None = None
-) -> list[list[RunScript]]:
+    n: int, tasks: list[Coroutine[None, None, Any]], name: str | None = None
+) -> list[list[tuple[int | str | bool]]]:
     """
     A replacement for asyncio.gather that runs a maximum of n tasks at once.
     If any task errors, we cancel all tasks in the group that share the same name
@@ -402,7 +401,7 @@ async def gather(
     else:
         tsks = [asyncio.create_task(c, name=name) for c in tasks]
     try:
-        gathered: list[list[RunScript]] = await asyncio.gather(*tsks)
+        gathered: list[list[tuple[int | str | bool]]] = await asyncio.gather(*tsks)
         return gathered
     except BaseException as err:
         print(f"Error while gathering tasks: {str(err)[:1000]}. Cancelling others...")
@@ -458,7 +457,6 @@ async def push_msg(
     msg: JSONObject | bytes,
     skip: tuple[str | None, str] | None = None,
     just: tuple[str | None, str] | None = None,
-    **kwargs,
 ) -> None:
     """
     Send JSON websocket message to one or more users/rooms
@@ -524,7 +522,7 @@ def _filter_corpora(
     ids: set[str] = set()
     if isinstance(user_data, dict):
         subs = cast(dict[str, subtype], user_data.get("subscription", {}))
-        sub = cast(subtype, subs.get("subscriptions", []))
+        sub = subs.get("subscriptions", [])
         for s in sub:
             ids.add(s["id"])
         for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
@@ -661,7 +659,7 @@ def _get_sent_ids(
 
 def _get_associated_query_job(
     depends_on: str | list[str],
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
 ) -> Job:
     """
     Helper to find the query job associated with sent job
@@ -673,8 +671,8 @@ def _get_associated_query_job(
 
 
 def format_query_params(
-    query: str, params: tuple | dict[str, Any]
-) -> tuple[str, tuple]:
+    query: str, params: dict[str, str]
+) -> tuple[str, tuple[str, ...]]:
     """
     Helper to allow for sqlalchemy format query with asyncpg
     """
@@ -682,6 +680,8 @@ def format_query_params(
         return query, params
     out = []
     n = 1
+    if not isinstance(params, dict):
+        return query, params
     for k, v in params.items():
         in_query = f":{k}"
         if in_query in query:
@@ -692,48 +692,64 @@ def format_query_params(
 
 
 def format_meta_lines(
-    query: str,
-    result: list
+    query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
     # replace this with actual upstream handling of column names
-    pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", query)
+    pre_columns = re.match(
+        r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", query
+    )
     if not pre_columns:
         return None
-    columns: list[str] = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
-    layers: dict[str,None] = {c.split("_")[0]: None for c in columns if not c.endswith("_id")}
+    columns: list[str] = [
+        p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")
+    ]  # [seg_id, layer1, layer2, etc.]
+    layers: dict[str, None] = {
+        c.split("_")[0]: None for c in columns if not c.endswith("_id")
+    }
     formatted: dict[str, Any] = {}
     for res in result:
         seg_id = "0"
-        segment: dict[str,dict] = {layer: {} for layer in layers}
+        segment: dict[str, dict[Any, Any]] = {layer: {} for layer in layers}
         for n, layer_prop in enumerate(columns):
-            if not res[n+1]:
+            if not res[n + 1]:
                 continue
             if layer_prop == "seg_id":
-                seg_id = res[n+1]
+                seg_id = cast(str, res[n + 1])
             else:
                 m = re.match(rf"^([^_]+)_(.+)$", layer_prop)
                 if not m:
                     continue
                 layer, prop = m.groups()
                 if prop == "meta":
-                    meta: dict
-                    if isinstance(res[n+1], str):
-                        meta = json.loads(res[n+1])
+                    meta: str | dict[Any, Any]
+                    if isinstance(res[n + 1], str):
+                        meta = json.loads(cast(str, res[n + 1]))
                     else:
-                        meta = res[n+1]
+                        meta = res[n + 1]
                     if not isinstance(meta, dict):
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if any(isinstance(res[n+1], type) for type in [int,str,bool,dict,list,tuple,UUID,date]):
-                        segment[layer][prop] = str(res[n+1])
-                    elif isinstance(res[n+1], Range):
-                        segment[layer][prop] = [res[n+1].lower,res[n+1].upper]
-        segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}
+                    if any(
+                        isinstance(res[n + 1], type)
+                        for type in [int, str, bool, dict, list, tuple, UUID, date]
+                    ):
+                        segment[layer][prop] = str(res[n + 1])
+                    elif isinstance(res[n + 1], Range):
+                        segment[layer][prop] = [
+                            cast(str, res[n + 1]).lower,
+                            cast(str, res[n + 1]).upper,
+                        ]
+        segment = {
+            layer: props
+            for layer, props in segment.items()
+            if props and [x for x in props if x != "id"]
+        }
         if not segment:
             continue
         formatted[str(seg_id)] = segment
     return formatted
+
 
 def _determine_language(batch: str) -> str | None:
     """
@@ -746,6 +762,7 @@ def _determine_language(batch: str) -> str | None:
         if batch.endswith(f"_{lan}"):
             return lan
     return None
+
 
 def _get_first_job(job: Job, connection: RedisConnection[bytes]) -> Job:
     """
@@ -801,7 +818,7 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
 
 
 def _publish_msg(
-    connection: RedisConnection, message: JSONObject | str | bytes, msg_id: str
+    connection: RedisConnection[bytes], message: JSONObject | str | bytes, msg_id: str
 ) -> None:
     """
     Store a message with msg_id as key, and notify listener

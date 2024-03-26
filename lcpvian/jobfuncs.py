@@ -1,6 +1,3 @@
-from __future__ import annotations
-
-import csv
 import json
 import logging
 import os
@@ -16,7 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 
 from rq.connections import get_current_connection
-from rq.job import (get_current_job, Job)
+from rq.job import get_current_job, Job
 
 from .callbacks import _export_complete
 from .configure import CorpusTemplate
@@ -110,9 +107,9 @@ async def _db_query(
     store: bool = False,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
-) -> list[tuple] | tuple | list[JSONObject] | JSONObject | list[MainCorpus] | list[
-    UserQuery
-] | list[Sentence] | None:
+) -> list[tuple[Any, ...]] | tuple[Any, ...] | list[JSONObject] | JSONObject | list[
+    MainCorpus
+] | list[UserQuery] | list[Sentence] | None:
     """
     The function queued by RQ, which executes our DB query
     """
@@ -149,7 +146,7 @@ async def _db_query(
             res = await conn.execute(text(query), params)
             if store:
                 return None
-            out: list[tuple] = [tuple(i) for i in res.fetchall()]
+            out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")
@@ -157,21 +154,23 @@ async def _db_query(
 
 
 async def _swissdox_export(
-    job_ids: dict[str,str],
-    documents: dict[str,Any] = {},
-    config: dict[str,Any] = {},
+    job_ids: dict[str, str],
+    documents: dict[str, Any] = {},
+    config: dict[str, Any] = {},
     underlang: str = "",
-    **kwargs: str | None | int | float | bool | list[str],
+    ne_cols: list[str] = [],
 ) -> None:
     """
     Take all the results from the relevant jobs and write them to storage
     """
     conn = get_current_connection()
 
-    prepared_segments_job: Job = Job.fetch(job_ids["prepared_segments"], connection=conn)
+    prepared_segments_job: Job = Job.fetch(
+        job_ids["prepared_segments"], connection=conn
+    )
     named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=conn)
 
-    path = os.path.join("results",config['meta'].get('name', 'anonymous_corpus'))
+    path = os.path.join("results", config["meta"].get("name", "anonymous_corpus"))
 
     if not os.path.exists(path):
         os.mkdir(path)
@@ -187,25 +186,27 @@ async def _swissdox_export(
         # Sanitize types -- should do the same for all dfs
         formed_row = []
         for cl in doc_columns:
-            c = row.get(cl,"")
+            c = row.get(cl, "")
             type = doc_attrs.get(cl, doc_attrs.get("meta", {}).get(cl, {})).get("type")
             if type == "integer":
                 c = int(c or 0)
-            elif type in ("text","string"):
+            elif type in ("text", "string"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
                 c = str(c)
             formed_row.append(c)
         doc_rows.append(formed_row)
     doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
-    doc_pandas.to_feather(os.path.join(path,"documents.feather"))
+    doc_pandas.to_feather(os.path.join(path, "documents.feather"))
 
     # Tokens
     seg: str = config["segment"]
-    segment_mapping: dict[str,Any] = config["mapping"]["layer"][seg]
+    segment_mapping: dict[str, Any] = config["mapping"]["layer"][seg]
     tok_columns: list[str] = ["segment_id"]
     if "partitions" in segment_mapping and underlang:
-        tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"]["columnHeaders"]
+        tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
+            "columnHeaders"
+        ]
     else:
         tok_columns += segment_mapping["prepared"]["columnHeaders"]
     tok_indices = []
@@ -213,28 +214,30 @@ async def _swissdox_export(
     for row in prepared_segments_job.result:
         sid: str = str(row[0])
         for n, token in enumerate(row[2]):
-            tok_indices.append( str(n + int(row[1])) )
-            tok_rows.append( [sid, *token] )
+            tok_indices.append(str(n + int(row[1])))
+            tok_rows.append([sid, *token])
     tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
-    tok_pandas.to_feather(os.path.join(path,"tokens.feather"))
+    tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
 
     # Named entities
-    ne_nid = next(n for n, c in enumerate(cast(list, kwargs.get("ne_cols", []))) if c == "id")
-    ne_colums: list[str] = [str(c) for n, c in enumerate(cast(list, kwargs.get("ne_cols", []))) if n != ne_nid]
+    ne_nid = next(n for n, c in enumerate(ne_cols) if c == "id")
+    ne_colums: list[str] = [str(c) for n, c in enumerate(ne_cols) if n != ne_nid]
     ne_indices = []
     ne_rows = []
     for row in named_entities_job.result:
         ne_indices.append(str(row[ne_nid]))
         ne_rows.append([str(r) for n, r in enumerate(row) if n != ne_nid])
     ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_colums)
-    ne_pandas.to_feather(os.path.join(path,"namedentities.feather"))
+    ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
 
     # Zip file
-    with zipfile.ZipFile(os.path.join(path,"swissdox.zip"), mode="w") as archive:
+    with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:
         # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
-        archive.write(os.path.join(path,"documents.feather"), "documents.feather")
-        archive.write(os.path.join(path,"tokens.feather"), "tokens.feather")
-        archive.write(os.path.join(path,"namedentities.feather"), "namedentities.feather")
+        archive.write(os.path.join(path, "documents.feather"), "documents.feather")
+        archive.write(os.path.join(path, "tokens.feather"), "tokens.feather")
+        archive.write(
+            os.path.join(path, "namedentities.feather"), "namedentities.feather"
+        )
 
     job = cast(Job, get_current_job())
     _export_complete(job, conn, None)

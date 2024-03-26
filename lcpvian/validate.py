@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import json
 import traceback
 
-from typing import cast
+from typing import cast, Any
 
 from .dqd_parser import convert
 from .typed import JSONObject
@@ -14,7 +12,7 @@ async def validate(
     room: str | None = None,
     query: str = "",
     query_name: str | None = None,
-    **kwargs: dict | None,
+    **kwargs: dict[str, Any],
 ) -> JSONObject:
     """
     Validate a JSON/DQD query. This is not an endpoint, it is called by sock.py
@@ -25,9 +23,13 @@ async def validate(
         result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
     except json.JSONDecodeError:
         try:
-            conf: dict = {}
+            conf: dict[str, Any] = {}
             if kwargs:
-                conf = cast(dict, kwargs).get("config", {}).get(kwargs.get("corpus"))
+                conf = (
+                    cast(dict[str, Any], kwargs)
+                    .get("config", {})
+                    .get(kwargs.get("corpus"))
+                )
             json_query = convert(query, conf)
             result = {
                 "kind": "dqd",
