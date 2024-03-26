@@ -25,6 +25,11 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
+    updateMeta(data) {
+      httpApi.put(`/corpora/${data.corpusId}/meta/update`, data.metadata).then((response) => {
+        return response.data;
+      });
+    },
     fetchCorpora() {
       httpApi.post(`/corpora`).then((response) => {
         this.corporaJson = response.data;

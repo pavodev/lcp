@@ -238,6 +238,20 @@ async def _lama_project_create(
             jso: JSONObject = await resp.json()
             return jso
 
+async def _lama_project_update(
+    headers: Headers, project_id: str, project_data: dict[str, str]
+) -> JSONObject:
+    """
+    todo: not tested yet, but the syntax is something like this
+    """
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}"
+    async with ClientSession() as session:
+        async with session.post(
+            url, headers=_extract_lama_headers(headers), json=project_data
+        ) as resp:
+            jso: JSONObject = await resp.json(content_type=None)
+            return jso
+
 
 async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
     """

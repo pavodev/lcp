@@ -100,7 +100,7 @@
             <button
               type="button"
               @click="submit"
-              class="btn btn-primary me-1"
+              class="btn btn-primary me-1 mb-1"
               :disabled="
                 (selectedCorpora && selectedCorpora.length == 0) ||
                 loading===true ||
@@ -116,7 +116,7 @@
             <button
               type="button"
               v-if="queryStatus in {'satisfied':1,'finished':1} && !loading"
-              class="btn btn-primary me-1"
+              class="btn btn-primary me-1 mb-1"
               data-bs-toggle="modal"
               data-bs-target="#exportModal"
             >
@@ -128,7 +128,7 @@
               type="button"
               v-if="queryStatus == 'satisfied' && !loading"
               @click="submitFullSearch"
-              class="btn btn-primary me-1"
+              class="btn btn-primary me-1 mb-1"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               Search whole corpus
@@ -138,7 +138,7 @@
               type="button"
               @click="stop"
               :disabled="loading == false"
-              class="btn btn-primary me-1"
+              class="btn btn-primary me-1 mb-1"
             >
               <FontAwesomeIcon :icon="['fas', 'xmark']" />
               Stop

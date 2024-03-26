@@ -1,3 +1,5 @@
+import moment from 'moment';
+
 const Utils = {
     uuidv4(){
       return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -69,7 +71,10 @@ const Utils = {
       document.addEventListener("copy", listener);
       document.execCommand("copy");
       document.removeEventListener("copy", listener);
-    }
+    },
+    formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
+      return date ? moment(date).format(format) : '';
+    },
   }
 
   export default Utils

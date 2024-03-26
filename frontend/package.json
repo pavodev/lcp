@@ -24,6 +24,7 @@
     "d3-v7": "npm:d3",
     "d3-zoom": "1.1.2",
     "git-describe": "^4.1.1",
+    "moment": "^2.30.1",
     "monaco-editor": "^0.34.1",
     "monaco-editor-webpack-plugin": "^7.0.1",
     "pinia": "^2.0.17",

@@ -35,10 +35,12 @@ from rq.registry import FailedJobRegistry
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
+from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .lama_user_data import lama_user_data
 from .message import get_message
-from .project import project_api_create, project_api_revoke, project_create
+from .project import project_api_create, project_api_revoke
+from .project import project_create, project_update
 from .query import query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
@@ -185,12 +187,14 @@ async def create_app(test: bool = False) -> web.Application:
     endpoints: list[tuple[str, str, Endpoint]] = [
         ("/check-file-permissions", "GET", check_file_permissions),
         ("/corpora", "POST", corpora),
+        ("/corpora/{corpora_id}/meta/update", "PUT", corpora_meta_update),
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{uuid}", "GET", get_message),
         ("/project", "POST", project_create),
+        ("/project/{project}", "POST", project_update),
         ("/project/{project}/api/create", "POST", project_api_create),
         ("/project/{project}/api/{key}/revoke", "POST", project_api_revoke),
         ("/query", "POST", query),

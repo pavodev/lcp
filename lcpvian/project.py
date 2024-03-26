@@ -9,16 +9,27 @@ from .utils import (
     _lama_api_create,
     _lama_api_revoke,
     _lama_project_create,
+    _lama_project_update
 )
 
 
 @ensure_authorised
 async def project_create(request: web.Request) -> web.Response:
     request_data: dict[str, str] = await request.json()
-    keys = ["title", "startDate", "finishDate", "description"]
+    keys = ["title", "startDate", "finishDate", "description", "additionalData"]
     project_data = {k: request_data[k] for k in keys}
     project_data["unit"] = "----"  # leave it for now, need to be changed in LAMa
     res = await _lama_project_create(request.headers, project_data)
+    return web.json_response(res)
+
+
+@ensure_authorised
+async def project_update(request: web.Request) -> web.Response:
+    request_data: dict[str, str] = await request.json()
+    keys = ["title", "startDate", "finishDate", "description", "additionalData"]
+    project_data = {k: request_data[k] for k in keys}
+    project_data["unit"] = "----"  # leave it for now, need to be changed in LAMa
+    res = await _lama_project_update(request.headers, request_data["id"], project_data)
     return web.json_response(res)
 
 

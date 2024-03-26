@@ -338,7 +338,7 @@ class QueryService:
             args=(query,),
             kwargs=kwargs,
         )
-        
+
         return_jobs = [job_sent.id]
 
         if meta:
@@ -355,7 +355,7 @@ class QueryService:
                 kwargs=kwargs,
             )
             return_jobs.append(job_meta.id)
-        
+
         return return_jobs
 
     async def swissdox_export(
@@ -528,6 +528,39 @@ class QueryService:
             result_ttl=self.query_ttl,
             on_success=Callback(_queries, self.callback_timeout),
             on_failure=Callback(_general_failure, self.callback_timeout),
+            job_timeout=self.timeout,
+            args=(query, params),
+            kwargs=kwargs,
+        )
+        return job
+
+    def update_metadata(
+        self,
+        corpus_id: int,
+        query_data: JSONObject,
+        queue: str = "internal",
+    ) -> Job:
+        """
+        Update metadata for a corpus
+        """
+        query = """UPDATE main.corpus SET
+            corpus_template = jsonb_set(
+                corpus_template,
+                '{meta}',
+                corpus_template->'meta' || :metadata_json
+            )
+        WHERE corpus_id = :corpus_id;"""
+        kwargs = {
+            "store": True,
+            "config": True,
+        }
+        params: dict[str, str | int | None | JSONObject] = {
+            "corpus_id": corpus_id,
+            "metadata_json": json.dumps(query_data),
+        }
+        job: Job = self.app[queue].enqueue(
+            _db_query,
+            result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query, params),
             kwargs=kwargs,

@@ -25,5 +25,11 @@ export const useProjectStore = defineStore("projectData", {
       this.queryData = await response.data;
       return this.queryData
     },
+    async update(data) {
+      let url = `/project/${data.id}`
+      let response = await httpApi.post(url, data)
+      this.queryData = await response.data;
+      return this.queryData
+    },
   },
 });

@@ -132,7 +132,7 @@ class QueryIteration:
             except json.JSONDecodeError:
                 json_query = convert(self.query, self.config)
                 self.dqd = self.query
-        
+
         res = cast(list[dict[str, dict[str, Any]]], json_query.get("results", []))
         has_kwic = any("resultsPlain" in r for r in res)
 
