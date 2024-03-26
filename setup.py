@@ -3,14 +3,12 @@ import sys
 
 from setuptools import setup
 
-from typing import Set
-
 
 PACKAGE_DIR = "lcpvian"
 BASEPATH = os.path.dirname(__file__)
 MODULE_PATH = os.path.join(BASEPATH, PACKAGE_DIR)
 
-SKIPS: Set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
+SKIPS: set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
 
 # use build_ext to do mypy c compilation
 if not any(a.endswith("setup.py") for a in sys.argv) or "build_ext" in sys.argv:
