@@ -68,9 +68,9 @@ else {
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "catchphrase",
-      apiUrl: "https://lcp.linguistik.uzh.ch/be",
-      wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
-      appDomain: "lcp.linguistik.uzh.ch",
+      apiUrl: "https://catchphrase.linguistik.uzh.ch/be",
+      wsUrl: "wss://catchphrase.linguistik.uzh.ch/ws",
+      appDomain: "catchphrase.linguistik.uzh.ch",
       environment: "production",
       apiHeaders: {},
       sentryDSN: null,
@@ -78,9 +78,9 @@ else {
   } else if (process.env.NODE_ENV === "test") {
     config = {
       appName: "catchphrase",
-      apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
-      wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
-      appDomain: "lcp.test.linguistik.uzh.ch",
+      apiUrl: "https://catchphrase.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://catchphrase.test.linguistik.uzh.ch/ws",
+      appDomain: "catchphrase.test.linguistik.uzh.ch",
       environment: "test",
       apiHeaders: {},
       sentryDSN: null,
