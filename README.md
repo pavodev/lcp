@@ -2,7 +2,7 @@
 
 > Boths apps together in one monorepository!
 
-First, install Python 3.11 (though anything from 3.9 onward should work) or setup a Python 3.11 virtual environment.
+First, install Python 3.11+ or setup a Python 3.11+ virtual environment.
 
 Make sure you also have access to `abstract-query` and `lcp-upload` submodule repositories. Ask someone to grant you access if you need it.
 
