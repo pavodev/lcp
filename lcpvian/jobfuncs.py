@@ -236,6 +236,6 @@ async def _swissdox_export(
         archive.write(os.path.join(path,"tokens.feather"), "tokens.feather")
         archive.write(os.path.join(path,"namedentities.feather"), "namedentities.feather")
 
-    job = get_current_job()
+    job = cast(Job, get_current_job())
     _export_complete(job, conn, None)
     return None

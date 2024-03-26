@@ -65,5 +65,5 @@ async def corpora_meta_update(request: web.Request) -> web.Response:
     )
     args = (corpora_id, to_store)
     job: Job = request.app["query_service"].update_metadata(*args)
-    info: dict[str, str] = {"status": 1, "job": job.id}
+    info: dict[str, str] = {"status": "1", "job": str(job.id)}
     return web.json_response(info)

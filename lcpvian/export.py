@@ -92,7 +92,12 @@ async def kwic(jobs: list[Job], resp: Any, config):
             continue
 
         meta_job: Job | None = next((mj for mj in meta_jobs if mj.kwargs.get("depends_on") == j.id), None)
-        formatted_meta: dict[str, Any] = format_meta_lines(meta_job.kwargs.get("meta_query"), meta_job.result)
+        if not meta_job:
+            continue
+        formatted_meta: dict[str, Any] = cast(
+            dict[str, Any],
+            format_meta_lines(meta_job.kwargs.get("meta_query"), meta_job.result)
+        )
 
         meta = j.kwargs.get("meta_json", {}).get("result_sets", [])
         kwic_indices = [n+1 for n, o in enumerate(meta) if o.get("type") == "plain"]
@@ -225,10 +230,10 @@ async def export_swissdox(
             documents["rows"].append(doc)
 
     # Optimize the list of ranges to look up (merge sequential ones)
-    current_range = None
+    current_range: dict = {}
     doc_ranges = []
     for l, u in documents['ranges'].items():
-        if current_range is None:
+        if not current_range:
             current_range = {'lower': l, 'upper': u}
         if u < current_range['upper']:
             continue
