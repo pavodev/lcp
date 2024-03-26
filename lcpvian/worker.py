@@ -157,13 +157,8 @@ async def work() -> None:
 
 def start_worker() -> None:
     try:
-        if sys.version_info >= (3, 11):
-            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                runner.run(work())
-        else:
-            uvloop.install()
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            asyncio.run(work())
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(work())
     except KeyboardInterrupt:
         print("Worker stopped.")
 
