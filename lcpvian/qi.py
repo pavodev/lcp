@@ -30,11 +30,9 @@ import os
 import re
 
 # import logging
-import sys
-
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, TypeVar, cast
+from typing import Any, cast
 from uuid import uuid4
 
 from abstract_query.create import json_to_sql

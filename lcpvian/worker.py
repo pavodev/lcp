@@ -23,7 +23,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import sys
 
 from typing import Any
 
@@ -112,7 +111,7 @@ query_kwargs = dict(
         "timeout": QUERY_TIMEOUT,
         "statement_cache_size": 0,
         "prepared_statement_cache_size": 0,
-        "server_settings": {"jit": "off"}
+        "server_settings": {"jit": "off"},
     },
     echo_pool=True,
     pool_recycle=3600,
