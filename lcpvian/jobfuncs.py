@@ -18,6 +18,7 @@ from sqlalchemy.sql import text
 from rq.connections import get_current_connection
 from rq.job import (get_current_job, Job)
 
+from .callbacks import _export_complete
 from .configure import CorpusTemplate
 from .impo import Importer
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
@@ -165,15 +166,15 @@ async def _swissdox_export(
     """
     Take all the results from the relevant jobs and write them to storage
     """
-    prepared_segments_job: Job = Job.fetch(job_ids["prepared_segments"], connection=get_current_connection())
-    named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=get_current_connection())
+    conn = get_current_connection()
+
+    prepared_segments_job: Job = Job.fetch(job_ids["prepared_segments"], connection=conn)
+    named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=conn)
 
     path = os.path.join("results",config['meta'].get('name', 'anonymous_corpus'))
 
     if not os.path.exists(path):
         os.mkdir(path)
-
-    ne_dict: dict[tuple[str,str],str] = {}
 
     # Documents
     doc_columns = [c for c in documents["columns"] if c != "id"]
@@ -235,4 +236,6 @@ async def _swissdox_export(
         archive.write(os.path.join(path,"tokens.feather"), "tokens.feather")
         archive.write(os.path.join(path,"namedentities.feather"), "namedentities.feather")
 
+    job = get_current_job()
+    _export_complete(job, conn, None)
     return None

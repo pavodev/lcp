@@ -11,14 +11,22 @@ from typing import Any, cast
 from .callbacks import _export_complete, _general_failure
 from .jobfuncs import _swissdox_export
 from .typed import JSONObject
-from .utils import _determine_language
+from .utils import _determine_language, format_meta_lines
 
-import asyncio
 import json
 import re
 
 EXPORT_TTL = 5000
 CHUNKS = 1000000 # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
+
+SWISSDOX_PREPARED_QUERY = """SELECT * FROM {schema}.prepared_{seg_table}{underlang} ps
+CROSS JOIN {schema}.{seg_table}{underlang}0 sg
+WHERE ps.{seg_table}_id = sg.{seg_table}_id
+AND {doc_multi_range} @> sg.char_range;"""
+
+SWISSDOX_NE_QUERY = """SELECT {ne_selects_str}
+FROM {schema}.{ne_table} ne {ne_joins_str}
+WHERE {ne_wheres_str};"""
 
 def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_meta: dict) -> tuple[str,str,dict,list]:
     kwic_name: str = result_meta.get("name","")
@@ -52,11 +60,19 @@ def _format_kwic(args: list, columns: list, sentences: dict[str,tuple], result_m
     return (kwic_name,sid,matching_entities,tokens)
 
 async def kwic(jobs: list[Job], resp: Any, config):
-    sentence_jobs = [j for j in jobs if j.kwargs.get("sentences_query") and not j.kwargs.get("meta_query")]
-    other_jobs = [j for j in jobs if j not in sentence_jobs]
+    sentence_jobs = []
+    meta_jobs = []
+    for j in jobs:
+        if not j.kwargs.get("sentences_query"):
+            continue
+        if j.kwargs.get("meta_query"):
+            meta_jobs.append(j)
+        else:
+            sentence_jobs.append(j)
+    query_jobs = [j for j in jobs if j not in sentence_jobs and j not in meta_jobs]
 
     buffer: str = ""
-    for j in other_jobs:
+    for j in query_jobs:
 
         if 'current_batch' not in j.kwargs:
             continue
@@ -75,6 +91,9 @@ async def kwic(jobs: list[Job], resp: Any, config):
         else:
             continue
 
+        meta_job: Job | None = next((mj for mj in meta_jobs if mj.kwargs.get("depends_on") == j.id), None)
+        formatted_meta: dict[str, Any] = format_meta_lines(meta_job.kwargs.get("meta_query"), meta_job.result)
+
         meta = j.kwargs.get("meta_json", {}).get("result_sets", [])
         kwic_indices = [n+1 for n, o in enumerate(meta) if o.get("type") == "plain"]
 
@@ -84,7 +103,10 @@ async def kwic(jobs: list[Job], resp: Any, config):
                 continue
             try:
                 kwic_name, sid, matching_entities, tokens = _format_kwic(args, columns, sentences, meta[n_type-1])
-                line: str = "\t".join([str(n_type),"plain",kwic_name,json.dumps({'sid': sid, 'matches': matching_entities, 'segment': tokens})])
+                data = {'sid': sid, 'matches': matching_entities, 'segment': tokens}
+                if sid in formatted_meta:
+                    data['meta'] = formatted_meta[sid]
+                line: str = "\t".join([str(n_type),"plain",kwic_name,json.dumps(data)])
             except:
                 # Because queries for prepared segments only fetch what's needed for previewing purposes,
                 # queries with lots of matches can only output a small subset of lines
@@ -169,7 +191,7 @@ async def export_swissdox(
 
     document_layer: str = config["firstClass"]["document"]
 
-    documents: dict[str,Any] = {"columns": set(), "rows": [], "ranges": []}
+    documents: dict[str,Any] = {"columns": set({}), "rows": [], "ranges": dict({})}
     for j in meta_jobs:
         cols_from_sql = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", j.kwargs.get("meta_query",""))
         if not cols_from_sql:
@@ -199,18 +221,37 @@ async def export_swissdox(
                 else:
                     doc[col_name] = res[ncol]
                     if col_name == "char_range":
-                        documents["ranges"].append(res[ncol])
+                        documents["ranges"][int(res[ncol].lower)] = res[ncol].upper
             documents["rows"].append(doc)
 
-    doc_multi_range = ",".join( [f"[{r.lower},{r.upper})" for r in documents['ranges']] )
+    # Optimize the list of ranges to look up (merge sequential ones)
+    current_range = None
+    doc_ranges = []
+    for l, u in documents['ranges'].items():
+        if current_range is None:
+            current_range = {'lower': l, 'upper': u}
+        if u < current_range['upper']:
+            continue
+        next_lower_range = current_range['upper']+1
+        if l > next_lower_range:
+            doc_ranges.append(current_range)
+            current_range = {'lower': l, 'upper': u}
+            next_lower_range = u+1
+        if next_lower_range in documents['ranges']:
+            current_range['upper'] = documents['ranges'][next_lower_range]['upper']
+    doc_ranges.append(current_range)
+
+    doc_multi_range = ",".join( [f"[{r['lower']},{r['upper']})" for r in doc_ranges] )
     doc_multi_range = "'{" + doc_multi_range + "}'::int8multirange"
     schema: str = cast(str, config["schema_path"])
 
-    seg_table: str = cast(str, config["firstClass"]["segment"])
-    query_prepared_segments: str = f"""SELECT * FROM {schema}.prepared_{seg_table}{underlang} ps
-        CROSS JOIN {schema}.{seg_table}{underlang}0 sg
-        WHERE ps.{seg_table.lower()}_id = sg.{seg_table.lower()}_id
-        AND {doc_multi_range} @> sg.char_range;"""
+    seg_table: str = cast(str, config["firstClass"]["segment"]).lower()
+    query_prepared_segments: str = SWISSDOX_PREPARED_QUERY.format(
+        schema=schema,
+        seg_table=seg_table,
+        underlang=underlang,
+        doc_multi_range=doc_multi_range
+    )
 
     ne_table = "namedentity"
     ne_mapping = config['mapping']['layer']['NamedEntity']
@@ -237,14 +278,19 @@ async def export_swissdox(
     if ne_joins_str:
         ne_joins_str = f"\n        CROSS JOIN {ne_joins_str}"
     ne_wheres_str = "\n        AND ".join( ne_wheres )
-    query_named_entities: str = f"""SELECT {ne_selects_str}
-        FROM {schema}.{ne_table} ne {ne_joins_str}
-        WHERE {ne_wheres_str};"""
+    query_named_entities: str = SWISSDOX_NE_QUERY.format(
+        ne_selects_str=ne_selects_str,
+        schema=schema,
+        ne_table=ne_table,
+        ne_joins_str=ne_joins_str,
+        ne_wheres_str=ne_wheres_str
+    )
 
     prepared_segments_job = await app["query_service"].swissdox_query(query_prepared_segments)
     named_entities_job = await app["query_service"].swissdox_query(query_named_entities)
     depends_on = [prepared_segments_job.id, named_entities_job.id]
 
+    print("Scheduled swissdox export depending on", depends_on)
     return app["background"].enqueue(
         _swissdox_export,
         on_failure=Callback(_general_failure, EXPORT_TTL),

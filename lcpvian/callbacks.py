@@ -18,11 +18,10 @@ import re
 import shutil
 import traceback
 
-from asyncpg import Range
 from datetime import datetime, date
 from types import TracebackType
 from typing import Any, Unpack, cast
-from uuid import uuid4, UUID
+from uuid import uuid4
 
 from redis import Redis as RedisConnection
 from rq.job import Job
@@ -56,6 +55,7 @@ from .utils import (
     _decide_can_send,
     _time_remaining,
     _publish_msg,
+    format_meta_lines,
     TRUES,
 )
 
@@ -223,6 +223,14 @@ def _query(
     if do_full:
         can_send = False
 
+    export_payload = {}
+    all_batches_done = len(done_part) == len(job.kwargs['all_batches'])
+    if all_batches_done and (to_export := first_job.meta.get("to_export", False)):
+        export_payload = to_export
+    if export_payload:
+        can_send = False
+
+
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
@@ -245,11 +253,6 @@ def _query(
     current_kwic_lines = min(max_kwic, total_found)
 
     action = "query_result"
-
-    export_payload = {}
-    all_batches_done = len(done_part) == len(job.kwargs['all_batches'])
-    if all_batches_done and (to_export := first_job.meta.get("to_export", False)):
-        export_payload = to_export
 
     jso = dict(**job.kwargs)
     jso.update(
@@ -340,44 +343,7 @@ def _meta(
 
     status = depended.meta["_status"]
 
-    # replace this with actual upstream handling of column names
-    pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", job.kwargs.get("meta_query",""))
-    if not pre_columns:
-        return None
-    columns: list[str] = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
-    layers: dict[str,None] = {c.split("_")[0]: None for c in columns if not c.endswith("_id")}
-    to_send: dict[str, dict] = {"-2": {}}
-    for res in result:
-        seg_id = "0"
-        segment: dict[str,dict] = {layer: {} for layer in layers}
-        for n, layer_prop in enumerate(columns):
-            if not res[n+1]:
-                continue
-            if layer_prop == "seg_id":
-                seg_id = res[n+1]
-            else:
-                m = re.match(rf"^([^_]+)_(.+)$", layer_prop)
-                if not m:
-                    continue
-                layer, prop = m.groups()
-                if prop == "meta":
-                    meta: dict
-                    if isinstance(res[n+1], str):
-                        meta = json.loads(res[n+1])
-                    else:
-                        meta = res[n+1]
-                    if not isinstance(meta, dict):
-                        continue
-                    segment[layer] = {**(segment[layer]), **meta}
-                else:
-                    if any(isinstance(res[n+1], type) for type in [int,str,bool,dict,list,tuple,UUID,date]):
-                        segment[layer][prop] = str(res[n+1])
-                    elif isinstance(res[n+1], Range):
-                        segment[layer][prop] = [res[n+1].lower,res[n+1].upper]
-        segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}
-        if not segment:
-            continue
-        to_send["-2"][str(seg_id)] = segment
+    to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query",""), result)}
 
     if not to_send["-2"]:
         return None
@@ -391,6 +357,8 @@ def _meta(
 
     base.save_meta()
 
+    can_send = not base.meta.get("to_export", False)
+
     action = "meta"
 
     jso = {
@@ -400,6 +368,7 @@ def _meta(
         "user": kwargs.get("user", job.kwargs["user"]),
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
+        "can_send": can_send,
         "table": table,
         "first_job": base.id,
         "msg_id": msg_id,
@@ -502,7 +471,8 @@ def _sentences(
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
 
-    can_send = not full or status == "finished"
+    # Do not send if this is an "export" query
+    can_send = not base.meta.get("to_export", False) and (not full or status == "finished")
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "sent_job_ws_messages" not in base.meta:

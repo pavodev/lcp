@@ -8,20 +8,17 @@ import asyncio
 import json
 import logging
 import math
+import numpy as np
 import os
 import re
 import traceback
 
+from asyncpg import Range
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
-
 from datetime import date, datetime
-
 from typing import Any, cast, TypeAlias
-
-from uuid import uuid4
-
-import numpy as np
+from uuid import uuid4, UUID
 
 try:
     from aiohttp import web, ClientSession
@@ -693,6 +690,50 @@ def format_query_params(
             out.append(v)
     return query, tuple(out)
 
+
+def format_meta_lines(
+    query: str,
+    result: list
+) -> dict[str, Any] | None:
+    # replace this with actual upstream handling of column names
+    pre_columns = re.match(r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", query)
+    if not pre_columns:
+        return None
+    columns: list[str] = [p.split(" AS ")[1].strip() for p in pre_columns[1].split(", ")] # [seg_id, layer1, layer2, etc.]
+    layers: dict[str,None] = {c.split("_")[0]: None for c in columns if not c.endswith("_id")}
+    formatted: dict[str, Any] = {}
+    for res in result:
+        seg_id = "0"
+        segment: dict[str,dict] = {layer: {} for layer in layers}
+        for n, layer_prop in enumerate(columns):
+            if not res[n+1]:
+                continue
+            if layer_prop == "seg_id":
+                seg_id = res[n+1]
+            else:
+                m = re.match(rf"^([^_]+)_(.+)$", layer_prop)
+                if not m:
+                    continue
+                layer, prop = m.groups()
+                if prop == "meta":
+                    meta: dict
+                    if isinstance(res[n+1], str):
+                        meta = json.loads(res[n+1])
+                    else:
+                        meta = res[n+1]
+                    if not isinstance(meta, dict):
+                        continue
+                    segment[layer] = {**(segment[layer]), **meta}
+                else:
+                    if any(isinstance(res[n+1], type) for type in [int,str,bool,dict,list,tuple,UUID,date]):
+                        segment[layer][prop] = str(res[n+1])
+                    elif isinstance(res[n+1], Range):
+                        segment[layer][prop] = [res[n+1].lower,res[n+1].upper]
+        segment = {layer: props for layer, props in segment.items() if props and [x for x in props if x != "id"]}
+        if not segment:
+            continue
+        formatted[str(seg_id)] = segment
+    return formatted
 
 def _determine_language(batch: str) -> str | None:
     """
