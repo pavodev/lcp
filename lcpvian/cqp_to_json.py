@@ -20,7 +20,7 @@ def nget(node: Any, prop: str) -> Any:
     return out
 
 
-def process_quantifier(quantifier, range) -> list[int]:
+def process_quantifier(quantifier, range: list[int]) -> list[int]:
     if quantifier:
         r: Any = nget(quantifier, "range")
         if r:

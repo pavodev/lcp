@@ -8,7 +8,6 @@ import importlib
 import json
 import logging
 import os
-import sys
 
 import aiohttp_cors
 import asyncio
@@ -287,13 +286,8 @@ def start() -> None:
         return
 
     try:
-        if sys.version_info >= (3, 11):
-            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                runner.run(start_app())
-        else:
-            uvloop.install()
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            asyncio.run(start_app())
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(start_app())
     except KeyboardInterrupt:
         print("Application stopped.")
     except (BaseException, OSError) as err:

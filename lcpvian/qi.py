@@ -45,20 +45,14 @@ from aiohttp.web import Application
 from rq.job import Job
 
 # wish there was a nicer way to do this...delete once we are sure of 3.11+
-if sys.version_info < (3, 11):
-    Self = TypeVar("Self", bound="QueryIteration")
-else:
-    from typing import Self
+from typing import Self
 
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
 from .utils import _determine_language, push_msg
 
-if sys.version_info <= (3, 9):
-    QI_KWARGS = dict()
-else:
-    QI_KWARGS = dict(kw_only=True, slots=True)
+QI_KWARGS = dict(kw_only=True, slots=True)
 
 
 @dataclass(**QI_KWARGS)
