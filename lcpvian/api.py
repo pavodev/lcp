@@ -67,3 +67,15 @@ async def query(corpus: int, query: str) -> None:
                     msg = {"user": "api", "room": "api", "action": "left"}
                     await ws.send_json(msg)
                     return None
+
+
+async def refresh_config() -> JSONObject:
+    """
+    Helper to force a refresh of the configuration
+    """
+    url = f"http://localhost:{os.getenv('AIO_PORT', 9090)}/config"
+    headers: JSONObject = {}
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers) as resp:
+            result: JSONObject = await resp.json()
+            return result

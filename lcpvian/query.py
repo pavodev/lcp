@@ -265,3 +265,13 @@ async def query(
         return web.json_response(http_response)
     else:
         return web.json_response(http_response[0])
+
+
+@ensure_authorised
+async def refresh_config(request: web.Request) -> web.Response:
+    """
+    Force a refresh of the config via the /config endpoint
+    """
+    qs = request.app["query_service"]
+    job: Job = await qs.get_config(force_refresh=True)
+    return web.json_response({"job": str(job.id)})

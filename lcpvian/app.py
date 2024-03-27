@@ -38,7 +38,7 @@ from .lama_user_data import lama_user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
 from .project import project_create, project_update
-from .query import query
+from .query import query, refresh_config
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
@@ -183,6 +183,7 @@ async def create_app(test: bool = False) -> web.Application:
 
     endpoints: list[tuple[str, str, Endpoint]] = [
         ("/check-file-permissions", "GET", check_file_permissions),
+        ("/config", "POST", refresh_config),
         ("/corpora", "POST", corpora),
         ("/corpora/{corpora_id}/meta/update", "PUT", corpora_meta_update),
         ("/create", "POST", make_schema),

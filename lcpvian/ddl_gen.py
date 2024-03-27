@@ -555,7 +555,7 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
-            elif (typ := vals.get("type")) == "jsonb":
+            elif (typ := vals.get("type")) == "dict":
                 norm_col = f"{attr}_id"
                 norm_table = Table(
                     attr,

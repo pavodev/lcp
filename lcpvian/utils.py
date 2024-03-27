@@ -659,7 +659,7 @@ def _get_sent_ids(
 
 def _get_associated_query_job(
     depends_on: str | list[str],
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
 ) -> Job:
     """
     Helper to find the query job associated with sent job
@@ -764,7 +764,7 @@ def _determine_language(batch: str) -> str | None:
     return None
 
 
-def _get_first_job(job: Job, connection: RedisConnection[bytes]) -> Job:
+def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
     """
     Helper to get the base job from a group of query jobs
     """
@@ -818,7 +818,7 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
 
 
 def _publish_msg(
-    connection: RedisConnection[bytes], message: JSONObject | str | bytes, msg_id: str
+    connection: "RedisConnection[bytes]", message: JSONObject | str | bytes, msg_id: str
 ) -> None:
     """
     Store a message with msg_id as key, and notify listener

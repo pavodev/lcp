@@ -66,7 +66,7 @@ MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
 def _query(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[Any],
     **kwargs: Unpack[QueryArgs],
 ) -> None:
@@ -328,7 +328,7 @@ def _query(
 
 def _meta(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[Any] | None,
     **kwargs: Unpack[SentJob],
 ) -> None:
@@ -381,7 +381,7 @@ def _meta(
 
 def _sentences(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[RawSent] | None,
     **kwargs: int | bool | str | None,
 ) -> None:
@@ -519,7 +519,7 @@ def _sentences(
 
 def _document(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[JSONObject] | JSONObject,
     **kwargs: Unpack[BaseArgs],
 ) -> None:
@@ -549,7 +549,7 @@ def _document(
 
 def _document_ids(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[JSONObject] | JSONObject,
     **kwargs: Unpack[DocIDArgs],
 ) -> None:
@@ -577,7 +577,7 @@ def _document_ids(
 
 def _schema(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: bool | None = None,
 ) -> None:
     """
@@ -608,7 +608,7 @@ def _schema(
 
 def _upload(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: MainCorpus | None,
 ) -> None:
     """
@@ -649,7 +649,7 @@ def _upload(
 
 def _upload_failure(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     typ: type,
     value: BaseException,
     trace: TracebackType,
@@ -705,7 +705,7 @@ def _upload_failure(
 
 def _general_failure(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     typ: type,
     value: BaseException,
     trace: TracebackType,
@@ -747,7 +747,7 @@ def _general_failure(
 
 def _queries(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[UserQuery] | None,
 ) -> None:
     """
@@ -780,7 +780,7 @@ def _queries(
 
 def _export_complete(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
@@ -789,7 +789,7 @@ def _export_complete(
 
 def _config(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[MainCorpus],
     publish: bool = True,
 ) -> dict[str, str | bool | Config]:

@@ -6,7 +6,6 @@ Code for generating batches is also in here
 
 from typing import Any, NotRequired, Sequence, TypedDict
 
-
 class Meta(TypedDict, total=False):
     date: str
     name: str

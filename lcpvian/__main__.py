@@ -8,11 +8,11 @@ import json
 import os
 import sys
 
-from .api import corpora, query
+from .api import corpora, query, refresh_config
 from .ddl_gen import main
 from .dqd_parser import cmdline
 
-COMMANDS = {"start", "lcpvian", "worker", "dqd", "ddl", "corpora", "query"}
+COMMANDS = {"start", "lcpvian", "worker", "dqd", "ddl", "corpora", "query", "config"}
 
 command = next((i for i in reversed(sys.argv) if i in COMMANDS), "lcpvian")
 
@@ -22,11 +22,15 @@ if command == "lcpvian" or command == "start":
     print("Starting application...")
     start()
 
+elif command == "config":
+    asyncio.run(refresh_config())
+
 elif command == "worker":
     from .worker import start_worker
 
     print("Starting worker...")
     start_worker()
+
 elif command == "dqd":
     print("Parsing DQD...")
 

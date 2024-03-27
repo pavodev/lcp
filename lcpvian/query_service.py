@@ -457,7 +457,7 @@ class QueryService:
             pass
         return jobs
 
-    async def get_config(self) -> Job:
+    async def get_config(self, force_refresh: bool = False) -> Job:
         """
         Get initial app configuration JSON
         """
@@ -470,7 +470,7 @@ class QueryService:
 
         redis: RedisConnection[bytes] = self.app["redis"]
         opts: dict[str, bool] = {"config": True}
-        if self.use_cache:
+        if self.use_cache and not force_refresh:
             try:
                 already = Job.fetch(job_id, connection=redis)
                 if already and already.result is not None:

@@ -305,7 +305,7 @@ def _get_all_sents(
     max_kwic: int,
     current_lines: int,
     full: bool,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
 ) -> Results:
     """
     Combine all sent jobs into one -- only done at the end of a `full` query
