@@ -190,7 +190,7 @@ async def _swissdox_export(
             type = doc_attrs.get(cl, doc_attrs.get("meta", {}).get(cl, {})).get("type")
             if type == "integer":
                 c = int(c or 0)
-            elif type in ("text", "string"):
+            elif type in ("text", "string", "vector"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
                 c = str(c)
