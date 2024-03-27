@@ -2,14 +2,14 @@
 
 from aiohttp import web
 from asyncio import sleep
-from rq import Callback
+from rq import Callback, Queue
 from rq.connections import get_current_connection
 from rq.job import Job
 from rq.registry import FinishedJobRegistry
 from typing import Any, cast
 
 from .callbacks import _export_complete, _general_failure
-from .jobfuncs import _swissdox_export
+from .jobfuncs import _db_query, _swissdox_export
 from .typed import JSONObject
 from .utils import _determine_language, format_meta_lines
 
@@ -172,8 +172,41 @@ async def export_dump(
     output.close()
 
 
+async def swissdox_query(
+    query: str,
+    use_cache: bool = True
+) -> Job:
+    """
+    Here we send the query to RQ and therefore to redis
+    """
+    conn = get_current_connection()
+
+    hashed = str(hash(query))
+    job: Job | None
+
+    if use_cache:
+        try:
+            job = Job.fetch(hashed, connection=conn)
+            if job is not None:
+                return cast(Job, job)
+        except:
+            pass
+
+    q = Queue("background", connection=conn)
+    job = q.enqueue(
+        _db_query,
+        # on_success=Callback(_query, self.timeout),
+        on_failure=Callback(_general_failure, EXPORT_TTL),
+        result_ttl=EXPORT_TTL,
+        job_timeout=EXPORT_TTL,
+        job_id=hashed,
+        args=(query,)
+    )
+    return cast(Job, job)
+
+
 async def export_swissdox(
-    app: web.Application,
+    # app: web.Application,
     first_job_id: str,
     underlang: str,
     config,
@@ -182,10 +215,13 @@ async def export_swissdox(
     Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
     Return a job depending on the former to execute _swissdox_export (see jobfuncs)
     """
+    # conn = app["redis"]
+    conn = get_current_connection()
+
     finished_jobs = [
-        Job.fetch(jid, connection=app["redis"])
+        Job.fetch(jid, connection=conn)
         for registry in [
-            FinishedJobRegistry(name=x, connection=app["redis"])
+            FinishedJobRegistry(name=x, connection=conn)
             for x in ("queue","background")
         ]
         for jid in registry.get_job_ids()
@@ -291,13 +327,18 @@ async def export_swissdox(
         ne_wheres_str=ne_wheres_str
     )
 
-    prepared_segments_job = await app["query_service"].swissdox_query(query_prepared_segments)
-    named_entities_job = await app["query_service"].swissdox_query(query_named_entities)
+    # prepared_segments_job = await app["query_service"].swissdox_query(query_prepared_segments)
+    # named_entities_job = await app["query_service"].swissdox_query(query_named_entities)
+    prepared_segments_job = await swissdox_query(query_prepared_segments)
+    named_entities_job = await swissdox_query(query_named_entities)
     depends_on = [prepared_segments_job.id, named_entities_job.id]
 
     print("Scheduled swissdox export depending on", depends_on)
-    return app["background"].enqueue(
+    # q = app["background"]
+    q = Queue("background", connection=conn)
+    return q.enqueue(
         _swissdox_export,
+        on_success=Callback(_export_complete, EXPORT_TTL),
         on_failure=Callback(_general_failure, EXPORT_TTL),
         result_ttl=EXPORT_TTL,
         job_timeout=EXPORT_TTL,
@@ -326,13 +367,13 @@ async def export(
     corpus_conf = payload.get("config", {})
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
     first_job = Job.fetch(first_job_id, connection=app["redis"])
+    depends_on = [
+        jid
+        for ks in ("_sent_jobs", "_meta_jobs")
+        for jid in first_job.meta.get(ks, {}).keys()
+    ]
     job: Job
     if export_format == "dump":
-        depends_on = [
-            jid
-            for ks in ("_sent_jobs", "_meta_jobs")
-            for jid in first_job.meta.get(ks, {}).keys()
-        ]
         print("Scheduled dump export depending on", depends_on)
         job = app["background"].enqueue(
             export_dump,
@@ -351,11 +392,17 @@ async def export(
         underlang = _determine_language( first_job.kwargs.get("current_batch")[2] ) or ""
         if underlang:
             underlang = f"_{underlang}"
-        job = await export_swissdox(
-            app,
-            first_job_id,
-            underlang,
-            corpus_conf
+        job = app["background"].enqueue(
+            export_swissdox,
+            on_failure=Callback(_general_failure, EXPORT_TTL),
+            result_ttl=EXPORT_TTL,
+            job_timeout=EXPORT_TTL,
+            depends_on=depends_on,
+            args=(
+                first_job_id,
+                underlang,
+                corpus_conf
+            )
         )
 
     return job
