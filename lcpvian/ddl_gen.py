@@ -2,8 +2,6 @@
 ddl_gen.py: create SQL code for corpus creation based on uploaded metadata JSON
 """
 
-from __future__ import annotations
-
 import json
 import math
 import os
@@ -259,7 +257,11 @@ class Column(DDL):
 
 class Table(DDL):
     def __init__(
-        self, name: str, cols: list[Column], anchorings: list[str] | None = None, parent: str | None = None
+        self,
+        name: str,
+        cols: list[Column],
+        anchorings: list[str] | None = None,
+        parent: str | None = None,
     ) -> None:
         super().__init__()
         name = name.strip()
@@ -519,14 +521,13 @@ class CTProcessor:
         tables: list[Table],
         table_cols: list[Column],
         types: list[Type],
-        entity_name: str
+        entity_name: str,
     ) -> tuple[list[Table], list[Column]]:
 
         entity_mapping: dict[str, JSONObject | bool] = cast(
-            dict[str,JSONObject | bool],
-            self.globals.mapping["layer"][entity_name]
+            dict[str, JSONObject | bool], self.globals.mapping["layer"][entity_name]
         )
-        map_attr: dict = {}
+        map_attr: dict[attr, dict] = {}
 
         for attr, vals in attr_structure:
             nullable = vals.get("nullable", False) or False
@@ -539,7 +540,7 @@ class CTProcessor:
                         Column(norm_col, "int", primary_key=True),
                         Column(attr, "text", unique=True),
                     ],
-                    parent=entity_name.lower()
+                    parent=entity_name.lower(),
                 )
                 map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
@@ -562,7 +563,7 @@ class CTProcessor:
                         Column(norm_col, "int", primary_key=True),
                         Column(attr, "jsonb", unique=True),
                     ],
-                    parent=entity_name.lower()
+                    parent=entity_name.lower(),
                 )
                 map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
@@ -581,7 +582,9 @@ class CTProcessor:
                 if vals.get("isGlobal"):
                     table_cols.append(Column(attr, f"main.{attr}", nullable=nullable))
                 else:
-                    assert "values" in vals, f"List of values is needed when type is categorical ({entity_name}:{attr})"
+                    assert (
+                        "values" in vals
+                    ), f"List of values is needed when type is categorical ({entity_name}:{attr})"
                     enum_type = Type(attr, vals["values"])
                     types.append(enum_type)
                     table_cols.append(Column(attr, attr, nullable=nullable))
@@ -602,7 +605,9 @@ class CTProcessor:
         if map_attr:
             entity_mapping["attributes"] = map_attr
 
-        self.globals.mapping["layer"][entity_name] = cast(dict[str, Any], entity_mapping)
+        self.globals.mapping["layer"][entity_name] = cast(
+            dict[str, Any], entity_mapping
+        )
         return tables, table_cols
 
     def _process_unitspan(self, entity: dict[str, dict[str, Any]]) -> None:
@@ -731,15 +736,14 @@ class CTProcessor:
             foreign_key={"table": part_ent + "0", "column": part_ent_col},
         )
 
-        fts_col = Column(
-            "vector",
-            "tsvector"
-        )
+        fts_col = Column("vector", "tsvector")
 
         part_ent = self.globals.base_map["segment"].lower()
         part_ent_col = f"{part_ent}_id"
 
-        ptable = PartitionedTable("fts_vector", [part_col, fts_col], column_part=part_ent_col)
+        ptable = PartitionedTable(
+            "fts_vector", [part_col, fts_col], column_part=part_ent_col
+        )
 
         self.globals.tables.append(ptable)
 
@@ -757,7 +761,6 @@ class CTProcessor:
         ]
         mapd["FTSvectorCols"] = {n: rc for n, rc in enumerate(rel_cols, start=1)}
         self.globals.mapping = mapd
-
 
     def process_schema(self) -> str:
         corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
@@ -784,19 +787,24 @@ class CTProcessor:
         views = [f"\n\n{search_path}\n"]
 
         for i in range(self.globals.num_partitions):
-            part = "rest" if i+1 == self.globals.num_partitions else i
+            part = "rest" if i + 1 == self.globals.num_partitions else i
 
-            statement = self.ddl.m_lemma_freq(cast(str, part), cast(str, tok_tbl))
+            statement = self.ddl.m_lemma_freq(part, tok_tbl)
             views.append(statement)
 
         self.globals.m_lemma_freqs = "\n".join(views)
 
-        [token_tbl] = (x for x in self.globals.tables if x.name == tok_tbl+"0")
-        rel_cols = ", ".join([x.name for x in token_tbl.cols if not (x.constrs.get("primary_key") or "range" in x.name)])
-        statement = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl+"0")
+        [token_tbl] = (x for x in self.globals.tables if x.name == tok_tbl + "0")
+        rel_cols = ", ".join(
+            [
+                x.name
+                for x in token_tbl.cols
+                if not (x.constrs.get("primary_key") or "range" in x.name)
+            ]
+        )
+        statement = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl + "0")
 
         self.globals.m_token_freq = f"\n\n{search_path}\n{statement}"
-
 
     def create_compute_prep_segs(self) -> None:
         tok_tab = next(
@@ -833,9 +841,9 @@ class CTProcessor:
         segname = self.globals.base_map["segment"]
         mapd["layer"][segname]["prepared"] = {
             "relation": ("prepared_" + segname),
-            "columnHeaders": rel_cols_names
+            "columnHeaders": rel_cols_names,
         }
-        mapd["layer"][segname]["relation"] = segname+"<batch>"
+        mapd["layer"][segname]["relation"] = segname + "<batch>"
         self.globals.mapping = mapd
 
         # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
@@ -941,7 +949,6 @@ def main(corpus_template_path: str) -> None:
         corpus_temp = json.load(f)
 
     data = generate_ddl(corpus_temp)
-
 
     # print(json.dumps(data, indent=4))
     print(data["create"])

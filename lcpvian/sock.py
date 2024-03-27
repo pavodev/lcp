@@ -16,8 +16,6 @@ the Redis channel we are listening to. The main thread gets the message and
 broadcasts it to the correct user/room via websocket.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -72,8 +70,8 @@ async def _process_message(
     data = json.loads(cast(bytes, message["data"]))
     raw: bytes = app["redis"].get(data["msg_id"])
     payload: JSONObject = json.loads(raw)
-    payload['user'] = data.get('user', payload.get('user',''))
-    payload['room'] = data.get('room', payload.get('room',''))
+    payload["user"] = data.get("user", payload.get("user", ""))
+    payload["room"] = data.get("room", payload.get("room", ""))
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
@@ -235,11 +233,11 @@ async def _handle_message(
 
     can_send = payload.get("can_send", True)
 
-    sent_allowed = action in ("sentences","meta") and can_send
-    to_submit: None | Coroutine = None
+    sent_allowed = action in ("sentences", "meta") and can_send
+    to_submit: None | Coroutine[None, None, web.Response] = None
 
     if (
-        action in ("sentences","meta")
+        action in ("sentences", "meta")
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):
@@ -293,13 +291,18 @@ async def _handle_message(
     if action == "query_result":
         export_payload: JSONObject = cast(JSONObject, payload.get("export", {}))
         if export_payload:
-            job: Job = await export(app, export_payload, cast(str, payload["first_job"]))
-            export_msg: JSONObject = cast(JSONObject, {
-                "room": room,
-                "user": user,
-                "action": "started_export",
-                "job_id": str(job.id)
-            })
+            job: Job = await export(
+                app, export_payload, cast(str, payload["first_job"])
+            )
+            export_msg: JSONObject = cast(
+                JSONObject,
+                {
+                    "room": room,
+                    "user": user,
+                    "action": "started_export",
+                    "job_id": str(job.id),
+                },
+            )
             await push_msg(
                 app["websockets"],
                 room,
@@ -358,7 +361,7 @@ async def _handle_query(
 
     _print_status_message(payload, status)
 
-    to_submit: None | Coroutine = None
+    to_submit: None | Coroutine[None, None, web.Response] = None
     can_send = payload["can_send"]
     # todo: this should no longer happen, as we send a progress update message instead?
     do_full = payload.get("full") and payload.get("status") != "finished"

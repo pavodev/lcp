@@ -10,15 +10,12 @@ These callbacks are hooked up as on_success and on_failure kwargs in
 calls to Queue.enqueue in query_service.py
 """
 
-from __future__ import annotations
-
 import json
 import os
-import re
 import shutil
 import traceback
 
-from datetime import datetime, date
+from datetime import datetime
 from types import TracebackType
 from typing import Any, Unpack, cast
 from uuid import uuid4
@@ -34,15 +31,18 @@ from .convert import (
     _get_all_sents,
 )
 from .typed import (
-    MainCorpus,
-    JSONObject,
-    UserQuery,
-    RawSent,
-    Config,
-    QueryArgs,
-    Results,
+    BaseArgs,
     Batch,
+    Config,
+    DocIDArgs,
+    JSONObject,
+    MainCorpus,
+    QueryArgs,
     QueryMeta,
+    RawSent,
+    Results,
+    SentJob,
+    UserQuery,
 )
 from .utils import (
     CustomEncoder,
@@ -67,8 +67,8 @@ MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 def _query(
     job: Job,
     connection: RedisConnection[bytes],
-    result: list,
-    **kwargs: Unpack[QueryArgs],  # type: ignore
+    result: list[Any],
+    **kwargs: Unpack[QueryArgs],
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -103,8 +103,9 @@ def _query(
     first_job = _get_first_job(job, connection)
     stored = first_job.meta.get("progress_info", {})
     existing_results = first_job.meta.get("all_non_kwic_results", existing_results)
-    total_requested = kwargs.get(
-        "total_results_requested", job.kwargs["total_results_requested"]
+    total_requested = cast(
+        int,
+        kwargs.get("total_results_requested", job.kwargs["total_results_requested"]),
     )
     just_finished = tuple(job.kwargs["current_batch"])
 
@@ -224,12 +225,11 @@ def _query(
         can_send = False
 
     export_payload = {}
-    all_batches_done = len(done_part) == len(job.kwargs['all_batches'])
+    all_batches_done = len(done_part) == len(job.kwargs["all_batches"])
     if all_batches_done and (to_export := first_job.meta.get("to_export", False)):
         export_payload = to_export
     if export_payload:
         can_send = False
-
 
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
@@ -325,11 +325,12 @@ def _query(
 
     return _publish_msg(connection, dumped, msg_id)
 
+
 def _meta(
     job: Job,
     connection: RedisConnection[bytes],
-    result: list | None,
-    **kwargs: int | bool | str | None,
+    result: list[Any] | None,
+    **kwargs: Unpack[SentJob],
 ) -> None:
     """
     Process meta data and send via websocket
@@ -343,7 +344,7 @@ def _meta(
 
     status = depended.meta["_status"]
 
-    to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query",""), result)}
+    to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
 
     if not to_send["-2"]:
         return None
@@ -353,9 +354,7 @@ def _meta(
         base.meta["meta_job_ws_messages"] = {}
     base.meta["meta_job_ws_messages"][msg_id] = None
     base.meta["_meta_jobs"][job.id] = None
-    base.save_meta()
-
-    base.save_meta()
+    base.save_meta()  # type: ignore
 
     can_send = not base.meta.get("to_export", False)
 
@@ -413,7 +412,7 @@ def _sentences(
     status = depended.meta["_status"]
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
-    depended.save_meta()
+    depended.save_meta()  # type: ignore
 
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
@@ -472,14 +471,16 @@ def _sentences(
     submit_payload["total_results_requested"] = total_requested
 
     # Do not send if this is an "export" query
-    can_send = not base.meta.get("to_export", False) and (not full or status == "finished")
+    can_send = not base.meta.get("to_export", False) and (
+        not full or status == "finished"
+    )
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "sent_job_ws_messages" not in base.meta:
         base.meta["sent_job_ws_messages"] = {}
     base.meta["sent_job_ws_messages"][msg_id] = None
     base.meta["_sent_jobs"][job.id] = None
-    base.save_meta()
+    base.save_meta()  # type: ignore
 
     action = "sentences"
 
@@ -511,7 +512,7 @@ def _sentences(
         print("not returning sentences because searching whole corpus")
         return
 
-    job.save_meta()
+    job.save_meta()  # type: ignore
 
     return _publish_msg(connection, dumped, msg_id)
 
@@ -520,7 +521,7 @@ def _document(
     job: Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
-    **kwargs,
+    **kwargs: Unpack[BaseArgs],
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
@@ -550,7 +551,7 @@ def _document_ids(
     job: Job,
     connection: RedisConnection[bytes],
     result: list[JSONObject] | JSONObject,
-    **kwargs,
+    **kwargs: Unpack[DocIDArgs],
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
@@ -560,7 +561,7 @@ def _document_ids(
     if not room:
         return None
     msg_id = str(uuid4())
-    formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
+    formatted = {str(idx): name for idx, name in cast(list[tuple[int, str]], result)}
     action = "document_ids"
     jso = {
         "document_ids": formatted,
@@ -784,6 +785,7 @@ def _export_complete(
 ) -> None:
     print("export complete!")
     return None
+
 
 def _config(
     job: Job,

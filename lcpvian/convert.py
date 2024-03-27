@@ -37,7 +37,15 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import Batch, QueryMeta, RawSent, ResultSents, ResultsValue, Results, VianKWIC
+from .typed import (
+    Batch,
+    QueryMeta,
+    RawSent,
+    ResultSents,
+    ResultsValue,
+    Results,
+    VianKWIC,
+)
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -52,8 +60,10 @@ OPS = {
 }
 
 
-def _prepare_existing(res: Results, kwics: set[int], colls: set[int]) -> dict:
-    out: dict = {}
+def _prepare_existing(
+    res: Results, kwics: set[int], colls: set[int]
+) -> dict[str, dict[str, tuple[int, float]]]:
+    out: dict[int, Any] = {}
     for k, v in res.items():
         k = int(k)
         if k < 1 or k in kwics:
@@ -150,13 +160,11 @@ def _aggregate_results(
         body = cast(list, rest[:-1])
         total_this_batch = rest[-1]
         # need_update = body in precalcs[key]
-        preexist = precalcs[key].get(
-            tuple(body), 0
-        )
+        preexist = precalcs[key].get(tuple(body), 0)
         combined = preexist + total_this_batch
         precalcs[key][tuple(body)] = combined
         counts[key] = combined
-        
+
     existing = _unfold(precalcs, kwics, colls)
     existing[-1] = minus_one
     existing[0] = zero
@@ -297,7 +305,7 @@ def _get_all_sents(
     max_kwic: int,
     current_lines: int,
     full: bool,
-    connection: RedisConnection,
+    connection: RedisConnection[bytes],
 ) -> Results:
     """
     Combine all sent jobs into one -- only done at the end of a `full` query

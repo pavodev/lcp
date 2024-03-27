@@ -18,8 +18,6 @@ this job ID; if it's available, we can trigger the callback manually, and thus
 save ourselves from running duplicate DB queries.
 """
 
-from __future__ import annotations
-
 import json
 import os
 
@@ -48,8 +46,17 @@ from .callbacks import (
 )
 from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema, _swissdox_export
-from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
-from .utils import _format_config_query, _set_config, PUBSUB_CHANNEL, CustomEncoder, TRUES
+from .typed import (
+    BaseArgs,
+    Config,
+    DocIDArgs,
+    JSONObject,
+    QueryArgs,
+    Results,
+    ResultsValue,
+    SentJob,
+)
+from .utils import _format_config_query, _set_config, PUBSUB_CHANNEL, CustomEncoder
 
 
 @final
@@ -71,7 +78,7 @@ class QueryService:
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.use_cache = app["_use_cache"]
 
-    async def send_all_data(self, job: Job, **kwargs) -> bool:
+    async def send_all_data(self, job: Job, **kwargs: Unpack[QueryArgs]) -> bool:
         """
         Get the stored messages related to a query and send them to frontend
         """
@@ -84,12 +91,14 @@ class QueryService:
         payload["user"] = kwargs["user"]
         payload["room"] = kwargs["room"]
         # we may have to apply the latest post-processes...
-        pps = cast(dict, kwargs["post_processes"] or payload["post_processes"])
+        pps = cast(
+            dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
+        )
         # json serialises the Results keys to strings, so we have to convert
         # them back into int for the Results object to be correctly typed:
         full_res = cast(dict[str, ResultsValue], payload["full_result"])
         res = cast(Results, {int(k): v for k, v in full_res.items()})
-        if pps and pps != payload["post_processes"]:
+        if pps and pps != cast(dict[int, Any], payload["post_processes"]):
             filtered = _apply_filters(res, pps)
             payload["result"] = cast(JSONObject, filtered)
         payload["no_restart"] = True
@@ -97,9 +106,14 @@ class QueryService:
         strung: str = json.dumps(payload, cls=CustomEncoder)
 
         failed = False
-        tasks: list[Coroutine] = [self.app["aredis"].publish(PUBSUB_CHANNEL, strung)]
+        tasks: list[Coroutine[None, None, None]] = [
+            self.app["aredis"].publish(PUBSUB_CHANNEL, strung)
+        ]
 
-        sent_and_meta_msgs = {**job.meta.get("sent_job_ws_messages", {}), **job.meta.get("meta_job_ws_messages", {})}
+        sent_and_meta_msgs = {
+            **job.meta.get("sent_job_ws_messages", {}),
+            **job.meta.get("meta_job_ws_messages", {}),
+        }
         for msg in sent_and_meta_msgs:
             # print(f"Retrieving sentences message: {msg}")
             print(f"Retrieving sentences or metadata message: {msg}")
@@ -127,7 +141,7 @@ class QueryService:
         self,
         query: str,
         queue: str = "query",
-        **kwargs: Unpack[QueryArgs],  # type: ignore
+        **kwargs: Unpack[QueryArgs],
     ) -> tuple[Job | None, bool | None]:
         """
         Here we send the query to RQ and therefore to redis
@@ -158,7 +172,7 @@ class QueryService:
         self,
         query: str,
         queue: str = "background",
-        **kwargs: Unpack[QueryArgs],  # type: ignore
+        **kwargs: Unpack[QueryArgs],
     ) -> Job:
         """
         Here we send the query to RQ and therefore to redis
@@ -170,7 +184,7 @@ class QueryService:
             try:
                 job = Job.fetch(hashed, connection=self.app["redis"])
                 if job is not None:
-                    return cast(Job, job)
+                    return job
             except:
                 pass
 
@@ -186,9 +200,8 @@ class QueryService:
         )
         return cast(Job, job)
 
-
     async def _attempt_query_from_cache(
-        self, hashed: str, **kwargs
+        self, hashed: str, **kwargs: Unpack[QueryArgs]
     ) -> tuple[Job | None, bool | None]:
         """
         Try to get a query from cache. Return the job and an indicator of
@@ -236,7 +249,11 @@ class QueryService:
         we can get the data from app["config"]
         """
         query = f"SELECT document_id, name FROM {schema}.document;"
-        kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
+        kwargs: DocIDArgs = {
+            "user": user,
+            "room": room,
+            "corpus_id": corpus_id,
+        }
         hashed = str(hash((query, corpus_id)))
         job: Job
         if self.use_cache:
@@ -276,7 +293,7 @@ class QueryService:
             try:
                 job = Job.fetch(hashed, connection=self.app["redis"])
                 if job and job.get_status(refresh=True) == "finished":
-                    kwa: dict[str, str | None] = {"user": user, "room": room}
+                    kwa: BaseArgs = {"user": user, "room": room}
                     _document(job, self.app["redis"], job.result, **kwa)
                     return job
             except NoSuchJobError:
@@ -305,10 +322,10 @@ class QueryService:
         query: str,
         meta: str = "",
         queue: str = "query",
-        **kwargs: int | bool | str | None | list[str],
+        **kwargs: Unpack[SentJob],
     ) -> list[str]:
-        depend = cast(str | list[str], kwargs["depends_on"])
-        hash_dep = tuple(depend) if isinstance(depend, list) else depend
+        depends_on = kwargs["depends_on"]
+        hash_dep = tuple(depends_on) if isinstance(depends_on, list) else depends_on
         hashed = str(
             hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
         )
@@ -332,7 +349,7 @@ class QueryService:
             on_success=Callback(_sentences, timeout),
             on_failure=Callback(_general_failure, timeout),
             result_ttl=self.query_ttl,
-            depends_on=kwargs["depends_on"],
+            depends_on=depends_on,
             job_timeout=timeout,
             job_id=hashed,
             args=(query,),
@@ -348,7 +365,7 @@ class QueryService:
                 on_success=Callback(_meta, timeout),
                 on_failure=Callback(_general_failure, timeout),
                 result_ttl=self.query_ttl,
-                depends_on=kwargs["depends_on"],
+                depends_on=depends_on,
                 job_timeout=timeout,
                 job_id=hashed_meta,
                 args=(meta,),
@@ -360,29 +377,40 @@ class QueryService:
 
     async def swissdox_export(
         self,
-        job_ids: dict[str,str],
+        job_ids: dict[str, str],
         corpus_index: str,
-        documents: dict[str,Any],
+        documents: dict[str, Any],
         underlang: str,
-        **kwargs
+        ne_cols: list[str] = [],
     ) -> Job:
-        depends_on = [Job.fetch(jid, connection=self.app["redis"]) for jid in job_ids.values()]
-        return self.app["background"].enqueue(
+        depends_on = [
+            Job.fetch(jid, connection=self.app["redis"]) for jid in job_ids.values()
+        ]
+        job = self.app["background"].enqueue(
             _swissdox_export,
             on_failure=Callback(_general_failure, self.timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             depends_on=depends_on,
-            args=(job_ids,corpus_index,documents,self.app['config'][str(corpus_index)],underlang),
-            kwargs=kwargs
+            args=(
+                job_ids,
+                corpus_index,
+                documents,
+                self.app["config"][str(corpus_index)],
+                underlang,
+            ),
+            kwargs={"ne_cols": ne_cols},
         )
+        return cast(Job, job)
 
-    def _attempt_meta_from_cache(self, hashed: str, **kwargs) -> list[str]:
+    def _attempt_meta_from_cache(
+        self, hashed: str, **kwargs: Unpack[SentJob]
+    ) -> list[str]:
         """
         Try to return meta from redis cache, instead of doing a new query
         """
         jobs: list[str] = []
-        kwa: dict[str, int | bool | str | None] = {}
+        kwa: SentJob
         job: Job
         try:
             job = Job.fetch(hashed, connection=self.app["redis"])
@@ -390,13 +418,11 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Meta found in redis memory. Retrieving...")
                 kwa = {
-                    "full": cast(bool, kwargs["full"]),
-                    "user": cast(str, kwargs["user"]),
-                    "room": cast(str | None, kwargs["room"]),
+                    "full": kwargs["full"],
+                    "user": kwargs["user"],
+                    "room": kwargs["room"],
                     "from_memory": True,
-                    "total_results_requested": cast(
-                        int, kwargs["total_results_requested"]
-                    ),
+                    "total_results_requested": kwargs["total_results_requested"],
                 }
                 _meta(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
@@ -404,7 +430,9 @@ class QueryService:
             pass
         return jobs
 
-    def _attempt_sent_from_cache(self, hashed: str, **kwargs) -> list[str]:
+    def _attempt_sent_from_cache(
+        self, hashed: str, **kwargs: Unpack[SentJob]
+    ) -> list[str]:
         """
         Try to return sentences from redis cache, instead of doing a new query
         """
@@ -417,13 +445,11 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Sentences found in redis memory. Retrieving...")
                 kwa = {
-                    "full": cast(bool, kwargs["full"]),
-                    "user": cast(str, kwargs["user"]),
-                    "room": cast(str | None, kwargs["room"]),
+                    "full": kwargs["full"],
+                    "user": kwargs["user"],
+                    "room": kwargs["room"],
                     "from_memory": True,
-                    "total_results_requested": cast(
-                        int, kwargs["total_results_requested"]
-                    ),
+                    "total_results_requested": kwargs["total_results_requested"],
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
@@ -438,7 +464,9 @@ class QueryService:
         job: Job
         job_id = "app_config"
 
-        query = _format_config_query("SELECT {selects} FROM main.corpus mc {join} WHERE mc.enabled = true;")
+        query = _format_config_query(
+            "SELECT {selects} FROM main.corpus mc {join} WHERE mc.enabled = true;"
+        )
 
         redis: RedisConnection[bytes] = self.app["redis"]
         opts: dict[str, bool] = {"config": True}

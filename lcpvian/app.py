@@ -4,8 +4,6 @@ The main setup for the aiohttp backend.
 Register URLs and endpoints, add redis, query_service, websockets, etc.
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import logging
@@ -106,9 +104,9 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    listener: Task = asyncio.create_task(listen_to_redis(app))
+    listener: Task[None] = asyncio.create_task(listen_to_redis(app))
     app["redis_listener"] = listener
-    cleanup: Task = asyncio.create_task(ws_cleanup(app["websockets"]))
+    cleanup: Task[None] = asyncio.create_task(ws_cleanup(app["websockets"]))
     app["ws_cleanup"] = cleanup
 
 
