@@ -527,7 +527,7 @@ class CTProcessor:
         entity_mapping: dict[str, JSONObject | bool] = cast(
             dict[str, JSONObject | bool], self.globals.mapping["layer"][entity_name]
         )
-        map_attr: dict[attr, dict] = {}
+        map_attr: dict[str, dict] = {}
 
         for attr, vals in attr_structure:
             nullable = vals.get("nullable", False) or False
@@ -603,7 +603,7 @@ class CTProcessor:
                 raise Exception(f"unknown type for attribute: '{attr}'")
 
         if map_attr:
-            entity_mapping["attributes"] = map_attr
+            entity_mapping["attributes"] = cast(JSONObject, map_attr)
 
         self.globals.mapping["layer"][entity_name] = cast(
             dict[str, Any], entity_mapping
@@ -787,7 +787,7 @@ class CTProcessor:
         views = [f"\n\n{search_path}\n"]
 
         for i in range(self.globals.num_partitions):
-            part = "rest" if i + 1 == self.globals.num_partitions else i
+            part: str = "rest" if i + 1 == self.globals.num_partitions else str(i)
 
             statement = self.ddl.m_lemma_freq(part, tok_tbl)
             views.append(statement)

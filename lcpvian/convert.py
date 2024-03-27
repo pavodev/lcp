@@ -62,7 +62,7 @@ OPS = {
 
 def _prepare_existing(
     res: Results, kwics: set[int], colls: set[int]
-) -> dict[str, dict[str, tuple[int, float]]]:
+) -> dict[int, dict[str, tuple[int, float]]]:
     out: dict[int, Any] = {}
     for k, v in res.items():
         k = int(k)
