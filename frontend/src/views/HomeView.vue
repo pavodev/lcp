@@ -180,7 +180,7 @@
     </div>
 
     <div class="modal fade" id="corpusDetailsModal" tabindex="-1" aria-labelledby="corpusDetailsModalLabel"
-      aria-hidden="true" ref="vuemodal">
+      aria-hidden="true" ref="vuemodaldetails">
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
@@ -570,10 +570,10 @@ export default {
     }
   },
   mounted() {
-    this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
+    this.$refs.vuemodaldetails.addEventListener("shown.bs.modal", () => {
       this.showGraph = true;
     });
-    this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
+    this.$refs.vuemodaldetails.addEventListener("hide.bs.modal", () => {
       this.showGraph = false;
     });
     // this.setTooltips();
