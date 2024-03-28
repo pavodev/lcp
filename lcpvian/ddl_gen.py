@@ -16,6 +16,12 @@ from typing import Any, cast
 
 from .typed import JSONObject
 
+TYPES_MAP = {
+    "number": "int",
+    "dict": "jsonb",
+    "array": "text[]",
+    "vector": "main.vector"
+}
 
 @dataclass
 class DataNeededLater:
@@ -478,6 +484,7 @@ class CTProcessor:
         self.corpus_temp = corpus_template
         self.schema_name = corpus_template.get("schema_name", "testcorpus")
         self.layers = self._order_ct_layers(corpus_template["layer"])
+        self.global_attributes = corpus_template.get("globalAttributes", {})
         self.globals = glos
         self.ddl = DDL()
 
@@ -532,15 +539,24 @@ class CTProcessor:
         for attr, vals in attr_structure:
             nullable = vals.get("nullable", False) or False
             # TODO: make this working also for e.g. "isGlobal" & "text"
-            if (typ := vals.get("type")) == "text":
+            typ = vals.get("type")
+            ref = vals.get("ref")
+            if typ == "text" or ref:
+                norm_type = "text"
+                parent = entity_name.lower()
+                if ref:
+                    assert ref in self.global_attributes, ReferenceError(f"Global attribute {ref} could not be found")
+                    norm_type = self.global_attributes[ref].get("type", "text")
+                    parent = "global_attribute"
+
                 norm_col = f"{attr}_id"
                 norm_table = Table(
                     attr,
                     [
                         Column(norm_col, "int", primary_key=True),
-                        Column(attr, "text", unique=True),
+                        Column(attr, TYPES_MAP.get(norm_type, norm_type), unique=True),
                     ],
-                    parent=entity_name.lower(),
+                    parent=parent,
                 )
                 map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
@@ -555,13 +571,13 @@ class CTProcessor:
 
                 tables.append(norm_table)
 
-            elif (typ := vals.get("type")) == "dict":
+            elif typ == "dict":
                 norm_col = f"{attr}_id"
                 norm_table = Table(
                     attr,
                     [
                         Column(norm_col, "int", primary_key=True),
-                        Column(attr, "jsonb", unique=True),
+                        Column(attr, TYPES_MAP.get("dict", "dict"), unique=True),
                     ],
                     parent=entity_name.lower(),
                 )
@@ -594,6 +610,19 @@ class CTProcessor:
 
             elif typ == "number":
                 table_cols.append(Column(attr, "int", nullable=nullable))
+
+            elif typ == "uuid":
+                table_cols.append(Column(attr, "uuid", nullable=nullable))
+
+            elif typ == "boolean":
+                table_cols.append(Column(attr, "boolean", nullable=nullable))
+
+            elif typ == "array":
+                # For now we treat all arrays as text arrays
+                table_cols.append(Column(attr, "text[]", nullable=nullable))
+
+            elif typ == "vector":
+                table_cols.append(Column(attr, "main.vector", nullable=nullable))
 
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
