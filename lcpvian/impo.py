@@ -381,7 +381,7 @@ class Importer:
         *args: Any,
         give: bool = False,
         progress: str | None = None,
-        params: dict[str, str] = {},
+        params: dict[str, int | str] = {},
     ) -> RunScript:
         """
         Run a simple script, and return the result if give
@@ -391,7 +391,7 @@ class Importer:
         Messing with this method in even trivial ways can cause segfaults for mysterious reasons
         """
 
-        base: dict[str, str] = {}
+        base: dict[str, int | str] = {}
         out: list[tuple[Any, ...]]
         params = params or base
         ares: list[Row[Any]] | str | None

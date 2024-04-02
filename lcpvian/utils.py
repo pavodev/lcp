@@ -671,8 +671,8 @@ def _get_associated_query_job(
 
 
 def format_query_params(
-    query: str, params: dict[str, str]
-) -> tuple[str, tuple[str, ...]]:
+    query: str, params: dict[str, int | str]
+) -> tuple[str, tuple[int | str, ...]]:
     """
     Helper to allow for sqlalchemy format query with asyncpg
     """
