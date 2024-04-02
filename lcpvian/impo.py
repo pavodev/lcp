@@ -456,9 +456,9 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
-        params: dict[str, str] = dict(
+        params: dict[str, str | int] = dict(
             name=self.name,
-            ver=str(self.version),
+            ver=int(self.version),
             template=json.dumps(dict(self.template)),
             schema=self.schema,
             counts=json.dumps(self.token_count),

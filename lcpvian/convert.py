@@ -157,7 +157,7 @@ def _aggregate_results(
             precalcs[key][text] = (combined, combined_e)
             continue
         # frequency table:
-        body = cast(list, rest[:-1])
+        body = cast(list, [str(x) for x in rest[:-1]])
         total_this_batch = rest[-1]
         # need_update = body in precalcs[key]
         preexist = precalcs[key].get(tuple(body), 0)
