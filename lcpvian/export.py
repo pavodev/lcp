@@ -19,7 +19,8 @@ import re
 EXPORT_TTL = 5000
 CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
-SWISSDOX_PREPARED_QUERY = """SELECT * FROM {schema}.prepared_{seg_table}{underlang} ps
+SWISSDOX_PREPARED_QUERY = """SELECT ps.content, sg.char_range
+FROM {schema}.prepared_{seg_table}{underlang} ps
 CROSS JOIN {schema}.{seg_table}{underlang}0 sg
 WHERE ps.{seg_table}_id = sg.{seg_table}_id
 AND {doc_multi_range} @> sg.char_range;"""
@@ -27,7 +28,7 @@ AND {doc_multi_range} @> sg.char_range;"""
 SWISSDOX_NE_QUERY = """SELECT {ne_selects_str}
 FROM {schema}.{ne_table} ne {ne_joins_str}
 WHERE {ne_wheres_str};"""
-
+SWISSDOX_NE_SELECTS = ["form","type"]
 
 def _format_kwic(
     args: list, columns: list, sentences: dict[str, tuple], result_meta: dict
@@ -325,10 +326,13 @@ async def export_swissdox(
     if "relation" in ne_mapping:
         ne_table = ne_mapping["relation"]
     ne_cols = ["id", "char_range"]
-    ne_selects = ["ne.namedentity_id AS id", "ne.char_range AS char_range"]
+    # ne_selects = ["ne.namedentity_id AS id", "ne.char_range AS char_range"]
+    ne_selects = ["ne.char_range AS char_range"]
     ne_joins = []
     ne_wheres = [f"{doc_multi_range} @> ne.char_range"]
     for attr_name, attr_values in config["layer"]["NamedEntity"]["attributes"].items():
+        if attr_name not in SWISSDOX_NE_SELECTS:
+            continue
         ne_cols.append(attr_name)
         if attr_values.get("type", "") == "text":
             ne_selects.append(f"ne_{attr_name}.{attr_name} AS {attr_name}")
@@ -353,8 +357,6 @@ async def export_swissdox(
         ne_wheres_str=ne_wheres_str,
     )
 
-    # prepared_segments_job = await app["query_service"].swissdox_query(query_prepared_segments)
-    # named_entities_job = await app["query_service"].swissdox_query(query_named_entities)
     prepared_segments_job = await swissdox_query(query_prepared_segments)
     named_entities_job = await swissdox_query(query_named_entities)
     depends_on = [prepared_segments_job.id, named_entities_job.id]

@@ -1,10 +1,10 @@
+import duckdb
 import json
 import logging
 import os
 import pandas
 import shutil
 import traceback
-import zipfile
 
 from asyncpg import Range
 from typing import Any, cast
@@ -176,6 +176,7 @@ async def _swissdox_export(
         os.mkdir(path)
 
     # Documents
+    docs_by_range: dict[int, tuple[int,str]] = {}
     doc_columns = [c for c in documents["columns"] if c != "id"]
     doc_indices = []
     doc_rows = []
@@ -193,51 +194,126 @@ async def _swissdox_export(
             elif type in ("text", "string", "vector"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
+                docs_by_range[c.lower] = (c.upper,id)
                 c = str(c)
             formed_row.append(c)
+        formed_row.append( str(id) )
         doc_rows.append(formed_row)
+    doc_columns.append("doc_id")
     doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
-    doc_pandas.to_feather(os.path.join(path, "documents.feather"))
+    # doc_pandas.to_feather(os.path.join(path, "documents.feather"))
 
     # Tokens
     seg: str = config["segment"]
     segment_mapping: dict[str, Any] = config["mapping"]["layer"][seg]
-    tok_columns: list[str] = ["segment_id"]
     if "partitions" in segment_mapping and underlang:
-        tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
-            "columnHeaders"
-        ]
-    else:
-        tok_columns += segment_mapping["prepared"]["columnHeaders"]
+        segment_mapping = segment_mapping["partitions"][underlang[1:]]
+    column_headers = segment_mapping.get("prepared", {}).get("columnHeaders", [])
+    # tok_columns: list[str] = ["segment_id"]
+    # if "partitions" in segment_mapping and underlang:
+    #     tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
+    #         "columnHeaders"
+    #     ]
+    # else:
+    #     tok_columns += segment_mapping["prepared"]["columnHeaders"]
+    tok_columns = ['form', 'lemma', 'upos', 'xpos', 'tense', 'voice', 'mood', 'doc_id', 'position']
     tok_indices = []
     tok_rows = []
-    for row in prepared_segments_job.result:
-        sid: str = str(row[0])
-        for n, token in enumerate(row[2]):
-            tok_indices.append(str(n + int(row[1])))
-            tok_rows.append([sid, *token])
+    n_tok = 1
+    for content, char_range in prepared_segments_job.result:
+        if char_range.lower is None:
+            continue # Ignore segments that are not anchored
+        doc_id: str
+        for lower, (upper,did) in docs_by_range.items():
+            if lower > char_range.upper or upper < char_range.lower:
+                continue
+            doc_id = str(did)
+            break
+        for n, token in enumerate(content):
+            tok_indices.append(str(n_tok))
+            row = []
+            for col in tok_columns[0:4]:
+                row.append( str(token[column_headers.index(col)]) )
+            if token[4]:
+                ufeat: dict = {}
+                if isinstance(token[4], str):
+                    ufeat = json.loads(token[4])
+                else:
+                    ufeat = token[4] or {}
+                row.append( ufeat.get("Tense", None) )
+                row.append( ufeat.get("Voice", None) )
+                row.append( ufeat.get("Mood", None) )
+            else:
+                row += [None, None, None]
+            row.append(doc_id)
+            row.append(str(n))
+            tok_rows.append(row)
+            n_tok += 1
     tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
-    tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
+    # tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
+
+    # Named entities to docs
+    ne_to_id: dict[tuple[str,str], str] = {} # map (form,type) to ne_id
+    ne_to_docs: dict[str, dict[str,int]] = {} # map ne_id to {doc_id: n}
 
     # Named entities
-    ne_nid = next(n for n, c in enumerate(ne_cols) if c == "id")
-    ne_colums: list[str] = [str(c) for n, c in enumerate(ne_cols) if n != ne_nid]
+    # TODO: store named entities as a dict, whose keys are tuple[form,type]
+    # if a key already exists, don't add it again (or do, whatever)
+    ne_columns: list[str] = ["form","type","ned_id"]
     ne_indices = []
     ne_rows = []
-    for row in named_entities_job.result:
-        ne_indices.append(str(row[ne_nid]))
-        ne_rows.append([str(r) for n, r in enumerate(row) if n != ne_nid])
-    ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_colums)
-    ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+    for char_range, form, typ in named_entities_job.result:
+        doc_id = ""
+        for lower, (upper,did) in docs_by_range.items():
+            if lower > char_range.upper or upper < char_range.lower:
+                continue
+            doc_id = str(did)
+            break
+        ne_id: str = ne_to_id.get((form,typ), "")
+        if not ne_id:
+            ne_id = str(len(ne_to_id)+1)
+            ne_to_id[(form,typ)] = ne_id
+            ne_to_docs[ne_id] = {}
+        ne_to_docs[ne_id][doc_id] = ne_to_docs[ne_id].get(doc_id, 0) + 1
+    for (form, typ), ne_id in ne_to_id.items():
+        ne_indices.append(ne_id)
+        ne_rows.append([form, typ, ne_id])
+    ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_columns)
+    # ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
 
-    # Zip file
-    with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:
-        # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
-        archive.write(os.path.join(path, "documents.feather"), "documents.feather")
-        archive.write(os.path.join(path, "tokens.feather"), "tokens.feather")
-        archive.write(
-            os.path.join(path, "namedentities.feather"), "namedentities.feather"
-        )
+    ne_doc_columns: list[str] = ["doc_id", "ne_id", "freq"]
+    ne_doc_indices = []
+    ne_doc_rows: list[tuple[str,str,str]] = []
+    ne_doc_idx = 1
+    for ne_id, doc_counts in ne_to_docs.items():
+        for doc_id, count in doc_counts.items():
+            ne_doc_indices.append( str(ne_doc_idx) )
+            ne_doc_idx += 1
+            ne_doc_rows.append( (doc_id, ne_id, str(count)) )
+    ne_document_pandas = pandas.DataFrame(data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns)
+    # ne_document_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+
+    # # Zip file
+    # with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:
+    #     # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
+    #     archive.write(os.path.join(path, "documents.feather"), "documents.feather")
+    #     archive.write(os.path.join(path, "tokens.feather"), "tokens.feather")
+    #     archive.write(
+    #         os.path.join(path, "namedentities.feather"), "namedentities.feather"
+    #     )
+
+    con = duckdb.connect(database=os.path.join(path, "swissdox.db"), read_only=False)
+
+    con.execute("CREATE TABLE token AS SELECT * FROM tok_pandas")
+    con.execute("CREATE TABLE ne AS SELECT * FROM ne_pandas")
+    con.execute("CREATE TABLE document AS SELECT * FROM doc_pandas")
+    con.execute("CREATE TABLE ne_document AS SELECT * FROM ne_document_pandas")
+
+    # con.execute("ALTER TABLE token ADD FOREIGN KEY (doc_id) REFERENCES document(doc_id)")
+    # con.execute("ALTER TABLE ne_document ADD FOREIGN KEY (doc_id) REFERENCES document(doc_id)")
+    # con.execute("ALTER TABLE ne_document ADD FOREIGN KEY (ne_id) REFERENCES ne(ned_id)")
+
+    con.close()
 
     job = cast(Job, get_current_job())
     _export_complete(job, conn, None)
