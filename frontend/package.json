@@ -9,7 +9,11 @@
     "serve:lcp": "vue-cli-service serve",
     "build:lcp": "vue-cli-service build",
     "serve:vian": "env APP_TYPE=vian vue-cli-service serve",
-    "build:vian": "env APP_TYPE=vian vue-cli-service build"
+    "build:vian": "env APP_TYPE=vian vue-cli-service build",
+    "serve:ofrom": "env APP_TYPE=ofrom vue-cli-service serve",
+    "build:ofrom": "env APP_TYPE=ofrom vue-cli-service build",
+    "serve:catchphrase": "env APP_TYPE=catchphrase vue-cli-service serve",
+    "build:catchphrase": "env APP_TYPE=catchphrase vue-cli-service build"
   },
   "dependencies": {
     "@fortawesome/fontawesome-svg-core": "^6.3.0",

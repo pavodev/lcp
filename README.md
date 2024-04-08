@@ -137,6 +137,10 @@ Then you can start it with:
 yarn serve:lcp
 # for VIAN frontend
 yarn serve:vian
+# for catchphrase frontend
+yarn serve:catchphrase
+# for soundscript frontend
+yarn serve:ofrom
 ```
 
 The app will be available at `http://localhost:8080`.
