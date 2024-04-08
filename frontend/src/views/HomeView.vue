@@ -3,7 +3,7 @@
     <div class="container">
       <div class="row mt-4">
         <div class="col">
-          <Title :title="appName" :isItalic="true" />
+          <Title :title="appName" :isItalic="appType == 'lcp' ? false : true" />
         </div>
         <div class="col mt-1 text-end">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#newProjectModal">
@@ -41,6 +41,7 @@
                 :class="index == -1 ? 'active' : ''" :id="`nav-${project.id}-tab`" data-bs-toggle="tab"
                 :data-bs-target="`#nav-${project.id}`" type="button" role="tab" :aria-controls="`nav-${project.id}`"
                 aria-selected="true" @click="currentProject = project">
+                <FontAwesomeIcon :icon="['fas', 'globe']" class="me-1" v-if="project.id == null" />
                 {{ project.title }}
                 <span class="api-badge">({{ project.corpora.length }})</span>
                 <span class="ms-1 api-badge" v-if="project.api">[API]</span>
@@ -340,6 +341,7 @@ export default {
       allowProjectModalSave: false,
       modalProjectData: null,
       appName: config.appName,
+      appType: config.appType,
       // tooltips: [],
       corporaFilter: "",
       currentProject: null,
@@ -452,9 +454,9 @@ export default {
     },
     openQueryWithCorpus(corpus) {
       if (config.appType == "vian") {
-        router.push(`/player/${corpus.meta.id}/${corpus.shortname}`);
+        router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       } else {
-        router.push(`/query/${corpus.meta.id}/${corpus.shortname}`);
+        router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       }
     },
     calculateSum(array) {
