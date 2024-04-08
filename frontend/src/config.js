@@ -1,6 +1,6 @@
-let config = null;
+let config = {};
 
-const testUserHeader = {
+const testUserHeaders = {
   "X-Remote-User": "firstname.lastname@uzh.ch",
   "X-Display-Name": "Firstname Lastname",
   "X-Mail": "firstname.lastname@uzh.ch",
@@ -38,7 +38,7 @@ if (process.env.APP_TYPE == "vian") {
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
       environment: "development",
-      apiHeaders: testUserHeader,
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
       baseMediaUrl: "http://localhost:8000",
     };
@@ -75,7 +75,7 @@ else if (process.env.APP_TYPE == "ofrom") {
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
       environment: "development",
-      apiHeaders: testUserHeader,
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
       baseMediaUrl: "http://localhost:8000",
     };
@@ -119,13 +119,14 @@ else if (process.env.APP_TYPE == "catchphrase") {
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
       environment: "development",
-      apiHeaders: testUserHeader,
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
       baseMediaUrl: "http://localhost:8000",
     };
   }
 }
 else {
+  // LCP
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "LCP",
@@ -163,7 +164,7 @@ else {
       wsUrl: "ws://localhost:9090/ws",
       appDomain: "localhost",
       environment: "development",
-      apiHeaders: testUserHeader,
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
       baseMediaUrl: "http://localhost:8000",
     };
