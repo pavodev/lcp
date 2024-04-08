@@ -152,7 +152,12 @@ async def _db_query(
             print(f"SQL error: {err}")
             raise err
 
-
+# TODO:
+# - save to proper path (based on hash) + create symlinks in projects (name queries?)
+# - handle existing duckdb files (duckdb won't overwrite)
+# - what happens for huge results? might need rethinking approach
+# - launch export even when queries fetched from cache
+# - communicate with frontend
 async def _swissdox_export(
     job_ids: dict[str, str],
     documents: dict[str, Any] = {},

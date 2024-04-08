@@ -138,7 +138,7 @@
                     ? 'badge rounded-pill bg-secondary'
                     : ''
                 "
-                v-html="currentToken[index]"
+                v-html="strPopover(currentToken[index])"
               ></span>
             </td>
           </tr>
@@ -589,6 +589,12 @@ export default {
         }
       }
     },
+    strPopover(token) {
+      if (token && token.constructor.name == 'Object')
+        return "<pre>"+Utils.dictToStr(token)+"</pre>";
+      else
+        return token;
+    }
   },
   computed: {
     headToken() {

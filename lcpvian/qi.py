@@ -235,7 +235,8 @@ class QueryIteration:
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
-            "is_vian": is_vian,
+            # "is_vian": is_vian,
+            "is_vian": False
         }
         made: Self = cls(**details)
         made.get_word_count()

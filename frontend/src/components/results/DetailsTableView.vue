@@ -57,9 +57,8 @@
 .object-column button::before {
   content: "▶";
 }
-.object-column pre {
+.object-column pre.whenFolded {
   display: block;
-  margin-top: -1.25em;
 }
 .object-column.unfolded {
   height: unset;
@@ -71,9 +70,17 @@
 .object-column.unfolded pre {
   margin-top: 0;
 }
+.object-column.unfolded .whenFolded {
+  display: none;
+}
+.object-column.unfolded .whenUnfolded {
+  display: block;
+}
 </style>
 
 <script>
+import Utils from '@/utils';
+
 export default {
   name: "ResultsDetailsTableView",
   props: ["data", "sentences", "corpora", "columnHeaders", "isModal"],
@@ -154,7 +161,8 @@ export default {
       const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
       if (content)
         return `<button onclick="this.parentNode.classList.toggle('unfolded')"> </button>
-          <pre>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
+          <pre class='whenFolded'>${Utils.dictToStr(jsonContent)}</pre>
+          <pre class='whenUnfolded'>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
       else
         return '';
     }

@@ -75,6 +75,12 @@ const Utils = {
     formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
       return date ? moment(date).format(format) : '';
     },
+    dictToStr: (dict) => {
+      const vals = [];
+      for (let k of Object.keys(dict).sort())
+        vals.push(dict[k]);
+      return vals.join(" ")
+    }
   }
 
   export default Utils
