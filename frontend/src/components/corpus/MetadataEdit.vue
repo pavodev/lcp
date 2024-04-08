@@ -46,23 +46,40 @@
       </div>
     </div>
     <div class="row">
-      <div class="col-6">
+      <div class="col-12">
         <div class="mb-3">
           <label for="corpus-license" class="form-label">License</label>
-          <div class="form-check" v-for="licence in licenses" :key="licence.name">
-            <input
-              class="form-check-input"
-              type="radio"
-              v-model="corpusData.meta.license"
-              :id="licence.tag"
-              :value="licence.tag"
-              :selected="corpusData.meta.license === licence.tag"
-            >
-            <label class="form-check-label" :for="licence.tag">
-              <img :src="`/licenses/${licence.tag}.png`" :alt="licence.name" class="license-img" />
-              <a :href="licence.url" target="_blank">{{ licence.name }}</a>
-            </label>
+          <div class="row">
+            <div class="col-3 mb-2" v-for="licence in licenses" :key="licence.name">
+              <div class="form-check">
+                <input
+                  class="form-check-input"
+                  type="radio"
+                  v-model="corpusData.meta.license"
+                  :id="licence.tag"
+                  :value="licence.tag"
+                  :selected="corpusData.meta.license === licence.tag"
+                >
+                <label class="form-check-label" :for="licence.tag" v-if="licence.tag == 'user-defined'">
+                  User defined
+                </label>
+                <label class="form-check-label" :for="licence.tag" v-else>
+                  <img :src="`/licenses/${licence.tag}.png`" :alt="licence.name" class="license-img" />
+                  <a :href="licence.url" target="_blank">
+                    <FontAwesomeIcon :icon="['fas', 'link']" />
+                    {{ licence.name }}
+                  </a>
+                </label>
+              </div>
+            </div>
           </div>
+        </div>
+      </div>
+      <div class="col-12" v-if="corpusData.meta.license == 'user-defined'">
+        <div class="mb-3">
+          <label for="corpus-description" class="form-label">User defined licence</label>
+          <textarea class="form-control" placeholder="User defined licence" v-model="userLicense"
+            id="user-defined-licence" style="height: 100px"></textarea>
         </div>
       </div>
     </div>
@@ -91,6 +108,7 @@ export default {
   props: ["corpus"],
   data() {
     return {
+      userLicense: this.corpus.meta && this.corpus.meta.userLicense ? atob(this.corpus.meta.userLicense) : "",
       licenses: [
         {tag: "cc-by", name: "CC-BY", url: "https://creativecommons.org/licenses/by/4.0/"},
         {tag: "cc-by-sa", name: "CC-BY-SA", url: "https://creativecommons.org/licenses/by-sa/4.0/"},
@@ -98,10 +116,16 @@ export default {
         {tag: "cc-by-nc-sa", name: "CC-BY-NC-SA", url: "https://creativecommons.org/licenses/by-nc-sa/4.0/"},
         {tag: "cc-by-nd", name: "CC-BY-ND", url: "https://creativecommons.org/licenses/by-nd/4.0/"},
         {tag: "cc-by-nc-nd", name: "CC-BY-NC-ND", url: "https://creativecommons.org/licenses/by-nc-nd/4.0/"},
-        {tag: "cc-zero", name: "CC-0", url: "https://creativecommons.org/publicdomain/zero/1.0/"}
+        {tag: "cc-zero", name: "CC-0", url: "https://creativecommons.org/publicdomain/zero/1.0/"},
+        {tag: "user-defined", name: "User defined", url: null}
       ],
       corpusData: { ...this.corpus },
     }
+  },
+  watch: {
+    userLicense() {
+      this.corpusData.meta.userLicense = btoa(this.userLicense);
+    },
   },
 }
 </script>
