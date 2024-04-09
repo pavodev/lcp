@@ -179,7 +179,9 @@ class QueryService:
         job: Job | None
         try:
             job = Job.fetch(hashed, connection=self.app["redis"])
-            is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
+            first_job_id = cast(str, kwargs.get("first_job", str(job.id)))
+            first_job = Job.fetch(first_job_id, connection=self.app["redis"])
+            is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
                 if is_first and not kwargs["full"]:

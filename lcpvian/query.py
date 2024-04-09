@@ -26,6 +26,7 @@ from typing import cast
 from aiohttp import web
 from rq.job import Job
 
+from .export import export
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
@@ -189,7 +190,6 @@ async def _query_iteration(
 
     return qi
 
-
 @ensure_authorised
 @logged
 async def query(
@@ -238,6 +238,14 @@ async def query(
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
+            elif qi.to_export:
+                if len(qi.done_batches) == len(qi.all_batches):
+                    await export(qi.app, qi.to_export, qi.first_job)
+                elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
+                    qi_job = cast(Job, qi.job)
+                    qi_job.meta["to_export"] = qi.to_export
+                    qi_job.save_meta()
+                    pass
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)

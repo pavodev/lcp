@@ -1,5 +1,3 @@
-# TODO: detect closed stream and stop job
-
 from aiohttp import web
 from asyncio import sleep
 from rq import Callback, Queue
@@ -11,7 +9,7 @@ from typing import Any, cast
 from .callbacks import _export_complete, _general_failure
 from .jobfuncs import _db_query, _swissdox_export
 from .typed import JSONObject
-from .utils import _determine_language, format_meta_lines
+from .utils import _determine_language, format_meta_lines, push_msg
 
 import json
 import re
@@ -254,6 +252,8 @@ async def export_swissdox(
 
     documents: dict[str, Any] = {"columns": set({}), "rows": [], "ranges": dict({})}
     for j in meta_jobs:
+        if not j.result:
+            continue
         cols_from_sql = re.match(
             r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+",
             j.kwargs.get("meta_query", ""),
@@ -305,7 +305,8 @@ async def export_swissdox(
             next_lower_range = u + 1
         if next_lower_range in documents["ranges"]:
             current_range["upper"] = documents["ranges"][next_lower_range]["upper"]
-    doc_ranges.append(current_range)
+    if current_range:
+        doc_ranges.append(current_range)
 
     doc_multi_range = ",".join([f"[{r['lower']},{r['upper']})" for r in doc_ranges])
     doc_multi_range = "'{" + doc_multi_range + "}'::int8multirange"
@@ -427,5 +428,24 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 corpus_conf
             )
         )
+
+    room = cast(str, payload.get("room", ""))
+    user = cast(str, payload.get("user", ""))
+    export_msg: JSONObject = cast(
+        JSONObject,
+        {
+            "room": room,
+            "user": user,
+            "action": "started_export",
+            "job_id": str(job.id),
+        },
+    )
+    await push_msg(
+        app["websockets"],
+        room,
+        export_msg,
+        skip=None,
+        just=(room, user),
+    )
 
     return job
