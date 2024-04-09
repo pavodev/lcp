@@ -220,7 +220,7 @@ async def _lama_user_details(headers: Headers) -> JSONObject:
 
 
 async def _lama_project_user_update(
-    headers: Headers, project_id: UUID, user_id: UUID, data: dict
+    headers: Headers, project_id: str, user_id: str, data: dict
 ) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/account/{user_id}/modify"
     async with ClientSession() as session:
@@ -244,7 +244,7 @@ async def _lama_invitation_remove(
 
 
 async def _lama_invitation_add(
-    headers: Headers, project_id: UUID, invitation_data: dict
+    headers: Headers, project_id: str, invitation_data: dict
 ) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/invitation/add"
     async with ClientSession() as session:
@@ -255,7 +255,7 @@ async def _lama_invitation_add(
             return jso
 
 
-async def _lama_project_users(headers: Headers, project_id: UUID) -> JSONObject:
+async def _lama_project_users(headers: Headers, project_id: str) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/accounts"
     async with ClientSession() as session:
         async with session.get(
