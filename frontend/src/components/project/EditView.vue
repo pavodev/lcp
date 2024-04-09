@@ -85,40 +85,93 @@
               </div>
             </div>
             <div class="tab-pane fade" id="nav-edit-permissions" role="tabpanel">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th scope="col">Email</th>
-                    <th scope="col">Invited</th>
-                    <th scope="col">Active</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <!-- <tr v-for="invitation in projectUsers.invited" :key="invitation.id">
-                      <td v-html="invitation.email"></td>
-                      <td v-html="formatDate(invitation.addedOn)"></td>
+              <div class="alert alert-dark" role="alert">
+                <h4>Users</h4>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Name</th>
+                      <th scope="col">Email</th>
+                      <th scope="col">Admin</th>
+                      <th scope="col">Active</th>
+                    </tr>
+                  </thead>
+                  <tbody v-if="users">
+                    <tr v-for="user in sortByEmail(users.registred)" :key="user.id">
+                      <td v-html="user.displayName"></td>
                       <td>
-                        <button
-                          class="btn btn-sm btn-danger ms-1 mb-1"
-                          @click="removeInvitaion(invitation.id)"
+                        <span v-html="user.email"></span>
+                        <div
+                          v-if="user.invitedFromEmail && user.email != user.invitedFromEmail"
+                          class="small-text"
                         >
-                          <FontAwesomeIcon :icon="['fas', 'trash']" />
-                          Remove
-                        </button>
+                          (invitation sent to {{ user.invitedFromEmail }})
+                        </div>
                       </td>
-                    </tr> -->
-                </tbody>
-              </table>
+                      <td>
+                        <div class="form-check form-switch">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            :disabled="user.id == lamaUserId"
+                            :checked="user.isAdmin"
+                            @click="updateUser(user.id, { admin: !user.isAdmin })"
+                          />
+                        </div>
+                      </td>
+                      <td>
+                        <div class="form-check form-switch">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            :disabled="user.id == lamaUserId"
+                            :checked="user.isActive"
+                            @click="updateUser(user.id, { active: !user.isActive })"
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="alert alert-dark" role="alert">
+                <h4>Invited users</h4>
+                <table class="table">
+                  <thead>
+                    <tr>
+                      <th scope="col">Email</th>
+                      <th scope="col">Invited</th>
+                      <th scope="col">Active</th>
+                    </tr>
+                  </thead>
+                  <tbody v-if="users">
+                    <tr v-for="invitation in users.invited" :key="invitation.id">
+                        <td v-html="invitation.email"></td>
+                        <td v-html="formatDate(invitation.addedOn)"></td>
+                        <td>
+                          <button
+                            class="btn btn-sm btn-danger ms-1 mb-1"
+                            @click="removeInvitation(invitation.id)"
+                          >
+                            <FontAwesomeIcon :icon="['fas', 'trash']" />
+                            Remove
+                          </button>
+                        </td>
+                      </tr>
+                  </tbody>
+                </table>
+              </div>
 
-              <div class="mt-5">
+              <div class="mt-5 mb-2">
                 <label for="email" class="form-label">Invite people</label>
-                <div class="input-group mb-3">
+                <div class="input-group mb-1">
                   <input type="text" v-model="inviteEmails" class="form-control"
                     placeholder="Email (comma-separated list of email addresses)" />
                   <button class="btn btn-outline-secondary" type="button" id="inviteButton" @click="inviteUsers">
                     Invite
                   </button>
                 </div>
+                <small id="inviteHelp" class="form-text text-muted">Separate multiple email addresses with a comma.</small>
               </div>
             </div>
             <div class="tab-pane fade" id="nav-edit-api" role="tabpanel">
@@ -166,7 +219,13 @@
   </div>
 </template>
 
-<style scoped></style>
+<style scoped>
+.alert table th,
+.alert table td {
+  background: transparent;
+  border-color: #c4c4c4;
+}
+</style>
 
 <script>
 import Utils from "@/utils";
@@ -189,17 +248,15 @@ export default {
       currentProject: currentProject,
       startDateState: this.project.startDate ? true : false,
       visibility: this.project.additionalData && this.project.additionalData.visibility ? this.project.additionalData.visibility : "private",
-      // model: {
-      //   title: this.project.title,
-      //   startDate: this.project.startDate,
-      //   finishDate: this.project.finishDate,
-      //   description: this.project.description,
-      // },
+      inviteEmails: '',
+      users: [],
+      lamaUserId: null,
     };
   },
-  // computed: {
-  //   ...mapState(useUserStore, ["userData"]),
-  // },
+  mounted() {
+    this.loadUsers();
+    this.lamaUserId = useUserStore().userData.user.id;
+  },
   watch: {
     visibility() {
       if (this.currentProject.additionalData == undefined) {
@@ -209,6 +266,28 @@ export default {
     }
   },
   methods: {
+    updateUser(userId, data) {
+      useProjectStore().updateUser(this.currentProject.id, userId, {
+        projectId: this.currentProject.id,
+        userId: userId,
+        ...data
+      }).then(() => {
+        this.loadUsers()
+      });
+    },
+    removeInvitation(invitationId) {
+      useProjectStore().removeInvitation(this.currentProject.id, invitationId).then(() => {
+        this.loadUsers()
+      });
+    },
+    sortByEmail(list) {
+      return list ? list.sort((a, b) => a.email.localeCompare(b.email)) : [];
+    },
+    loadUsers() {
+      useProjectStore().getUsers(this.currentProject.id).then((data) => {
+        this.users = data;
+      })
+    },
     makeDataPublic() {
       console.log("makeDataPublic")
     },
@@ -235,6 +314,13 @@ export default {
         //   timeout: 120,
         // });
       }
+    },
+    async inviteUsers() {
+      let emails = this.inviteEmails.split(",").map((email) => email.trim()).filter(email => Utils.validateEmail(email));
+      useProjectStore().inviteUsers(this.currentProject.id, emails).then(() => {
+        this.loadUsers()
+        this.inviteEmails = '';
+      });
     },
     validate() {
       this.titleState = this.currentProject.title.trim().replace(/\s\s+/g, ' ').length >= 7;
