@@ -224,13 +224,6 @@ def _query(
     if do_full:
         can_send = False
 
-    export_payload = {}
-    all_batches_done = len(done_part) == len(job.kwargs["all_batches"])
-    if all_batches_done and (to_export := first_job.meta.get("to_export", False)):
-        export_payload = to_export
-    if export_payload:
-        can_send = False
-
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
@@ -264,7 +257,6 @@ def _query(
             "status": status,
             "job": job.id,
             "action": action,
-            "export": export_payload,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
@@ -308,7 +300,7 @@ def _query(
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "total_results_so_far": total_found,
-            "action": "background_job_progress",
+            "action": "background_job_progress"
         }
 
     job.meta["payload"] = jso
@@ -469,6 +461,7 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
+    submit_payload["to_export"] = depended.meta.get("to_export", "")
 
     # Do not send if this is an "export" query
     can_send = not base.meta.get("to_export", False) and (

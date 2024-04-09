@@ -121,7 +121,7 @@
               data-bs-target="#exportModal"
             >
               <FontAwesomeIcon :icon="['fas', 'file-export']" />
-              Export preview
+              Export
             </button>
 
             <button
@@ -1271,8 +1271,11 @@ export default {
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
     async exportResults() {
-      // TODO: check whether all the results have already been fetched first?
-      this.submit(null, true, false, /*full=*/true, /*to_export=*/{'tsv':'dump', 'swissdox':'swissdox'}[this.exportFormat||'dump']);
+      const to_export = {
+        'tsv':'dump',
+        'swissdox':'swissdox'
+      }[this.exportFormat||'dump'];
+      this.submit(null, true, false, /*full=*/true, /*to_export=*/to_export);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);

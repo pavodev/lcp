@@ -99,6 +99,7 @@ class QueryIteration:
     query_depends: list[str] = field(default_factory=list)
     dep_chain: list[str] = field(default_factory=list)
     post_processes: dict[int, Any] = field(default_factory=dict)
+    to_export: dict[str, Any] = field(default_factory=dict)
 
     def make_query(self) -> None:
         """
@@ -195,19 +196,6 @@ class QueryIteration:
             total_duration = prev.kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
-            if request_data.get("to_export", False):
-                first_job: Job = (
-                    prev
-                    if first_job_id == previous
-                    else Job.fetch(first_job_id, connection=request.app["redis"])
-                )
-                first_job.meta["to_export"] = {
-                    "format": str(request_data["to_export"]),
-                    "config": request.app["config"][
-                        str(first_job.kwargs.get("corpora", [None])[0])
-                    ],
-                }
-                first_job.save_meta()  # type: ignore
         is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
@@ -238,6 +226,13 @@ class QueryIteration:
             # "is_vian": is_vian,
             "is_vian": False
         }
+        if request_data.get("to_export", False):
+            details["to_export"] = {
+                "format": str(request_data["to_export"]),
+                "config": request.app["config"][str(corpora_to_use[0])],
+                "user": request_data.get("user", ""),
+                "room": request_data.get("room", "")
+            }
         made: Self = cls(**details)
         made.get_word_count()
         return made
@@ -311,6 +306,7 @@ class QueryIteration:
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
+            to_export=self.to_export
         )
 
         queue = "query" if not self.full else "background"
@@ -614,6 +610,7 @@ class QueryIteration:
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
             "is_vian": manual.get("is_vian", False),
+            "to_export": manual.get("to_export", job.kwargs.get("to_export", ""))
         }
         return cls(**details)
 
