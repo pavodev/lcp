@@ -1,75 +1,133 @@
 [build-system]
-requires = [
-    "setuptools",
-    "mypy",
-    "types-redis",
-    "types-aiofiles",
-    "python-dotenv",
-    "yarl",
-    "async_timeout",
-    "brotli",
-    "aiodns",
-    "asyncpg",
-    "SQLAlchemy",
-    "greenlet",
-    "uvloop",
-    "lark"
-]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "lcpvian"
 authors = [
     {name = "Danny McDonald", email = "daniel.mcdonald@uzh.ch"},
+    {name = "Jeremy Zehr", email = "jeremy.zehr@uzh.ch"},
 ]
 description = "Linguistics web app"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 keywords = ["corpus", "linguistics", "nlp"]
 license = {text = "MIT"}
 classifiers = [
-    "Framework :: aiohttp",
     "Programming Language :: Python :: 3",
-]
-dependencies = [
-    "backports.zoneinfo @ http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1",
-    "pip == 23.2.1",
-    "pyjwt == 2.8.0",
-    "aiohttp == 3.8.5",
-    "aiohttp-cors == 0.7.0",
-    "aiohttp-catcher == 0.3.2",
-    "python-dotenv == 1.0.0",
-    "bcrypt == 4.0.1",
-    "sshtunnel == 0.4.0",
-    "aiohttp-devtools == 1.0.post0",
-    "Brotli == 1.0.9",
-    "aiodns == 3.0.0",
-    "yarl == 1.9.2",
-    "pycares == 4.3.0",
-    "uvloop == 0.17.0",
-    "redis < 5.0.0",
-    "asyncpg == 0.28.0",
-    "rq == 1.15.1",
-    "types-redis < 5.0.0.0",
-    "lark == 1.1.5",
-    "py7zr == 0.20.5",
-    "gunicorn == 20.1.0",
-    "aiofiles == 23.1.0",
-    "types-aiofiles == 23.1.0.2",
-    "types-decorator == 5.1.8.4",
-    "aiocontextvars == 0.2.2",
-    "typing_extensions == 4.7.1",
-    "urllib3 == 2.0.4",
-    "sentry_sdk == 1.29.2",
-    "setuptools == 68.0.0",
-    "mypy == 1.4.1",
-    "types-psutil == 5.9.5.12",
-    "SQLAlchemy == 2.0.19",
-    "greenlet == 2.0.2",
-    "paramiko == 3.3.1"
+    "Development Status :: 3 - Beta",
+    "Intended Audience :: Researchers",
+    "Environment :: Web Environment",
 ]
 dynamic = ["version"]
 
-[project.optional-dependencies]
-pdf = ["ReportLab==1.2", "RXP"]
-rest = ["docutils==0.3", "pack ==1.1, ==1.3"]
+[build-system]
+requires = ["setuptools >= 69.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["lcpvian"]
+
+requires-python = ">=3.11"
+dependencies = [
+  "aiocontextvars~=0.2.2",
+  "aiodns~=3.2.0",
+  "aiofiles~=23.2.1",
+  "aiohttp~=3.9.3",
+  "aiohttp-catcher~=0.3.2",
+  "aiohttp-cors~=0.7.0",
+  "asyncpg~=0.29.0",
+  "bcrypt~=4.1.2",
+  "Brotli~=1.1.0",
+  "certifi~=2024.2.2",
+  "cffi~=1.16.0",
+  "click~=8.1.7",
+  "cryptography~=42.0.5",
+  "devtools~=0.12.2",
+  "executing~=2.0.1",
+  "greenlet~=3.0.3",
+  "gunicorn~=21.2.0",
+  "hatch-mypyc~=0.16.0",
+  "lark~=1.1.9",
+  "mypy~=1.9.0",
+  "numpy~=1.26.4",
+  "packaging~=24.0",
+  "pandas~=2.2.1",
+  "pandas-stubs~=2.2.1.240316",
+  "paramiko~=3.4.0",
+  "psutil~=5.9.8",
+  "py7zr~=0.21.0",
+  "pyarrow~=15.0.2",
+  "pycares~=4.4.0",
+  "pyjwt~=2.8.0",
+  "python-dotenv~=1.0.1",
+  "pytz~=2024.1",
+  "redis~=5.0.3",
+  "rq~=1.16.1",
+  "sentry-sdk~=1.44.0",
+  "SQLAlchemy~=2.0.29",
+  "sshtunnel~=0.4.0",
+  "types-aiofiles~=23.2.0.20240331",
+  "types-decorator~=5.1.8.20240310",
+  "types-psutil~=5.9.5.20240316",
+  "types-pytz~=2024.1.0.20240203",
+  "types-redis~=4.6.0.20240311",
+  "urllib3~=2.2.1",
+  "uvloop~=0.19.0",
+]
+
+[project.urls]
+Repository = "https://github.com/liri-uzh/lcp.git"
+
+[project.scripts]
+lcpvian = "lcpvian.app:start"
+
+[tool.hatch.version]
+path = "lcpvian/__init__.py"
+
+[tool.hatch.build]
+packages = ["lcpvian", "frontend"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "frontend",
+]
+exclude = [
+  "frontend/dist",
+  "frontend/node_modules",
+  "frontend/public",
+  "frontend/.gitignore",
+]
+
+[tool.hatch.envs.default]
+dependencies = ["black", "mypy"]
+
+[tool.hatch.envs.default.scripts]
+format-check = [
+  "black --version",
+  "black --check --diff .",
+]
+format = [
+  "black .",
+  "format-check",
+]
+typecheck = [
+  "mypy lcpvian --install-types --non-interactive",
+]
+
+[tool.mypy]
+python_version = "3.11"
+ignore_missing_imports = true
+
+[tool.hatch.build.targets.wheel.hooks.mypyc]
+dependencies = ["hatch-mypyc"]
+include = ["lcpvian"]
+exclude = [
+  "lcpvian/__main__.py", "lcpvian/nomypypy"]
+
+[build.targets.wheel.hooks.mypyc.options]
+opt_level = "3"
+
+[tool.poetry.dependencies]
+abstract-query = { path = "./abstract-query", develop = true }
+lcp-upload = { path = "./lcp-upload", develop = true }
