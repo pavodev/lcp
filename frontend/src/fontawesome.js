@@ -30,6 +30,8 @@ import {
   faTable,
   faTrash,
   faUser,
+  faUserGear,
+  faUsers,
   faVideo,
   faVolumeDown,
   faVolumeHigh,
@@ -69,6 +71,8 @@ library.add(faPowerOff);
 library.add(faTable);
 library.add(faTrash);
 library.add(faUser);
+library.add(faUserGear);
+library.add(faUsers);
 library.add(faVideo);
 library.add(faVolumeDown);
 library.add(faVolumeLow);
