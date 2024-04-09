@@ -219,6 +219,52 @@ async def _lama_user_details(headers: Headers) -> JSONObject:
             return jso
 
 
+async def _lama_project_user_update(
+    headers: Headers, project_id: UUID, user_id: UUID, data: dict
+) -> JSONObject:
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/account/{user_id}/modify"
+    async with ClientSession() as session:
+        async with session.post(
+            url, json=data, headers=_extract_lama_headers(headers)
+        ) as resp:
+            jso: JSONObject = await resp.json()
+            return jso
+
+
+async def _lama_invitation_remove(
+    headers: Headers, invitation_id: str
+) -> JSONObject:
+    url = f"{os.environ['LAMA_API_URL']}/invitation/{invitation_id}/remove"
+    async with ClientSession() as session:
+        async with session.post(
+            url, headers=_extract_lama_headers(headers)
+        ) as resp:
+            jso: JSONObject = await resp.json()
+            return jso
+
+
+async def _lama_invitation_add(
+    headers: Headers, project_id: UUID, invitation_data: dict
+) -> JSONObject:
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/invitation/add"
+    async with ClientSession() as session:
+        async with session.post(
+            url, json=invitation_data, headers=_extract_lama_headers(headers)
+        ) as resp:
+            jso: JSONObject = await resp.json()
+            return jso
+
+
+async def _lama_project_users(headers: Headers, project_id: UUID) -> JSONObject:
+    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/accounts"
+    async with ClientSession() as session:
+        async with session.get(
+            url, headers=_extract_lama_headers(headers)
+        ) as resp:
+            jso: JSONObject = await resp.json()
+            return jso
+
+
 async def _lama_project_create(
     headers: Headers, project_data: dict[str, str]
 ) -> JSONObject:
@@ -255,7 +301,9 @@ async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
     """
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/create"
     async with ClientSession() as session:
-        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
+        async with session.post(
+            url, headers=_extract_lama_headers(headers)
+        ) as resp:
             jso: JSONObject = await resp.json(content_type=None)
             return jso
 

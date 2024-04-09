@@ -1,7 +1,7 @@
 const { defineConfig } = require("@vue/cli-service");
-const isVian = process.env.APP_TYPE == "vian"
+const appTypes = ["lcp", "vian", "ofrom", "catchphrase"]
 const webpack = require('webpack');
-const appType = isVian ? "vian" : "lcp";
+const appType = appTypes.includes(process.env.APP_TYPE) ? process.env.APP_TYPE : "lcp";
 const monacoWebpackPlugin = require("monaco-editor-webpack-plugin");
 const {gitDescribeSync} = require('git-describe');
 

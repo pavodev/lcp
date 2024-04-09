@@ -5,7 +5,6 @@ export const useCorpusStore = defineStore("corpusData", {
   state: () => ({
     queryData: null,
     corpora: [],
-    vianCorpus: [],
   }),
   getters: {},
   actions: {

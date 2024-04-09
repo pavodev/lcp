@@ -18,6 +18,7 @@ import {
   faFileExport,
   faForward,
   faGear,
+  faGlobe,
   faHouse,
   faLink,
   faMagnifyingGlass,
@@ -29,6 +30,8 @@ import {
   faTable,
   faTrash,
   faUser,
+  faUserGear,
+  faUsers,
   faVideo,
   faVolumeDown,
   faVolumeHigh,
@@ -56,6 +59,7 @@ library.add(faExpand);
 library.add(faFileExport);
 library.add(faForward);
 library.add(faGear);
+library.add(faGlobe);
 library.add(faHouse);
 library.add(faLink);
 library.add(faMagnifyingGlass);
@@ -67,6 +71,8 @@ library.add(faPowerOff);
 library.add(faTable);
 library.add(faTrash);
 library.add(faUser);
+library.add(faUserGear);
+library.add(faUsers);
 library.add(faVideo);
 library.add(faVolumeDown);
 library.add(faVolumeLow);

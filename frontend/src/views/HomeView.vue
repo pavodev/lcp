@@ -3,7 +3,7 @@
     <div class="container">
       <div class="row mt-4">
         <div class="col">
-          <Title :title="appName" :isItalic="true" />
+          <Title :title="appName" :isItalic="appType == 'lcp' ? false : true" />
         </div>
         <div class="col mt-1 text-end">
           <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#newProjectModal">
@@ -41,6 +41,10 @@
                 :class="index == -1 ? 'active' : ''" :id="`nav-${project.id}-tab`" data-bs-toggle="tab"
                 :data-bs-target="`#nav-${project.id}`" type="button" role="tab" :aria-controls="`nav-${project.id}`"
                 aria-selected="true" @click="currentProject = project">
+                <FontAwesomeIcon
+                  :icon="projectIcons(project)"
+                  class="me-1"
+                />
                 {{ project.title }}
                 <span class="api-badge">({{ project.corpora.length }})</span>
                 <span class="ms-1 api-badge" v-if="project.api">[API]</span>
@@ -52,7 +56,7 @@
           <div v-for="(project, index) in projectsGroups" :key="project.id" class="tab-pane fade"
             :class="index == -1 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
             aria-labelledby="nav-results-tab">
-            <div class="alert alert-success" role="alert" v-if="index != -1 && project.isAdmin">
+            <div class="alert alert-success" role="alert" v-if="index != -1">
               <div class="row">
                 <div class="col-11">
                   <div class="row">
@@ -78,7 +82,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="col-1 text-end">
+                <div class="col-1 text-end" v-if="project.isAdmin">
                   <!-- <span v-if="project.api">
                     <p class="mb-0">API Key: {{ project.api.key }}</p>
                     <p class="">Secret Key: {{ project.api.secretPart }}</p>
@@ -143,7 +147,12 @@
                   <div class="details-button icon-3 tooltips" title="Corpus details">
                     <FontAwesomeIcon :icon="['fas', 'circle-info']" />
                   </div>
-                  <div class="details-button icon-4 tooltips" title="Corpus edit" @click.stop="openCorpusEdit(corpus)">
+                  <div
+                    v-if="project.isAdmin"
+                    class="details-button icon-4 tooltips"
+                    title="Corpus edit"
+                    @click.stop="openCorpusEdit(corpus)"
+                  >
                     <FontAwesomeIcon :icon="['fas', 'gear']" />
                   </div>
                 </div>
@@ -340,6 +349,7 @@ export default {
       allowProjectModalSave: false,
       modalProjectData: null,
       appName: config.appName,
+      appType: config.appType,
       // tooltips: [],
       corporaFilter: "",
       currentProject: null,
@@ -357,6 +367,19 @@ export default {
     ProjectEdit,
   },
   methods: {
+    projectIcons(project) {
+      let icons = ['fas']
+      if (project.id == null) {
+        icons.push('globe')
+      }
+      else if (project.isAdmin) {
+        icons.push('user-gear')
+      }
+      else {
+        icons.push('users')
+      }
+      return icons
+    },
     tabsScrollLeft() {
       let left = Math.abs(parseInt(this.$refs.tabslist.style.left || 0, 10)) - this.scrollBoxSize() + 200
       if (left < 0) {
@@ -452,9 +475,9 @@ export default {
     },
     openQueryWithCorpus(corpus) {
       if (config.appType == "vian") {
-        router.push(`/player/${corpus.meta.id}/${corpus.shortname}`);
+        router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       } else {
-        router.push(`/query/${corpus.meta.id}/${corpus.shortname}`);
+        router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       }
     },
     calculateSum(array) {

@@ -38,6 +38,8 @@ from .lama_user_data import lama_user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
 from .project import project_create, project_update
+from .project import project_users_invite, project_users
+from .project import project_users_invitation_remove, project_user_update
 from .query import query, refresh_config
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
@@ -195,6 +197,10 @@ async def create_app(test: bool = False) -> web.Application:
         ("/project/{project}", "POST", project_update),
         ("/project/{project}/api/create", "POST", project_api_create),
         ("/project/{project}/api/{key}/revoke", "POST", project_api_revoke),
+        ("/project/{project}/users", "GET", project_users),
+        ("/project/{project}/user/{user}/update", "POST", project_user_update),
+        ("/project/{project}/users/invite", "POST", project_users_invite),
+        ("/project/{project}/users/invitation/{invitation}", "DELETE", project_users_invitation_remove),
         ("/query", "POST", query),
         ("/settings", "GET", lama_user_data),
         ("/store", "POST", store_query),

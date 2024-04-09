@@ -107,7 +107,7 @@ export default {
       let matrix = []
       let linksDict = {}
       let groups = {}
-      data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array 
+      data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array
         ? tokenIdOrArray.forEach( (tokenId) => groups[tokenId] = tokenId in groups ? groups[tokenId] : groupId )
         : groups[tokenIdOrArray] = tokenIdOrArray in groups ? groups[tokenIdOrArray] : groupId
       )
