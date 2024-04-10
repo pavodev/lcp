@@ -17,9 +17,9 @@ async def corpora(app_type: str = "all") -> JSONObject:
     """
     Helper to quickly show corpora in app
     """
-    from dotenv import load_dotenv
+    from .utils import load_env
 
-    load_dotenv(override=True)
+    load_env()
 
     headers: JSONObject = {}
     jso = {"appType": app_type, "all": True}

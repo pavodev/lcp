@@ -1,10 +1,11 @@
-import duckdb
 import json
 import logging
 import os
 import pandas
 import shutil
 import traceback
+
+import duckdb
 
 from asyncpg import Range
 from typing import Any, cast
@@ -107,9 +108,16 @@ async def _db_query(
     store: bool = False,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
-) -> list[tuple[Any, ...]] | tuple[Any, ...] | list[JSONObject] | JSONObject | list[
-    MainCorpus
-] | list[UserQuery] | list[Sentence] | None:
+) -> (
+    list[tuple[Any, ...]]
+    | tuple[Any, ...]
+    | list[JSONObject]
+    | JSONObject
+    | list[MainCorpus]
+    | list[UserQuery]
+    | list[Sentence]
+    | None
+):
     """
     The function queued by RQ, which executes our DB query
     """
@@ -152,6 +160,7 @@ async def _db_query(
             print(f"SQL error: {err}")
             raise err
 
+
 # TODO:
 # - save to proper path (based on hash) + create symlinks in projects (name queries?)
 # - handle existing duckdb files (duckdb won't overwrite)
@@ -181,7 +190,7 @@ async def _swissdox_export(
         os.mkdir(path)
 
     # Documents
-    docs_by_range: dict[int, tuple[int,str]] = {}
+    docs_by_range: dict[int, tuple[int, str]] = {}
     doc_columns = [c for c in documents["columns"] if c != "id"]
     doc_indices = []
     doc_rows = []
@@ -199,10 +208,10 @@ async def _swissdox_export(
             elif type in ("text", "string", "vector"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
-                docs_by_range[c.lower] = (c.upper,id)
+                docs_by_range[c.lower] = (c.upper, id)
                 c = str(c)
             formed_row.append(c)
-        formed_row.append( str(id) )
+        formed_row.append(str(id))
         doc_rows.append(formed_row)
     doc_columns.append("doc_id")
     doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
@@ -221,15 +230,25 @@ async def _swissdox_export(
     #     ]
     # else:
     #     tok_columns += segment_mapping["prepared"]["columnHeaders"]
-    tok_columns = ['form', 'lemma', 'upos', 'xpos', 'tense', 'voice', 'mood', 'doc_id', 'position']
+    tok_columns = [
+        "form",
+        "lemma",
+        "upos",
+        "xpos",
+        "tense",
+        "voice",
+        "mood",
+        "doc_id",
+        "position",
+    ]
     tok_indices = []
     tok_rows = []
     n_tok = 1
     for content, char_range in prepared_segments_job.result:
         if char_range.lower is None:
-            continue # Ignore segments that are not anchored
+            continue  # Ignore segments that are not anchored
         doc_id: str
-        for lower, (upper,did) in docs_by_range.items():
+        for lower, (upper, did) in docs_by_range.items():
             if lower > char_range.upper or upper < char_range.lower:
                 continue
             doc_id = str(did)
@@ -238,16 +257,16 @@ async def _swissdox_export(
             tok_indices.append(str(n_tok))
             row = []
             for col in tok_columns[0:4]:
-                row.append( str(token[column_headers.index(col)]) )
+                row.append(str(token[column_headers.index(col)]))
             if token[4]:
                 ufeat: dict = {}
                 if isinstance(token[4], str):
                     ufeat = json.loads(token[4])
                 else:
                     ufeat = token[4] or {}
-                row.append( ufeat.get("Tense", None) )
-                row.append( ufeat.get("Voice", None) )
-                row.append( ufeat.get("Mood", None) )
+                row.append(ufeat.get("Tense", None))
+                row.append(ufeat.get("Voice", None))
+                row.append(ufeat.get("Mood", None))
             else:
                 row += [None, None, None]
             row.append(doc_id)
@@ -258,26 +277,26 @@ async def _swissdox_export(
     # tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
 
     # Named entities to docs
-    ne_to_id: dict[tuple[str,str], str] = {} # map (form,type) to ne_id
-    ne_to_docs: dict[str, dict[str,int]] = {} # map ne_id to {doc_id: n}
+    ne_to_id: dict[tuple[str, str], str] = {}  # map (form,type) to ne_id
+    ne_to_docs: dict[str, dict[str, int]] = {}  # map ne_id to {doc_id: n}
 
     # Named entities
     # TODO: store named entities as a dict, whose keys are tuple[form,type]
     # if a key already exists, don't add it again (or do, whatever)
-    ne_columns: list[str] = ["form","type","ned_id"]
+    ne_columns: list[str] = ["form", "type", "ned_id"]
     ne_indices = []
     ne_rows = []
     for char_range, form, typ in named_entities_job.result:
         doc_id = ""
-        for lower, (upper,did) in docs_by_range.items():
+        for lower, (upper, did) in docs_by_range.items():
             if lower > char_range.upper or upper < char_range.lower:
                 continue
             doc_id = str(did)
             break
-        ne_id: str = ne_to_id.get((form,typ), "")
+        ne_id: str = ne_to_id.get((form, typ), "")
         if not ne_id:
-            ne_id = str(len(ne_to_id)+1)
-            ne_to_id[(form,typ)] = ne_id
+            ne_id = str(len(ne_to_id) + 1)
+            ne_to_id[(form, typ)] = ne_id
             ne_to_docs[ne_id] = {}
         ne_to_docs[ne_id][doc_id] = ne_to_docs[ne_id].get(doc_id, 0) + 1
     for (form, typ), ne_id in ne_to_id.items():
@@ -288,14 +307,16 @@ async def _swissdox_export(
 
     ne_doc_columns: list[str] = ["doc_id", "ne_id", "freq"]
     ne_doc_indices = []
-    ne_doc_rows: list[tuple[str,str,str]] = []
+    ne_doc_rows: list[tuple[str, str, str]] = []
     ne_doc_idx = 1
     for ne_id, doc_counts in ne_to_docs.items():
         for doc_id, count in doc_counts.items():
-            ne_doc_indices.append( str(ne_doc_idx) )
+            ne_doc_indices.append(str(ne_doc_idx))
             ne_doc_idx += 1
-            ne_doc_rows.append( (doc_id, ne_id, str(count)) )
-    ne_document_pandas = pandas.DataFrame(data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns)
+            ne_doc_rows.append((doc_id, ne_id, str(count)))
+    ne_document_pandas = pandas.DataFrame(
+        data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns
+    )
     # ne_document_pandas.to_feather(os.path.join(path, "namedentities.feather"))
 
     # # Zip file

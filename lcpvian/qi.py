@@ -35,7 +35,11 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
 
-from abstract_query.create import json_to_sql
+try:
+    from abstract_query.create import json_to_sql
+except:
+    from .abstract_query.create import json_to_sql
+
 from aiohttp import web
 
 # we need the below to avoid a mypy keyerror in the type annotation:
@@ -224,14 +228,14 @@ class QueryIteration:
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
             # "is_vian": is_vian,
-            "is_vian": False
+            "is_vian": False,
         }
         if request_data.get("to_export", False):
             details["to_export"] = {
                 "format": str(request_data["to_export"]),
                 "config": request.app["config"][str(corpora_to_use[0])],
                 "user": request_data.get("user", ""),
-                "room": request_data.get("room", "")
+                "room": request_data.get("room", ""),
             }
         made: Self = cls(**details)
         made.get_word_count()
@@ -306,7 +310,7 @@ class QueryIteration:
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
-            to_export=self.to_export
+            to_export=self.to_export,
         )
 
         queue = "query" if not self.full else "background"
@@ -610,7 +614,7 @@ class QueryIteration:
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
             "is_vian": manual.get("is_vian", False),
-            "to_export": manual.get("to_export", job.kwargs.get("to_export", ""))
+            "to_export": manual.get("to_export", job.kwargs.get("to_export", "")),
         }
         return cls(**details)
 

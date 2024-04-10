@@ -335,3 +335,29 @@ cloc . --exclude-dir=dist,build,node_modules,uploads,.mypy_cache,htmlcov \
        --exclude-lang=JSON \
        --not-match-f=dqd_parser
 ```
+
+
+## New build concept vis `pyproject.toml` (WIP)
+
+```bash
+
+git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/lcpvian.git
+cd lcpvian
+
+pip install --upgrade hatch hatchling poetry pip
+
+hatch build
+pip install dist/*.whl --force-reinstall
+
+# makes .env file in ~/lcp you need to configure
+lcp-setup
+
+# installs and builds frontend stuff:
+lcp-frontend-setup
+
+# runs frontend, worker and backend:
+lcp-run
+
+# run another worker:
+lcp-worker
+```

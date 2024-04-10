@@ -18,7 +18,6 @@ from collections import defaultdict, deque
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
 from aiohttp_catcher import Catcher, catch
-from dotenv import load_dotenv
 from redis import Redis
 from redis import asyncio as aioredis
 from redis.asyncio.retry import Retry as AsyncRetry
@@ -46,10 +45,11 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import TRUES, handle_lama_error, handle_timeout
+from .utils import TRUES, handle_lama_error, handle_timeout, load_env
 from .video import video
 
-load_dotenv(override=True)
+
+load_env()
 
 # this is all just a way to find out if utils (and therefore the codebase) is a c extension
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
@@ -200,7 +200,11 @@ async def create_app(test: bool = False) -> web.Application:
         ("/project/{project}/users", "GET", project_users),
         ("/project/{project}/user/{user}/update", "POST", project_user_update),
         ("/project/{project}/users/invite", "POST", project_users_invite),
-        ("/project/{project}/users/invitation/{invitation}", "DELETE", project_users_invitation_remove),
+        (
+            "/project/{project}/users/invitation/{invitation}",
+            "DELETE",
+            project_users_invitation_remove,
+        ),
         ("/query", "POST", query),
         ("/settings", "GET", lama_user_data),
         ("/store", "POST", store_query),

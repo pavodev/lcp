@@ -28,7 +28,6 @@ from typing import Any
 
 import uvloop
 
-from dotenv import load_dotenv
 from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
@@ -38,7 +37,9 @@ from sqlalchemy.pool import NullPool
 
 from sshtunnel import SSHTunnelForwarder
 
-load_dotenv(override=True)
+from .utils import load_env
+
+load_env()
 
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
@@ -86,10 +87,7 @@ PORT = int(os.getenv("SQL_PORT", 25432))
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 
-redis_conn = Redis.from_url(
-    f"{REDIS_URL}/{REDIS_DB_INDEX}",
-    health_check_interval=10
-)
+redis_conn = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}", health_check_interval=10)
 
 
 tunnel: SSHTunnelForwarder

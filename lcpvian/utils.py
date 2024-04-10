@@ -9,8 +9,10 @@ import math
 import numpy as np
 import os
 import re
+import shutil
 import traceback
 
+from dotenv import load_dotenv
 from asyncpg import Range
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
@@ -28,7 +30,6 @@ except ImportError:
 from redis import Redis as RedisConnection
 
 from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser
-
 
 from redis.utils import HIREDIS_AVAILABLE
 
@@ -141,6 +142,49 @@ class CustomEncoder(json.JSONEncoder):
         return default
 
 
+def load_env() -> None:
+    """
+    Load .env from ~/lcp/.env if present, otherwise from current dir/dotenv defaults
+    """
+    current = os.path.join(os.getcwd(), ".env")
+    installed_path = os.path.expanduser("~/lcp/.env")
+    loaded = False
+    if os.path.isfile(installed_path):
+        try:
+            load_dotenv(installed_path, override=True)
+            print(f"Loaded .env from {installed_path}")
+            return None
+        except:
+            print(f"Could not load {installed_path}...")
+    if not loaded:
+        load_dotenv(override=True)
+        print(f"Loaded .env from {current}")
+    return None
+
+
+def setup() -> None:
+    """
+    Command user can run as `lcp-setup` -- right now it just makes a .env
+
+    We could add argparsing, input() based formatting of the .env, etc etc.
+    """
+    home = os.path.expanduser("~/lcp")
+    os.makedirs(home, exist_ok=True)
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    env_ex = os.path.join(root, ".env.example")
+    print("EX", env_ex, os.path.isfile(env_ex))
+    out = os.path.join(home, ".env")
+    if not os.path.isfile(out):
+        shutil.copyfile(env_ex, out)
+        print(
+            f"""
+            Created: {out} ...
+            Edit this file with needed values for the app to run,
+            then run `lcp` and `lcp-worker` commands to start app
+            """.strip()
+        )
+
+
 def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     auth decorator, still wip
@@ -183,9 +227,9 @@ def _extract_lama_headers(headers: Mapping[str, Any]) -> dict[str, str]:
     retval = {
         "X-API-Key": os.environ["LAMA_API_KEY"],
         "X-Remote-User": headers.get("X-Remote-User"),
-        "X-Display-Name": headers["X-Display-Name"]
-        if headers.get("X-Display-Name")
-        else "",
+        "X-Display-Name": (
+            headers["X-Display-Name"] if headers.get("X-Display-Name") else ""
+        ),
         "X-Edu-Person-Unique-Id": headers.get("X-Edu-Person-Unique-Id"),
         "X-Home-Organization": headers.get("X-Home-Organization"),
         "X-Schac-Home-Organization": headers.get("X-Schac-Home-Organization"),
@@ -231,14 +275,10 @@ async def _lama_project_user_update(
             return jso
 
 
-async def _lama_invitation_remove(
-    headers: Headers, invitation_id: str
-) -> JSONObject:
+async def _lama_invitation_remove(headers: Headers, invitation_id: str) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/invitation/{invitation_id}/remove"
     async with ClientSession() as session:
-        async with session.post(
-            url, headers=_extract_lama_headers(headers)
-        ) as resp:
+        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
             jso: JSONObject = await resp.json()
             return jso
 
@@ -258,9 +298,7 @@ async def _lama_invitation_add(
 async def _lama_project_users(headers: Headers, project_id: str) -> JSONObject:
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/accounts"
     async with ClientSession() as session:
-        async with session.get(
-            url, headers=_extract_lama_headers(headers)
-        ) as resp:
+        async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
             jso: JSONObject = await resp.json()
             return jso
 
@@ -301,9 +339,7 @@ async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
     """
     url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/create"
     async with ClientSession() as session:
-        async with session.post(
-            url, headers=_extract_lama_headers(headers)
-        ) as resp:
+        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
             jso: JSONObject = await resp.json(content_type=None)
             return jso
 
