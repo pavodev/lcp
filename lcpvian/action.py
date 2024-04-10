@@ -29,27 +29,23 @@ KILL_PORT = f"kill -9 `lsof -t -i:{os.getenv('AIO_PORT', '9090')}`"
 
 def build():
     print("=============CALL BUILD================")
-    os.chdir(FRONTEND_DIR)
-    return subprocess.Popen(FE_BUILD.split())
+    return subprocess.Popen(FE_BUILD.split(), cwd=FRONTEND_DIR)
 
 
 def edrop():
     print("=============CALL EDROP================")
-    os.chdir(EDROPS_DIR)
-    return subprocess.Popen(FE_INSTALL.split())
+    return subprocess.Popen(FE_INSTALL.split(), cwd=EDROPS_DIR)
 
 
 def install():
     print("=============CALL INSTALL================")
     edrop().wait()
-    os.chdir(FRONTEND_DIR)
-    return subprocess.Popen(FE_INSTALL.split())
+    return subprocess.Popen(FE_INSTALL.split(), cwd=FRONTEND_DIR)
 
 
 def serve():
     print("=============CALL SERVE================")
-    os.chdir(FRONTEND_DIR)
-    return subprocess.Popen(FE_SERVE.split())
+    return subprocess.Popen(FE_SERVE.split(), cwd=FRONTEND_DIR)
 
 
 def setup():
@@ -70,10 +66,10 @@ def start_all() -> None:
     commands = [serve()]
     sleep(15)
     print("START WORKER")
-    commands.append(subprocess.Popen([WORKER_START]))
+    commands.append(subprocess.Popen([WORKER_START], cwd=ROOT))
     sleep(15)
     print("START LCP")
-    commands.append(subprocess.Popen([LCP]))
+    commands.append(subprocess.Popen([LCP], cwd=ROOT))
     sleep(15)
     print(f"Running {len(commands)} commands")
     try:
