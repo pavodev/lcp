@@ -172,7 +172,6 @@ def setup() -> None:
     os.makedirs(home, exist_ok=True)
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     env_ex = os.path.join(root, ".env.example")
-    print("EX", env_ex, os.path.isfile(env_ex))
     out = os.path.join(home, ".env")
     if not os.path.isfile(out):
         shutil.copyfile(env_ex, out)
