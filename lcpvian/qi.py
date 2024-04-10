@@ -546,7 +546,13 @@ class QueryIteration:
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
         seg_name = f"prepared_{name}{underlang}"
-        script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
+        annotations: str = ""
+        for layer, properties in config['layer'].items():
+            if layer == seg or properties.get("contains","") != config["token"]:
+                continue
+            annotations = ", annotations"
+            break
+        script = f"SELECT {name}_id, off_set, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
         return script
 
     @classmethod

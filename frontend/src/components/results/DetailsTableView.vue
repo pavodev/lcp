@@ -3,11 +3,17 @@
     <table class="table mb-5" :class="isModal ? 'modal-table' : ''">
       <tbody>
         <tr>
+          <td v-if="sentences.length > 2" key="annotations"></td>
           <td v-for="(header, index) in filteredColumnHeaders" :key="`tr-header-${index}`">
             <th>{{ header }}</th>
           </td>
         </tr>
         <tr v-for="(token, tIndex) in sentences[1]" :key="`tr-token-${tIndex}`" :class="rowClasses(tIndex)">
+          <td
+            v-if="sentences.length > 2"
+            v-html="annotations(tIndex, sentences)"
+            key="annotations"
+          ></td>
           <td v-for="(column, cIndex) in filteredColumnHeaders" :key="`td-${tIndex}-${cIndex}`">
             <span v-if="column == 'head'" v-html="headToken(token, tIndex)"> </span>
             <span
@@ -165,6 +171,18 @@ export default {
           <pre class='whenUnfolded'>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
       else
         return '';
+    },
+    annotations(tIndex, sentence) {
+      const [offset, _, annotations] = sentence; // eslint-disable-line no-unused-vars
+      let ret = [];
+      for (let [layer, entities] of Object.entries(annotations)) {
+        for (let entity of entities) {
+          if (entity.tokens.indexOf(tIndex + offset)<0)
+            continue
+          ret.push(`${layer}: ${Utils.dictToStr(entity.attributes)}`)
+        }
+      }
+      return ret.join(", ");
     }
   },
 };

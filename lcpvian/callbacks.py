@@ -431,6 +431,16 @@ def _sentences(
             full,
         )
 
+    for sent in (result or []):
+        if len(sent) < 4:
+            continue
+        if not sent[3]:
+            continue
+        sent_id = str(sent[0])
+        if sent_id not in to_send.get(-1, {}):
+            continue
+        to_send[-1][sent_id].append(sent[3])
+
     more_data = not job.kwargs["no_more_data"]
     submit_query = job.kwargs["start_query_from_sents"]
     if submit_query and more_data:
