@@ -95,6 +95,7 @@ import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
 import NotificationView from "@/components/NotificationView.vue";
+import config from "@/config";
 
 export default {
   name: "AppLCP",
@@ -105,6 +106,7 @@ export default {
     }
   },
   mounted() {
+    document.title = config.appName;
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();
   },

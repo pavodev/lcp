@@ -20,7 +20,7 @@
       <tbody>
         <tr
           v-for="(item, resultIndex) in results"
-          :key="resultIndex"
+          :key="`tr-results-${resultIndex}`"
           :data-index="resultIndex"
         >
           <td scope="row" class="results">

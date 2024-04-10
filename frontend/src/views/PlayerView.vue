@@ -80,7 +80,7 @@
           <div :class="mainVideo == 1 ? 'active' : ''">
             <video ref="videoPlayer1" @timeupdate="timeupdate">
               <source
-                :src="baseVideoUrl + currentDocument[2][0]"
+                :src="baseMediaUrl + currentDocument[2][0]"
                 type="video/mp4"
               />
             </video>
@@ -91,7 +91,7 @@
           >
             <video ref="videoPlayer2">
               <source
-                :src="baseVideoUrl + currentDocument[2][1]"
+                :src="baseMediaUrl + currentDocument[2][1]"
                 type="video/mp4"
               />
             </video>
@@ -102,7 +102,7 @@
           >
             <video ref="videoPlayer3">
               <source
-                :src="baseVideoUrl + currentDocument[2][2]"
+                :src="baseMediaUrl + currentDocument[2][2]"
                 type="video/mp4"
               />
             </video>
@@ -113,7 +113,7 @@
           >
             <video ref="videoPlayer4">
               <source
-                :src="baseVideoUrl + currentDocument[2][3]"
+                :src="baseMediaUrl + currentDocument[2][3]"
                 type="video/mp4"
               />
             </video>
@@ -636,7 +636,7 @@ export default {
       playerSpeed: 1,
       mainVideo: 1,
       mainAudio: 1,
-      baseVideoUrl: `${config.baseVideoUrl}/e822e422-32e1-4635-a0c9-0366970affeb/`,
+      baseMediaUrl: `${config.baseMediaUrl}/e822e422-32e1-4635-a0c9-0366970affeb/`,
       volume: 0.5,
       frameRate: 25.0,
 
