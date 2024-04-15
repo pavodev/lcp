@@ -15,7 +15,9 @@ from .utils import load_env
 FE_INSTALL = "yarn install"
 FE_BUILD = "yarn build"
 FE_SERVE = "yarn serve"
+FE_YARN = "yarn"
 WORKER_START = "lcp-worker"
+NPM_INSTALL = "npm install"
 LCP = "lcp"
 
 load_env()
@@ -23,33 +25,41 @@ load_env()
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
+
+FRONTEND_SRC = os.path.join(FRONTEND_DIR, "src")
 EDROPS_DIR = os.path.join(ROOT, "vian-eventdrops")
 KILL_PORT = f"kill -9 `lsof -t -i:{os.getenv('AIO_PORT', '9090')}`"
 
 
+def npm_install():
+    return subprocess.Popen(NPM_INSTALL.split(), cwd=FRONTEND_SRC)
+
+
+def yarn():
+    return subprocess.Popen(FE_YARN.split(), cwd=FRONTEND_SRC)
+
+
 def build():
-    print("=============CALL BUILD================")
-    return subprocess.Popen(FE_BUILD.split(), cwd=FRONTEND_DIR)
+    install().wait()
+    return subprocess.Popen(FE_BUILD.split(), cwd=FRONTEND_SRC)
 
 
 def edrop():
-    print("=============CALL EDROP================")
     return subprocess.Popen(FE_INSTALL.split(), cwd=EDROPS_DIR)
 
 
 def install():
-    print("=============CALL INSTALL================")
-    edrop().wait()
-    return subprocess.Popen(FE_INSTALL.split(), cwd=FRONTEND_DIR)
+    return subprocess.Popen(FE_INSTALL.split(), cwd=FRONTEND_SRC)
 
 
 def serve():
-    print("=============CALL SERVE================")
-    return subprocess.Popen(FE_SERVE.split(), cwd=FRONTEND_DIR)
+    return subprocess.Popen(FE_SERVE.split(), cwd=FRONTEND_SRC)
 
 
 def setup():
     print("=============CALL SETUP================")
+    edrop().wait()
+    yarn().wait()
     install().wait()
     build().wait()
     print("Finished! You can now run `lcp-frontend-serve` to run the frontend...")
@@ -65,10 +75,8 @@ def start_all() -> None:
         pass
     commands = [serve()]
     sleep(15)
-    print("START WORKER")
     commands.append(subprocess.Popen([WORKER_START], cwd=ROOT))
     sleep(15)
-    print("START LCP")
     commands.append(subprocess.Popen([LCP], cwd=ROOT))
     sleep(15)
     print(f"Running {len(commands)} commands")
