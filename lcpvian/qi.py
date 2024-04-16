@@ -447,6 +447,7 @@ class QueryIteration:
         for layer in parents_with_attributes:
             alias = layer
             layer_mapping = config["mapping"]["layer"].get(layer, {})
+            mapping_attrs = layer_mapping.get("attributes", {})
             attributes: dict[str, Any] = {
                 k: v for k, v in config["layer"][layer].get("attributes", {}).items()
             }
@@ -480,11 +481,21 @@ class QueryIteration:
             for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
-                # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
-                if attr == "meta":
-                    lb, rb = "{", "}"
-                    attr_name = f"({attr_name} #>> '{lb}{rb}')::jsonb"
-                selects.append(f'{alias}."{attr}" AS {layer}_{attr}')
+                attr_mapping = mapping_attrs.get(attr, {})
+                # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
+                if attr_mapping.get("type","") == "relation":
+                    attr_table = attr_mapping.get("name","")
+                    # Join the lookup table
+                    joins.append(
+                        f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
+                    )
+                    # Select the attribute from the lookup table
+                    selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
+                else:
+                    # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+                    if attr == "meta":
+                        attr_name = f"meta::jsonb"
+                    selects.append(f'{alias}.{attr_name} AS {layer}_{attr}')
             # Will get char_range from the appropriate table
             char_range_table: str = alias
             # join tables
