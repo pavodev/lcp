@@ -246,6 +246,7 @@ export default {
     return {
       currentTab: "metadata",
       currentProject: currentProject,
+      titleState: false,
       startDateState: this.project.startDate ? true : false,
       visibility: this.project.additionalData && this.project.additionalData.visibility ? this.project.additionalData.visibility : "private",
       inviteEmails: '',
