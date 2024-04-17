@@ -84,6 +84,8 @@ export default {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
             let text = attribute.replace(/@/gi, "_");
             let attributes = corpus.layer[layer].attributes[attribute];
+            if ("name" in attributes)
+              text = attributes.name;
             let attributeData = {
               id: attributeId,
               text: text,
