@@ -174,12 +174,13 @@ export default {
     },
     annotations(tIndex, sentence) {
       const [offset, _, annotations] = sentence; // eslint-disable-line no-unused-vars
+      const tokenIndexOffset = tIndex + offset;
       let ret = [];
       for (let [layer, entities] of Object.entries(annotations)) {
-        for (let entity of entities) {
-          if (entity.tokens.indexOf(tIndex + offset)<0)
+        for (let [entityOffset, entityLength, attributes] of entities) {
+          if (tokenIndexOffset < entityOffset || tokenIndexOffset >= (entityOffset+entityLength))
             continue
-          ret.push(`${layer}: ${Utils.dictToStr(entity.attributes)}`)
+          ret.push(`${layer}: ${Utils.dictToStr(attributes)}`)
         }
       }
       return ret.join(", ");
