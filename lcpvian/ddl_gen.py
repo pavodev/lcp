@@ -34,6 +34,7 @@ class DataNeededLater:
     constraints: list[str] = field(default_factory=list)
     prep_seg_create: str = ""
     prep_seg_insert: str = ""
+    prep_seg_updates: list[str] = field(default_factory=list)
     m_token_n: str = ""
     m_token_freq: str = ""
     m_lemma_freqs: str = ""
@@ -58,6 +59,7 @@ class Globs:
         self.num_partitions: int = 0
         self.prep_seg_create: str = ""
         self.prep_seg_insert: str = ""
+        self.prep_seg_updates: list[str] = []
         self.m_token_n: str = ""
         self.m_token_freq: str = ""
         self.m_lemma_freqs: str = ""
@@ -66,6 +68,9 @@ class Globs:
         self.perms: str = ""
 
 
+LB = "{"
+RB = "}"
+SG = "'"
 class DDL:
     """
     base DDL class for DB entities
@@ -92,7 +97,8 @@ class DDL:
             CREATE TABLE prepared_{x.rstrip("0")} (
                 {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
                 off_set     int,
-                content     jsonb
+                content     jsonb,
+                annotations jsonb
             );"""
         )
 
@@ -101,7 +107,8 @@ class DDL:
             WITH ins AS (
                    SELECT {x}
                         , min({y}) AS off_set
-                        , to_jsonb(array_agg(toks ORDER BY {y}))
+                        , to_jsonb(array_agg(toks ORDER BY {y})) AS content
+                        , '{LB}{RB}'::jsonb AS annotations
                      FROM (
                           SELECT {x}
                                , {y}
@@ -112,6 +119,35 @@ class DDL:
              INSERT INTO {z.rstrip("0")}
              SELECT *
                FROM ins;"""
+        )
+
+        self.update_prep_segs: Callable[[str, list[str], str, str, list[tuple]], str] = lambda layer, attrs, seg, tok, joins: dedent(
+            f"""
+            UPDATE prepared_{seg} ps
+            SET annotations = jsonb_set(ps.annotations, '{LB}LB{RB}{layer}{LB}RB{RB}', cte.annotations::jsonb)
+            FROM (
+                SELECT
+                    sub.{seg}_id,
+                    array_to_json(array_agg(sub.annotations)) annotations
+                FROM (
+                    SELECT
+                        subs.{seg}_id,
+                        jsonb_build_array((array_agg({tok}_id))[1], array_length(array_agg({tok}_id),1), json_build_object({', '.join([SG+a+SG+', subs.'+a for a in attrs])})) AS annotations
+                    FROM (
+                        SELECT
+                            t.{seg}_id,
+                            ann.{layer.lower()}_id{', '+', '.join([('ann_'+a+'.' if a in [j[1] for j in joins] else 'ann.')+a+' AS '+a for a in attrs]) if attrs else ''},
+                            ann.char_range,
+                            t.{tok}_id
+                        FROM {LB}batch{RB} t
+                        CROSS JOIN {layer.lower()} ann
+                        {'JOIN '+' JOIN '.join([j[0]+' ann_'+j[1]+' ON ann.'+j[1]+'_id = ann_'+j[1]+'.'+j[1]+'_id' for j in joins]) if joins else ''}
+                        WHERE t.char_range && ann.char_range
+                    ) subs
+                    GROUP BY {layer.lower()}_id{(', '+', '.join(attrs) if attrs else '')}, {seg}_id
+                ) sub GROUP BY {seg}_id
+            ) cte
+            WHERE cte.{seg}_id = ps.{seg}_id;"""
         )
 
         self.m_token_n: Callable[[str, str], str] = lambda x, y: dedent(
@@ -909,6 +945,32 @@ class CTProcessor:
 
         self.globals.prep_seg_insert = f"\n\n{searchpath}\n{query}"
 
+        self.globals.prep_seg_updates = []
+        for layer, props in self.corpus_temp['layer'].items():
+            if layer == segname or props.get("contains") != tokname:
+                continue
+            attrs = []
+            joins = []
+            for a, p in props.get("attributes", {}).items():
+                attrs.append(a)
+                if p.get("type") not in ("text", "dict"):
+                    continue
+                mapping: dict[str,Any] = cast(dict[str, Any], self.globals.mapping['layer'])
+                info: dict[str,Any] = mapping.get(layer,{}).get("attributes",{}).get(a,{})
+                assert "name" in mapping and mapping.get("type") == "relation", LookupError(f"Invalid mapping for {layer}->{a}")
+                joins.append((mapping["name"],a))
+            update: str = (
+                # layer, attrs, seg, tok, joins
+                self.ddl.update_prep_segs(
+                    layer,
+                    attrs,
+                    segname,
+                    tokname,
+                    joins
+                )
+            )
+            self.globals.prep_seg_updates.append(update)
+
         # todo: check this again
         for i in range(1, self.globals.num_partitions):
             if i == self.globals.num_partitions - 1 and i > 1:
@@ -963,6 +1025,7 @@ def generate_ddl(
         formed_constraints,
         globs.prep_seg_create,
         globs.prep_seg_insert,
+        globs.prep_seg_updates,
         globs.m_token_n,
         globs.m_token_freq,
         globs.m_lemma_freqs,
@@ -988,6 +1051,7 @@ def main(corpus_template_path: str) -> None:
         print(ref)
     print(data["prep_seg_create"])
     print(data["prep_seg_insert"])
+    print(data["prep_seg_updates"])
     print(data["m_token_n"])
     print(data["m_token_freq"])
     print(data["m_lemma_freqs"])

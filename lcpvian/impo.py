@@ -130,6 +130,7 @@ class Importer:
         self.schema = self.template["schema_name"]
         self.batches = cast(list[str], data["batchnames"])
         self.insert = cast(str, data["prep_seg_insert"])
+        self.updates = cast(list[str], data["prep_seg_updates"])
         self.constraints = cast(list[str], data["constraints"])
         self.create = cast(str, data["prep_seg_create"])
         self.m_token_freq = cast(str, data["m_token_freq"])
@@ -433,8 +434,12 @@ class Importer:
         await self.run_script(self.create)
         msg = f"Running {len(self.batches)} insert tasks:\n{self.insert}\n"
         self.update_progress(msg)
-        inserts = [self.insert.format(batch=batch) for batch in self.batches]
+        inserts = [self.insert.format('{}', batch=batch) for batch in self.batches]
         await self.process_data(inserts, self.run_script, progress=progress)
+        msg = f"Running {len(self.updates)} * {len(self.batches)} prepared annotations tasks:\n{self.updates}\n"
+        self.update_progress(msg)
+        updates = [u.format(LB='{', RB='}', batch=batch) for batch in self.batches for u in self.updates]
+        await self.process_data(updates, self.run_script, progress=progress)
         return None
 
     async def collocations(self) -> None:
