@@ -162,6 +162,8 @@ let decorations = null;
 let suggestValuesCommandId = null; // Reference to a monaco command to immediately show the suggestion modal again
 let suggestValuesArray = null;  // This is either null, or set to an array of the relevant categorical values
 
+const KEYWORDS = ['sequence','set','group','EXISTS','NOT','plain','analysis','context','entities'];
+
 export default {
   name: "EditorView",
   data() {
@@ -207,126 +209,127 @@ export default {
                 insertText: `"${item}"`,
                 range: range
               }))
-              : [
-                  {
-                    label: "Token",
-                    kind: monaco.languages.CompletionItemKind.Text,
-                    insertText: "Token\n\tform = test1",
-                    range: range
-                  },
-                  {
-                    label: "Segment",
-                    kind: monaco.languages.CompletionItemKind.Text,
-                    insertText: "Segment s1",
-                    range: range,
-                  },
-                  // {
-                  //   label: "NOT",
-                  //   kind: monaco.languages.CompletionItemKind.Keyword,
-                  //   insertText: "NOT\n\t",
-                  //   range: range,
-                  // },
-                  ...this.columnHeaders().map(item => {
-                    return {
-                      label: item,
-                      kind: monaco.languages.CompletionItemKind.Keyword,
-                      insertText: `${item} = `,
-                      range: range,
-                      command: {
-                        id: suggestValuesCommandId,
-                        title: "insert values",
-                        arguments: [item]
-                      }
-                    }
-                  }),
-                  {
-                    label: "from",
-                    kind: monaco.languages.CompletionItemKind.Keyword,
-                    insertText: "from = ",
-                    range: range,
-                  },
-                  {
-                    label: "head",
-                    kind: monaco.languages.CompletionItemKind.Keyword,
-                    insertText: "head = ",
-                    range: range,
-                  },
-                  {
-                    label: "dep",
-                    kind: monaco.languages.CompletionItemKind.Keyword,
-                    insertText: "dep = ",
-                    range: range,
-                  },
-                  {
-                    label: "to",
-                    kind: monaco.languages.CompletionItemKind.Keyword,
-                    insertText: "to = ",
-                    range: range,
-                  },
-                  {
-                    label: "label",
-                    kind: monaco.languages.CompletionItemKind.Keyword,
-                    insertText: "label = ",
-                    range: range,
-                  },
-                  // {
-                  //   label: "pos",
-                  //   kind: monaco.languages.CompletionItemKind.Keyword,
-                  //   insertText: "pos = ",
-                  //   range: range,
-                  // },
-                  // {
-                  //   label: "AND",
-                  //   kind: monaco.languages.CompletionItemKind.Keyword,
-                  //   insertText: "AND\n\t",
-                  //   range: range,
-                  // },
-                  // {
-                  //   label: "OR",
-                  //   kind: monaco.languages.CompletionItemKind.Keyword,
-                  //   insertText: "OR\n\t",
-                  //   range: range,
-                  // },
-                  {
-                    label: "DepRel",
-                    kind: monaco.languages.CompletionItemKind.Text,
-                    insertText: "DepRel dr1\n\t",
-                    insertTextRules:
-                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    range: range,
-                  },
-                  {
-                    label: "group",
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: "group g\n\tt1\n\tt2",
-                    insertTextRules:
-                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: "If-Else Statement",
-                    range: range,
-                  },
-                  {
-                    label: "distance",
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: "distance\n\tfrom = \n\tto = \n\tvalue = ",
-                    insertTextRules:
-                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: "If-Else Statement",
-                    range: range,
-                  },
-                  {
-                    label: "sequence",
-                    kind: monaco.languages.CompletionItemKind.Snippet,
-                    insertText: "sequence\n\t",
-                    insertTextRules:
-                      monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-                    documentation: "If-Else Statement",
-                    range: range,
-                  },
-                ];
+              : this.mainSuggestions(range)
+              // : [
+              //     {
+              //       label: "Token",
+              //       kind: monaco.languages.CompletionItemKind.Text,
+              //       insertText: "Token\n\tform = test1",
+              //       range: range
+              //     },
+              //     {
+              //       label: "Segment",
+              //       kind: monaco.languages.CompletionItemKind.Text,
+              //       insertText: "Segment s1",
+              //       range: range,
+              //     },
+              //     // {
+              //     //   label: "NOT",
+              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
+              //     //   insertText: "NOT\n\t",
+              //     //   range: range,
+              //     // },
+              //     ...this.columnHeaders().map(item => {
+              //       return {
+              //         label: item,
+              //         kind: monaco.languages.CompletionItemKind.Keyword,
+              //         insertText: `${item} = `,
+              //         range: range,
+              //         command: {
+              //           id: suggestValuesCommandId,
+              //           title: "insert values",
+              //           arguments: [item]
+              //         }
+              //       }
+              //     }),
+              //     {
+              //       label: "from",
+              //       kind: monaco.languages.CompletionItemKind.Keyword,
+              //       insertText: "from = ",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "head",
+              //       kind: monaco.languages.CompletionItemKind.Keyword,
+              //       insertText: "head = ",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "dep",
+              //       kind: monaco.languages.CompletionItemKind.Keyword,
+              //       insertText: "dep = ",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "to",
+              //       kind: monaco.languages.CompletionItemKind.Keyword,
+              //       insertText: "to = ",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "label",
+              //       kind: monaco.languages.CompletionItemKind.Keyword,
+              //       insertText: "label = ",
+              //       range: range,
+              //     },
+              //     // {
+              //     //   label: "pos",
+              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
+              //     //   insertText: "pos = ",
+              //     //   range: range,
+              //     // },
+              //     // {
+              //     //   label: "AND",
+              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
+              //     //   insertText: "AND\n\t",
+              //     //   range: range,
+              //     // },
+              //     // {
+              //     //   label: "OR",
+              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
+              //     //   insertText: "OR\n\t",
+              //     //   range: range,
+              //     // },
+              //     {
+              //       label: "DepRel",
+              //       kind: monaco.languages.CompletionItemKind.Text,
+              //       insertText: "DepRel dr1\n\t",
+              //       insertTextRules:
+              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              //       range: range,
+              //     },
+              //     {
+              //       label: "group",
+              //       kind: monaco.languages.CompletionItemKind.Snippet,
+              //       insertText: "group g\n\tt1\n\tt2",
+              //       insertTextRules:
+              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              //       documentation: "If-Else Statement",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "distance",
+              //       kind: monaco.languages.CompletionItemKind.Snippet,
+              //       insertText: "distance\n\tfrom = \n\tto = \n\tvalue = ",
+              //       insertTextRules:
+              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              //       documentation: "If-Else Statement",
+              //       range: range,
+              //     },
+              //     {
+              //       label: "sequence",
+              //       kind: monaco.languages.CompletionItemKind.Snippet,
+              //       insertText: "sequence\n\t",
+              //       insertTextRules:
+              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
+              //       documentation: "If-Else Statement",
+              //       range: range,
+              //     },
+              //   ];
             suggestValuesArray = null;
             return { suggestions: suggestions };
           },
-          triggerCharacters: ["="]
+          triggerCharacters: ["="," "]
         });
         this.languageObj = dispose
       },
@@ -378,6 +381,38 @@ export default {
     }, true);
   },
   methods: {
+    mainSuggestions(range) {
+      const s = [];
+      for (let [layer,props] of Object.entries(this.corpora.corpus.layer)) {
+        s.push({
+          label: layer,
+          kind: monaco.languages.CompletionItemKind.Text,
+          insertText: layer,
+          range: range
+        });
+        for (let a in props.attributes)
+          s.push({
+          label: a,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: `${a} = `,
+          range: range,
+          command: {
+            id: suggestValuesCommandId,
+            title: "insert values",
+            arguments: [a]
+          }
+        });
+      }
+      for (let k of KEYWORDS)
+        s.push({
+          label: k,
+          kind: monaco.languages.CompletionItemKind.Keyword,
+          insertText: k+' ',
+          range: range
+        });
+      console.log("suggestions", s);
+      return s;
+    },
     columnHeaders() {
       let keywords = []
       if (this.corpora && this.corpora.corpus) {
@@ -404,6 +439,12 @@ export default {
     },
     triggerAutocomplete(prompt,prefixWithSpace=false) {
       if (!this.corpora || !this.corpora.corpus) return;
+      console.log("prompt", prompt);
+      if (prompt in this.corpora.corpus.layer)
+        return setTimeout( ()=>{
+          suggestValuesArray = [" "+prompt.charAt(0).toLowerCase()]; 
+          editor.trigger('', 'editor.action.triggerSuggest', {});
+        } , 1 );
       // eslint-disable-next-line no-unused-vars
       Object.entries(this.corpora.corpus.layer).forEach( ([_,{attributes}]) => {
         let props = (attributes||{})[prompt];
