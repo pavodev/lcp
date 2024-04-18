@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">LCP</a>
+        <a class="navbar-brand" href="/"><i>catchphrase</i></a>
         <button
           class="navbar-toggler"
           type="button"
@@ -81,7 +81,8 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <router-view class="app-content-box" />
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -94,11 +95,12 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
 
 export default {
-  name: "AppLCP",
+  name: "AppCatchphrase",
   data() {
     console.log("Application version:", process.env.GIT_HASH)
     return {
@@ -121,6 +123,7 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),
@@ -134,6 +137,9 @@ export default {
 </script>
 
 <style scoped>
+.navbar-brand {
+  font-style: italic;
+}
 .version-number {
   font-size: 80% !important;
   opacity: 0.75;

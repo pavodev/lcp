@@ -525,6 +525,7 @@ class QueryService:
         kwargs = {
             "store": True,
             "config": True,
+            "refresh_config": True,
         }
         params: dict[str, str | int | None | JSONObject] = {
             "corpus_id": corpus_id,

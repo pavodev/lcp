@@ -6,8 +6,9 @@ const testUserHeaders = {
   "X-Mail": "firstname.lastname@uzh.ch",
   "X-Edu-Person-Unique-Id": "test_user_uniq_id@uzh.ch",
 }
+// const testUserHeaders = {}
 
-if (process.env.APP_TYPE == "vian") {
+if (process.env.APP_TYPE == "videoscope") {
   if (process.env.NODE_ENV == "production") {
     config = {
       appName: "videoscope",
@@ -38,7 +39,7 @@ if (process.env.APP_TYPE == "vian") {
     };
   }
 }
-else if (process.env.APP_TYPE == "ofrom") {
+else if (process.env.APP_TYPE == "soundscript") {
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "soundscript",
@@ -86,13 +87,6 @@ else if (process.env.APP_TYPE == "catchphrase") {
       apiHeaders: {},
       sentryDSN: null,
     };
-  } else if (process.env.NODE_ENV === "dev") {
-    config = {
-      appName: "catchphrase",
-      apiUrl: "http://localhost:9090",
-      apiHeaders: {},
-      sentryDSN: null,
-    };
   } else {
     // development
     config = {
@@ -123,13 +117,6 @@ else {
       apiHeaders: {},
       sentryDSN: null,
     };
-  } else if (process.env.NODE_ENV === "dev") {
-    config = {
-      appName: "LCP",
-      apiUrl: "http://localhost:9090",
-      apiHeaders: {},
-      sentryDSN: null,
-    };
   } else {
     // development
     config = {
@@ -143,5 +130,28 @@ else {
   }
 }
 config.appType = process.env.APP_TYPE;
+
+if (process.env.NODE_ENV == "production") {
+  config['appLinks'] = {
+    "catchphrase": "https://catchphrase.linguistik.uzh.ch",
+    "soundscript": "https://soundscript.linguistik.uzh.ch",
+    "videoscope": "https://videoscope.linguistik.uzh.ch",
+  }
+}
+else if (process.env.NODE_ENV == "staging") {
+  config['appLinks'] = {
+    "catchphrase": "https://catchphrase.test.linguistik.uzh.ch",
+    "soundscript": "https://soundscript.test.linguistik.uzh.ch",
+    "videoscope": "https://videoscope.test.linguistik.uzh.ch"
+  }
+}
+else {
+  config['appLinks'] = {
+    "catchphrase": "http://localhost:8081",
+    "soundscript": "http://localhost:8082",
+    "videoscope": "http://localhost:8083",
+
+  }
+}
 
 export default config;

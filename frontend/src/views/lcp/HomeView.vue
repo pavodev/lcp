@@ -2,20 +2,25 @@
   <div class="home">
     <div class="container">
       <div class="row mt-4">
-        <div class="col">
-          <Title :title="appName" :isItalic="appType == 'lcp' ? false : true" />
-        </div>
-        <div class="col mt-1 text-end">
-          <button
-            type="button"
-            class="btn btn-secondary btn-sm"
-            data-bs-toggle="modal"
-            data-bs-target="#newProjectModal"
-            @click="modalIndexKey++"
-          >
-            <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
-            Add new group
-          </button>
+        <div class="col-8">
+          <Title title="LiRI Corpus Platform" />
+          <p>
+            The LiRI Corpus Platform (LCP) is a software system for handling and querying corpora of different kinds. Users can query corpora directly from their browser, and upload their own corpora using a command-line interface.
+          </p>
+          <p>
+            <a :href="appLinks['catchphrase']" target="_blank" class="btn btn-primary me-1 btn-catchphrase">
+              <FontAwesomeIcon :icon="['fas', 'font']" class="me-2" />
+              <i>catchphrase</i>
+            </a>
+            <a :href="appLinks['soundscript']" target="_blank" class="btn btn-primary me-1 btn-soundscript">
+              <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
+              <i>soundscript</i>
+            </a>
+            <a :href="appLinks['videoscope']" target="_blank" class="btn btn-primary me-1 btn-videoscope">
+              <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
+              <i>videoscope</i>
+            </a>
+          </p>
         </div>
       </div>
       <div class="row mt-3">
@@ -71,42 +76,31 @@
           <div v-for="(project, index) in projectsGroups" :key="project.id" class="tab-pane fade"
             :class="index == -1 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
             aria-labelledby="nav-results-tab">
-            <div class="alert alert-success" role="alert" v-if="index != -1">
+            <div class="alert alert-success" role="alert" v-if="index != -1 && project.description">
               <div class="row">
                 <div class="col-11">
                   <div class="row">
-                    <div class="col-2">
+                    <div class="col-3">
                       Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
                     </div>
-                    <div class="col-2">
+                    <div class="col-3">
                       Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
                     </div>
-                    <div class="col-2">
+                    <!-- <div class="col-2">
                       Institution: <b>{{ project.institution }}</b>
-                    </div>
-                    <div class="col-2">
+                    </div> -->
+                    <div class="col-3">
                       API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
                     </div>
-                    <div class="col-2">
+                    <!-- <div class="col-3">
                       Visibility: <b>{{ project.additionalData && project.additionalData.visibility ? project.additionalData.visibility : "private" }}</b>
-                    </div>
+                    </div> -->
                   </div>
-                  <div class="row">
+                  <div class="row" v-if="project.description">
                     <div class="col-12">
                       Description: <b>{{ project.description }}</b>
                     </div>
                   </div>
-                </div>
-                <div class="col-1 text-end" v-if="project.isAdmin">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-light"
-                    data-bs-toggle="modal"
-                    data-bs-target="#editProjectModal"
-                    @click="modalIndexKey++"
-                  >
-                    <FontAwesomeIcon :icon="['fas', 'gear']" />
-                  </button>
                 </div>
               </div>
             </div>
@@ -144,12 +138,37 @@
                         v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`" />
                     </p>
                   </div>
-                  <div
-                    class="details-button icon-1 tooltips"
-                    title="Query corpus"
-                    @click.stop="openQueryWithCorpus(corpus)"
-                  >
+                  <div class="details-button icon-1 tooltips">
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+                    <FontAwesomeIcon class="ms-1" :icon="['fas', 'caret-down']" />
+                    <div class="dropdown-app-content">
+                      <a
+                        :href="getAppLink('catchphrase', corpus)"
+                        target="_blank"
+                        @click.stop
+                      >
+                        <FontAwesomeIcon :icon="['fas', 'font']" class="me-2" />
+                        <i>catchphrase</i>
+                      </a>
+                      <a
+                        :href="getAppLink('soundscript', corpus)"
+                        v-if="['audio', 'video'].includes(corpus.meta.dataType)"
+                        target="_blank"
+                        @click.stop
+                      >
+                        <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
+                        <i>soundscript</i>
+                      </a>
+                      <a
+                        :href="getAppLink('videoscope', corpus)"
+                        v-if="['video'].includes(corpus.meta.dataType)"
+                        target="_blank"
+                        @click.stop
+                      >
+                        <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
+                        <i>videoscope</i>
+                      </a>
+                    </div>
                   </div>
                   <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus webpage"
                     :disabled="!corpus.meta.url" target="_blank" @click.stop>
@@ -215,43 +234,14 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
-            <div class="row mb-2">
-              <div class="col-12">
-                <div
-                  class="btn btn-primary btn-sm btn-catchphrase me-1 tooltips"
-                  @click="openQueryWithCorpus(corpusModal)"
-                  data-bs-dismiss="modal"
-                  title="Query corpus with catchphrase"
-                >
-                  <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" class="me-2" />
-                  <i>catchphrase</i>
-                </div>
-                <div
-                  class="btn btn-primary btn-sm btn-soundscript me-1 tooltips"
-                  @click="openQueryWithCorpus(corpusModal)"
-                  data-bs-dismiss="modal"
-                  title="Query corpus with soundscript"
-                  v-if="['audio', 'video'].includes(corpusModal.meta.dataType)"
-                >
-                  <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
-                  <i>soundscript</i>
-                </div>
-                <div
-                  class="btn btn-primary btn-sm btn-videoscope me-1 tooltips"
-                  @click="openQueryWithCorpus(corpusModal)"
-                  data-bs-dismiss="modal"
-                  title="Query corpus with videoscope"
-                  v-if="['video'].includes(corpusModal.meta.dataType)"
-                >
-                  <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
-                  <i>videoscope</i>
-                </div>
-              </div>
-            </div>
             <div class="row">
               <div class="col-5">
                 <div class="title mb-0">
                   <span>{{ corpusModal.meta.name }}</span>
+                  <div class="icon-1 btn btn-primary btn-sm horizontal-space" title="Query corpus"
+                    @click="openQueryWithCorpus(corpusModal)" data-bs-dismiss="modal">
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+                  </div>
                 </div>
                 <p class="author mb-0" v-if="corpusModal.meta.author">
                   by {{ corpusModal.meta.author }}
@@ -395,6 +385,7 @@ export default {
       modalProjectData: null,
       appName: config.appName,
       appType: config.appType,
+      appLinks: config.appLinks,
       // tooltips: [],
       corporaFilter: "",
       currentProject: null,
@@ -522,16 +513,16 @@ export default {
         router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       }
     },
-    // getAppLink(appType, corpus) {
-    //   let appLink = config.appLinks[appType]
-    //   if (["catchphrase", "soundscript"].includes(appType)) {
-    //     appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-    //   }
-    //   else {
-    //     appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-    //   }
-    //   return appLink
-    // },
+    getAppLink(appType, corpus) {
+      let appLink = config.appLinks[appType]
+      if (["catchphrase", "soundscript"].includes(appType)) {
+        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      else {
+        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      return appLink
+    },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
@@ -750,6 +741,7 @@ export default {
 .corpus-block {
   border: 1px solid #d4d4d4;
   border-radius: 5px;
+  /* padding: 20px; */
   cursor: pointer;
   position: relative;
   height: 233px;
@@ -844,6 +836,28 @@ details-button:disabled {
   opacity: 0.5;
 }
 
+.dropdown-app-content {
+  display: none;
+  position: absolute;
+  background-color: #f9f9f9;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0,0,0,0.2);
+  z-index: 100;
+}
+
+.dropdown-app-content a {
+  color: black;
+  padding: 12px 16px;
+  text-decoration: none;
+  display: block;
+  transition: all 0.3s;
+}
+
+.dropdown-app-content a:hover {
+  color: black;
+  background-color: #dfdfdf;
+}
+
 .corpus-block:hover .details-button {
   opacity: 1;
 }
@@ -859,6 +873,7 @@ details-button:disabled {
   padding: 15px 10px 10px 15px;
   color: #fff;
   border-radius: 40px 0 0;
+  width: 55px;
 }
 
 .details-button.icon-1:hover {
@@ -890,15 +905,15 @@ details-button:disabled {
 }
 
 .details-button.icon-2 {
-  right: 55px;
+  right: 65px;
 }
 
 .details-button.icon-3 {
-  right: 90px;
+  right: 100px;
 }
 
 .details-button.icon-4 {
-  right: 125px;
+  right: 135px;
 }
 
 .horizontal-space {

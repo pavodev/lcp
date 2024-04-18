@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/"><i>soundscript</i></a>
+        <a class="navbar-brand" href="/">LCP</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -22,7 +22,7 @@
                 Home
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -30,7 +30,7 @@
                 />
                 Query
               </router-link>
-            </li>
+            </li> -->
             <li class="nav-item">
               <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
                 <FontAwesomeIcon
@@ -81,7 +81,9 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <HomeView class="app-content-box" />
+    <!-- <router-view /> -->
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -94,11 +96,13 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
+import HomeView from "@/views/lcp/HomeView.vue";
 
 export default {
-  name: "AppOFROM",
+  name: "AppLCP",
   data() {
     console.log("Application version:", process.env.GIT_HASH)
     return {
@@ -121,6 +125,8 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    HomeView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),
