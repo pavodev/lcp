@@ -111,33 +111,44 @@
               </div>
             </div>
             <div class="row mt-2">
-              <div class="col-4 mb-3" v-for="corpus in filterCorpora(project.corpora)" :key="corpus.id"
-                @click="openCorpus(corpus)">
-                <div class="corpus-block">
-                  <p class="title mb-0">{{ corpus.meta.name }}</p>
-                  <p class="author mb-0">
-                    <span v-if="corpus.meta.author">by {{ corpus.meta.author }}</span>
-                  </p>
-                  <p class="description mt-3">
-                    {{ corpus.meta.corpusDescription }}
-                  </p>
-                  <p class="word-count mb-0">
-                    Word count:
-                    <b>{{
-                      nFormatter(
-                        calculateSum(Object.values(corpus.token_counts))
-                      )
-                    }}</b>
-                  </p>
-                  <p class="word-count mb-0">
-                    Version: <b>{{ corpus.meta.version }}</b>
-                  </p>
-                  <p class="word-count" v-if="corpus.partitions">
-                    <span class="badge text-bg-primary me-1" v-for="language in corpus.partitions.values"
-                      v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`" />
-                  </p>
-                  <div class="details-button icon-1 tooltips" title="Query corpus"
-                    @click.stop="openQueryWithCorpus(corpus)">
+              <div
+                v-for="corpus in filterCorpora(project.corpora)"
+                :key="corpus.id"
+                @click="openCorpus(corpus)"
+                class="col-4 mb-3"
+              >
+                <div class="corpus-block" :class="corpus.meta.dataType ? `data-type-${corpus.meta.dataType}` : ''">
+                  <div class="corpus-block-header px-4 py-3">
+                    <p class="title mb-0">{{ corpus.meta.name }}</p>
+                    <p class="author mb-0">
+                      <span v-if="corpus.meta.author">by {{ corpus.meta.author }}</span>
+                    </p>
+                  </div>
+                  <div class="px-4">
+                    <p class="description mt-3">
+                      {{ corpus.meta.corpusDescription }}
+                    </p>
+                    <p class="word-count mb-0">
+                      Word count:
+                      <b>{{
+                        nFormatter(
+                          calculateSum(Object.values(corpus.token_counts))
+                        )
+                      }}</b>
+                    </p>
+                    <p class="word-count mb-0">
+                      Revision: <b>{{ corpus.meta.revision }}</b>
+                    </p>
+                    <p class="word-count" v-if="corpus.partitions">
+                      <span class="badge text-bg-primary me-1" v-for="language in corpus.partitions.values"
+                        v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`" />
+                    </p>
+                  </div>
+                  <div
+                    class="details-button icon-1 tooltips"
+                    title="Query corpus"
+                    @click.stop="openQueryWithCorpus(corpus)"
+                  >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                   <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus webpage"
@@ -700,10 +711,35 @@ export default {
 .corpus-block {
   border: 1px solid #d4d4d4;
   border-radius: 5px;
-  padding: 20px;
   cursor: pointer;
   position: relative;
   height: 233px;
+}
+
+.corpus-block-header {
+  width: 100%;
+  background-color: #d1e7dd;
+  transition: all 0.3s;
+}
+
+.corpus-block:hover .corpus-block-header {
+  background-color: #b4d8c8;
+}
+
+.data-type-video .corpus-block-header {
+  background-color: #ede7f0;
+}
+
+.data-type-video:hover .corpus-block-header {
+  background-color: #d7cade;
+}
+
+.data-type-audio .corpus-block-header {
+  background-color: #e8eff8;
+}
+
+.data-type-audio:hover .corpus-block-header {
+  background-color: #c3d5ed;
 }
 
 .author {
@@ -722,7 +758,7 @@ export default {
 
 .description {
   font-size: 90%;
-  height: 70px;
+  height: 65px;
   overflow: hidden;
 }
 
@@ -784,6 +820,34 @@ details-button:disabled {
   padding: 15px 10px 10px 15px;
   color: #fff;
   border-radius: 40px 0 0;
+}
+
+.details-button.icon-1:hover {
+  opacity: 1 !important;
+}
+
+.details-button.icon-1:hover .dropdown-app-content {
+  display: block;
+}
+
+.data-type-audio .details-data-type,
+.data-type-audio .details-button {
+  color: #0059be;
+}
+
+.data-type-audio .details-button.icon-1 {
+  background-color: #0059be;
+  color: #fff;
+}
+
+.data-type-video .details-data-type,
+.data-type-video .details-button {
+  color: #622A7F;
+}
+
+.data-type-video .details-button.icon-1 {
+  background-color: #622A7F;
+  color: #fff;
 }
 
 .details-button.icon-2 {

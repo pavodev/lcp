@@ -586,10 +586,10 @@ def _filter_corpora(
         if get_all or app_type in ('lcp', 'catchphrase'):
             corpora[idx] = conf
             continue
-        if app_type == 'vian' and data_type in ['video']:
+        if app_type == 'videoscope' and data_type in ['video']:
             corpora[idx] = conf
             continue
-        if app_type == 'ofrom' and data_type in ['audio', 'video']:
+        if app_type == 'soundscript' and data_type in ['audio', 'video']:
             corpora[idx] = conf
             continue
     return corpora
