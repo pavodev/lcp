@@ -582,7 +582,7 @@ def _filter_corpora(
         if idx == "-1":
             corpora[idx] = conf
             continue
-        data_type: list[str] = conf.get("meta").get("dataType")
+        data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
         if get_all or app_type in ('lcp', 'catchphrase'):
             corpora[idx] = conf
             continue

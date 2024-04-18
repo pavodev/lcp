@@ -142,7 +142,7 @@ async def _db_query(
 
     params = params or {}
 
-    if job.kwargs.get("refresh_config"):
+    if job and job.kwargs.get("refresh_config", None):
         await refresh_config()
 
     async with getattr(pool, method)() as conn:

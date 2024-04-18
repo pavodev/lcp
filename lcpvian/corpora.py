@@ -28,7 +28,7 @@ async def corpora(request: web.Request) -> web.Response:
         request_data = await request.json()
     except JSONDecodeError:  # no data was sent ... eventually this should not happpen
         pass
-    app_type = request_data.get("appType", "lcp")
+    app_type = str(request_data.get("appType", "lcp"))
     app_type = "lcp" if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"} else app_type
 
     if not request_data.get("all", False):

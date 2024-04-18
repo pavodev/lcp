@@ -278,13 +278,14 @@ async def _handle_message(
     # - if corpus was uploaded via gui mode, send a ws message
     #   to all users with the latest config so the FE can show it
     if action == "uploaded":
-        vian = cast(bool, payload["is_vian"])
+        # TODO: Should be chnaged to accept all app types (catchphrase, soundscript, videoscope)
+        app_type = "videoscope" if cast(bool, payload["is_vian"]) else "lcp"
         user_data = cast(JSONObject | None, payload["user_data"])
         conf: CorpusConfig = cast(CorpusConfig, payload["entry"])
         conf["_batches"] = _get_batches(conf)
         app["config"][str(payload["id"])] = conf
         if payload.get("gui"):
-            filt = _filter_corpora(app["config"], vian, user_data)
+            filt = _filter_corpora(app["config"], app_type, user_data)
             payload["config"] = cast(JSONObject, filt)
             await push_msg(app["websockets"], "", payload)
 
