@@ -80,11 +80,12 @@ export default {
       Object.keys(corpus.layer).forEach((layer, index) => {
         let next = [], link = [];
         if ("attributes" in corpus.layer[layer]) {
+          let corpus_type = corpus.layer[layer].layerType;
           Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
             let text = attribute.replace(/@/gi, "_");
             let attributes = corpus.layer[layer].attributes[attribute];
-            if ("name" in attributes)
+            if (corpus_type == "relation" && "name" in attributes)
               text = attributes.name;
             let attributeData = {
               id: attributeId,

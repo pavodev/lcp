@@ -515,9 +515,9 @@
         },
         "comparison": {
             "properties": {
-                "entity": {
-                    "type": "string",
-                    "$ref": "#/$defs/entity"
+                "left": {
+                    "type": "object",
+                    "$ref": "#/$defs/left"
                 },
                 "operator": {
                     "type": "string",
@@ -538,6 +538,10 @@
                 "entityComparison": {
                     "type": "string",
                     "$ref": "#/$defs/entity_comparison"
+                },
+                "functionComparison": {
+                    "type": "object",
+                    "$ref": "#/$defs/function_comparison"
                 }
             },
             "oneOf": [
@@ -560,11 +564,40 @@
                     "required": [
                         "entityComparison"
                     ]
+                },
+                {
+                    "required": [
+                        "functionComparison"
+                    ]
                 }
             ],
             "required": [
-                "entity",
+                "left",
                 "operator"
+            ]
+        },
+        "left": {
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity"
+                },
+                "function": {
+                    "type": "object",
+                    "$ref": "#/$defs/function"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "entity"
+                    ]
+                },
+                {
+                    "required": [
+                        "function"
+                    ]
+                }
             ]
         },
         "constraints": {
@@ -592,7 +625,7 @@
         },
         "quantor__existential": {
             "type": "string",
-            "pattern": "(EXISTS?|!EXISTS?|\u00acEXISTS?|NOT EXISTS?)"
+            "pattern": "(EXISTS?|[!\u00ac~]EXISTS?|NOT EXISTS?)"
         },
         "operator__unary": {
             "type": "string",
@@ -861,6 +894,13 @@
             ],
             "type": "string"
         },
+        "function_comparison": {
+            "type": "object",
+            "$ref": "#/$defs/function",
+            "required": [
+                "function"
+            ]
+        },
         "label": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
@@ -909,6 +949,79 @@
         "attribute__": {
             "type": "string",
             "pattern": "[^\\n\\r ].*"
+        },
+        "function": {
+            "properties": {
+                "functionName": {
+                    "type": "string",
+                    "$ref": "#/$defs/function_name"
+                },
+                "arguments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/arguments"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "functionName",
+                "arguments"
+            ]
+        },
+        "function_name": {
+            "type": "string",
+            "pattern": "length|size|min|max|century|year|month|day"
+        },
+        "arguments": {
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity"
+                },
+                "function": {
+                    "type": "object",
+                    "$ref": "#/$defs/function"
+                },
+                "argumentNumber": {
+                    "type": "string",
+                    "$ref": "#/$defs/argument_number"
+                },
+                "argumentString": {
+                    "type": "string",
+                    "$ref": "#/$defs/argument_string"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "entity"
+                    ]
+                },
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "argumentNumber"
+                    ]
+                },
+                {
+                    "required": [
+                        "argumentString"
+                    ]
+                }
+            ]
+        },
+        "argument_number": {
+            "type": "string",
+            "pattern": "-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\\s*[*\\/+-]\\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*"
+        },
+        "argument_string": {
+            "type": "string",
+            "pattern": "('.+'|\".+\")"
         }
     },
     "properties": {

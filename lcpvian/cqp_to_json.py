@@ -94,7 +94,7 @@ def process_brackets(node: Any) -> dict:
             and get_leaf_value(nget(query, "modifier")) == "%l"
             else "regexComparison"
         )
-        return {"comparison": {"entity": at, "operator": op, comparison_type: value}}
+        return {"comparison": {"left": {"entity": at}, "operator": op, comparison_type: value}}
 
     elif section:
         processed_section: dict
@@ -176,7 +176,7 @@ def process_node(
             token["unit"]["constraints"] = [
                 {
                     "comparison": {
-                        "entity": "form",
+                        "left": {"entity": "form"},
                         "operator": "=",
                         "regexComparison": comp,
                     }
