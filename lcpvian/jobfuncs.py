@@ -126,7 +126,7 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if store else "_pool"
+    name = "_upool" if store else ("_wpool" if config else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
     method = "begin" if store else "connect"
