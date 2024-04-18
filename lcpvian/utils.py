@@ -793,6 +793,18 @@ def format_meta_lines(
     return formatted
 
 
+def _layer_contains(config: CorpusConfig, parent: str, child: str) -> bool:
+    child_layer = config["layer"].get(child)
+    parent_layer = config["layer"].get(parent)
+    if not child_layer or not parent_layer:
+        return False
+    while parent_layer and (parents_child := parent_layer.get("contains")):
+        if parents_child == child:
+            return True
+        parent_layer = config["layer"].get(parents_child)
+    return False
+
+
 def _determine_language(batch: str) -> str | None:
     """
     Helper to find language from batch
