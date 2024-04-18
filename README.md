@@ -135,12 +135,12 @@ Then you can start it with:
 # in ./frontend:
 # for LCP frontend
 yarn serve:lcp
-# for VIAN frontend
-yarn serve:vian
+# for videoscope frontend
+yarn serve:videoscope
 # for catchphrase frontend
 yarn serve:catchphrase
 # for soundscript frontend
-yarn serve:ofrom
+yarn serve:soundscript
 ```
 
 The app will be available at `http://localhost:8080`.
