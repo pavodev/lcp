@@ -48,7 +48,7 @@ from typing import Self
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
-from .utils import _determine_language, push_msg
+from .utils import _determine_language, _layer_contains, push_msg
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 
@@ -378,15 +378,7 @@ class QueryIteration:
         if not self.current_batch:
             raise ValueError("Need batch")
         config = self.config[str(self.current_batch[0])]
-        child_layer = config["layer"].get(child)
-        parent_layer = config["layer"].get(parent)
-        if not child_layer or not parent_layer:
-            return False
-        while parent_layer and (parents_child := parent_layer.get("contains")):
-            if parents_child == child:
-                return True
-            parent_layer = config["layer"].get(parents_child)
-        return False
+        return _layer_contains(config, parent, child)
 
     def _is_time_anchored(self, layer: str) -> bool:
         if not self.current_batch:
