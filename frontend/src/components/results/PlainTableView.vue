@@ -27,7 +27,7 @@
             <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
               <FontAwesomeIcon :icon="['fas', 'copy']" />
             </span>
-            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="hasAudio(resultIndex)">
+            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
             <span
@@ -347,6 +347,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import config from "@/config";
 
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
@@ -391,7 +392,7 @@ export default {
       currentPage: 1,
       groups: this.data ? this.getGroups(this.data[0], true) : [],
       randInt: Math.floor(Math.random() * 1000),
-      playIndex: -1
+      playIndex: -1,
     };
   },
   components: {
@@ -521,13 +522,17 @@ export default {
         text: "Copied to clipboard",
       });
     },
-    hasAudio(resultIndex) {
-      resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
-      const sentenceId = this.data[resultIndex][0];
-      let meta = this.meta[sentenceId];
+    showAudio(resultIndex) {
       let retval = false;
-      if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
-        retval = true;
+      // Just for soundscript
+      if (config.appType == "soundscript") {
+        resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+        const sentenceId = this.data[resultIndex][0];
+        let meta = this.meta[sentenceId];
+
+        if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
+          retval = true;
+        }
       }
       return retval;
     },
