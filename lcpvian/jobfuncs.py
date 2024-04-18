@@ -15,6 +15,7 @@ from sqlalchemy.sql import text
 from rq.connections import get_current_connection
 from rq.job import get_current_job, Job
 
+from .api import refresh_config
 from .callbacks import _export_complete
 from .configure import CorpusTemplate
 from .impo import Importer
@@ -140,6 +141,9 @@ async def _db_query(
                 raise SQLAlchemyError("Job canceled")
 
     params = params or {}
+
+    if job.kwargs.get("refresh_config"):
+        await refresh_config()
 
     async with getattr(pool, method)() as conn:
         try:
