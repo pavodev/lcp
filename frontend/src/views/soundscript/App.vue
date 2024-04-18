@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">VIAN-DH</a>
+        <a class="navbar-brand" href="/"><i>soundscript</i></a>
         <button
           class="navbar-toggler"
           type="button"
@@ -23,17 +23,41 @@
               </router-link>
             </li>
             <li class="nav-item">
+              <router-link class="nav-link" to="/query">
+                <FontAwesomeIcon
+                  :icon="['fas', 'magnifying-glass']"
+                  class="me-1"
+                />
+                Query
+              </router-link>
+            </li>
+            <li class="nav-item">
+              <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
+                <FontAwesomeIcon
+                  :icon="['fas', 'circle-question']"
+                  class="me-1"
+                />
+                Manual
+              </a>
+            </li>
+            <!-- <li class="nav-item">
+              <router-link class="nav-link" to="/query-test">
+                <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
+                Query Test
+              </router-link>
+            </li> -->
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/player">
                 <FontAwesomeIcon
                   :icon="['fas', 'video']"
                   class="me-1"
                 />
-                Viewer
+                Player
               </router-link>
-            </li>
+            </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
+            <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
@@ -74,8 +98,9 @@ import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
 
 export default {
-  name: "AppVIAN",
+  name: "AppSoundscript",
   data() {
+    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
     }

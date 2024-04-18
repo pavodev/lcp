@@ -558,7 +558,7 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
 
 def _filter_corpora(
     config: Config,
-    is_vian: bool,
+    app_type: str,
     user_data: JSONObject | None,
     get_all: bool = False,
 ) -> Config:
@@ -582,20 +582,14 @@ def _filter_corpora(
         if idx == "-1":
             corpora[idx] = conf
             continue
-        allowed: list[str] = conf.get("projects", [])
-        if get_all:
+        data_type: list[str] = conf.get("meta").get("dataType")
+        if get_all or app_type in ('lcp', 'catchphrase'):
             corpora[idx] = conf
             continue
-        if "all" in allowed:
+        if app_type == 'vian' and data_type in ['video']:
             corpora[idx] = conf
             continue
-        if is_vian and "vian" in allowed:
-            corpora[idx] = conf
-            continue
-        if not is_vian and "lcp" in allowed:
-            corpora[idx] = conf
-            continue
-        if not allowed or any(i in ids for i in allowed):
+        if app_type == 'ofrom' and data_type in ['audio', 'video']:
             corpora[idx] = conf
             continue
     return corpora

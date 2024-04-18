@@ -1,5 +1,5 @@
 import { createApp } from "vue";
-import App from "./views/OFROM/App.vue";
+import App from "./views/videoscope/App.vue";
 import { createPinia } from "pinia";
 import router from "./router";
 import FontAwesomeIcon from '@/fontawesome';

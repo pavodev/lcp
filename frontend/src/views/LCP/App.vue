@@ -22,7 +22,7 @@
                 Home
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -30,7 +30,7 @@
                 />
                 Query
               </router-link>
-            </li>
+            </li> -->
             <li class="nav-item">
               <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
                 <FontAwesomeIcon
@@ -81,9 +81,11 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <HomeView class="app-content" />
+    <!-- <router-view /> -->
     <NotificationView />
     <LoadingView />
+    <FooterView />
   </div>
 </template>
 
@@ -94,8 +96,10 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
+import HomeView from "@/views/lcp/HomeView.vue";
 
 export default {
   name: "AppLCP",
@@ -121,6 +125,8 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    HomeView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),
@@ -138,5 +144,8 @@ export default {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
+}
+.app-content {
+  min-height: calc(100vh - 125px - 180px);
 }
 </style>

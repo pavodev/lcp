@@ -196,3 +196,32 @@ nav a.router-link-exact-active {
   font-family: monospace;
   border-radius: 0.2em;
 }
+
+
+.btn-catchphrase {
+  background-color: #2a7f62;
+}
+
+.btn-catchphrase:hover {
+  background-color: #338b6e;
+}
+
+.btn-videoscope {
+  background-color: #622A7F;
+  border-color: #592573;
+}
+
+.btn-videoscope:hover {
+  background-color: #7b379d;
+  border-color: #6b2f87;
+}
+
+.btn-soundscript {
+  background-color: #0059be;
+  border-color: #0152af;
+}
+
+.btn-soundscript:hover {
+  background-color: #0069d9;
+  border-color: #005cb2;
+}

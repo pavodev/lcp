@@ -98,7 +98,7 @@ import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
 
 export default {
-  name: "AppLCP",
+  name: "AppCatchphrase",
   data() {
     console.log("Application version:", process.env.GIT_HASH)
     return {
