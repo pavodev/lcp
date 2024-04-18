@@ -81,7 +81,8 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <router-view class="app-content-box" />
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -94,6 +95,7 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
 
@@ -121,6 +123,7 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),

@@ -34,6 +34,10 @@ body {
   --bs-progress-bar-bg: #2a7f62;
 }
 
+.app-content-box {
+  min-height: calc(100vh - 125px - 180px);
+}
+
 .navbar {
   box-shadow: 0 2px 12px 0 rgb(0 0 0 / 16%);
 }

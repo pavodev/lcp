@@ -81,11 +81,11 @@
         </div>
       </div>
     </nav>
-    <HomeView class="app-content" />
+    <HomeView class="app-content-box" />
     <!-- <router-view /> -->
+    <FooterView />
     <NotificationView />
     <LoadingView />
-    <FooterView />
   </div>
 </template>
 
@@ -144,8 +144,5 @@ export default {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
-}
-.app-content {
-  min-height: calc(100vh - 125px - 180px);
 }
 </style>

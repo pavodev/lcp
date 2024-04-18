@@ -215,14 +215,43 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
+            <div class="row mb-2">
+              <div class="col-12">
+                <div
+                  class="btn btn-primary btn-sm btn-catchphrase me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with catchphrase"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" class="me-2" />
+                  <i>catchphrase</i>
+                </div>
+                <div
+                  class="btn btn-primary btn-sm btn-soundscript me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with soundscript"
+                  v-if="['audio', 'video'].includes(corpusModal.meta.dataType)"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
+                  <i>soundscript</i>
+                </div>
+                <div
+                  class="btn btn-primary btn-sm btn-videoscope me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with videoscope"
+                  v-if="['video'].includes(corpusModal.meta.dataType)"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
+                  <i>videoscope</i>
+                </div>
+              </div>
+            </div>
             <div class="row">
               <div class="col-5">
                 <div class="title mb-0">
                   <span>{{ corpusModal.meta.name }}</span>
-                  <div class="icon-1 btn btn-primary btn-sm horizontal-space" title="Query corpus"
-                    @click="openQueryWithCorpus(corpusModal)" data-bs-dismiss="modal">
-                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                  </div>
                 </div>
                 <p class="author mb-0" v-if="corpusModal.meta.author">
                   by {{ corpusModal.meta.author }}
@@ -493,6 +522,16 @@ export default {
         router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       }
     },
+    // getAppLink(appType, corpus) {
+    //   let appLink = config.appLinks[appType]
+    //   if (["catchphrase", "soundscript"].includes(appType)) {
+    //     appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+    //   }
+    //   else {
+    //     appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+    //   }
+    //   return appLink
+    // },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
