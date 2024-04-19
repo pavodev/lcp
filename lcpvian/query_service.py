@@ -257,6 +257,15 @@ class QueryService:
         Fetch info about a document from DB/cache
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
+        # Start work on new logic with Tangram4 (corpus_id 59)
+        if corpus == 59:
+            query = f"""WITH doc AS (SELECT frame_range FROM {schema}.document WHERE document_id = 3),
+    seg AS (SELECT 'seg', jsonb_build_object('frame_range', s.frame_range, 'prepared', ps.content, 'agent_id', s.agent_id) AS props FROM {schema}.segment0 s, doc CROSS JOIN {schema}.prepared_segment ps WHERE s.frame_range && doc.frame_range AND s.segment_id = ps.segment_id),
+    ges AS (SELECT 'ges', jsonb_build_object('frame_range', g.frame_range, 'type', g.type, 'bodyPart', g.body_part, 'agent_id', g.agent_id) AS props FROM {schema}.gesture g, doc WHERE g.frame_range && doc.frame_range),
+    ag AS (SELECT DISTINCT 'ag', jsonb_build_object('agent', a.agent, 'agent_id', a.agent_id) AS props FROM {schema}.agent a, seg, ges WHERE a.agent_id IN ((seg.props->'agent_id')::int, (ges.props->'agent_id')::int))
+SELECT * FROM seg
+UNION ALL SELECT * FROM ges
+UNION ALL SELECT * FROM ag;"""
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
         job: Job

@@ -962,7 +962,50 @@ KWIC => plain
       console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
-          this.showData(data.document[0]);
+          let dataToShow = data.document[0];
+          if (this.selectedCorpora.value == 59) {
+            dataToShow = {
+              agents: {},
+              layers: {
+                1: {name: "gesture"},
+                2: {name: "sentence"}
+              },
+              tracks: {},
+              document_id: parseInt(this.selectedCorpora.value)
+            };
+            for (let line of data.document) {
+              const [typ, props] = line;
+              const aid = props.agent_id;
+              if (typ == "seg") {
+                const trackName = `speaker ${aid} sentences`
+                let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null,null];
+                if (ntrack===null) {
+                  ntrack = Object.keys(dataToShow.tracks).length;
+                  track = {name: trackName, layer: 2, agent: aid, sentences: [], gestures: null}
+                }
+                const frame_range = props.frame_range.replace(/[[)]/g,"").split(",").map(v=>parseInt(v));
+                track.sentences.push({content: [...props.prepared], frame_range: frame_range});
+                dataToShow.tracks[ntrack] = track;
+              }
+              else if (typ == "ges") {
+                const body_part = props.bodyPart.replace("_"," ");
+                const trackName = `speaker ${aid} ${body_part}`
+                let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null,null];
+                if (ntrack===null) {
+                  ntrack = Object.keys(dataToShow.tracks).length;
+                  track = {name: trackName, layer: 1, agent: aid, sentences: null, gestures: []}
+                }
+                const frame_range = props.frame_range.replace(/[[)]/g,"").split(",").map(v=>parseInt(v));
+                track.gestures.push({gesture: props.type, frame_range: frame_range});
+                dataToShow.tracks[ntrack] = track;
+              }
+              else if (typ == "ag") {
+                dataToShow.agents[aid] = {...props.agent};
+              }
+            }
+          }
+          console.log("dataToShow", dataToShow);
+          this.showData(dataToShow);
           this._setVolume();
           return;
         }
