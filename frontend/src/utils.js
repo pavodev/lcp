@@ -75,10 +75,14 @@ const Utils = {
     formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
       return date ? moment(date).format(format) : '';
     },
-    dictToStr: (dict) => {
+    dictToStr: (dict,replaceYesNo=true) => {
       const vals = [];
-      for (let k of Object.keys(dict).sort())
-        vals.push(dict[k]);
+      for (let k of Object.keys(dict).sort()) {
+        if (replaceYesNo && dict[k].match(/^(yes|no)$/i))
+          vals.push(dict[k].replace(/yes/i,"+").replace(/no/i,"-") + k);
+        else
+          vals.push(dict[k]);
+      }
       return vals.join(" ")
     },
     slugify(str) {

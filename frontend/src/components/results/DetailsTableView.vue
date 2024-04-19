@@ -63,7 +63,7 @@
 .object-column button::before {
   content: "▶";
 }
-.object-column pre.whenFolded {
+.object-column span.whenFolded {
   display: block;
 }
 .object-column.unfolded {
@@ -167,7 +167,7 @@ export default {
       const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
       if (content)
         return `<button onclick="this.parentNode.classList.toggle('unfolded')"> </button>
-          <pre class='whenFolded'>${Utils.dictToStr(jsonContent)}</pre>
+          <span class='whenFolded'>${Utils.dictToStr(jsonContent)}</span>
           <pre class='whenUnfolded'>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
       else
         return '';

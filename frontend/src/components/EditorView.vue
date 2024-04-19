@@ -153,16 +153,26 @@ monaco.editor.onDidCreateModel(function(model) {
   });
   validate();
 });
-monaco.languages.register({ id: "DQDmonaco" });
-monaco.languages.setMonarchTokensProvider("DQDmonaco", DQDmonaco);
 
 let editor = null;
 let decorations = null;
 // We use a hack to suggest continuation for attributes with categorical values
 let suggestValuesCommandId = null; // Reference to a monaco command to immediately show the suggestion modal again
-let suggestValuesArray = null;  // This is either null, or set to an array of the relevant categorical values
+let suggestPrompt = undefined;  // This is either undefined, or set to a prompt to generate suggestions
 
-const KEYWORDS = ['sequence','set','group','EXISTS','NOT','plain','analysis','context','entities'];
+const KEYWORDS = [
+  'sequence ',
+  'set',
+  'group',
+  'EXISTS\n    ',
+  'NOT ',
+  'AND\n    ',
+  'OR\n    ',
+  'plain\n    ',
+  'analysis\n  ',
+  'context\n    ',
+  'entities\n    '
+];
 
 export default {
   name: "EditorView",
@@ -185,14 +195,44 @@ export default {
           this.languageObj()
         }
 
+        // Reset highlighting
+        this.setHighlighting();
+
         // Register a completion item provider for the new language
         const { dispose } = monaco.languages.registerCompletionItemProvider("DQDmonaco", {
           provideCompletionItems: (model, position) => {
+            let suggestions = []
             var word = model.getWordUntilPosition(position), column = position.column;
-            while (suggestValuesArray===null && word.word=="" && column>0) {
-              column--;
-              let previousWord = model.getWordUntilPosition({lineNumber: position.lineNumber, column: column}).word;
-              if (previousWord) return this.triggerAutocomplete(previousWord, /*prefixWithSpace:*/ true);
+            if (!suggestPrompt) {
+              while (word.word=="" && column>0) {
+                column--;
+                let previousWord = model.getWordUntilPosition({lineNumber: position.lineNumber, column: column}).word;
+                if (previousWord) {
+                  suggestPrompt = previousWord;
+                  break;
+                }
+              }
+            }
+            if (suggestPrompt) {
+              if (suggestPrompt in this.corpora.corpus.layer)
+                suggestions = [suggestPrompt.charAt(0).toLowerCase()];
+              else {
+                for (let lprops of Object.values(this.corpora.corpus.layer)) {
+                  const attributes = lprops.attributes;
+                  if (!(suggestPrompt in (attributes||{})))
+                    continue;
+                  if (attributes[suggestPrompt].type == "text")
+                    suggestions.push('""');
+                  if (attributes[suggestPrompt].type != "categorical")
+                    continue;
+                  let values = attributes[suggestPrompt].values;
+                  if (!(values instanceof Array) && suggestPrompt in this.corpora.corpus.glob_attr)
+                    values = this.corpora.corpus.glob_attr[suggestPrompt];
+                  if (!(values instanceof Array) || values.length==0)
+                    continue;
+                  suggestions = [...suggestions, ...values.map(v=>`"${v}"`)];
+                }
+              }
             }
             var range = {
               startLineNumber: position.lineNumber,
@@ -200,133 +240,16 @@ export default {
               startColumn: word.startColumn,
               endColumn: word.endColumn,
             };
-
-            // Use suggestValuesArray if it is set
-            var suggestions = suggestValuesArray
-              ? suggestValuesArray.map( (item) => Object({
+            if (suggestions.length)
+              suggestions = suggestions.map( (item) => Object({
                 label: item,
                 kind: monaco.languages.CompletionItemKind.Text,
-                insertText: `"${item}"`,
+                insertText: item,
                 range: range
-              }))
-              : this.mainSuggestions(range)
-              // : [
-              //     {
-              //       label: "Token",
-              //       kind: monaco.languages.CompletionItemKind.Text,
-              //       insertText: "Token\n\tform = test1",
-              //       range: range
-              //     },
-              //     {
-              //       label: "Segment",
-              //       kind: monaco.languages.CompletionItemKind.Text,
-              //       insertText: "Segment s1",
-              //       range: range,
-              //     },
-              //     // {
-              //     //   label: "NOT",
-              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //     //   insertText: "NOT\n\t",
-              //     //   range: range,
-              //     // },
-              //     ...this.columnHeaders().map(item => {
-              //       return {
-              //         label: item,
-              //         kind: monaco.languages.CompletionItemKind.Keyword,
-              //         insertText: `${item} = `,
-              //         range: range,
-              //         command: {
-              //           id: suggestValuesCommandId,
-              //           title: "insert values",
-              //           arguments: [item]
-              //         }
-              //       }
-              //     }),
-              //     {
-              //       label: "from",
-              //       kind: monaco.languages.CompletionItemKind.Keyword,
-              //       insertText: "from = ",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "head",
-              //       kind: monaco.languages.CompletionItemKind.Keyword,
-              //       insertText: "head = ",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "dep",
-              //       kind: monaco.languages.CompletionItemKind.Keyword,
-              //       insertText: "dep = ",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "to",
-              //       kind: monaco.languages.CompletionItemKind.Keyword,
-              //       insertText: "to = ",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "label",
-              //       kind: monaco.languages.CompletionItemKind.Keyword,
-              //       insertText: "label = ",
-              //       range: range,
-              //     },
-              //     // {
-              //     //   label: "pos",
-              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //     //   insertText: "pos = ",
-              //     //   range: range,
-              //     // },
-              //     // {
-              //     //   label: "AND",
-              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //     //   insertText: "AND\n\t",
-              //     //   range: range,
-              //     // },
-              //     // {
-              //     //   label: "OR",
-              //     //   kind: monaco.languages.CompletionItemKind.Keyword,
-              //     //   insertText: "OR\n\t",
-              //     //   range: range,
-              //     // },
-              //     {
-              //       label: "DepRel",
-              //       kind: monaco.languages.CompletionItemKind.Text,
-              //       insertText: "DepRel dr1\n\t",
-              //       insertTextRules:
-              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              //       range: range,
-              //     },
-              //     {
-              //       label: "group",
-              //       kind: monaco.languages.CompletionItemKind.Snippet,
-              //       insertText: "group g\n\tt1\n\tt2",
-              //       insertTextRules:
-              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              //       documentation: "If-Else Statement",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "distance",
-              //       kind: monaco.languages.CompletionItemKind.Snippet,
-              //       insertText: "distance\n\tfrom = \n\tto = \n\tvalue = ",
-              //       insertTextRules:
-              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              //       documentation: "If-Else Statement",
-              //       range: range,
-              //     },
-              //     {
-              //       label: "sequence",
-              //       kind: monaco.languages.CompletionItemKind.Snippet,
-              //       insertText: "sequence\n\t",
-              //       insertTextRules:
-              //         monaco.languages.CompletionItemInsertTextRule.InsertAsSnippet,
-              //       documentation: "If-Else Statement",
-              //       range: range,
-              //     },
-              //   ];
-            suggestValuesArray = null;
+              }));
+            else
+              suggestions = this.mainSuggestions(range);
+            suggestPrompt = undefined;
             return { suggestions: suggestions };
           },
           triggerCharacters: ["="," "]
@@ -342,6 +265,8 @@ export default {
     }
   },
   mounted() {
+    monaco.languages.register({ id: "DQDmonaco" });
+    this.setHighlighting();
     editor = monaco.editor.create(document.getElementById("editor"), {
       language: "DQDmonaco",
       value: this.query,
@@ -375,14 +300,35 @@ export default {
     // Generate a command ID for manual triggering of autocompletion
     // eslint-disable-next-line no-unused-vars
     suggestValuesCommandId = editor.addCommand( 0, (_,suggestion) => this.triggerAutocomplete(suggestion) );
-
+    
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
     }, true);
   },
   methods: {
+    setHighlighting() {
+      // Customize highlighting to current corpus
+      const copyDQDmonaco = {...DQDmonaco}
+      copyDQDmonaco.keywords = [...DQDmonaco.keywords];
+      copyDQDmonaco.typeKeywords = [...DQDmonaco.typeKeywords];
+      if (this.corpora && this.corpora.corpus && this.corpora.corpus.layer) {
+        for (let [l,lp] of Object.entries(this.corpora.corpus.layer)) {
+          const layer_type = lp.layerType;
+          copyDQDmonaco.keywords.push(l);
+          for (let [a,ap] of Object.entries(lp.attributes||{})) {
+            let typeKeyword = a;
+            if (layer_type == "relation" && "name" in ap)
+              typeKeyword = ap.name;
+              copyDQDmonaco.typeKeywords.push(typeKeyword);
+          }
+        }
+      }
+      monaco.languages.setMonarchTokensProvider("DQDmonaco", copyDQDmonaco);
+    },
     mainSuggestions(range) {
       const s = [];
+      if (!this.corpora || !this.corpora.corpus)
+        return s;
       for (let [layer,props] of Object.entries(this.corpora.corpus.layer)) {
         s.push({
           label: layer,
@@ -390,27 +336,46 @@ export default {
           insertText: layer,
           range: range
         });
-        for (let a in props.attributes)
-          s.push({
-          label: a,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: `${a} = `,
-          range: range,
-          command: {
-            id: suggestValuesCommandId,
-            title: "insert values",
-            arguments: [a]
+        let layer_type = props.layerType;
+        for (let [a, ap] of Object.entries(props.attributes||{})) {
+          let text = a;
+          if (layer_type == "relation" && "name" in ap)
+            text = ap.name;
+          if (a == "meta") {
+            for (let sa in ap)
+              s.push({
+                label: sa,
+                kind: monaco.languages.CompletionItemKind.Keyword,
+                insertText: `${sa} = `,
+                range: range,
+                command: {
+                  id: suggestValuesCommandId,
+                  title: "insert values",
+                  arguments: [sa]
+                }
+              });
           }
-        });
+          else
+            s.push({
+              label: text,
+              kind: monaco.languages.CompletionItemKind.Keyword,
+              insertText: `${text} = `,
+              range: range,
+              command: {
+                id: suggestValuesCommandId,
+                title: "insert values",
+                arguments: [text]
+              }
+            });
+        }
       }
       for (let k of KEYWORDS)
         s.push({
-          label: k,
+          label: k.trimEnd(),
           kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: k+' ',
+          insertText: k,
           range: range
         });
-      console.log("suggestions", s);
       return s;
     },
     columnHeaders() {
@@ -427,38 +392,11 @@ export default {
       }
       return keywords;
     },
-    categoricalValues() {
-      let keywords = []
-      if (this.corpora && this.corpora.corpus)
-        // eslint-disable-next-line no-unused-vars
-        Object.entries(this.corpora.corpus.layer).forEach( ([_,{attributes}]) => Object.values(attributes||{}).forEach( props => {
-          if (props.type == "categorical" && props.values instanceof Array)
-            keywords.push(...props.values);
-        }) );
-      return keywords;
-    },
-    triggerAutocomplete(prompt,prefixWithSpace=false) {
+    triggerAutocomplete(prompt) {
       if (!this.corpora || !this.corpora.corpus) return;
-      console.log("prompt", prompt);
-      if (prompt in this.corpora.corpus.layer)
-        return setTimeout( ()=>{
-          suggestValuesArray = [" "+prompt.charAt(0).toLowerCase()]; 
-          editor.trigger('', 'editor.action.triggerSuggest', {});
-        } , 1 );
-      // eslint-disable-next-line no-unused-vars
-      Object.entries(this.corpora.corpus.layer).forEach( ([_,{attributes}]) => {
-        let props = (attributes||{})[prompt];
-        if (!props || props.type != "categorical") return;
-        let values = props.values;
-        if (!(values instanceof Array) && prompt in this.corpora.corpus.glob_attr)
-          values = this.corpora.corpus.glob_attr[prompt];
-        if (!(values instanceof Array) || values.length==0) return;
-        if (prefixWithSpace) values = values.map((v)=>" "+v);
-        setTimeout( ()=>{ // Timeout necessary to prevent overlap from previous accepted suggestion
-          suggestValuesArray = values; // can't directly pass an argument to triggerSuggest, so use this instead
-          editor.trigger('', 'editor.action.triggerSuggest', {});
-        } , 1 );
-      });
+      suggestPrompt = prompt;
+      setTimeout(()=>editor.trigger('', 'editor.action.triggerSuggest', {}), 1);
+      return null;
     },
     processErrorMessage(message) {
       // if (message.startsWith("Unexpected token")) return "Invalid character";

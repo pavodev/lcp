@@ -596,7 +596,7 @@ export default {
     },
     strPopover(token) {
       if (token && token.constructor.name == 'Object')
-        return "<pre>"+Utils.dictToStr(token)+"</pre>";
+        return Utils.dictToStr(token);
       else
         return token;
     }
