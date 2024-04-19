@@ -548,7 +548,12 @@ class QueryIteration:
         seg = config["segment"]
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
-        seg_name = f"prepared_{name}{underlang}"
+        seg_mapping = config["mapping"]["layer"].get(seg,{}).get("prepared",{})
+        if lang:
+            seg_mapping = config["mapping"]["layer"].get(seg,{}).get("partitions",{}).get(lang,{}).get("prepared")
+        seg_name = seg_mapping.get("relation","")
+        if not seg_name:
+            seg_name = f"prepared_{name}{underlang}"
         annotations: str = ""
         for layer, properties in config['layer'].items():
             if layer == seg or properties.get("contains","") != config["token"]:
