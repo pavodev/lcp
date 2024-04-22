@@ -58,8 +58,9 @@
 .object-column {
   display: block;
   height: 1.5em;
-  overflow-y: hidden;
   position: relative;
+  white-space: nowrap;
+  padding-right: 25px;
 }
 .object-column button {
   float: right;

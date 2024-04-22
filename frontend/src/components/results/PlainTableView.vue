@@ -171,7 +171,7 @@
       </table>
     </div>
     <div
-      class="modal fade"
+      class="modal fade modal-xl"
       :id="`detailsModal${randInt}`"
       tabindex="-1"
       aria-labelledby="detailsModalLabel"
