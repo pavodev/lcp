@@ -79,7 +79,7 @@
             <div class="alert alert-success" role="alert" v-if="project.description || project.isAdmin">
               <div class="row">
                 <div class="col-11">
-                  <div class="row" v-if="!project.isPublic || project.isAdmin">
+                  <div class="row" v-if="project.isAdmin">
                     <div class="col-3">
                       Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
                     </div>
