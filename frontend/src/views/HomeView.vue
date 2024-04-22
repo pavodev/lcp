@@ -128,20 +128,24 @@
                     <p class="description mt-3">
                       {{ corpus.meta.corpusDescription }}
                     </p>
-                    <p class="word-count mb-0">
-                      Word count:
-                      <b>{{
+                    <p class="word-count">
+                      <template v-if="corpus.partitions">
+                        <span
+                          class="badge text-bg-primary me-1 tooltips" title="Partition"
+                          v-for="language in corpus.partitions.values"
+                          v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`"
+                        />
+                      </template>
+                      <span class="badge text-bg-primary me-1 tooltips" title="Word count"
+                      >{{
                         nFormatter(
                           calculateSum(Object.values(corpus.token_counts))
                         )
-                      }}</b>
-                    </p>
-                    <p class="word-count mb-0">
-                      Revision: <b>{{ corpus.meta.revision }}</b>
-                    </p>
-                    <p class="word-count" v-if="corpus.partitions">
-                      <span class="badge text-bg-primary me-1" v-for="language in corpus.partitions.values"
-                        v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`" />
+                      }}</span>
+                      <span
+                        class="badge text-bg-primary me-1 tooltips" title="Revision"
+                        v-if="corpus.meta.revision"
+                      >{{ corpus.meta.revision }}</span>
                     </p>
                   </div>
                   <div
@@ -797,7 +801,7 @@ export default {
 
 .description {
   font-size: 90%;
-  height: 65px;
+  height: 108px;
   overflow: hidden;
 }
 
