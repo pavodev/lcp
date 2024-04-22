@@ -68,7 +68,7 @@ export default {
       let data = [
         {
           id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, ""),
+          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, "").replace(/@/gi, "[at]"),
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
