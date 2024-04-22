@@ -192,6 +192,7 @@ async def _handle_message(
         "background_job_progress",
         "document",
         "document_ids",
+        "export_link"
     )
     errors = (
         "failed",
@@ -414,7 +415,9 @@ async def _handle_query(
         await to_submit
 
     if to_export := the_job.meta.get("to_export"):
-        await export(app, to_export, the_job.kwargs.get("first_job", ""))
+        done_batches, all_batches = the_job.kwargs.get("done_batches"), the_job.kwargs.get("all_batches")
+        if (len(done_batches)+1 == len(all_batches)):
+            await export(app, to_export, the_job.kwargs.get("first_job", ""))
 
 
 async def _ait(self: WSMessage) -> WSMessage:

@@ -34,6 +34,7 @@ from .configure import CorpusConfig
 from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
+from .export import download_export
 from .lama_user_data import lama_user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -191,8 +192,9 @@ async def create_app(test: bool = False) -> web.Application:
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
+        ("/download_export/{fn}", "GET", download_export),
         ("/fetch", "POST", fetch_queries),
-        ("/get_message/{uuid}", "GET", get_message),
+        ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),
         ("/project/{project}", "POST", project_update),
         ("/project/{project}/api/create", "POST", project_api_create),

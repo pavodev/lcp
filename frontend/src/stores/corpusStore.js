@@ -50,5 +50,14 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
+    async fetchExport(fn) {
+      let url = `${httpApi.getUri()}/download_export/${fn}`;
+      const a = document.createElement("A");
+      a.href = url;
+      a.download = "results";
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
   },
 });

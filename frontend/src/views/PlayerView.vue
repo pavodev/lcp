@@ -963,6 +963,7 @@ KWIC => plain
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
           let dataToShow = data.document[0];
+          // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           if (this.selectedCorpora.value == 59) {
             dataToShow = {
               agents: {},

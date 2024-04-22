@@ -16,7 +16,6 @@ from rq.connections import get_current_connection
 from rq.job import get_current_job, Job
 
 from .api import refresh_config
-from .callbacks import _export_complete
 from .configure import CorpusTemplate
 from .impo import Importer
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
@@ -324,6 +323,4 @@ async def _swissdox_export(
 
     con.close()
 
-    job = cast(Job, get_current_job())
-    _export_complete(job, conn, None)
     return None

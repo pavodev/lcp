@@ -787,6 +787,19 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
+    if job.dependency and job.args and isinstance(job.args[0],str) and os.path.exists(job.args[0]):
+        user = job.dependency.kwargs.get("user")
+        room = job.dependency.kwargs.get("room")
+        if user and room:
+            msg_id = str(uuid4())
+            jso: dict[str, Any] = {
+                "user": user,
+                "room": room,
+                "action": "export_link",
+                "msg_id": msg_id,
+                "fn": os.path.basename(job.args[0])
+            }
+            _publish_msg(connection, jso, msg_id)
     return None
 
 

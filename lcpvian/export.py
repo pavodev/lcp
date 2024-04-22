@@ -30,7 +30,7 @@ SWISSDOX_NE_SELECTS = ["form","type"]
 
 def _format_kwic(
     args: list, columns: list, sentences: dict[str, tuple], result_meta: dict
-) -> tuple[str, str, dict, list]:
+) -> tuple[str, str, dict, list, list]:
     kwic_name: str = result_meta.get("name", "")
     attributes: list = result_meta.get("attributes", [])
     entities_attributes: dict = next(
@@ -38,7 +38,7 @@ def _format_kwic(
     )
     entities: list = entities_attributes.get("data", [])
     sid, matches = args
-    first_token_id, prep_seg = sentences[sid]
+    first_token_id, prep_seg, annotations = sentences[sid]
     matching_entities: dict[str, int | list[int]] = {}
     for n in entities:
         if n.get("type") in ("sequence", "set"):
@@ -62,8 +62,7 @@ def _format_kwic(
         token_dict = {columns[n_col]: col for n_col, col in enumerate(token)}
         token_dict["token_id"] = token_id
         tokens.append(token_dict)
-
-    return (kwic_name, sid, matching_entities, tokens)
+    return (kwic_name, sid, matching_entities, tokens, annotations)
 
 
 async def kwic(jobs: list[Job], resp: Any, config):
@@ -95,10 +94,10 @@ async def kwic(jobs: list[Job], resp: Any, config):
             (sj for sj in sentence_jobs if sj.kwargs.get("depends_on") == j.id), None
         )
         sentences: dict[str, tuple]
-        if sentence_job:
+        if sentence_job and sentence_job.result:
             sentences = {
-                str(uuid): (first_token_id, tokens)
-                for (uuid, first_token_id, tokens) in sentence_job.result
+                str(uuid): (first_token_id, tokens, annotations)
+                for (uuid, first_token_id, tokens, annotations) in sentence_job.result
             }
         else:
             continue
@@ -121,10 +120,10 @@ async def kwic(jobs: list[Job], resp: Any, config):
             if n_type not in kwic_indices:
                 continue
             try:
-                kwic_name, sid, matching_entities, tokens = _format_kwic(
+                kwic_name, sid, matching_entities, tokens, annotations = _format_kwic(
                     args, columns, sentences, meta[n_type - 1]
                 )
-                data = {"sid": sid, "matches": matching_entities, "segment": tokens}
+                data = {"sid": sid, "matches": matching_entities, "segment": tokens, "annotations": annotations}
                 if sid in formatted_meta:
                     data["meta"] = formatted_meta[sid]
                 line: str = "\t".join(
@@ -156,7 +155,7 @@ async def export_dump(filepath: str, job_id: str, config: dict) -> None:
         Job.fetch(jid, connection=conn)
         for registry in [
             FinishedJobRegistry(name=x, connection=conn)
-            for x in ("queue", "background")
+            for x in ("query", "background")
         ]
         for jid in registry.get_job_ids()
     ]
@@ -236,7 +235,7 @@ async def export_swissdox(
         Job.fetch(jid, connection=conn)
         for registry in [
             FinishedJobRegistry(name=x, connection=conn)
-            for x in ("queue","background")
+            for x in ("query","background")
         ]
         for jid in registry.get_job_ids()
     ]
@@ -449,3 +448,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     )
 
     return job
+
+
+async def download_export(request: web.Request) -> web.FileResponse:
+    fn = request.match_info["fn"]
+    return web.FileResponse(f"./results/{fn}")
