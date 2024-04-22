@@ -126,7 +126,7 @@ Iteration: TypeAlias = tuple[
 
 # one of the main endpoint functions like query(), upload()
 Endpoint: TypeAlias = Callable[
-    [web.Request], Awaitable[web.Response | web.WebSocketResponse]
+    [web.Request], Awaitable[web.Response | web.WebSocketResponse | web.FileResponse]
 ]
 
 # a kwic line for vian, with seg, toks, doc, gesture, agent and frame ranges
