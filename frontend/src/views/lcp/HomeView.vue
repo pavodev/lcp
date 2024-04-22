@@ -16,10 +16,10 @@
               <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
               <i>soundscript</i>
             </a>
-            <a :href="appLinks['videoscope']" target="_blank" class="btn btn-primary me-1 btn-videoscope">
+            <!-- <a :href="appLinks['videoscope']" target="_blank" class="btn btn-primary me-1 btn-videoscope">
               <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
               <i>videoscope</i>
-            </a>
+            </a> -->
           </p>
         </div>
       </div>
