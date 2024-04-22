@@ -156,7 +156,7 @@
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
-                  <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus webpage"
+                  <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus origin"
                     :disabled="!corpus.meta.url" target="_blank" @click.stop>
                     <FontAwesomeIcon :icon="['fas', 'link']" />
                   </a>
