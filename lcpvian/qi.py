@@ -560,7 +560,7 @@ class QueryIteration:
                 continue
             annotations = ", annotations"
             break
-        script = f"SELECT {name}_id, off_set, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
+        script = f"SELECT {name}_id, id_offset, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
         return script
 
     @classmethod

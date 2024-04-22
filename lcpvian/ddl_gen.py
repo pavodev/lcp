@@ -96,7 +96,7 @@ class DDL:
             f"""
             CREATE TABLE prepared_{x.rstrip("0")} (
                 {y}         uuid    PRIMARY KEY REFERENCES {x} ({y}),
-                off_set     int,
+                id_offset   int8,
                 content     jsonb,
                 annotations jsonb
             );"""
@@ -104,9 +104,9 @@ class DDL:
 
         self.compute_prep_segs: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
-            WITH ins AS (
+             INSERT INTO {z.rstrip("0")}
                    SELECT {x}
-                        , min({y}) AS off_set
+                        , min({y}) AS id_offset
                         , to_jsonb(array_agg(toks ORDER BY {y})) AS content
                         , '{LB}{RB}'::jsonb AS annotations
                      FROM (
@@ -115,10 +115,7 @@ class DDL:
                                , jsonb_build_array(
                                     %s
                            ORDER BY {y}) x
-                    GROUP BY {x})
-             INSERT INTO {z.rstrip("0")}
-             SELECT *
-               FROM ins;"""
+                    GROUP BY {x});"""
         )
 
         self.update_prep_segs: Callable[[str, list[str], str, str, list[tuple]], str] = lambda layer, attrs, seg, tok, joins: dedent(
