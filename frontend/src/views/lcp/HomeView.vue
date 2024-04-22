@@ -114,9 +114,9 @@
                 <div class="corpus-block" :class="corpus.meta.dataType ? `data-type-${corpus.meta.dataType}` : ''">
                   <div class="corpus-block-header px-4 py-3">
                     <p class="title mb-0">{{ corpus.meta.name }}</p>
-                    <p class="author mb-0">
-                      <span v-if="corpus.meta.author">by {{ corpus.meta.author }}</span>
-                    </p>
+                    <!-- <p class="author mb-0">
+                      <span v-if="corpus.meta.author">{{ corpus.meta.author }}</span>
+                    </p> -->
                   </div>
                   <div class="px-4">
                     <p class="description mt-3">
@@ -243,9 +243,9 @@
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                 </div>
-                <p class="author mb-0" v-if="corpusModal.meta.author">
-                  by {{ corpusModal.meta.author }}
-                </p>
+                <!-- <p class="author mb-0" v-if="corpusModal.meta.author">
+                  {{ corpusModal.meta.author }}
+                </p> -->
                 <p class="description mt-3">
                   {{ corpusModal.meta.corpusDescription }}
                 </p>
@@ -814,7 +814,7 @@ export default {
 
 .details-data-type {
   position: absolute;
-  top: 10px;
+  top: 18px;
   color: #2a7f62;
   opacity: 0.9;
   right: 10px;
