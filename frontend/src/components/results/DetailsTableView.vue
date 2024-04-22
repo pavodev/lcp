@@ -19,8 +19,12 @@
             <span
               v-else-if="isJson(token[cIndex])"
               :class="objectClasses(token[cIndex])"
-              v-html="objectColumn(token[cIndex])"
-            ></span>
+            >
+              {{ objectColumn(token[cIndex]) }}
+              <span class="ufeat-info-button tooltips" data-bs-html="true" :title="tooltipText(token[cIndex])">
+                <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+              </span>
+            </span>
             <span
               v-else
               :class="textClasses(column)"
@@ -55,6 +59,7 @@
   display: block;
   height: 1.5em;
   overflow-y: hidden;
+  position: relative;
 }
 .object-column button {
   float: right;
@@ -83,10 +88,17 @@
   display: block;
   white-space: pre;
 }
+.object-column .ufeat-info-button {
+  position: absolute;
+  cursor: pointer;
+  right: 0px;
+  top: 0px;
+}
 </style>
 
 <script>
 import Utils from '@/utils';
+import { setTooltips, removeTooltips } from "@/tooltips";
 
 export default {
   name: "ResultsDetailsTableView",
@@ -182,6 +194,20 @@ export default {
       }
       return retval
     },
+    tooltipText(content) {
+      let retval = "";
+      if (content) {
+        const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
+        let _tmpUfeats = []
+        this.ufeatOrder.forEach(key => {
+          if (key in jsonContent) {
+            _tmpUfeats.push(`${key}: ${jsonContent[key]}`);
+          }
+        });
+        retval = _tmpUfeats.join("<br>");
+      }
+      return retval
+    },
     annotations(tIndex, sentence) {
       const [offset, _, annotations] = sentence; // eslint-disable-line no-unused-vars
       const tokenIndexOffset = tIndex + offset;
@@ -195,6 +221,15 @@ export default {
       }
       return ret.join(", ");
     }
+  },
+  mounted() {
+    setTooltips();
+  },
+  updated() {
+    setTooltips();
+  },
+  beforeUnmount() {
+    removeTooltips();
   },
 };
 </script>
