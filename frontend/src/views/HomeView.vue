@@ -47,7 +47,7 @@
                 v-for="(project, index) in projectsGroups"
                 :key="project.id"
                 class="nav-link"
-                :class="[index == -1 ? 'active' : '', corporaFilter && project.corpora.length == 0 ? 'no-corpora' : '']"
+                :class="[index == 0 ? 'active' : '', corporaFilter && project.corpora.length == 0 ? 'no-corpora' : '']"
                 :id="`nav-${project.id}-tab`"
                 data-bs-toggle="tab"
                 :data-bs-target="`#nav-${project.id}`"
@@ -69,47 +69,47 @@
         </nav>
         <div class="tab-content pt-3" id="nav-tabContent">
           <div v-for="(project, index) in projectsGroups" :key="project.id" class="tab-pane fade"
-            :class="index == -1 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
+            :class="index == 0 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
             aria-labelledby="nav-results-tab">
-            <div class="alert alert-success" role="alert" v-if="index != -1">
-              <div class="row">
-                <div class="col-11">
-                  <div class="row">
-                    <div class="col-2">
-                      Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
+              <div class="alert alert-success" role="alert" v-if="project.description || project.isAdmin">
+                <div class="row">
+                  <div class="col-11">
+                    <div class="row" v-if="!project.isPublic || project.isAdmin">
+                      <div class="col-2">
+                        Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
+                      </div>
+                      <div class="col-2">
+                        Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
+                      </div>
+                      <div class="col-2">
+                        Institution: <b>{{ project.institution }}</b>
+                      </div>
+                      <div class="col-2">
+                        API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
+                      </div>
+                      <!-- <div class="col-2">
+                        Visibility: <b>{{ project.additionalData && project.additionalData.visibility ? project.additionalData.visibility : "private" }}</b>
+                      </div> -->
                     </div>
-                    <div class="col-2">
-                      Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
-                    </div>
-                    <div class="col-2">
-                      Institution: <b>{{ project.institution }}</b>
-                    </div>
-                    <div class="col-2">
-                      API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
-                    </div>
-                    <div class="col-2">
-                      Visibility: <b>{{ project.additionalData && project.additionalData.visibility ? project.additionalData.visibility : "private" }}</b>
+                    <div class="row">
+                      <div class="col-12">
+                        Description: <b>{{ project.description }}</b>
+                      </div>
                     </div>
                   </div>
-                  <div class="row">
-                    <div class="col-12">
-                      Description: <b>{{ project.description }}</b>
-                    </div>
+                  <div class="col-1 text-end" v-if="project.isAdmin">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-light"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editProjectModal"
+                      @click="modalIndexKey++"
+                    >
+                      <FontAwesomeIcon :icon="['fas', 'gear']" />
+                    </button>
                   </div>
-                </div>
-                <div class="col-1 text-end" v-if="project.isAdmin">
-                  <button
-                    type="button"
-                    class="btn btn-sm btn-light"
-                    data-bs-toggle="modal"
-                    data-bs-target="#editProjectModal"
-                    @click="modalIndexKey++"
-                  >
-                    <FontAwesomeIcon :icon="['fas', 'gear']" />
-                  </button>
                 </div>
               </div>
-            </div>
             <div class="row mt-2">
               <div
                 v-for="corpus in filterCorpora(project.corpora)"
@@ -143,7 +143,8 @@
                         )
                       }}</span>
                       <span
-                        class="badge text-bg-primary me-1 tooltips" title="Revision"
+                        class="badge text-bg-primary me-1 tooltips"
+                        :title="`Revision: ${corpus.meta.revision}`"
                         v-if="corpus.meta.revision"
                       >{{ corpus.meta.revision }}</span>
                     </p>
@@ -272,7 +273,7 @@
                   }}</b>
                 </p>
                 <p class="word-count mb-0">
-                  Version: {{ corpusModal.meta.version }}
+                  Revision: {{ corpusModal.meta.revision }}
                 </p>
                 <p class="word-count mb-0">
                   URL:
@@ -419,7 +420,7 @@ export default {
   methods: {
     projectIcons(project) {
       let icons = ['fas']
-      if (project.id == null) {
+      if (project.isPublic == true) {
         icons.push('globe')
       }
       else if (project.isAdmin) {
@@ -619,34 +620,43 @@ export default {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["projects"]),
     projectsGroups() {
-      let retval = {
-        "-1": {
-          id: null,
-          title: "Public",
-          corpora: [],
-        },
-      };
-      let projectIds = [-1];
+      let projects = {}
+      let projectIds = [];
       this.projects.forEach((project) => {
+        let isPublic = project.additionalData && project.additionalData.public == true;
         projectIds.push(project.id);
-        retval[project.id] = {
+        projects[project.id] = {
           ...project,
           corpora: [],
+          isPublic: isPublic,
         };
       });
+      let publicProjects = this.projects.filter(project => project.additionalData && project.additionalData.public == true)
+      let publicProjectId = publicProjects.length ? publicProjects[0].id : -1
+
       this.corpora.forEach((corpus) => {
         corpus.projects.forEach(projectId => {
-          projectId = projectId == "all" ? -1 : projectId;  // -1 for public
-          if (projectIds.includes(projectId) && !retval[projectId].corpora.includes(corpus)) {
+          projectId = projectId == "all" ? publicProjectId : projectId;  // -1 for public
+          if (projectIds.includes(projectId) && !projects[projectId].corpora.includes(corpus)) {
             if (
               this.corporaFilter == '' ||
               corpus.meta.name.toLowerCase().includes(this.corporaFilter.toLowerCase()) // Filter corpora by name
             ) {
-              retval[projectId].corpora.push(corpus);
+              projects[projectId].corpora.push(corpus);
             }
           }
         })
       });
+      let sortedProjects = []
+
+      // Show public projects first
+      Object.keys(projects).forEach((projectId) => {
+        if (projects[projectId].isPublic) {
+          sortedProjects.push(projects[projectId])
+          delete projects[projectId]
+        }
+      })
+      sortedProjects.push(...Object.values(projects))
       // If there is a filter, remove empty projects
       // if (this.corporaFilter.length > 0) {
       //   let _retval = {}
@@ -657,7 +667,7 @@ export default {
       //   }
       //   retval = _retval
       // }
-      return retval;
+      return sortedProjects;
     }
   },
   mounted() {
