@@ -81,6 +81,7 @@
 }
 .object-column.unfolded .whenUnfolded {
   display: block;
+  white-space: pre;
 }
 </style>
 
@@ -92,6 +93,11 @@ export default {
   props: ["data", "sentences", "corpora", "columnHeaders", "isModal"],
   data() {
     return {
+      ufeatOrder: [
+        'Typo', 'ExtPos', 'NumForm', 'NumType', 'Tense', 'VerbForm', 'Mood', 'Polarity',
+        'Definite', 'Foreign', 'Reflex', 'Number', 'Abbr', 'Voice', 'Poss', 'PronType',
+        'Case', 'Degree', 'Style', 'Person', 'Gender'
+      ],
       filteredColumnHeaders: this.columnHeaders.filter(ch=>ch!="spaceAfter")
     }
   },
@@ -164,13 +170,17 @@ export default {
         return [''];
     },
     objectColumn(content) {
-      const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
-      if (content)
-        return `<button onclick="this.parentNode.classList.toggle('unfolded')"> </button>
-          <span class='whenFolded'>${Utils.dictToStr(jsonContent)}</span>
-          <pre class='whenUnfolded'>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</pre>`;
-      else
-        return '';
+      let retval = "";
+      if (content) {
+        // ufeats
+        const jsonContent = content instanceof Object && Object.keys(content).length ? content : JSON.parse(content);
+        let ufeatValues = this.ufeatOrder.filter(key => key in jsonContent).map(key => jsonContent[key]);
+        retval = ufeatValues.join(" ");
+        // retval = `<button class="btn btn-sm btn-primary" onclick="this.parentNode.classList.toggle('unfolded')"> </button>
+        //   <span class='whenFolded'>${Utils.dictToStr(jsonContent)}</span>
+        //   <span class='whenUnfolded'>${JSON.stringify(jsonContent,null,2).replace(/\n/g,'<br>')}</span>`;
+      }
+      return retval
     },
     annotations(tIndex, sentence) {
       const [offset, _, annotations] = sentence; // eslint-disable-line no-unused-vars

@@ -25,47 +25,86 @@
     font-weight: bold;
     fill: #1e9989;
   }
-  * >>> svg .link-pointer {
-    fill: #656565;
-  }
   * >>> svg g.text-lemma {
     font-size: 80%;
   }
+
+  /* Deafult line link color */
   * >>> svg line.link-line {
-    stroke:#1e9989;
+    stroke:#b0b0b0;
     stroke-width: 1px;
   }
-
-  * >>> svg g.links g.link-type-det line.link-line {
-    stroke:#0078BF;
+  * >>> svg .link-pointer {
+    fill: #b0b0b0;
   }
-  * >>> svg g.links g.link-type-det .link-text,
-  * >>> svg g.links g.link-type-det .link-pointer {
-    fill: #0078BF;
+  * >>> svg text.link-text {
+    fill:#b0b0b0;
   }
 
-  * >>> svg g.links g.link-type-verb line.link-line {
-    stroke:#EF82F4;
+  /* Group 1 - Issue #199 */
+  * >>> svg g.links g.link-type-nsubj line.link-line,
+  * >>> svg g.links g.link-type-obj line.link-line,
+  * >>> svg g.links g.link-type-iobj line.link-line,
+  * >>> svg g.links g.link-type-csubj line.link-line,
+  * >>> svg g.links g.link-type-ccomp line.link-line,
+  * >>> svg g.links g.link-type-xcomp line.link-line {
+    stroke: #5b77ae;
   }
-  * >>> svg g.links g.link-type-verb .link-text,
-  * >>> svg g.links g.link-type-verb .link-pointer {
-    fill: #EF82F4;
+  * >>> svg g.links g.link-type-nsubj text.link-text,
+  * >>> svg g.links g.link-type-obj text.link-text,
+  * >>> svg g.links g.link-type-iobj text.link-text,
+  * >>> svg g.links g.link-type-csubj text.link-text,
+  * >>> svg g.links g.link-type-ccomp text.link-text,
+  * >>> svg g.links g.link-type-xcomp text.link-text {
+    fill: #003ebb;
   }
 
-  * >>> svg g.links g.link-type-punct line.link-line {
-    stroke:rgb(199, 199, 199);
+  /* Group 2 - Issue #199 */
+  * >>> svg g.links g.link-type-obl line.link-line,
+  * >>> svg g.links g.link-type-vocative line.link-line,
+  * >>> svg g.links g.link-type-expl line.link-line,
+  * >>> svg g.links g.link-type-dislocated line.link-line,
+  * >>> svg g.links g.link-type-advcl line.link-line,
+  * >>> svg g.links g.link-type-advmod line.link-line,
+  * >>> svg g.links g.link-type-discourse line.link-line,
+  * >>> svg g.links g.link-type-aux line.link-line,
+  * >>> svg g.links g.link-type-cop line.link-line,
+  * >>> svg g.links g.link-type-mark line.link-line {
+    stroke: #9d0000;
   }
-  * >>> svg g.links g.link-type-punct .link-text,
-  * >>> svg g.links g.link-type-punct .link-pointer {
-    fill: rgb(199, 199, 199);
+  * >>> svg g.links g.link-type-obl text.link-text,
+  * >>> svg g.links g.link-type-vocative text.link-text,
+  * >>> svg g.links g.link-type-expl text.link-text,
+  * >>> svg g.links g.link-type-dislocated text.link-text,
+  * >>> svg g.links g.link-type-advcl text.link-text,
+  * >>> svg g.links g.link-type-advmod text.link-text,
+  * >>> svg g.links g.link-type-discourse text.link-text,
+  * >>> svg g.links g.link-type-aux text.link-text,
+  * >>> svg g.links g.link-type-cop text.link-text,
+  * >>> svg g.links g.link-type-mark text.link-text {
+    fill: #9d0000;
   }
 
-  * >>> svg g.links g.link-type-conj line.link-line {
-    stroke: #FFA17A;
+  /* Group 3 - Issue #199 */
+  * >>> svg g.links g.link-type-nmod line.link-line,
+  * >>> svg g.links g.link-type-appos line.link-line,
+  * >>> svg g.links g.link-type-nummod line.link-line,
+  * >>> svg g.links g.link-type-acl line.link-line,
+  * >>> svg g.links g.link-type-amod line.link-line,
+  * >>> svg g.links g.link-type-det line.link-line,
+  * >>> svg g.links g.link-type-clf line.link-line,
+  * >>> svg g.links g.link-type-case line.link-line {
+    stroke: #7bcc85;
   }
-  * >>> svg g.links g.link-type-conj .link-text,
-  * >>> svg g.links g.link-type-conj .link-pointer {
-    fill: #FFA17A;
+  * >>> svg g.links g.link-type-nmod text.link-text,
+  * >>> svg g.links g.link-type-appos text.link-text,
+  * >>> svg g.links g.link-type-nummod text.link-text,
+  * >>> svg g.links g.link-type-acl text.link-text,
+  * >>> svg g.links g.link-type-amod text.link-text,
+  * >>> svg g.links g.link-type-det text.link-text,
+  * >>> svg g.links g.link-type-clf text.link-text,
+  * >>> svg g.links g.link-type-case text.link-text {
+    fill: #548c5b;
   }
 </style>
 
@@ -154,7 +193,6 @@ export default {
         }
       })
 
-
       // Compile links
       Object.keys(linksDict).sort((a, b) => a - b).forEach(levelIndex => {
         linksDict[levelIndex].forEach(link => {
@@ -236,7 +274,7 @@ export default {
     const totalWidth = this.tokens[countTokens - 1].sumX + this.tokens[countTokens - 1].width + countTokens*this.tokenSpace + 100
 
     let maxLevel = Math.max(...Object.values(this.links).map(link => link.level))
-    var margin = { top: 40, right: 50, bottom: 20, left: 50 },
+    var margin = { top: 40, right: 30, bottom: 20, left: 50 },
       width = totalWidth - margin.left - margin.right,
       height = 110 + maxLevel*15 - margin.top - margin.bottom;
 
