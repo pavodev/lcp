@@ -151,23 +151,21 @@
       :style="{top: popoverY + 'px', left: popoverX + 'px' }"
     >
       <table class="table popover-table">
-        <thead>
-          <tr>
-            <th v-for="(_, layer) in currentMeta" :key="`th-${layer}`">
+        <template v-for="(meta, layer) in currentMeta" :key="`th-${layer}`">
+          <tr v-if="layer in allowedMetaColums">
+            <td>
               {{ layer }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td v-for="(meta, layer) in currentMeta" :key="`tr-${layer}-value`">
-              <span
-                v-html="Object.entries(meta).map( ([name,value])=>`<strong>${name}:</strong> ${value}` ).join('<br>')"
-              >
-              </span>
+              <table class="table">
+                <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
+                  <tr v-if="allowedMetaColums[layer].includes(meta_key)">
+                    <td>{{ meta_key }}</td>
+                    <td>{{ meta_value }}</td>
+                  </tr>
+                </template>
+              </table>
             </td>
           </tr>
-        </tbody>
+        </template>
       </table>
     </div>
     <div
@@ -213,7 +211,7 @@
       </div>
     </div>
     <audio controls ref="audioplayer" class="d-none">
-        <source src="/test.mp3" type="audio/mpeg">
+        <source src="" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
   </div>
@@ -381,6 +379,14 @@ export default {
     "loading",
   ],
   data() {
+    let allowedMetaColums = {}
+
+    Object.keys(this.corpora.corpus.layer).forEach( layer => {
+      if (this.corpora.corpus.layer[layer].attributes && this.corpora.corpus.layer[layer].attributes.meta) {
+        allowedMetaColums[layer] = Object.keys(this.corpora.corpus.layer[layer].attributes.meta)
+      }
+    })
+
     return {
       popoverY: 0,
       popoverX: 0,
@@ -390,6 +396,7 @@ export default {
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
+      allowedMetaColums: allowedMetaColums,
       groups: this.data ? this.getGroups(this.data[0], true) : [],
       randInt: Math.floor(Math.random() * 1000),
       playIndex: -1,
