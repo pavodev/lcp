@@ -798,7 +798,7 @@ import { setTooltips, removeTooltips } from "@/tooltips";
 
 
 export default {
-  name: "QueryTestView",
+  name: "QueryView",
   data() {
     return {
       query: "",

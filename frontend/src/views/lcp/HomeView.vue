@@ -143,7 +143,8 @@
                       >R{{ corpus.meta.revision }}</span>
                     </p>
                   </div>
-                  <div class="details-button icon-1 tooltips">
+
+                  <div class="details-button icon-1 tooltips" v-if="hasAccess(corpus)">
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                     <FontAwesomeIcon class="ms-1" :icon="['fas', 'caret-down']" />
                     <div class="dropdown-app-content">
@@ -174,6 +175,13 @@
                         <i>videoscope</i>
                       </a>
                     </div>
+                  </div>
+                  <div
+                    class="details-button icon-1 tooltips disabled"
+                    title="Only Swissdox user can query this corpus"
+                    v-else
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                   <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus origin"
                     :disabled="!corpus.meta.url" target="_blank" @click.stop>
@@ -241,7 +249,7 @@
           <div class="modal-body text-start" v-if="corpusModal">
             <div class="row">
               <div class="col-5">
-                <div class="title mb-0">
+                <div class="title mb-0" v-if="hasAccess(corpusModal)">
                   <span>{{ corpusModal.meta.name }}</span>
                   <div class="icon-1 btn btn-primary btn-sm horizontal-space" title="Query corpus"
                     @click="openQueryWithCorpus(corpusModal)" data-bs-dismiss="modal">
@@ -409,6 +417,9 @@ export default {
     ProjectEdit,
   },
   methods: {
+    hasAccess(corpus) {
+      return !corpus.authUser || (corpus.authUser == true && this.userData.user.swissdoxUser == true);
+    },
     projectIcons(project) {
       let icons = ['fas']
       if (project.isPublic == true) {
@@ -609,7 +620,7 @@ export default {
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["projects"]),
+    ...mapState(useUserStore, ["projects", "userData"]),
     projectsGroups() {
       let projects = {}
       let projectIds = [];
@@ -896,6 +907,10 @@ details-button:disabled {
 
 .details-button.icon-1:hover .dropdown-app-content {
   display: block;
+}
+
+.details-button.icon-1.disabled {
+  background-color: #969696;
 }
 
 .data-type-audio .details-data-type,

@@ -152,7 +152,15 @@
                   <div
                     class="details-button icon-1 tooltips"
                     title="Query corpus"
+                    v-if="hasAccess(corpus)"
                     @click.stop="openQueryWithCorpus(corpus)"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+                  </div>
+                  <div
+                    class="details-button icon-1 tooltips disabled"
+                    title="Only Swissdox user can query this corpus"
+                    v-else
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
@@ -220,7 +228,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
-            <div class="row mb-2">
+            <div class="row mb-2" v-if="hasAccess(corpusModal)">
               <div class="col-12">
                 <div
                   class="btn btn-primary btn-sm btn-catchphrase me-1 tooltips"
@@ -418,6 +426,9 @@ export default {
     ProjectEdit,
   },
   methods: {
+    hasAccess(corpus) {
+      return !corpus.authUser || (corpus.authUser == true && this.userData.user.swissdoxUser == true);
+    },
     projectIcons(project) {
       let icons = ['fas']
       if (project.isPublic == true) {
@@ -618,7 +629,7 @@ export default {
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["projects"]),
+    ...mapState(useUserStore, ["projects", "userData"]),
     projectsGroups() {
       let projects = {}
       let projectIds = [];
@@ -881,6 +892,10 @@ details-button:disabled {
 
 .details-button.icon-1:hover .dropdown-app-content {
   display: block;
+}
+
+.details-button.icon-1.disabled {
+  background-color: #969696;
 }
 
 .data-type-audio .details-data-type,
