@@ -862,8 +862,8 @@ export default {
             this.checkAuthUser()
             this.defaultQueryDQD = corpus[0].sample_query || "";
             this.queryDQD = this.defaultQueryDQD;
+            this.preselectedCorporaId = null;
           }
-          this.preselectedCorporaId = null;
           this.validate();
         }
       },
