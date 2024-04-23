@@ -608,7 +608,7 @@
               Launch export
             </button>
           </div>
-          <div class="modal-body text-start">
+          <!-- <div class="modal-body text-start">
             <label class="form-label">SwissDox</label>
             <button
               type="button"
@@ -617,7 +617,7 @@
             >
               Launch export
             </button>
-          </div>
+          </div> -->
           <div class="modal-footer">
             <button
               type="button"
