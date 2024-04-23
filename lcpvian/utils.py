@@ -576,8 +576,11 @@ def _filter_corpora(
         for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
             ids.add(proj["id"])
 
+    ids.add("all")
     corpora: dict[str, CorpusConfig] = {}
     for corpus_id, conf in config.items():
+        if get_all is False and len([project_id for project_id in conf["projects"] if project_id in ids]) == 0:
+            continue
         idx = str(corpus_id)
         if idx == "-1":
             corpora[idx] = conf

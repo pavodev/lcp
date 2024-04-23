@@ -25,10 +25,14 @@ export const useWsStore = defineStore("wsData", {
       this.messages = []
     },
     connectToRoom(socket, userId, roomId) {
+      if (userId == null) {
+        return
+      }
+      // console.log("USER", userId, "ROOM", roomId, "SOCKET", socket)
       this.socket = socket
       this.userId = userId
       this.roomId = roomId
-      console.log("Connect to WS room", this.socket, this.roomId, userId)
+      // console.log("Connect to WS room", this.socket, this.roomId, userId)
       // if (this.socket.readyState != 1){
       // console.log("Connect to WS")
       this.waitForConnection(() => {
@@ -61,7 +65,7 @@ export const useWsStore = defineStore("wsData", {
     },
     onSocketMessage(event) {
       let data = JSON.parse(event.data);
-      console.log("Rec1a", data)
+      // console.log("Rec1a", data)
       this.add(data)
     },
     sendWSMessage(data) {

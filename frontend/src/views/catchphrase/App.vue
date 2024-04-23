@@ -64,7 +64,7 @@
             </li>
             <li class="nav-item">
               <a
-                v-if="userData && userData.user && userData.user.id"
+                v-if="userData && userData.user && userData.user.displayName"
                 class="nav-link"
                 href="/Shibboleth.sso/Logout"
               >
