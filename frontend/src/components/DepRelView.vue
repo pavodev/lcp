@@ -5,7 +5,8 @@
 
 <style scoped>
   #dep-rel-view {
-    height: 50vh;
+    padding-top: 20px;
+    height: 60vh;
   }
   * >>> svg {
     font-family: Arial, Helvetica, sans-serif;
