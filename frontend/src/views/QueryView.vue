@@ -859,6 +859,7 @@ export default {
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
+            this.checkAuthUser()
             this.defaultQueryDQD = corpus[0].sample_query || "";
             this.queryDQD = this.defaultQueryDQD;
           }
@@ -881,6 +882,7 @@ export default {
       deep: true,
     },
     selectedCorpora() {
+      this.checkAuthUser();
       let updateGraph = false;
       if (this.corpusGraph) {
         this.corpusGraph = null;
@@ -1012,6 +1014,12 @@ export default {
         this.loading = "resubmit";
       this.queryDQD = queryDQD;
       this.validate();
+    },
+    checkAuthUser() {
+      // Check if user is authaticated
+      if (this.selectedCorpora.corpus.authUser == true && (!this.userData.user || this.userData.user.swissdoxUser != true)) {
+        window.location.replace("/login");
+      }
     },
     // sendLeft() {
     //   this.$socket.sendObj({
