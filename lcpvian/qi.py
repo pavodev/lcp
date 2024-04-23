@@ -228,7 +228,9 @@ class QueryIteration:
         }
         if request_data.get("to_export", False):
             details["to_export"] = {
-                "format": str(request_data["to_export"]),
+                "format": str(request_data["to_export"].get("format","")),
+                "preview": request_data["to_export"].get("preview", False),
+                "download": request_data["to_export"].get("download", False),
                 "config": request.app["config"][str(corpora_to_use[0])],
                 "user": request_data.get("user", ""),
                 "room": request_data.get("room", "")

@@ -602,8 +602,17 @@
             <label class="form-label">Plain fromat (TSV + JSON)</label>
             <button
               type="button"
+              @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Download preview
+            </button>
+            <button
+              type="button"
               @click="exportResults('plain')"
               class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
               Launch export
             </button>
@@ -816,7 +825,6 @@ export default {
       currentResults: 0,
       selectedLanguages: ["en"],
       queryName: "",
-      exportFormat: "",
       currentTab: "dqd",
       simultaneousMode: false,
       percentageDone: 0,
@@ -1283,13 +1291,16 @@ export default {
       if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
-    async exportResults(format, download=false) {
-      const to_export = {
+    async exportResults(format, download=false, preview=false) {
+      const to_export = {};
+      to_export.format = {
         'plain':'dump',
         'swissdox':'swissdox'
       }[format];
-      console.log("need download", download);
-      this.submit(null, true, false, /*full=*/true, /*to_export=*/to_export);
+      to_export.preview = preview;
+      to_export.download = download;
+      let full = !preview;
+      this.submit(null, true, false, /*full=*/full, /*to_export=*/to_export);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
