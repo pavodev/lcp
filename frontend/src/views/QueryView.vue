@@ -316,7 +316,7 @@
         </div> -->
         <div class="col">
           <hr class="mt-5 mb-5" />
-          <span v-if="debug">
+          <span>
             <h6 class="mb-3">Query result</h6>
             <div class="progress mb-2">
               <div
