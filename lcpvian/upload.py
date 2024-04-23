@@ -344,23 +344,22 @@ async def make_schema(request: web.Request) -> web.Response:
     existing_project = cast(dict[str, JSON], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
+
     if project and project not in ids:
-        admin = os.environ["LAMA_USER"]
-        admin_org = os.getenv("LAMA_HOME_ORGANIZATION", admin.split("@")[-1])
         headers: Headers = {
             "X-API-Key": os.environ["LAMA_API_KEY"],
-            "X-Remote-User": admin,
-            "X-Schac-Home-Organization": admin_org,
-            "X-Persistent-Id": os.environ["LAMA_PERSISTENT_ID"],
+            "X-User-API-Key": key,
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
+        uname = user_acc["account"]["displayName"]
         profile: dict[str, str] = {
-            "title": project,
-            "unit": "LiRI",
+            "title": f"{uname}: private group",
+            "unit": user_acc["account"]["homeOrganization"],
             "startDate": start,
             "finishDate": finish,
         }
+
         try:
             existing_project = await _lama_project_create(headers, profile)
             if existing_project.get("status", True) is not False:
