@@ -192,6 +192,7 @@ async def _handle_message(
         "background_job_progress",
         "document",
         "document_ids",
+        "started_export",
         "export_link"
     )
     errors = (
@@ -245,15 +246,17 @@ async def _handle_message(
         # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
-    if action == "sentences":
+    if action in ("sentences","meta"):
         drops = ("can_send", "submit_query")
         for drop in drops:
             payload.pop(drop, None)
 
     if action in simples or sent_allowed:
-        if action == "sentences" and len(cast(Results, payload["result"])) < 3:
-            pass
-        else:
+        send_sents = not payload.get("full") and (
+            action == "sentences" and len(cast(Results, payload["result"])) > 2
+            or action == "meta"
+        )
+        if action in simples or send_sents:
             await push_msg(
                 app["websockets"],
                 room,
@@ -261,6 +264,8 @@ async def _handle_message(
                 skip=None,
                 just=(room, user),
             )
+        else:
+            print(f"Not sending {action} message!")
         if to_submit is not None:
             await to_submit
             to_submit = None

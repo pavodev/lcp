@@ -182,6 +182,8 @@ async def _swissdox_export(
 
     if not os.path.exists(path):
         os.mkdir(path)
+    elif os.path.exists(os.path.join(path, "swissdox.db")):
+        return None
 
     # Documents
     docs_by_range: dict[int, tuple[int,str]] = {}

@@ -1130,8 +1130,11 @@ export default {
           console.log("query stored", data);
           return;
         } else if (data["action"] == "export_link") {
-          console.log("action is export_link");
           useCorpusStore().fetchExport(data.fn);
+          useNotificationStore().add({
+            type: "success",
+            text: "Initiated export download"
+          });
         }else if (data["action"] === "stopped") {
           if (data["n"]) {
             console.log("queries stopped", data);
@@ -1185,6 +1188,10 @@ export default {
           } else {
             this.WSDataSentences = data;
             if (this.WSDataResults) {
+              if (!this.WSDataResults.result)
+                this.WSDataResults.result = {};
+              if (!this.WSDataResults.result["0"] || !this.WSDataResults.result["0"].result_sets)
+                this.WSDataResults.result["0"] = {result_sets: []};
               this.WSDataResults.result["0"].result_sets.forEach(
                 (_resultSet, index) => {
                   if (_resultSet.type == "plain") {
@@ -1213,6 +1220,12 @@ export default {
             this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
             this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
           }
+        } else if (data["action"] === "started_export") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "success",
+            text: "Started the export process...",
+          });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {

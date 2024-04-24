@@ -12,6 +12,7 @@ from .typed import JSONObject
 from .utils import _determine_language, format_meta_lines, push_msg
 
 import json
+import os
 import re
 
 EXPORT_TTL = 5000
@@ -149,6 +150,8 @@ async def export_dump(filepath: str, job_id: str, config: dict, download = False
     """
     Read the results from all the query, sentence and meta jobs and write them in dump.tsv
     """
+    if os.path.exists(filepath):
+        return
     output = open(filepath, "w")
     output.write((("\t".join(["index", "type", "label", "data"]) + f"\n")))
 

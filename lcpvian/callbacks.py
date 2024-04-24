@@ -334,6 +334,7 @@ def _meta(
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
+    full = cast(bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False))))
     status = depended.meta["_status"]
 
     to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
@@ -348,7 +349,9 @@ def _meta(
     base.meta["_meta_jobs"][job.id] = None
     base.save_meta()  # type: ignore
 
-    can_send = not base.meta.get("to_export", False)
+    can_send = not base.meta.get("to_export", False) and (
+        not full or status == "finished"
+    )
 
     action = "meta"
 
@@ -360,6 +363,7 @@ def _meta(
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
         "can_send": can_send,
+        "full": full,
         "table": table,
         "first_job": base.id,
         "msg_id": msg_id,
@@ -508,12 +512,12 @@ def _sentences(
     # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
 
-    if use_cache and not can_send and False:
-        if not connection.get(msg_id):
-            connection.set(msg_id, dumped)
-        connection.expire(msg_id, MESSAGE_TTL)
-        print("not returning sentences because searching whole corpus")
-        return
+    # if use_cache and not can_send:
+    #     if not connection.get(msg_id):
+    #         connection.set(msg_id, dumped)
+    #     connection.expire(msg_id, MESSAGE_TTL)
+    #     print("not returning sentences because searching whole corpus")
+    #     return
 
     job.save_meta()  # type: ignore
 
