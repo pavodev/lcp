@@ -965,15 +965,25 @@ KWIC => plain
           let dataToShow = data.document[0];
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           if (this.selectedCorpora.value == 59) {
+            let tracks = this.selectedCorpora.corpus.tracks;
+            if (!tracks)
+              tracks = {
+                "layers": {
+                  "Segment": {
+                    "split": "agent"
+                  },
+                  "Gesture": {
+                    "split": ["agent","bodyPart"]
+                  }
+                },
+                "group_by": ["agent"]
+              };
             dataToShow = {
-              agents: {},
-              layers: {
-                1: {name: "gesture"},
-                2: {name: "sentence"}
-              },
+              layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
               document_id: parseInt(this.selectedCorpora.value)
             };
+            dataToShow[tracks.group_by] = {};
             for (let line of data.document) {
               const [typ, props] = line;
               const aid = props.agent_id;
@@ -1001,7 +1011,7 @@ KWIC => plain
                 dataToShow.tracks[ntrack] = track;
               }
               else if (typ == "ag") {
-                dataToShow.agents[aid] = {...props.agent};
+                dataToShow.agent[aid] = {...props.agent};
               }
             }
           }
