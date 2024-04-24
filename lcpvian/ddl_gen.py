@@ -546,9 +546,13 @@ class CTProcessor:
             else:
                 to_append.append((k, v))
 
-        for k, v in to_append:
-            if v["contains"] in ordered:
-                ordered[k] = v
+        while to_append:
+            to_remove = set()
+            for n, (k, v) in enumerate(to_append):
+                if v["contains"] in ordered:
+                    ordered[k] = v
+                    to_remove.add(n)
+            to_append = [x for n, x in enumerate(to_append) if n not in to_remove]
 
         for k, v in last_append:
             ordered[k] = v
@@ -656,6 +660,36 @@ class CTProcessor:
 
             elif typ == "vector":
                 table_cols.append(Column(attr, "main.vector", nullable=nullable))
+
+            elif typ == "labels":
+                assert "nlabels" in self.layers[entity_name], AttributeError(
+                    f"Attribute {attr} is of type labels but no number of distinct labels was provided for entity type {entity_name}"
+                )
+                nbit = self.layers[entity_name]['nlabels']
+                assert str(nbit).isnumeric(), TypeError(
+                    f"The value of {entity_name}'s 'nlabels' should be an integer; got '{nbit}' instead"
+                )
+                table_cols.append(Column(attr, f"bit({nbit})", nullable=nullable))
+                # Create lookup table if needed
+                label_lookup_table_name = f"{entity_name.lower()}_labels"
+                map_attr[attr] = {"name": label_lookup_table_name, "type": "relation"}
+                if label_lookup_table_name not in [t.name for t in tables]:
+                    inttype = "int2"
+                    if int(nbit) > 32767:
+                        inttype = "int4"
+                    elif int(nbit) > 2147483647:
+                        inttype = "int8"
+                    elif int(nbit) > 9223372036854775807:
+                        raise ValueError(f"Cannot accommodate more than 9223372036854775807 distinct labels")
+                    label_lookup_table = Table(
+                        "labels",
+                        [
+                            Column("bit", inttype, primary_key=True),
+                            Column("label", "text", unique=True),
+                        ],
+                        parent=entity_name.lower(),
+                    )
+                    tables.append(label_lookup_table)
 
             elif not typ and attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
