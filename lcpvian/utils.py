@@ -60,6 +60,7 @@ from .typed import (
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
 TRUES = {"true", "1", "y", "yes"}
+FALSES = {"", "0", "null", "none"}
 
 MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
