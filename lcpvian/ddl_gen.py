@@ -105,7 +105,7 @@ class DDL:
         self.compute_prep_segs: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
              INSERT INTO {z.rstrip("0")}
-                   SELECT {x}
+                   (SELECT {x}
                         , min({y}) AS id_offset
                         , to_jsonb(array_agg(toks ORDER BY {y})) AS content
                         , '{LB}{RB}'::jsonb AS annotations
