@@ -695,6 +695,7 @@ export default {
     setTooltips();
   },
   beforeUnmount() {
+    window.removeEventListener('resize', this.updateTabsCarets);
     // this.removeTooltips();
     removeTooltips();
   },

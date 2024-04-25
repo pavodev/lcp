@@ -705,6 +705,7 @@ export default {
   },
   beforeUnmount() {
     // this.removeTooltips();
+    window.removeEventListener('resize', this.updateTabsCarets);
     removeTooltips();
   },
 };
