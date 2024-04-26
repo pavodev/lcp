@@ -483,7 +483,7 @@ class QueryIteration:
                 if attr_mapping.get("type","") == "relation":
                     attr_table = attr_mapping.get("name","")
                     if v.get("type") == "labels":
-                        nbit: int = int(config["layer"][layer].get("nlabels","1"))
+                        nbit: int = int(cast(str, config["layer"][layer].get("nlabels","1")))
                         # Join the lookup table
                         joins_later.append(
                             f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
