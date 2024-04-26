@@ -382,8 +382,14 @@ export default {
     let allowedMetaColums = {}
 
     Object.keys(this.corpora.corpus.layer).forEach( layer => {
-      if (this.corpora.corpus.layer[layer].attributes && this.corpora.corpus.layer[layer].attributes.meta) {
-        allowedMetaColums[layer] = Object.keys(this.corpora.corpus.layer[layer].attributes.meta)
+      if (this.corpora.corpus.layer[layer].attributes/* && this.corpora.corpus.layer[layer].attributes.meta*/) {
+        // allowedMetaColums[layer] = Object.keys(this.corpora.corpus.layer[layer].attributes.meta)
+        allowedMetaColums[layer] = [
+          ...Object.keys(this.corpora.corpus.layer[layer].attributes),
+          ...Object.keys(this.corpora.corpus.layer[layer].attributes.meta||{})
+        ];
+        if ("meta" in allowedMetaColums)
+          delete allowedMetaColums.meta;
       }
     })
 

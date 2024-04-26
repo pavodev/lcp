@@ -438,6 +438,7 @@ class QueryIteration:
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
+        group_by = []
         for layer in parents_with_attributes:
             alias = layer
             layer_mapping = config["mapping"]["layer"].get(layer, {})
@@ -472,6 +473,8 @@ class QueryIteration:
                 prefix_id = layer.lower()
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
+            group_by.append(f"{layer}_id")
+            joins_later = []
             for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
@@ -479,12 +482,21 @@ class QueryIteration:
                 # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
                 if attr_mapping.get("type","") == "relation":
                     attr_table = attr_mapping.get("name","")
-                    # Join the lookup table
-                    joins.append(
-                        f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
-                    )
-                    # Select the attribute from the lookup table
-                    selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
+                    if v.get("type") == "labels":
+                        nbit: int = int(config["layer"][layer].get("nlabels","1"))
+                        # Join the lookup table
+                        joins_later.append(
+                            f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
+                        )
+                        # Select the attribute from the lookup table
+                        selects.append(f'array_agg({attr_table}.label) AS {layer}_{attr}')
+                    else:
+                        # Join the lookup table
+                        joins_later.append(
+                            f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
+                        )
+                        # Select the attribute from the lookup table
+                        selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
                 else:
                     # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
                     if attr == "meta":
@@ -516,6 +528,7 @@ class QueryIteration:
                 joins.append(
                     f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
                 )
+            joins += joins_later
             # Get char_range from the main table
             selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
             # And frame_range if applicable
@@ -531,7 +544,8 @@ class QueryIteration:
             joins
         )  # left join = include non-empty entities even if other ones are empty
         joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
-        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
+        group_by_formed = ", ".join(group_by)
+        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed} GROUP BY {group_by_formed};"
         print("meta script", script)
         return script
 
