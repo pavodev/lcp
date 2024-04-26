@@ -863,7 +863,7 @@
         },
         "operator": {
             "type": "string",
-            "pattern": "(<(-|\\d+(\\.\\.\\d+)?)?>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!|in)"
+            "pattern": "((not |!)?contain|<(-|\\d+(\\.\\.\\d+)?)?>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!)"
         },
         "math_comparison": {
             "type": "string",

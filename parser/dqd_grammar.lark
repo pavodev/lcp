@@ -16,9 +16,9 @@ statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ 
 
 cqp__           : (ANYTHING _NL|_INDENT cqp__ _DEDENT)+
 
-members         : statement__                                                         -> members
+members         : statement__                                       -> members
 
-comparison      : left operator comparison_type__ _NL                       -> comparison
+comparison      : left operator comparison_type__ _NL               -> comparison
 
 left            : entity
                 | function
@@ -65,6 +65,7 @@ comparison_type__ : NUMBER_EXPRESSION                                           
                   | (LABEL|LAYER|DOTENTITY)                                          -> entity_comparison
                   | function                                                         -> function_comparison
 
+
 label           : LABEL                                                                -> label
 layer           : LAYER                                                                -> layer
 part_of         : LABEL                                                                -> part_of
@@ -104,16 +105,16 @@ FUNCTION.4            : /length|size|min|max|century|year|month|day/
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
 
+OPERATOR.2       : /((not |!)?contain|<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!)/
 LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/
 LABEL.2          : /[a-z][a-zA-Z0-9_]*/
 
-OPERATOR.1      : /(<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
 
-STRING_LITERAL  : /('.+'|".+")/
-REGEX           : /\/.+\//
-RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
-STRING          : /[^\n\r ].*/
+STRING_LITERAL.1  : /('.+'|".+")/
+REGEX.1           : /\/.+\//
+RANGE.1           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
+STRING.1          : /[^\n\r ].*/
 
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
