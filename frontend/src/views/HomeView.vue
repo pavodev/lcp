@@ -909,9 +909,17 @@ details-button:disabled {
   color: #fff;
 }
 
+.data-type-audio .text-bg-primary {
+  background-color: #0059be !important;
+}
+
 .data-type-video .details-data-type,
 .data-type-video .details-button {
   color: #622A7F;
+}
+
+.data-type-video .text-bg-primary {
+  background-color: #622A7F !important;
 }
 
 .data-type-video .details-button.icon-1 {
