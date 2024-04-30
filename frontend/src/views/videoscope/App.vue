@@ -117,4 +117,40 @@ export default {
   opacity: 0.75;
   margin-top: 2px;
 }
+
+/* videoscope colors */
+nav.bg-liri {
+  background-color: #622A7F;
+}
+* >>> .nav-tabs {
+    --bs-nav-tabs-link-active-color: #fff;
+    --bs-nav-tabs-link-active-bg: #622A7F;
+    --bs-nav-tabs-link-active-border-color: #622A7F;
+}
+* >>> .nav-link {
+    color: #622A7F;
+}
+* >>> .nav-link:hover {
+    color: #4e1e66;
+}
+* >>> .navbar a:hover {
+  color: #b390c5;
+}
+footer {
+  background-color: #622A7F;
+}
+* >>> .alert-success {
+  --bs-alert-bg: #ede7f0;
+  --bs-alert-border-color: #e1d6e6;
+}
+* >>> .btn-primary {
+  --bs-btn-bg: #622A7F;
+  --bs-btn-border-color: #622A7F;
+  --bs-btn-hover-bg: #7b4596;
+  --bs-btn-hover-border-color: #7b4596;
+  --bs-btn-active-bg: #54226d;
+  --bs-btn-active-border-color: #54226d;
+  --bs-btn-disabled-bg: #622A7F;
+  --bs-btn-disabled-border-color: #622A7F;
+}
 </style>

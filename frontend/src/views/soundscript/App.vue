@@ -142,4 +142,40 @@ export default {
   opacity: 0.75;
   margin-top: 2px;
 }
+/* soundscript colors */
+nav.bg-liri {
+  background-color: #0059be;
+}
+* >>> .nav-tabs {
+    --bs-nav-tabs-link-active-color: #fff;
+    --bs-nav-tabs-link-active-bg: #0059be;
+    --bs-nav-tabs-link-active-border-color: #0059be;
+}
+* >>> .nav-link {
+    color: #0059be;
+}
+* >>> .nav-link:hover {
+    color: #00489a;
+}
+* >>> .navbar a:hover {
+  color: #8fa4bd;
+}
+footer {
+  background-color: #0059be;
+}
+* >>> .alert-success {
+  --bs-alert-bg: #e8eff8;
+  --bs-alert-border-color: #d7e2f0;
+}
+
+* >>> .btn-primary {
+  --bs-btn-bg: #0059be;
+  --bs-btn-border-color: #0059be;
+  --bs-btn-hover-bg: #0152af;
+  --bs-btn-hover-border-color: #0152af;
+  --bs-btn-active-bg: #00489a;
+  --bs-btn-active-border-color: #00489a;
+  --bs-btn-disabled-bg: #0059be;
+  --bs-btn-disabled-border-color: #0059be;
+}
 </style>
