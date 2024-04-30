@@ -535,6 +535,18 @@ export default {
         text: "Copied to clipboard",
       });
     },
+    getAudio(resultIndex) {
+      const sentenceId = this.data[resultIndex][0];
+      let meta = this.meta[sentenceId];
+      if (!meta) return "";
+      const doc_meta = meta[this.corpora.corpus.firstClass.document];
+      if (!doc_meta) return "";
+      const media = doc_meta.media;
+      if (!media) return "";
+      const media_name = Object.keys(this.corpora.corpus.meta.mediaSlots||{'':0})[0];
+      if (!media_name) return "";
+      return JSON.parse(media)[media_name];
+    },
     showAudio(resultIndex) {
       let retval = false;
       // Just for soundscript
@@ -543,7 +555,8 @@ export default {
         const sentenceId = this.data[resultIndex][0];
         let meta = this.meta[sentenceId];
 
-        if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
+        // if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
+        if (this.getAudio(resultIndex)) {
           retval = true;
         }
       }
@@ -556,7 +569,7 @@ export default {
       let meta = this.meta[sentenceId];
       if (meta) {
         // corpus tamplete,
-        let filename = meta[this.corpora.corpus.firstClass.document].audio
+        let filename = getAudio(resultIndex); // meta[this.corpora.corpus.firstClass.document].audio
         let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
         let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25.
         let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25.

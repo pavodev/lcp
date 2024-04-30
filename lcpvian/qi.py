@@ -497,6 +497,7 @@ class QueryIteration:
                         )
                         # Select the attribute from the lookup table
                         selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
+                        group_by.append(f"{layer}_{attr}")
                 else:
                     # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
                     if attr == "meta":
@@ -537,6 +538,10 @@ class QueryIteration:
                 selects.append(
                     f'{char_range_table}."frame_range" AS {layer}_frame_range'
                 )
+
+        # Add code here to add "media" if dealing with a multimedia corpus
+        if config.get("meta", config).get("mediaSlots",{}):
+            selects.append(f"{config['document']}.media::jsonb AS {config['document']}_media")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)

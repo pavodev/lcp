@@ -775,9 +775,11 @@ def format_meta_lines(
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if any(
+                    if isinstance(res[n + 1], dict):
+                        segment[layer][prop] = json.dumps(res[n + 1])
+                    elif any(
                         isinstance(res[n + 1], type)
-                        for type in [int, str, bool, dict, list, tuple, UUID, date]
+                        for type in [int, str, bool, list, tuple, UUID, date]
                     ):
                         segment[layer][prop] = str(res[n + 1])
                     elif isinstance(res[n + 1], Range):
