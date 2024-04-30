@@ -219,7 +219,7 @@ class QueryService:
         The fetch from cache should not be needed, as on subsequent jobs
         we can get the data from app["config"]
         """
-        query = f"SELECT document_id, name FROM {schema}.document;"
+        query = f"SELECT document_id, name, media, frame_range FROM {schema}.document;"
         kwargs: DocIDArgs = {
             "user": user,
             "room": room,

@@ -588,7 +588,17 @@ def _document_ids(
     if not room:
         return None
     msg_id = str(uuid4())
-    formatted = {str(idx): name for idx, name in cast(list[tuple[int, str]], result)}
+    formatted = {
+        str(idx): {
+            'name': name,
+            'media': media,
+            'frame_range': (
+                [frame_range.lower, frame_range.upper or 0] if frame_range
+                else [0,0]
+            )
+        }
+        for idx, name, media, frame_range in cast(list[tuple[int, str, dict, Any]], result)
+    }
     action = "document_ids"
     jso = {
         "document_ids": formatted,

@@ -1009,7 +1009,8 @@ KWIC => plain
         }
         else if (data["action"] === "document_ids") {
           // console.log("DOC", data);
-          this.documentDict = data.document_ids
+          this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
+          this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media)]);
           return;
         }
         else if (data["action"] === "validate") {
