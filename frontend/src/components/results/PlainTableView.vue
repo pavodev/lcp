@@ -569,7 +569,7 @@ export default {
       let meta = this.meta[sentenceId];
       if (meta) {
         // corpus tamplete,
-        let filename = getAudio(resultIndex); // meta[this.corpora.corpus.firstClass.document].audio
+        let filename = this.getAudio(resultIndex); // meta[this.corpora.corpus.firstClass.document].audio
         let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
         let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25.
         let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25.
