@@ -169,7 +169,7 @@ async def _handle_error(
     Sanitise errors send to FE if not in debug mode
     """
     payload["debug"] = app["_debug"]
-    bad_keys = {"traceback", "original_query", "sentences_query", "sql"}
+    bad_keys = {"traceback", "original_query", "sentences_query", "sql", "consoleSQL"}
     if not app["_debug"]:
         for key in bad_keys:
             payload.pop(key, None)
@@ -406,6 +406,7 @@ async def _handle_query(
             "projected_results",
             "batches_done",
             "simultaneous",
+            "consoleSQL"
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
         await push_msg(

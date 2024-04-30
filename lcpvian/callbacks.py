@@ -285,6 +285,8 @@ def _query(
 
     if job.kwargs["debug"] and job.kwargs["sql"]:
         jso["sql"] = job.kwargs["sql"]
+    if job.kwargs["sql"]:
+        jso["consoleSQL"] = job.kwargs["sql"]
 
     if is_full and status != "finished":
         jso["progress"] = {

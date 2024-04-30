@@ -1158,6 +1158,9 @@ export default {
           if (data.sql) {
             this.sqlQuery = data.sql;
           }
+          if (data.consoleSQL) {
+            console.log("SQL", data.consoleSQL);
+          }
           this.failedStatus = false;
           data["n_results"] = data["result"].length;
           this.WSDataResults = data;
