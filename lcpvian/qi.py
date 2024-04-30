@@ -531,6 +531,7 @@ class QueryIteration:
             joins += joins_later
             # Get char_range from the main table
             selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
+            group_by.append(f"{layer}_char_range")
             # And frame_range if applicable
             if self._is_time_anchored(layer):
                 selects.append(
