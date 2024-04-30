@@ -966,54 +966,41 @@ KWIC => plain
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           if (this.selectedCorpora.value == 59) {
             let tracks = this.selectedCorpora.corpus.tracks;
-            if (!tracks)
-              tracks = {
-                "layers": {
-                  "Segment": {
-                    "split": "agent"
-                  },
-                  "Gesture": {
-                    "split": ["agent","bodyPart"]
-                  }
-                },
-                "group_by": ["agent"]
-              };
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
               document_id: parseInt(this.selectedCorpora.value)
             };
-            dataToShow[tracks.group_by] = {};
-            for (let line of data.document) {
-              const [typ, props] = line;
-              const aid = props.agent_id;
-              if (typ == "seg") {
-                const trackName = `speaker ${aid} sentences`
+            for (let gb of tracks.group_by) {
+              if (!(gb in (data.document.global_attributes||{})))
+                throw ReferenceError(`'${gb}' could not be found in global_attributes`);
+              dataToShow[gb] = Object.fromEntries(data.document.global_attributes[gb].map(v=>[v[gb+'_id'],v[gb]]))
+            }
+            for (let layer in data.document.layers) {
+              const cols = data.document.structure[layer];
+              const rows = data.document.layers[layer];
+              for (let row of rows) {
+                let trackName = layer;
+                let content = {};
+                for (let ncol in row) {
+                  let name = cols[ncol];
+                  let value = row[ncol];
+                  if (tracks.layers[layer].split.find(s=>name.toLowerCase().match(new RegExp(`^${s}(_id)?$`,'i'))))
+                    trackName = (isNaN(parseInt(value)) ? value : `${name.replace(/_id$/,'')} ${value}`) + ' ' + trackName;
+                  else
+                    content[name] = value;
+                }
                 let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null,null];
                 if (ntrack===null) {
                   ntrack = Object.keys(dataToShow.tracks).length;
-                  track = {name: trackName, layer: 2, agent: aid, sentences: [], gestures: null}
+                  track = {name: trackName, layer: Object.keys(tracks.layers).indexOf(layer)+1};
+                  track[layer] = [];
                 }
-                const frame_range = props.frame_range.replace(/[[)]/g,"").split(",").map(v=>parseInt(v));
-                track.sentences.push({content: [...props.prepared], frame_range: frame_range});
+                track[layer].push(content);
                 dataToShow.tracks[ntrack] = track;
-              }
-              else if (typ == "ges") {
-                const body_part = props.bodyPart.replace("_"," ");
-                const trackName = `speaker ${aid} ${body_part}`
-                let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null,null];
-                if (ntrack===null) {
-                  ntrack = Object.keys(dataToShow.tracks).length;
-                  track = {name: trackName, layer: 1, agent: aid, sentences: null, gestures: []}
-                }
-                const frame_range = props.frame_range.replace(/[[)]/g,"").split(",").map(v=>parseInt(v));
-                track.gestures.push({gesture: props.type, frame_range: frame_range});
-                dataToShow.tracks[ntrack] = track;
-              }
-              else if (typ == "ag") {
-                dataToShow.agent[aid] = {...props.agent};
               }
             }
+            console.log("data.document", data.document, "dataToShow", dataToShow);
           }
           console.log("dataToShow", dataToShow);
           this.showData(dataToShow);
