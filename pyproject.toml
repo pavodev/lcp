@@ -47,12 +47,12 @@ dependencies = [
   "executing~=2.0.1",
   "greenlet~=3.0.3",
   "gunicorn~=21.2.0",
-  "hatch~=1.9.4",
   "hatch-mypyc~=0.16.0",
   "hatchling<1.22",  # newer version exists but does not work with hatch
-  "lark~=1.1.9",
+  "hatch~=1.9.4",
   "keyring<25.0.0,>=24.0.0",  # poetry issue
-  "mypy~=1.9.0",
+  "lark~=1.1.9",
+  "mypy~=1.10.0",
   "numpy~=1.26.4",
   "packaging~=24.0",
   "pandas-stubs~=2.2.1.240316",
@@ -72,6 +72,7 @@ dependencies = [
   "sentry-sdk~=1.44.0",
   "SQLAlchemy~=2.0.29",
   "sqlparse~=0.4.4",
+  "sqlparse~=0.5.0",
   "sshtunnel~=0.4.0",
   "tqdm~=4.66.2",
   "types-aiofiles~=23.2.0.20240331",
@@ -82,9 +83,13 @@ dependencies = [
   "types-redis~=4.6.0.20240409",
   "types-requests~=2.31.0.20240406",
   "types-tqdm~=4.66.0.20240106",
+  "typing_extensions~=4.11.0",
   "urllib3~=2.2.1",
   "uvloop~=0.19.0",
 ]
+
+
+
 
 [tool.hatch.version]
 path = "lcpvian/__init__.py"

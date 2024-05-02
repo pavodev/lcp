@@ -35,11 +35,6 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 from uuid import uuid4
 
-try:
-    from abstract_query.create import json_to_sql
-except:
-    from .abstract_query.create import json_to_sql
-
 from aiohttp import web
 
 # we need the below to avoid a mypy keyerror in the type annotation:
@@ -49,6 +44,8 @@ from rq.job import Job
 # wish there was a nicer way to do this...delete once we are sure of 3.11+
 from typing import Self
 
+
+from .abstract_query.create import json_to_sql
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
