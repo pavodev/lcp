@@ -45,7 +45,7 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import TRUES, handle_lama_error, handle_timeout, load_env
+from .utils import TRUES, FALSES, handle_lama_error, handle_timeout, load_env
 from .video import video
 
 
@@ -58,7 +58,19 @@ SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
-DEBUG = bool(os.getenv("DEBUG", "false").lower() in ("true", "1"))
+DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
+
+AUTH_CLASS: type | None = None
+try:
+    need = os.getenv("AUTHENTICATION_CLASS")
+    if need.strip() and "." in need and need.lower() not in FALSES:
+        path, name = need.rsplit(".", 1)
+        if path and name:
+            modu = importlib.import_module(path)
+            AUTH_CLASS = getattr(modu, name)
+            print(f"Using authenication class: {need}")
+except Exception as err:
+    print(f"Warning: no authentication class found! ({err})")
 
 
 if SENTRY_DSN:
@@ -176,6 +188,8 @@ async def create_app(test: bool = False) -> web.Application:
     ws: Websockets = defaultdict(set)
     app["websockets"] = ws
     app["_debug"] = DEBUG
+
+    app["auth_class"] = AUTH_CLASS
 
     # here we store corpus_id: config
     conf: dict[str, CorpusConfig] = {}

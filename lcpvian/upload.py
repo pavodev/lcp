@@ -23,7 +23,6 @@ from .typed import Headers, JSON
 from .utils import (
     _lama_check_api_key,
     _lama_project_create,
-    ensure_authorised,
     _lama_user_details,
 )
 
