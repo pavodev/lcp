@@ -4,13 +4,6 @@
       <div class="row">
         <div class="col-5">
           <label class="form-label">Corpus</label>
-          <!-- <multiselect
-            v-model="selectedCorpora"
-            :options="corporaList"
-            :multiple="false"
-            label="name"
-            track-by="value"
-          ></multiselect> -->
           <select v-model="selectedCorpora" class="form-select">
             <option
               v-for="corpora in corpusList"
@@ -137,7 +130,7 @@
             type="button"
             class="btn btn-sm btn-primary active"
             @click="playerStop"
-            v-if="playing"
+            v-if="playerIsPlaying"
           >
             <FontAwesomeIcon :icon="['fas', 'pause']" />
           </button>
@@ -358,7 +351,7 @@
           <div class="col" @click="timelineClick">
             <div
               class="progress"
-              style="height: 10px; widdth: 100%"
+              style="height: 10px; width: 100%"
               ref="timeline"
             >
               <div
@@ -382,9 +375,17 @@
           </div>
         </div>
       </div>
-
-      <div id="eventdrops-demo" style="width: 90%" class="mt-4"></div>
-
+      <TimelineView
+        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
+        :data="currentDocumentData"
+        :playerIsPlaying="playerIsPlaying"
+        :playerCurrentTime="playerCurrentTime"
+        @updateTime="_playerSetTime"
+        :key="documentIndexKey"
+      />
+      <div v-else-if="loadingDocument == true">
+        Loading data ...
+      </div>
       <hr />
 
       <div class="container mt-4">
@@ -592,10 +593,6 @@
 </template>
 
 <script>
-import Utils from "@/utils.js";
-import * as d3 from "d3/build/d3";
-import eventDrops from "../../../vian-eventdrops/src/";
-
 import { mapState } from "pinia";
 
 import { useCorpusStore } from "@/stores/corpusStore";
@@ -604,10 +601,10 @@ import { useUserStore } from "@/stores/userStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import config from "@/config";
+import Utils from "@/utils.js";
 import EditorView from "@/components/EditorView.vue";
+import TimelineView from "@/components/videoscope/TimelineView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
-
-// import exampleData from '@/assets/example_data.json';
 
 export default {
   data() {
@@ -616,6 +613,8 @@ export default {
       selectedCorpora: null,
       currentDocument: null,
       currentDocumentData: null,
+      documentIndexKey: 0,
+      loadingDocument: false,
       isQueryValidData: null,
       loading: false,
       failedStatus: false,
@@ -632,52 +631,26 @@ export default {
       currentTime: "",
       subtitles: {},
       subtext: "",
-      playing: false,
+      playerIsPlaying: false,
+      playerCurrentTime: 0,
       playerSpeed: 1,
+      updateTimer: null,
       mainVideo: 1,
       mainAudio: 1,
-      baseMediaUrl: `${config.baseMediaUrl}/e822e422-32e1-4635-a0c9-0366970affeb/`,
       volume: 0.5,
       frameRate: 25.0,
 
       setResultTime: null,
       query: "",
-      queryDQD: `Segment s
-
-sequence@s
-	Token t1
-		upos = "DET"
-	Token t2
-		upos = "NOUN"
-
-Gesture g
-	agent = s.agent
-	type = "PG"
-	start >= s.start - 3s
-	end <= s.end + 3s
-
-KWIC => plain
-	context
-		s
-	entities
-		t1
-		t2
-		g
-`,
-      corpusData: [
-        // [2, "AKAW1", ["AKAW1_K1.mp4", "AKAW1_K2.mp4"], [1,57800]],
-        // [3, "AKAW2", ["AKAW2_K1.mp4"], [57799,103525]],
-        // [4, "AWAV1", ["AWAV1_K1.mp4"], [103524,142044]],
-        // [5, "CALK1", ["CALK1_K1.mp4", "CALK1_K2.mp4"], [142043,180563]],
-        // [6, "CHAB2", ["CHAB2_K1.mp4", "CHAB2_K2.mp4"], [180562,235692]],
-        // [7, "DAAF1", ["DAAF1_K1.mp4", "DAAF1_K2.mp4"], [0, 0]],
-      ],
+      queryDQD: '',
+      corpusData: [],
       documentDict: {},
     };
   },
   components: {
     EditorView,
     PaginationComponent,
+    TimelineView,
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -701,6 +674,13 @@ KWIC => plain
         .filter((row, rowIndex) => {
           return rowIndex >= start && rowIndex < end;
         })
+    },
+    baseMediaUrl() {
+      let retval = ""
+      if (this.selectedCorpora) {
+        retval = `${config.baseMediaUrl}/${this.selectedCorpora.corpus.corpus_id}/`
+      }
+      return retval
     },
   },
   methods: {
@@ -726,6 +706,7 @@ KWIC => plain
         //   // this.currentDocument = this.corpusData[result[2] - 1];
         // this.currentDocument = this.documentDict[result[2]];
         this.setResultTime = value;
+        // TODO: should be fixed - corpusData changed
         this.currentDocument = this.corpusData.filter(corpus => corpus[0] == result[2])[0]
         //   // console.log("Change document")
         // console.log("Set doc", this.currentDocument, this.corpusData, result)
@@ -744,8 +725,8 @@ KWIC => plain
       if (this.$refs.videoPlayer4) {
         this.$refs.videoPlayer4.play();
       }
-      this.playing = true;
-      this.chart.player.playing = true;
+      this.playerIsPlaying = true;
+      // this.$refs.timeline.player.playing = true;
     },
     playerStop() {
       if (this.$refs.videoPlayer1) {
@@ -760,8 +741,8 @@ KWIC => plain
       if (this.$refs.videoPlayer4) {
         this.$refs.videoPlayer4.pause();
       }
-      this.playing = false;
-      this.chart.player.playing = false;
+      this.playerIsPlaying = false;
+      // this.$refs.timeline.player.playing = false;
     },
     playerFromStart() {
       this._playerSetToFrame(0);
@@ -789,15 +770,19 @@ KWIC => plain
     _playerSetTime(value) {
       if (this.$refs.videoPlayer1) {
         this.$refs.videoPlayer1.currentTime = value;
+        this.playerCurrentTime = value;
       }
       if (this.$refs.videoPlayer2) {
         this.$refs.videoPlayer2.currentTime = value;
+        this.playerCurrentTime = value;
       }
       if (this.$refs.videoPlayer3) {
         this.$refs.videoPlayer3.currentTime = value;
+        this.playerCurrentTime = value;
       }
       if (this.$refs.videoPlayer4) {
         this.$refs.videoPlayer4.currentTime = value;
+        this.playerCurrentTime = value;
       }
     },
     playerFrameDown(value) {
@@ -847,9 +832,10 @@ KWIC => plain
       if (filtered.length) {
         this.subtext = this.subtitles[filtered[0]];
       }
-      if (this.chart && this.$refs.videoPlayer1) {
-        this.chart.player.time = this.$refs.videoPlayer1.currentTime;
-      }
+      // if (this.$refs.timeline && this.$refs.videoPlayer1) {
+      //   this.playerCurrentTime = this.$refs.videoPlayer1.currentTime;
+      //   this.$refs.timeline.player.time = this.$refs.videoPlayer1.currentTime;
+      // }
     },
     playerMainVideo(number) {
       this.mainVideo = number;
@@ -940,36 +926,21 @@ KWIC => plain
         this.loading = true;
         this.percentageDone = 0.001;
       }
-      // useCorpusStore()
-      //   .fetchQuery(data)
-      //   .then((data) => {
-      //     this.loading = true
-      //   });
     },
-    // connectToRoom() {
-    //   this.waitForConnection(() => {
-    //     this.$socket.sendObj({
-    //       room: this.roomId,
-    //       // room: null,
-    //       action: "joined",
-    //       user: this.userId,
-    //     });
-    //     this.$socket.onmessage = this.onSocketMessage;
-    //   }, 500);
-    // },
     onSocketMessage(data) {
       // let data = JSON.parse(event.data);
-      console.log("SOC", data)
+      // console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
-          let dataToShow = data.document[0];
+          let dataToShow = {};
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
+          let document_id = parseInt(this.currentDocument[0])
           if (this.selectedCorpora.value == 59) {
             let tracks = this.selectedCorpora.corpus.tracks;
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
-              document_id: parseInt(this.selectedCorpora.value)
+              document_id: document_id
             };
             for (let gb of tracks.group_by) {
               if (!(gb in (data.document.global_attributes||{})))
@@ -1000,17 +971,45 @@ KWIC => plain
                 dataToShow.tracks[ntrack] = track;
               }
             }
-            console.log("data.document", data.document, "dataToShow", dataToShow);
           }
-          console.log("dataToShow", dataToShow);
-          this.showData(dataToShow);
+
+          let timelineData = []
+          for (const [key, track] of Object.entries(dataToShow.tracks)) {
+            let values = []
+            const keyName = dataToShow.layers[track.layer].name;
+
+            for (const entry of track[keyName]) {
+              const [startFrame, endFrame] = entry.frame_range
+              let shift = this.currentDocument[3][0];
+              let startTime = (parseFloat(startFrame - shift) / this.frameRate);
+              let endTime = (parseFloat(endFrame - shift) / this.frameRate);
+              values.push({
+                x1: startTime,
+                x2: endTime,
+                // TODO [HARDCODED]: This should be changed
+                n: keyName == "Segment" ? entry.prepared.map(row => row[0]).join(" ") : entry.type,
+                l: key
+              })
+            }
+
+            timelineData.push({
+              name: track.name,
+              heightLines: 1,
+              values: values
+            })
+          }
+
+          this.currentDocumentData = timelineData;
+          this.loadingDocument = false;
+          this.documentIndexKey++;
           this._setVolume();
           return;
         }
         else if (data["action"] === "document_ids") {
-          // console.log("DOC", data);
+          console.log("DOC", data);
+          // this.documentDict = data.document_ids
           this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
-          this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media)]);
+          this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media),props.frame_range]);
           return;
         }
         else if (data["action"] === "validate") {
@@ -1077,184 +1076,6 @@ KWIC => plain
             text: data.info,
           });
         }
-      }
-    },
-    // waitForConnection(callback, interval) {
-    //   if (this.$socket.readyState === 1) {
-    //     callback();
-    //   } else {
-    //     setTimeout(() => {
-    //       this.waitForConnection(callback, interval);
-    //     }, interval);
-    //   }
-    // },
-    showData(data) {
-      this.chart = eventDrops({
-        d3,
-        range: {
-          start: new Date("2022-01-01T00:00:00.000"),
-          end: new Date("2022-01-01T00:50:00.000"),
-        },
-        // axis: {
-        //   formats: {
-        //       milliseconds: '%L',
-        //       seconds: ':%S',
-        //       minutes: '%H:%M',
-        //       hours: '%H',
-        //       days: '',
-        //       weeks: '',
-        //       months: '',
-        //       year: '',
-        //   },
-        //   verticalGrid: false,
-        //   tickPadding: 6,
-        // },
-        drop: {
-          date: (d) => new Date(d.date),
-          // onClick: e => {
-          //   // console.log(e, 123123)
-          //   this._playerSetToFrame(e.frameNumber)
-          // },
-          // onMouseOver: commit => {
-          //   tooltip
-          //     .transition()
-          //     .duration(200)
-          //     .style('opacity', 1)
-          //     .style('pointer-events', 'auto');
-
-          //   tooltip
-          //     .html(`
-          //       <div class="content">
-          //         ${commit.message}
-          //       </div>
-          //     `)
-          //     .style('left', `${d3.event.pageX - 30}px`)
-          //     .style('top', `${d3.event.pageY + 20}px`)
-          // },
-          // onMouseOut: () => {
-          //   tooltip
-          //     .transition()
-          //     .duration(500)
-          //     .style('opacity', 0)
-          //     .style('pointer-events', 'none');
-          // },
-        },
-      });
-
-      // this.chart.player.time = 0
-
-      let that = this;
-      function calcDate(frameNumber) {
-        try {
-          let shift = that.corpusData[that.currentDocument[0]-2][3][0]
-          frameNumber = frameNumber - shift
-        }
-        catch {
-          console.log("Shift error")
-        }
-        Utils.msToTime((frameNumber * 1000) / that.frameRate);
-        let time = new Date((parseFloat(frameNumber) / that.frameRate) * 1000)
-          .toISOString()
-          .substring(11, 23);
-        return `2022-01-01T${time}`;
-      }
-
-      // Prepare data - group by agent
-      let _tmpData = {};
-      if (data && data.tracks) {
-        for (let track of Object.values(data.tracks)) {
-          if (track.sentences && track["agent"]) {
-            if (!(track["agent"] in _tmpData)) {
-              _tmpData[track["agent"]] = {
-                sentences: [],
-                gestures: [],
-              };
-            }
-            let _track = {
-              name: track["name"],
-              data: [],
-              height: 50,
-            };
-            // let _track2 = {
-            //   name: "Annotation",
-            //   data: [],
-            // };
-            // let _track3 = {
-            //   name: "Lemma",
-            //   data: [],
-            // };
-            for (let sentence of track["sentences"]) {
-              _track.data.push({
-                date: calcDate(sentence.frame_range[0]),
-                dateEnd: calcDate(sentence.frame_range[1]),
-                specClass: "threeLine",
-                l1: sentence.content.map((text) => text[0]).join(" "),
-                l2: sentence.content.map((text) => text[1]).join(" "),
-                l3: sentence.content.map((text) => text[2]).join(" "),
-                frameRange: sentence.frame_range,
-              });
-              // _track2.data.push({
-              //   date: calcDate(sentence.frame_range[0]),
-              //   dateEnd: calcDate(sentence.frame_range[1]),
-              //   message: sentence.content.map((text) => text[3]).join(" "),
-              //   frameRange: sentence.frame_range,
-              // });
-              // _track3.data.push({
-              //   date: calcDate(sentence.frame_range[0]),
-              //   dateEnd: calcDate(sentence.frame_range[1]),
-              //   message: sentence.content.map((text) => text[2]).join(" "),
-              //   frameRange: sentence.frame_range,
-              // });
-              this.subtitles[sentence.frame_range[1]] = sentence.content
-                .map((text) => text[1])
-                .join(" ");
-            }
-            _tmpData[track["agent"]]["sentences"].push(_track);
-            // _tmpData[track["agent"]]["sentences"].push(_track2);
-            // _tmpData[track["agent"]]["sentences"].push(_track3);
-          }
-          if (track.gestures && track["agent"]) {
-            if (!(track["agent"] in _tmpData)) {
-              _tmpData[track["agent"]] = {
-                sentences: [],
-                gestures: [],
-              };
-            }
-            let _track = {
-              name: track["name"],
-              data: [],
-            };
-            for (let gesture of track["gestures"]) {
-              _track.data.push({
-                date: calcDate(gesture.frame_range[0]),
-                dateEnd: calcDate(gesture.frame_range[1]),
-                specClass: "oneLine",
-                l2: gesture.gesture,
-                frameRange: gesture.frame_range,
-              });
-            }
-            _tmpData[track["agent"]]["gestures"].push(_track);
-          }
-        }
-      }
-
-      let repositoriesData = [];
-      for (let agentId of Object.keys(_tmpData)) {
-        for (let sentence of _tmpData[agentId]["sentences"]) {
-          repositoriesData.push(sentence);
-        }
-        for (let gesture of _tmpData[agentId]["gestures"]) {
-          repositoriesData.push(gesture);
-        }
-      }
-
-      d3.select("#eventdrops-demo").data([repositoriesData]).call(this.chart);
-
-      // this.loading = false;
-      if (this.setResultTime) {
-        // console.log("Set time", this.setResultTime)
-        this._playerSetTime(this.setResultTime);
-        this.setResultTime = null;
       }
     },
     setExample(num) {
@@ -1356,30 +1177,6 @@ KWIC => plain
       this.editorIndex++
       this.validate()
     },
-    // async fetch() {
-    //   let data = {
-    //     user: this.userId,
-    //     room: this.roomId,
-    //     // room: null,
-    //   };
-    //   // useCorpusStore().fetchQueries(data);
-    //   let retval = await useCorpusStore().fetchQuery(data);
-    //   if (retval.status == "started") {
-    //     this.loading = true;
-    //     this.percentageDone = 0.001;
-    //   }
-    // },
-    sendLeft() {
-      this.$socket.sendObj({
-        room: this.roomId,
-        // room: null,
-        action: "left",
-        user: this.userId,
-      });
-    },
-    // resume() {
-    //   this.submit(null, true);
-    // },
     stop() {
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
@@ -1400,7 +1197,9 @@ KWIC => plain
       });
     },
     loadDocuments() {
+      this.loadingDocument = true
       this.documentDict = {}
+      this.currentDocumentData = {}
       if (this.roomId && this.userId) {
         useCorpusStore().fetchDocuments({
           room: this.roomId,
@@ -1428,6 +1227,8 @@ KWIC => plain
         console.log("Error player");
       }
       if (this.currentDocument) {
+        this.currentDocumentData = {}
+        this.loadingDocument = true
         // console.log("AA", this.currentDocument)
         useCorpusStore().fetchDocument({
           doc_id: this.currentDocument[0],
@@ -1455,34 +1256,30 @@ KWIC => plain
         this.playerFrameUp(25);
       }
     });
-    // window.addEventListener("keypress", (e) => {
-    //   if (e.key == " ") {
-    //     e.preventDefault();
-    //     if (this.playing) {
-    //       this.playerStop();
-    //     } else {
-    //       this.playerPlay();
-    //     }
-    //   }
-    // });
-    window.addEventListener("timelineClick", () => {
-      if (this.chart && this.chart.player) {
-        let time = this.chart.player.time;
-        this._playerSetTime(time);
-      }
-    });
-
-
-    // this.showData(exampleData.document[0])
-    // exampleData;
+    this.setExample(1);
   },
-  // beforeMount() {
-  //   window.addEventListener("beforeunload", this.sendLeft);
-  // },
-  // unmounted() {
-  //   this.sendLeft();
-  // },
+  unmounted() {
+    if (this.updateTimer) {
+      clearInterval(this.updateTimer);
+    }
+    // this.sendLeft();
+  },
   watch: {
+    playerIsPlaying: {
+      handler() {
+        if (this.updateTimer) {
+          clearInterval(this.updateTimer);
+        }
+        if (this.playerIsPlaying) {
+          this.updateTimer = setInterval(() => {
+            this.playerCurrentTime = this.$refs.videoPlayer1.currentTime;
+          }, 30);
+        } else {
+          console.log("Stopped")
+        }
+      },
+      immediate: true,
+    },
     corpora: {
       handler() {
         if (this.preselectedCorporaId) {

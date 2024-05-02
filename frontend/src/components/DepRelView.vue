@@ -110,7 +110,7 @@
 </style>
 
 <script>
-import * as d3 from 'd3-v7'
+import * as d3 from 'd3'
 
 const browserText = (function () {
   const canvas = document.createElement('canvas'),
@@ -147,6 +147,7 @@ export default {
       let matrix = []
       let linksDict = {}
       let groups = {}
+
       data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array
         ? tokenIdOrArray.forEach( (tokenId) => groups[tokenId] = tokenId in groups ? groups[tokenId] : groupId )
         : groups[tokenIdOrArray] = tokenIdOrArray in groups ? groups[tokenIdOrArray] : groupId

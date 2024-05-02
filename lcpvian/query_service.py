@@ -266,13 +266,32 @@ class QueryService:
         # Start work on new logic with Tangram4 (corpus_id 59)
         if corpus == 59:
             # TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template (pass config to this method)
-            query = f"""WITH doc AS (SELECT frame_range FROM {schema}.document WHERE document_id = 3),
-    seg AS (SELECT 'layer', 'Segment', jsonb_build_object('frame_range', {range_to_array('s.frame_range')}, 'prepared', ps.content, 'agent_id', s.agent_id) AS props FROM {schema}.segment0 s, doc CROSS JOIN {schema}.prepared_segment ps WHERE s.frame_range && doc.frame_range AND s.segment_id = ps.segment_id),
-    ges AS (SELECT 'layer', 'Gesture', jsonb_build_object('frame_range', {range_to_array('g.frame_range')}, 'type', g.type, 'bodyPart', g.body_part, 'agent_id', g.agent_id) AS props FROM {schema}.gesture g, doc WHERE g.frame_range && doc.frame_range),
-    ag AS (SELECT DISTINCT 'glob', 'agent', jsonb_build_object('agent', a.agent, 'agent_id', a.agent_id) AS props FROM {schema}.agent a, seg, ges WHERE a.agent_id IN ((seg.props->'agent_id')::int, (ges.props->'agent_id')::int))
-SELECT * FROM seg
-UNION ALL SELECT * FROM ges
-UNION ALL SELECT * FROM ag;"""
+            query = f"""
+                WITH doc AS (SELECT frame_range FROM {schema}.document WHERE document_id = :doc_id),
+                seg AS (
+                    SELECT 'layer', 'Segment', jsonb_build_object('frame_range', {range_to_array('s.frame_range')},
+                        'prepared', ps.content, 'agent_id', s.agent_id) AS props
+                    FROM {schema}.segment0 s, doc
+                    CROSS JOIN {schema}.prepared_segment ps
+                    WHERE s.frame_range && doc.frame_range
+                    AND s.segment_id = ps.segment_id
+                ),
+                ges AS (
+                    SELECT 'layer', 'Gesture', jsonb_build_object('frame_range', {range_to_array('g.frame_range')},
+                        'type', g.type, 'bodyPart', g.body_part, 'agent_id', g.agent_id) AS props
+                    FROM {schema}.gesture g, doc
+                    WHERE g.frame_range && doc.frame_range
+                ),
+                ag AS (
+                    SELECT DISTINCT 'glob', 'agent',
+                        jsonb_build_object('agent', a.agent, 'agent_id', a.agent_id) AS props
+                    FROM {schema}.agent a, seg, ges
+                    WHERE a.agent_id IN ((seg.props->'agent_id')::int, (ges.props->'agent_id')::int)
+                )
+                SELECT * FROM seg
+                UNION ALL SELECT * FROM ges
+                UNION ALL SELECT * FROM ag;
+            """
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
         job: Job
