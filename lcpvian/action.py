@@ -12,6 +12,9 @@ from time import sleep
 
 from .utils import load_env
 
+load_env()
+
+
 FE_INSTALL = "npm install"
 FE_BUILD_CP = "npm run build:catchphrase"
 FE_SERVE_CP = "npm run serve:catchphrase"
@@ -21,11 +24,10 @@ FE_BUILD_SS = "npm run build:soundscape"
 FE_SERVE_SS = "npm run serve:soundscape"
 FE_BUILD_SS = "npm run build:soundscape"
 FE_SERVE_SS = "npm run serve:soundscape"
+
 WORKER_START = "lcp-worker"
+
 LCP = "lcp"
-
-load_env()
-
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
@@ -33,45 +35,63 @@ EDROPS_DIR = os.path.join(ROOT, "vian-eventdrops")
 KILL_PORT = f"kill -9 `lsof -t -i:{os.getenv('AIO_PORT', '9090')}`"
 
 
-def npm_install():
+def npm_install() -> subprocess.Popen:
     return subprocess.Popen(FE_INSTALL.split(), cwd=FRONTEND_DIR)
 
 
-def edrop():
+def edrop() -> subprocess.Popen:
     return subprocess.Popen(FE_INSTALL.split(), cwd=EDROPS_DIR)
 
 
-def build(ss: bool = False):
+def build(ss: bool = False) -> subprocess.Popen:
     npm_install().wait()
     cmd = FE_BUILD_SS if ss else FE_BUILD_CP
     return subprocess.Popen(cmd.split(), cwd=FRONTEND_DIR)
 
 
-def serve(ss: bool = False):
+def serve(ss: bool = False) -> subprocess.Popen:
     cmd = FE_SERVE_SS if ss else FE_SERVE_CP
     return subprocess.Popen(cmd.split(), cwd=FRONTEND_DIR)
 
 
-def serve_ss():
+def serve_ss() -> subprocess.Popen:
+    """
+    Serve all processes needed for soundscript
+    """
     return serve(ss=True)
 
 
-def serve_cp():
+def serve_cp() -> subprocess.Popen:
+    """
+    Serve all processes needed for catchphrase
+    """
     return serve(ss=False)
 
 
-def setup_cp():
+def setup_cp() -> None:
+    """
+    Build catchphrase project
+    """
     edrop().wait()
     npm_install().wait()
     build().wait()
-    print("Finished! You can now run `lcp-frontend-serve` to run the frontend...")
+    print(
+        "Finished! You can now run `lcp-frontend-serve` to run the catchphrase frontend..."
+    )
+    return None
 
 
 def setup_ss():
+    """
+    Build soundscipt project
+    """
     edrop().wait()
     npm_install().wait()
     build(ss=True).wait()
-    print("Finished! You can now run `lcp-frontend-serve` to run the frontend...")
+    print(
+        "Finished! You can now run `lcp-frontend-serve` to run the soundscript frontend..."
+    )
+    return None
 
 
 def start_app(ss: bool = False) -> None:
@@ -120,9 +140,9 @@ def start_app(ss: bool = False) -> None:
     return None
 
 
-def start_cp():
+def start_cp() -> None:
     return start_app(ss=False)
 
 
-def start_ss():
+def start_ss() -> None:
     return start_app(ss=True)
