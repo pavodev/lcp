@@ -378,6 +378,7 @@
       <TimelineView
         v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
         :data="currentDocumentData"
+        :mediaDuration="currentMediaDuration"
         :playerIsPlaying="playerIsPlaying"
         :playerCurrentTime="playerCurrentTime"
         @updateTime="_playerSetTime"
@@ -613,6 +614,7 @@ export default {
       selectedCorpora: null,
       currentDocument: null,
       currentDocumentData: null,
+      currentMediaDuration: 0,
       documentIndexKey: 0,
       loadingDocument: false,
       isQueryValidData: null,
@@ -999,6 +1001,7 @@ export default {
             })
           }
 
+          this.currentMediaDuration = this.$refs.videoPlayer1.duration;
           this.currentDocumentData = timelineData;
           this.loadingDocument = false;
           this.documentIndexKey++;
@@ -1200,6 +1203,7 @@ KWIC => plain
       this.loadingDocument = true
       this.documentDict = {}
       this.currentDocumentData = {}
+      this.currentMediaDuration = 0
       if (this.roomId && this.userId) {
         useCorpusStore().fetchDocuments({
           room: this.roomId,

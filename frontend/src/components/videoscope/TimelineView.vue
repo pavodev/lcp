@@ -99,7 +99,7 @@ function moveRight() {
 
 export default {
   name: "TimelineView",
-  props: ["data", "playerIsPlaying", "playerCurrentTime"],
+  props: ["data", "playerIsPlaying", "playerCurrentTime", "mediaDuration"],
   data() {
     return {
       currentTime: 0,
@@ -179,7 +179,7 @@ export default {
     svg = d3.select("#timeline-svg");
 
     // Create the scaleLinear
-    linearScale = d3.scaleLinear().domain([0, 156]).range([padding, width - 1]);
+    linearScale = d3.scaleLinear().domain([0, this.mediaDuration]).range([padding, width - 1]);
 
     // Add names to the chart
     let heightStart = {}
