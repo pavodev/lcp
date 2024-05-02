@@ -39,26 +39,7 @@
     <div class="row">
       <div class="col-7">
         <div class="mb-3">
-          <label for="corpus-license" class="form-label">Data type: <b>{{ corpusData.meta.dataType ? corpusData.meta.dataType : 'text' }}</b></label>
-          <br>
-          <label for="corpus-license" class="form-label">Data type</label>
-          <div class="row">
-            <div class="col mb-2">
-              <div class="form-check form-check-inline" v-for="dataType in dataTypes" :key="dataType.name">
-                <input
-                  class="form-check-input"
-                  type="radio"
-                  v-model="corpusData.meta.dataType"
-                  :id="dataType.tag"
-                  :value="dataType.tag"
-                  :selected="corpusData.meta.dataType === dataType.tag"
-                >
-                <label class="form-check-label" :for="dataType.tag">
-                  {{ dataType.name }}
-                </label>
-              </div>
-            </div>
-          </div>
+          <label for="corpus-license" class="form-label">Data type: <b>{{ corpusDataType(corpusData) }}</b></label>
         </div>
       </div>
     </div>
@@ -128,15 +109,12 @@ a:hover {
 </style>
 
 <script>
+import Utils from "@/utils";
 
 export default {
   name: "CorpusMetdataEdit",
   props: ["corpus"],
   data() {
-    let corpusDataTmp = this.corpus;
-    if (!corpusDataTmp.meta.dataType) {
-      corpusDataTmp.meta.dataType = "text";
-    }
     return {
       userLicense: this.corpus.meta && this.corpus.meta.userLicense ? atob(this.corpus.meta.userLicense) : "",
       licenses: [
@@ -149,13 +127,11 @@ export default {
         {tag: "cc-zero", name: "CC-0", url: "https://creativecommons.org/publicdomain/zero/1.0/"},
         {tag: "user-defined", name: "User defined", url: null}
       ],
-      corpusData: { ...corpusDataTmp },
-      dataTypes: [
-        {tag: "text", name: "Text Corpus"},
-        {tag: "audio", name: "Text + Audio Corpus"},
-        {tag: "video", name: "Text + Video Corpus"}
-      ],
+      corpusData: { ...this.corpus },
     }
+  },
+  methods: {
+    corpusDataType: Utils.corpusDataType,
   },
   watch: {
     userLicense() {
