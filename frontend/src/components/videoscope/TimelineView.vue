@@ -44,31 +44,57 @@ import * as d3 from 'd3'
 import Utils from "@/utils.js";
 
 let svg = null;
+let zoom;
 let linearScale = null;
 let currentTime = 0;
 let playerState = false;
 const padding = 180;
 const width = document.body.clientWidth - 20;
+const paddingBeforeTimeline = 40;
 
 // Function to update the vertical timeline
 function updateVerticalLine(xPosition) {
   const verticalLine = svg.selectAll(".vertical-line");
   verticalLine.attr("x1", xPosition).attr("x2", xPosition);
 
+  const rightBoundary = width - paddingBeforeTimeline;
+
   // Hide vertical line
   // console.log("PLB", playButton.checked)
-  if (xPosition < padding) {
-    // if (playButton.checked) {
-      // console.log("MOVE")
-    // }
-    // else {
-      // console.log("HIDE")
-    // }
+  if (xPosition > rightBoundary) {
+    if (playerState) {
+      moveRight()
+    }
+    else {
+      verticalLine.attr("opacity", 0);
+    }
+  }
+  else if (xPosition < padding) {
     verticalLine.attr("opacity", 0);
   }
   else {
     verticalLine.attr("opacity", 1);
   }
+}
+
+function moveRight() {
+  const currentTransform = d3.zoomTransform(svg.node());
+  const newXScale = currentTransform.rescaleX(linearScale);
+
+  // Get the width of the visible range
+  const visibleWidth = newXScale.range()[1] - newXScale.range()[0];
+
+  // Get the width of the entire data range
+  const totalWidth = newXScale.domain()[1] - newXScale.domain()[0];
+
+  // Calculate the amount to move the graph to the right (one width)
+  const moveAmount = totalWidth - visibleWidth;
+
+  // Calculate the new translation along the x-axis
+  const newTx = currentTransform.x + moveAmount;
+
+  // Update the zoom transform with the new translation
+  svg.call(zoom.transform, d3.zoomIdentity.translate(newTx, currentTransform.y).scale(currentTransform.k));
 }
 
 export default {
@@ -227,7 +253,6 @@ export default {
     // END OF THE BARS
 
     // Add x-axis group
-    const paddingBeforeTimeline = 40;
     const xAxisGroup = svg
       .append("g")
       .attr("class", "x-axis")
@@ -244,7 +269,7 @@ export default {
     xAxisGroup.call(xAxis);
 
     // Create zoom behavior
-    const zoom = d3
+    zoom = d3
       .zoom()
       .scaleExtent([1, 75])
       .translateExtent([
