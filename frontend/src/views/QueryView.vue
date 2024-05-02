@@ -101,13 +101,7 @@
               type="button"
               @click="submit"
               class="btn btn-primary me-1 mb-1"
-              :disabled="
-                (selectedCorpora && selectedCorpora.length == 0) ||
-                loading===true ||
-                (isQueryValidData != null && isQueryValidData.valid == false) ||
-                !query ||
-                !selectedLanguages
-              "
+              :disabled="isSubmitDisabled()"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
@@ -435,8 +429,14 @@
         percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)
       "
       style="text-align: center"
+      class="mb-3"
     >
-      No results found!
+      <div v-if="WSDataResults && WSDataResults.total_results_so_far == 0">
+        No results found!
+      </div>
+      <div>
+        Loading results...
+      </div>
     </div>
     <div class="container-fluid">
       <div class="row">
@@ -1279,6 +1279,14 @@ export default {
         data["percentage_done"] += this.percentageDone;
         this.WSDataResults = data;
       }
+    },
+    isSubmitDisabled() {
+      console.log("AA", this.selectedCorpora, this.loading)
+      return (this.selectedCorpora && this.selectedCorpora.length == 0) ||
+              this.loading===true ||
+              (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
+              !this.query ||
+              !this.selectedLanguages
     },
     switchGraph() {
       if (!this.corpusGraph && this.selectedCorpora)

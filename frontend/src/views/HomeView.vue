@@ -5,7 +5,7 @@
         <div class="col">
           <Title :title="appName" :isItalic="appType == 'lcp' ? false : true" />
         </div>
-        <div class="col mt-1 text-end">
+        <div class="col mt-1 text-end" v-if="userData && userData.user && userData.user.displayName">
           <button
             type="button"
             class="btn btn-secondary btn-sm"

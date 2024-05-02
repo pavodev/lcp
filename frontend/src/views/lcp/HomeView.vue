@@ -111,7 +111,7 @@
                 @click="openCorpus(corpus)"
                 class="col-4 mb-3"
               >
-                <div class="corpus-block" :class="corpus.meta.dataType ? `data-type-${corpus.meta.dataType}` : ''">
+                <div class="corpus-block" :class="`data-type-${corpusDataType(corpus)}`">
                   <div class="corpus-block-header px-4 py-3">
                     <p class="title mb-0">{{ corpus.meta.name }}</p>
                     <!-- <p class="author mb-0">
@@ -158,7 +158,7 @@
                       </a>
                       <a
                         :href="getAppLink('soundscript', corpus)"
-                        v-if="['audio', 'video'].includes(corpus.meta.dataType)"
+                        v-if="['audio', 'video'].includes(corpusDataType(corpus))"
                         target="_blank"
                         @click.stop
                       >
@@ -167,7 +167,7 @@
                       </a>
                       <a
                         :href="getAppLink('videoscope', corpus)"
-                        v-if="['video'].includes(corpus.meta.dataType)"
+                        v-if="['video'].includes(corpusDataType(corpus))"
                         target="_blank"
                         @click.stop
                       >
@@ -199,8 +199,8 @@
                     <FontAwesomeIcon :icon="['fas', 'gear']" />
                   </div>
                   <div class="details-data-type icon-3 tooltips" title="Data type" v-if="appType == 'lcp'">
-                    <FontAwesomeIcon :icon="['fas', 'music']" v-if="corpus.meta.dataType == 'audio'" />
-                    <FontAwesomeIcon :icon="['fas', 'video']" v-else-if="corpus.meta.dataType == 'video'" />
+                    <FontAwesomeIcon :icon="['fas', 'music']" v-if="corpusDataType(corpus) == 'audio'" />
+                    <FontAwesomeIcon :icon="['fas', 'video']" v-else-if="corpusDataType(corpus) == 'video'" />
                     <FontAwesomeIcon :icon="['fas', 'font']" v-else />
                   </div>
                 </div>
@@ -420,6 +420,7 @@ export default {
     hasAccess(corpus) {
       return !corpus.authUser || (corpus.authUser == true && this.userData.user.swissdoxUser == true);
     },
+    corpusDataType: Utils.corpusDataType,
     projectIcons(project) {
       let icons = ['fas']
       if (project.isPublic == true) {
