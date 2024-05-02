@@ -14,8 +14,6 @@ We aim to provide an 'authoritative' deployment of the system (including its var
 
 ## Installing the system locally
 
-> Note! Currently this is not 100% possible, as some submodules are not yet open sourced. This will change soon! Till then, do not attempt local installation, it will not work.
-
 You will need:
 
 * This repo and its submodules
@@ -41,7 +39,7 @@ git clone --recurse-submodules https://github.com/liri-uzh/lcp.git
 cd lcp
 ````
 
-This will also clone the `abstract-query`, `lcp-upload`, and `vian-eventdrops` submodules; each should be available in the root of this repo.
+This will also clone any needed submodules; each should be available in the root of this repo.
 
 ### Installing Python3.11 / creating a virtual environment
 
@@ -62,7 +60,7 @@ source ./lcp-venv/bin/activate
 From the repo root dir you can do: 
 
 ```python
-pip install -e abstract-query -e lcp-upload -e .
+pip install -e .
 ```
 
 This makes various helper commands available on the system:
@@ -71,7 +69,7 @@ This makes various helper commands available on the system:
 lcp-setup
 ```
 
-will create a `~/lcp/.env` with some default and some empty settings, which you can then edit.
+will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required
 
 You can also run:
 
@@ -83,13 +81,13 @@ to install the frontend (assuming you have node.js and NPM installed)
 
 ### Configuring `.env`
 
-We use a `.env` file to manage the backend configuration. Hopefully, the Python installation should also have created a file: `~/lcp/.env`. If it's not there, copy `.env.example` to your LCP directory:
+We use a `.env` file to manage the backend configuration. Running the `lcp-setup` command should have created `~/lcp/.env`. If it's not there, copy `.env.example` as seen in this repo to your LCP directory:
 
 ```bash
 cp .env.example ~/lcp/.env
 ```
 
-The LCP app will look in `~/lcp` for a `.env` file. If you didn't install into the home directory, hopefully it is smart enough to find a `.env` file in your current working directory. If it can't find either, it is unlikely to work.
+When LCP is started, it will look in `~/lcp` for a `.env` file. If you didn't install into the home directory, hopefully it is smart enough to find a `.env` file in your current working directory. If it can't find either, it is unlikely to work.
 
 #### `.env` settings
 
@@ -104,11 +102,11 @@ AUTHENTICATION_CLASS=somecodedir.auth.Authentication
 
 #### Authentication classes
 
-> Configurable auth is work in progress, sorry
+Our app uses LAMa and SWITCH/edu-id for authentication. If you were running your own version, you may want no authentication, or a custom authentication system. For custom authentication, take a look at `lcpvian/authenticate.py`. The class you point to in `.env` will need to have the same methods, each returning booleans which indicate whether a user has access to a given resource.
 
-Our app uses LAMa and SWITCH/edu-id for authentication. If you were running your own version, you may want no authentication, or a custom authentication system. For custom authentication, take a look at `lcpvian/authenticate.py`. The class you point to in .env will need to have the same methods, each returning booleans which indicate whether a user has access to a given resource.
+### Installing the frontend manually
 
-### Installing the frontend
+When you install the repo via `pip`, you should have access to commands like `lcp-install`, which can help install the system. However if you are a developer or want to install the frontend manually, the following information will be useful.
 
 For the frontend, you need to install `Node.js`, `npm` and `yarn`. For Ubuntu, that would be something like:
 
@@ -163,6 +161,10 @@ yarn serve:ofrom
 
 ## Starting the app
 
+Users of the open-source version can run the `lcp` command to start the app. Assuming everything is correctly configured, it will be available via the host/port configured in `.env`.
+
+### Starting backend manually
+
 The backend uses worker processes to handle long-running database jobs. Therefore, you need to start at least one worker via:
 
 ```bash
@@ -209,26 +211,6 @@ git config --global push.recurseSubmodules "on-demand"
 To check that typing is correct (do before commit/push/c-extension building):
 ```bash
 mypy lcpvian
-```
-
-### C extensions
-
-To build optional `c` extensions for both `abstract-query` and `lcpvian` repos:
-
-```bash
-cd abstract-query
-python setup.py build_ext --inplace
-cd ..
-python setup.py build_ext --inplace
-```
-
-When these are built, the C code will be used instead of the Python, so changes to the repos won't be reflected in your development version until you rebuild or delete the C data with:
-
-```bash
-cd abstract-query
-rm *.so; rm abstract_query/*.so; rm -r -f build
-cd ..
-rm *.so; rm lcpvian/*.so; rm -r -f build
 ```
 
 ## Configuration
