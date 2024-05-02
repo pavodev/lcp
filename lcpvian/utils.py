@@ -798,6 +798,10 @@ def format_meta_lines(
     return formatted
 
 
+def range_to_array(sql_ref: str) -> str:
+    return f"jsonb_build_array(lower({sql_ref}), upper({sql_ref}))"
+
+
 def _layer_contains(config: CorpusConfig, parent: str, child: str) -> bool:
     child_layer = config["layer"].get(child)
     parent_layer = config["layer"].get(parent)

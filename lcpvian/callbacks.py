@@ -593,7 +593,7 @@ def _document_ids(
             'name': name,
             'media': media,
             'frame_range': (
-                [frame_range.lower, frame_range.upper or 0] if frame_range
+                [frame_range.lower, frame_range.upper] if frame_range
                 else [0,0]
             )
         }

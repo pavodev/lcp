@@ -552,10 +552,6 @@ export default {
       // Just for soundscript
       if (config.appType == "soundscript") {
         resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
-        const sentenceId = this.data[resultIndex][0];
-        let meta = this.meta[sentenceId];
-
-        // if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
         if (this.getAudio(resultIndex)) {
           retval = true;
         }
