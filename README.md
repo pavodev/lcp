@@ -123,9 +123,7 @@ nvm use 19
 Then, if you haven't before, install the frontend:
 
 ```bash
-cd vian-eventdrops
-yarn install
-cd ../frontend
+cd frontend
 yarn install
 ```
 
