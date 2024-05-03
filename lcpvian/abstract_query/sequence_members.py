@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 import re
+from typing import cast
 
 from .utils import _unique_label
 
@@ -120,7 +121,7 @@ class Member:
                     }
                 }
                 optional_sequence: Sequence = Sequence(
-                    newseqobj, parent_sequence, depth + 1, sequence_references
+                    newseqobj, parent_sequence, depth + 1, sequence_references=sequence_references
                 )
                 # The members must appear min: return them as individual members
                 for _ in range(min):
@@ -156,7 +157,7 @@ class Member:
             all_units.append(self)
 
         else:
-            for m in self.members:
+            for m in cast(Sequence, self).members:
                 if isinstance(m, Unit):
                     all_units.append(m)
                 elif isinstance(m, Disjunction) or isinstance(m, Sequence):
@@ -230,10 +231,10 @@ class Sequence(Member):
         
         if obj["sequence"].get("label"):
             self.anonymous = False
-            self.label = obj["sequence"]["label"]
+            self.label: str = obj["sequence"]["label"]
         else:
             self.anonymous = True
-            self.label: str = str(
+            self.label = str(
                 obj["sequence"].get("label", _unique_label(sequence_references))
             )
 
@@ -299,7 +300,7 @@ class Sequence(Member):
         """Whether this sentence include the member anywhere down the pipe"""
         if member in self.members:
             return True
-        parent_sequence: Sequence = member.parent_sequence
+        parent_sequence: Sequence | None = member.parent_sequence
         while parent_sequence and parent_sequence is not self:
             parent_sequence = parent_sequence.parent_sequence
         return parent_sequence is self

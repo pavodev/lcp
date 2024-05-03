@@ -46,6 +46,7 @@ from typing import Self
 
 
 from .abstract_query.create import json_to_sql
+from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
@@ -134,7 +135,7 @@ class QueryIteration:
         if not has_kwic:
             self.sentences = False
 
-        sql_query, meta_json, post_processes = json_to_sql(json_query, **kwa)
+        sql_query, meta_json, post_processes = json_to_sql(cast(QueryJSON, json_query), **kwa)
         self.jso = json_query
         self.sql = sql_query
         self.meta = meta_json

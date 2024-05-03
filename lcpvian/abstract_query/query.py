@@ -109,6 +109,8 @@ class Token:
         Get all conditions for a single token (possibly within a sequence)
         """
         out: set[str] = set()
+        if self.conn_obj is None:
+            return out
         if self.quantor:
             out.add( self.conn_obj._build_subquery(self.conn_obj) )
             return out
@@ -158,13 +160,13 @@ class QueryMaker:
         self.token = cast(str, self.config["token"])
         self.segment = cast(str, self.config["segment"])
         self.document = cast(str, self.config["document"])
-        mapping = cast(JSONObject, self.config["mapping"])
+        mapping = cast(dict[str,Any], self.config["mapping"])
         layers = cast(JSONObject, mapping["layer"])
         _cols = cast(JSONObject, layers[self.segment])
         self._needs_lang: bool = self.lang in cast(
             JSONObject, _cols.get("partitions", {})
         )
-        self.has_fts: bool = mapping.get("hasFTS", False)
+        self.has_fts: bool = cast(bool, mapping.get("hasFTS", False))
         self.main_layer = ""
         self.main_label = ""
         self._table: tuple[str, str] | None = None
@@ -172,9 +174,10 @@ class QueryMaker:
         self._base = ""
         self._underlang = _get_underlang(self.lang, self.config)
         self._has_segment: str = ""
+        layer_info: dict[str,Any] = cast(dict[str,Any], layers[self.token])
         self.n_batches: int = (
-            layers[self.token]["partitions"][self.lang].get("batches", 1) if "partitions" in layers[self.token]
-            else layers[self.token].get("batches", 1)
+            layer_info["partitions"][self.lang].get("batches", 1) if "partitions" in layer_info
+            else layer_info.get("batches", 1)
         )
         self.sqlsequences: list[SQLSequence] = self.r.sqlsequences # []
 
@@ -212,7 +215,7 @@ class QueryMaker:
             prev_label,
             self.conf,
             self.vian,
-            obj.get("quantor", None),
+            cast(str | None, obj.get("quantor", None)),
             self.r.label_layer,
             self.r.set_objects,
             self.r.entities,
@@ -250,14 +253,14 @@ class QueryMaker:
         """
         main_layer = self.segment
         has_segment = any(
-            x.get("unit", {}).get("layer") == self.segment for x in query_part
+            cast(dict,x).get("unit", {}).get("layer") == self.segment for x in query_part
         )
         if has_segment:
             label = cast(
                 str,
                 next(
                     x["label"]
-                    for x in [u.get("unit", {}) for u in query_part]
+                    for x in [cast(dict[str,Any], u.get("unit", {})) for u in query_part]
                     if x.get("layer") == self.segment and x.get("label")
                 ),
             )
@@ -330,7 +333,7 @@ class QueryMaker:
         seg = next(
             (
                 x
-                for x in [u["unit"] for u in query_json if "unit" in u]
+                for x in [cast(dict[str,Any], u["unit"]) for u in query_json if "unit" in u]
                 if x.get("layer") == self.segment and "label" in x
             ),
             None,
@@ -343,18 +346,20 @@ class QueryMaker:
 
         groups: dict[str,list[str]] = {}
 
-        obj: JSONObject
+        obj: dict[str,Any]
 
-        for i, obj in enumerate(to_iter):
+        for obj in to_iter:
             # Lift any argument of a quantifier to obj
             if qkey := next((x for x in obj if x.endswith("Quantification")), None):
-                quantor = obj[qkey].get("quantor", "")
+                quan_obj = cast(dict[str,Any], obj[qkey])
+                assert "args" in quan_obj, SyntaxError("Could not find 'args' in quantifier")
+                quantor = quan_obj.get("quantor", "")
                 if quantor.endswith(("EXISTS","EXIST")):
                     if quantor.startswith(("~","!","NOT","¬")):
                         quantor = "NOT EXISTS"
                     else:
                         quantor = "EXISTS"
-                    obj = next((a for a in obj[qkey].get("args",[]) if "unit" in a), None)
+                    obj = next(a for a in quan_obj["args"])
                     obj["unit"]["quantor"] = quantor
                     assert "partOf" in obj["unit"], SyntaxError("Quantified entities require a scope (eg Token@s)")
 
@@ -386,7 +391,7 @@ class QueryMaker:
                 self.sequence(obj)
                 continue
             elif is_group:
-                lab: str = ""
+                lab = ""
                 group: list[str] = []
                 for k, v in obj["group"].items():
                     if k == "label":
@@ -477,21 +482,21 @@ class QueryMaker:
         # Add any fixed token needed for sequences
         sequence_ranges: dict[str, tuple[str,str]] = dict()
         entities: dict[str, list] = {self._get_label_as(s).split(".")[-1]: [] for s in self.selects}
+        entities_set: set = {e for e in entities}
         tok: str = self.token.lower()
-        seg: str = self.segment.lower()
+        seg_str: str = self.segment.lower()
         for s in self.sqlsequences:
             for t,_,_,_ in s.fixed_tokens:
-                lab: str = t.internal_label
+                lab = t.internal_label
                 selects_in_fixed.add(f"{lab}.{tok}_id as {lab}")
                 original_label: str = t.obj['unit'].get("label", "")
                 if original_label:
                     self.selects.add(f"___lasttable___.{lab} as {original_label}")
                     self.r.entities.add(original_label)
                 table: str = tok + batch_suffix
-                # self.joins[f"{self.schema}.{table} {lab}".lower()] = f"{lab}.{seg}_id = {sl}.{seg}_id"
                 formed_join: str = f"{self.schema}.{table} {lab}".lower()
                 self.joins[formed_join] = self.joins.get(formed_join, None)
-            swhere, sleft_joins = s.where_fixed_members(entities, tok, seg, sl)
+            swhere, sleft_joins = s.where_fixed_members(entities_set, tok, seg_str, sl)
 
             for w in swhere:
                 self.conditions.add(w)
@@ -514,8 +519,8 @@ class QueryMaker:
                 
                 min_label: str = _unique_label(entities, f"{min} as min_{s.sequence.label}")
                 max_label: str = _unique_label(entities, f"{max} as max_{s.sequence.label}")
-                
-                sequence_ranges[s.sequence.label] = [min_label,max_label]
+
+                sequence_ranges[s.sequence.label] = (min_label,max_label)
 
         # we remove the selects that are not needed
         has_char_range = self._seg_has_char_range()
@@ -583,7 +588,7 @@ class QueryMaker:
                 from_table = last_table,
                 tok = tok,
                 batch_suffix = batch_suffix,
-                seg = seg,
+                seg = seg_str,
                 schema = self.schema.lower()
             )
             if simple_seq:
@@ -604,10 +609,13 @@ class QueryMaker:
             for n, cte in enumerate(s.ctes):
                 n_cte += cte.n
                 cte.n += n_cte
+                state_prev_cte: list[int] = [0]
+                if isinstance(last_cte, Cte) and n > 0:
+                    state_prev_cte = last_cte.get_final_states()
                 transition_table: str = cte.transition()
                 traversal_table: str = cte.traversal(
                     from_table=last_table,
-                    state_prev_cte = ([0] if n==0 else last_cte.get_final_states()),
+                    state_prev_cte = state_prev_cte,
                     schema = self.schema.lower(),
                     tok = self.token.lower(),
                     batch_suffix = batch_suffix,
@@ -630,8 +638,8 @@ class QueryMaker:
                     continue
                 gather_selects += f",\n{min_seq.replace('___lasttable___', last_table)}"
                 gather_selects += f",\n{max_seq.replace('___lasttable___', last_table)}"
-                min_label: str = min_seq.split(" as ")[-1]
-                max_label: str = max_seq.split(" as ")[-1]
+                min_label = min_seq.split(" as ")[-1]
+                max_label = max_seq.split(" as ")[-1]
                 jttable = _unique_label(entities, "t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = f"{jttable}.{seg}_id = gather.s AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
@@ -654,8 +662,9 @@ class QueryMaker:
         # If there's no sequence range to return, there's no gather table, but we still need to put a constraint on the last state
         elif last_cte:
             # make sure to reach the last state of the last CTE!
-            orderby: str = "" if last_cte.no_transition else f" ORDER BY ordercol"
-            last_table = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({last_cte.non_epsilon_states()[2]}){orderby}) {last_table}"
+            orderby = "" if last_cte.no_transition else f" ORDER BY ordercol"
+            final_states = ','.join([str(x) for x in last_cte.get_final_states()])
+            last_table = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({final_states}){orderby}) {last_table}"
 
         for g, refs in groups.items():
             str_refs: str = ",".join(refs)
@@ -719,7 +728,7 @@ class QueryMaker:
         return None
 
     # This is messy, it can be rewritten more cleanly
-    def _bound_label(self, label: str = "", query_json: dict[str, Any] = dict(), in_scope: bool = False) -> str:
+    def _bound_label(self, label: str = "", query_json: dict[str, Any] = dict(), in_scope: bool = False) -> bool:
         """
         Look through the query part of the JSON and return False if the label is found in an unbound context
         """
@@ -736,12 +745,12 @@ class QueryMaker:
             if "sequence" in obj:
                 if obj["sequence"].get("label") == label:
                     return in_scope 
-                tmp_in_scope: bool = obj["sequence"].get("repetition", "1") != "1"
+                tmp_in_scope = obj["sequence"].get("repetition", "1") != "1"
                 for m in obj["sequence"].get("members", []):
                     if self._bound_label(label, m, tmp_in_scope):
                         return True
             if "logicalOpNAry" in obj:
-                tmp_in_scope: bool = obj["logicalOpNAry"].get("operator") == "OR"
+                tmp_in_scope = obj["logicalOpNAry"].get("operator") == "OR"
                 for a in obj["logicalOpNAry"].get("args", []):
                     if self._bound_label(label, a, tmp_in_scope):
                         return True
@@ -754,7 +763,7 @@ class QueryMaker:
         """
         Return a label to refer to char_range after joining the segment table if necessary
         """
-        segment: str = _get_table(self.segment, self.config, self.batch, self.lang)
+        segment: str = _get_table(self.segment, self.config, self.batch, cast(str,self.lang))
         lab: str = ""
         if not self.sqlsequences:
             lab = next((l for l, info in self.r.label_layer.items() if info[0] == self.segment), f"has_char_range_{self._n}")
@@ -771,7 +780,8 @@ class QueryMaker:
             self.joins[formed.lower()] = set()
         assert self._table is not None, RuntimeError("No main table could be determined for query")
         formed_cond = f"{self._table[1]}.{self.segment}_id = {lab}.{self.segment}_id"
-        self.joins[formed.lower()].add(formed_cond.lower())
+        joins: set = cast(set, self.joins[formed.lower()])
+        joins.add(formed_cond.lower())
         return lab
 
     def _get_seg_label(self) -> str:
@@ -876,7 +886,7 @@ class QueryMaker:
         """
         Process an object in the query larger than token unit that directly contains tokens
         """
-        part_of_label: str = obj.get("partOf","")
+        part_of_label: str = cast(str, obj.get("partOf",""))
         part_of_layer: str = self.r.label_layer.get(part_of_label,("",None))[0]
         if not part_of_layer:
             return None
@@ -893,7 +903,7 @@ class QueryMaker:
             layer,
             label,
             self.conf,
-            quantor=obj.get("quantor", None),
+            quantor=cast(str | None, obj.get("quantor", None)),
             label_layer=self.r.label_layer,
             entities=self.r.entities,
             part_of=lab,
@@ -942,7 +952,7 @@ class QueryMaker:
         # if is_meta:
         #     self.handle_meta(label, layer, contains)
         constraints = cast(JSONObject, obj.get("constraints", {}))
-        part_of = obj.get("partOf",None)
+        part_of: str = cast(str, obj.get("partOf",""))
         part_of_layer = self.r.label_layer.get(part_of, ('',''))[0]
         if self.has_fts:
             if part_of_layer.lower() == self.segment.lower():
@@ -956,7 +966,7 @@ class QueryMaker:
                 layer,
                 label,
                 self.conf,
-                quantor=obj.get("quantor", None),
+                quantor=cast(str | None, obj.get("quantor", None)),
                 label_layer=self.r.label_layer,
                 entities=self.r.entities,
                 part_of=part_of,

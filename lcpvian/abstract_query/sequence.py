@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import re
 
-from automathon import NFA
-from typing import cast
+from automathon import NFA # type: ignore
+from typing import cast, Any
 
 from .constraint import _get_constraints
 from .prefilter import Prefilter
@@ -50,7 +50,7 @@ def _where_conditions_from_constraints(
     )
     if cons is None:
         # return ([f"{label}.{conf.config['token'].lower()}_id > 0"], [])
-        return (["1 = 1", []])
+        return (["1 = 1"], [])
     all_conditions: list[str] = []
     inner_conditions = cons.conditions()
     if inner_conditions:
@@ -63,6 +63,8 @@ def _where_conditions_from_constraints(
     
     left_joins: list[str] = []
     for table, conds in cons.joins().items():
+        if not isinstance(conds, set):
+            continue
         real_conds: list = [c for c in conds if isinstance(c,str)]
         if not real_conds: continue
         left_joins.append(f"{table} ON {' AND '.join(real_conds)}")
@@ -80,7 +82,7 @@ def _prefilter(conf: Config, subseq: list[Unit]) -> str:
             [seq],
             conf,
             dict(),
-            True                    
+            "" # has_segment (remove?)
         )
     condition = p._condition()
     return "@@".join(condition.split("@@ E'")[1:])[:-1] # Messy, change what Prefilter returns instead
@@ -123,7 +125,7 @@ class Cte:
     def add_member(self, m: Member) -> None:
         self.members.append(m)
         
-    def close(self, m: Member | None) -> None:
+    def close(self, m: Unit | None) -> None:
         self.next_fixed_token = m
         
         self.states: dict[State,None] = dict() # dict as ordered set
@@ -133,9 +135,9 @@ class Cte:
         self.states[self.start_state] = None
         
         current_state: State = self.start_state
-        
-        for m in self.members:
-            current_state = self.add_state(m, current_state)
+
+        for me in self.members:
+            current_state = self.add_state(cast(Member,me), current_state)
 
         current_state.to(self.end_state) 
         self.states[self.end_state] = None
@@ -144,10 +146,10 @@ class Cte:
         # effectivelty create indices (n) to refer to states
         state_map: dict = {}
         for n, state in enumerate(self.states):
-            state_map[state]: tuple[int,bool] = (str(n), not state.constraints)
+            state_map[state] = (str(n), not state.constraints)
         delta: dict = {}
         for state, (n, epsilon) in state_map.items():
-            entry = {}
+            entry: dict[str,Any] = {}
             for d in state.destinations:
                 key = '' if epsilon else str(n)
                 set_entry = entry.get(key,set())
@@ -172,7 +174,7 @@ class Cte:
 
         self.optional = automaton_minimized.initialState in automaton_minimized.F
         
-        self.closed: bool = True
+        self.closed = True
 
 
     def add_state(self, member: Member, source: State) -> State:
@@ -198,7 +200,7 @@ class Cte:
             self.states[seq_end] = None
             source.to(seq_start)
             
-            transit: State = seq_start
+            transit = seq_start
             for m in member.members:
                 transit = self.add_state(m, transit)
             transit.to(seq_end)
@@ -291,7 +293,7 @@ class Cte:
                     constraints=[c for c in state.constraints if isinstance(c,dict)],
                     entities={"token"}, 
                     override=override_references,
-                    part_of=state.unit.obj.get("partOf", "")
+                    part_of=state.unit.obj.get("partOf", "") if state.unit else ""
                 )
                 constraints = f"{' AND '.join(where_conditions)} AND transition{self.n}.label = '{state.label}'"
                 state_left_joins = state_left_joins.union({ls for ls in ljs})
@@ -369,7 +371,7 @@ class Cte:
                 # Make sure the previous and next fixed tokens are adjacent!
                 if self.next_fixed_token:
                     nl: str = self.next_fixed_token.internal_label
-                    join_void: str = f"({join_void} AND prev_cte.{nl} = prev_cte.{pl} + 1)"
+                    join_void = f"({join_void} AND prev_cte.{nl} = prev_cte.{pl} + 1)"
                 joins.append(join_void)
             join_first_token += " AND "+(f"({' OR '.join(joins)})" if len(joins) > 1 else joins[0])
         
@@ -385,7 +387,7 @@ class Cte:
             from_table = f"""(
             SELECT *
                 FROM {from_table}
-                WHERE {from_table}.state IN ({','.join(state_prev_cte)}){orderby}
+                WHERE {from_table}.state IN ({','.join([str(s) for s in state_prev_cte])}){orderby}
             )"""
             # Append to the list of tokens from the previous CTE
             token_list = f"prev_cte.token_list || jsonb_build_array(jsonb_build_array(token.{tok}_id, transition{n}.label, transition{n}.sequence))"
@@ -480,55 +482,57 @@ class SQLSequence:
         return self._members
         
     
-    def get_sequence_anchors(self):
-        sequence_to_units_ctes: dict[str, tuple[ list[Unit], dict[Cte, set[str]] ]] = dict()
+    # No longer used?
+    # def get_sequence_anchors(self):
+    #     sequence_to_units_ctes: dict[str, tuple[ list[Unit], dict[Cte, set[str]] ]] = dict()
         
-        for t, _, _, _ in self.fixed_tokens:
-            for s in t.get_all_parent_sequences():
-                if s.label not in sequence_to_units_ctes:
-                    sequence_to_units_ctes[s.label] = ([], dict())
-                sequence_to_units_ctes[s.label][0].append(t)
+    #     for t, _, _, _ in self.fixed_tokens:
+    #         for s in t.get_all_parent_sequences():
+    #             if s.label not in sequence_to_units_ctes:
+    #                 sequence_to_units_ctes[s.label] = ([], dict())
+    #             sequence_to_units_ctes[s.label][0].append(t)
     
-        for c in self.ctes:
-            for m in c.members:
-                for u in m.get_all_units():
-                    for s in t.get_all_parent_sequences():
-                        if s.label not in sequence_to_units_ctes:
-                            sequence_to_units_ctes[s.label] = ([], dict())
-                        old_set: set[str] = sequence_to_units_ctes[s.label][1].get(c, set())
-                        sequence_to_units_ctes[s.label][1][c] = old_set.union({u.parent_sequence.label})
+    #     for c in self.ctes:
+    #         for m in c.members:
+    #             for u in m.get_all_units():
+    #                 for s in t.get_all_parent_sequences():
+    #                     if s.label not in sequence_to_units_ctes:
+    #                         sequence_to_units_ctes[s.label] = ([], dict())
+    #                     old_set: set[str] = sequence_to_units_ctes[s.label][1].get(c, set())
+    #                     sequence_to_units_ctes[s.label][1][c] = old_set.union({u.parent_sequence.label})
                         
-        return sequence_to_units_ctes
+    #     return sequence_to_units_ctes
                 
 
-    def get_sequence_member_occurrences(self, sequence: Sequence) -> tuple[ list[Unit], list[tuple[Cte,set[str]]] ]:
-        """Return all the fixed tokens and tokens in CTEs (with their direct parent sequence's label) contained in the passed sequence"""
-        units_in_fixed_tokens: list[Unit] = []
-        for t, _, _, _ in self.fixed_tokens:
-            if sequence.includes(t):
-                units_in_fixed_tokens.append(t)
+    # No longer used?
+    # def get_sequence_member_occurrences(self, sequence: Sequence) -> tuple[ list[Unit], list[tuple[Cte,set[str]]] ]:
+    #     """Return all the fixed tokens and tokens in CTEs (with their direct parent sequence's label) contained in the passed sequence"""
+    #     units_in_fixed_tokens: list[Unit] = []
+    #     for t, _, _, _ in self.fixed_tokens:
+    #         if sequence.includes(t):
+    #             units_in_fixed_tokens.append(t)
 
-        list_cte: list[tuple[Cte,list[str]]] = []
-        for c in self.ctes:
-            units_in_cte: list[Unit] = []
-            for m in c.members:
-                if isinstance(m, Unit):
-                    units_in_cte.append(m)
-                elif isinstance(m, Disjunction) or isinstance(m, Sequence):
-                    units_in_cte += m.get_all_units()
-            labels: set[str] = set()
-            for u in units_in_cte:
-                if not sequence.includes(u):
-                    continue
-                if not isinstance(u.parent_sequence, Sequence):
-                    continue
-                labels.add(m.parent_sequence.label)
-            list_cte.append( (c, labels) )
+    #     list_cte: list[tuple[Cte,list[str]]] = []
+    #     for c in self.ctes:
+    #         units_in_cte: list[Unit] = []
+    #         for m in c.members:
+    #             if isinstance(m, Unit):
+    #                 units_in_cte.append(m)
+    #             elif isinstance(m, Disjunction) or isinstance(m, Sequence):
+    #                 units_in_cte += m.get_all_units()
+    #         labels: set[str] = set()
+    #         for u in units_in_cte:
+    #             if not sequence.includes(u):
+    #                 continue
+    #             if not isinstance(u.parent_sequence, Sequence):
+    #                 continue
+    #             labels.add(m.parent_sequence.label)
+    #         list_cte.append( (c, labels) )
             
-        return ( units_in_fixed_tokens , list_cte )
+    #     return ( units_in_fixed_tokens , list_cte )
         
         
-    def add_to_cte(self, to_add: Unit, fixed_token: Unit | None, current_cte: Cte | None) -> Cte:
+    def add_to_cte(self, to_add: Member, fixed_token: Unit | None, current_cte: Cte | None) -> Cte:
         if current_cte is None:
             current_cte = Cte(self, len(self.ctes), fixed_token)
             self.ctes.append(current_cte)
@@ -581,7 +585,7 @@ class SQLSequence:
         """Shift the entity references in the constraints written by the user to their internal labels"""
         ret_constraints: list[dict] = []
         for c in constraints:
-            new_constraint = {}
+            new_constraint: dict[str,Any] = {}
             for k, v in c.items():
                 if (k == "entity" or k == "entityComparison") and isinstance(v,str):
                     new_ref: str = self.internal_reference(v)
@@ -631,10 +635,11 @@ class SQLSequence:
             override[seg_lab] = f"fixed_parts.{seg_lab}"
         refs_to_replace = '|'.join([f"{e}.{self.label_layer[e][0].lower()}_id" for e in override if e in self.label_layer])
         replacer = lambda m: m[1].split('.')[0]
-        return (
+        ret: list[list[str]] = [
             [re.sub(rf"\b({refs_to_replace})\b", replacer, x) for x in conds]
             for conds in wheres_joins
-        )
+        ]
+        return (ret[0], ret[1])
     
     def prefilters(self) -> set[str]:
         
@@ -680,7 +685,8 @@ class SQLSequence:
                 m.internal_label = _unique_label(references, m.label)
                 self._internal_references[m.label] = m.internal_label   #f"t{len(self.fixed_tokens)}"
                 self.fixed_tokens.append( (m,min_separation,max_separation,modulo) )
-                current_cte = self.close_cte(current_cte, m)
+                self.close_cte(current_cte, m)
+                current_cte = None
                 last_fixed_token = m
                 min_separation = 0
                 max_separation = 0
@@ -701,7 +707,7 @@ class SQLSequence:
                     
                     if isinstance(prev_member, Unit) and isinstance(next_member, Unit):
                         # Simple subsequences between two fixed tokens do not require a CTE
-                        self.simple_sequences.append( (last_fixed_token,m,next_member) )
+                        self.simple_sequences.append( (cast(Unit,last_fixed_token),m,next_member) )
                         modulo = len(m.members)
                         self._sequence_references[m.label] = [*m.members]
                     else:
@@ -787,7 +793,7 @@ class SQLSequence:
         # Go through the subsequences (will add an ALL for each)
         for n, (prev, s, next) in enumerate(self.simple_sequences):
             pl: str = prev.internal_label
-            nl: str = next.internal_label
+            nl: str = next.internal_label if isinstance(next, Unit) else ""
             np: int = len(self.fixed_tokens)
             n_tokens: int = len(s.members) # n+1 of the last fixed token, used only if next_n<0
             mod: int = len(s.members) # lenght of the subsequence, used as modulo only if next_n<0

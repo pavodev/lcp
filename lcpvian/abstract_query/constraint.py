@@ -94,7 +94,7 @@ class Constraints:
         """
         Helper for quantors
         """
-        base = _get_table(member.layer, self.config.config, self.config.batch, self.config.lang)
+        base = _get_table(member.layer, self.config.config, self.config.batch, cast(str,self.config.lang))
         member._quantor_label = self.label
         if isinstance(member, Constraints):
             for m in member.members:
@@ -177,13 +177,21 @@ class Constraints:
                 member.make()
                 # todo: does this need nesting?
                 for k, v in member.joins().items():
-                    if k.strip():
-                        out[k] = out[k].union(v) if k in out and v and isinstance(out[k],set) and isinstance(v,set) else v
+                    if not k.strip():
+                        continue
+                    if k in out and v and isinstance(out[k],set) and isinstance(v,set):
+                        cast(set,out[k]).add(v)
+                    else:
+                        out[k] = v
             elif isinstance(member, (TimeConstraint, Constraint)):
                 member.make()
                 for k, v in member._joins.items():
-                    if k.strip():
-                        out[k] = out[k].union(v) if k in out and v and isinstance(out[k],set) and isinstance(v,set) else v
+                    if not k.strip():
+                        continue
+                    if k in out and v and isinstance(out[k],set) and isinstance(v,set):
+                        cast(set,out[k]).add(v)
+                    else:
+                        out[k] = v
         return out
 
 class Constraint:
@@ -218,8 +226,8 @@ class Constraint:
         self._query = query
         self._query_variable = (
             type == "entity"
-            and "." in query
-            and query.count(".") == 1
+            and "." in cast(str,query)
+            and cast(str,query).count(".") == 1
         )
         self.op = self._standardise_op(op)
         self.label = label
@@ -236,8 +244,11 @@ class Constraint:
         self._is_dependency = (
             self._layer_info['layerType'] == "relation"
             and self.field in {
-                x.get("name","")
-                for n, x in {"label": {"name":"label"}, **self._layer_info.get("attributes",{})}.items()
+                cast(dict[str,str],x).get("name","")
+                for n, x in {
+                    "label": {"name":"label"},
+                    **cast(dict[str,Any],self._layer_info.get("attributes",{}))
+                }.items()
                 if n in ("source","target","label") # Revise special treatment of "label" here?
             }
         )
@@ -251,7 +262,7 @@ class Constraint:
         self._label = "" # fallback label for anonymous entities
         self.order = order
         self.prev_label = prev_label
-        self._joins: dict[str, None | Literal[True]] = {}
+        self._joins: Joins = {}
         self._conditions: set[str] = set()
         self._list_query = isinstance(query, (list, tuple, set))
         self._add_text = True
@@ -287,7 +298,7 @@ class Constraint:
             if self._joins[table] is None:
                 self._joins[table] = set()
             assert isinstance(self._joins[table], set), "Constraint _joins should be lists"
-            self._joins[table].add(constraint)
+            cast(set,self._joins[table]).add(constraint)
         else:
             self._joins[table] = {constraint}
 
@@ -366,7 +377,7 @@ class Constraint:
         )
         field_type = field_info.get("type", "")
         field_ref = field_info.get("ref")
-        attributes_mapping = _get_mapping(self.layer, self.config, self.batch, self.lang).get("attributes", {})
+        attributes_mapping = _get_mapping(self.layer, self.config, self.batch, cast(str,self.lang)).get("attributes", {})
         field_mapping = attributes_mapping.get(field, {})
         relational_field = field_mapping.get("type","") == "relation"
 
@@ -396,13 +407,13 @@ class Constraint:
         if self.type == "entity":
             entity_dict = self.parse_entity(field_type, relational_field)
             relational_entity = entity_dict.get("relational")
-            entity_label = entity_dict.get("label")
-            entity_layer = entity_dict.get("layer")
-            entity_field = entity_dict.get("field")
+            entity_label: str = cast(str, entity_dict.get("label"))
+            entity_layer: str = cast(str, entity_dict.get("layer"))
+            entity_field: str = cast(str, entity_dict.get("field"))
             # Proceed immediately if simply comparing two FKs
             if relational_field and relational_entity: # and field_type == "dict":
                 formed_condition = f"{self.label}.{self.field}_id {self.op} {entity_label}.{entity_field}_id"
-                entity_table = _get_table(entity_layer, self.config, self.batch, self.lang)
+                entity_table = _get_table(entity_layer, self.config, self.batch, cast(str,self.lang))
                 formed_join_table = f"{self.schema}.{entity_table} {entity_label}"
                 self._add_join_on(
                     formed_join_table.lower(),
@@ -412,8 +423,8 @@ class Constraint:
                 return None
 
         label: str = self.label
-        field_ref: str = f"{self.label}.{self.field}"
-        formatted: str = self._formatted
+        field_ref = f"{self.label}.{self.field}"
+        formatted: str = cast(str, self._formatted)
 
         if field_type == "labels" or self.op.lower().endswith("contain"):
             assert field_type =="labels" and self.op.lower().endswith("contain"), TypeError(
@@ -454,14 +465,14 @@ class Constraint:
                 meta_op: str = "->"
                 if self._cast in ("::text", "::int"):
                     meta_op += ">"
-                field_ref: str = f"({label}.meta {meta_op} '{self.field}')"
+                field_ref = f"({label}.meta {meta_op} '{self.field}')"
 
             # Join any necessary table for the field
             if relational_field:
                 field_table = field_mapping.get("name", field)
                 field_label: str = f"{label}_{field}".lower()
                 join_table: str = f"{self.schema}.{field_table} {field_label}"
-                formed_join_condition: str = f"{label}.{field}_id = {field_label}.{field}_id"
+                formed_join_condition = f"{label}.{field}_id = {field_label}.{field}_id"
                 self._add_join_on(
                     join_table.lower(),
                     formed_join_condition.lower()
@@ -471,17 +482,17 @@ class Constraint:
 
         # Use a join if testing a relational entity (form = x.form  or  agent = x.agent)
         if entity_dict.get("relational"):
-            entity_field = entity_dict.get("field")
+            entity_field = cast(str, entity_dict.get("field"))
             assert entity_field, NotImplementedError(
                 f"Cannot process comparison '{self.field} {self.op} {self._query}'"
             )
-            entity_label = entity_dict.get("label")
-            entity_layer = entity_dict.get("layer")
+            entity_label = cast(str, entity_dict.get("label"))
+            entity_layer = cast(str, entity_dict.get("layer"))
             relation_label: str = f"{entity_label}_{entity_field}".lower()
             formatted = f"{relation_label}.{entity_field}::{self._cast}"
             formed_comparison = f"{field_ref}{self._cast} {self.op} {formatted}"
-            entity_table = _get_table(entity_layer, self.config, self.batch, self.lang)
-            join_table: str = f"{self.schema}.{entity_table} {relation_label}"
+            entity_table = _get_table(entity_layer, self.config, self.batch, cast(str,self.lang))
+            join_table = f"{self.schema}.{entity_table} {relation_label}"
             self._add_join_on(
                 join_table.lower(),
                 formed_comparison
@@ -540,9 +551,9 @@ class Constraint:
         Return (True,False) if the entity is relational bt
         Add a condition if both self's field and entity's field point to relational tables
         """
-        entity_label, *entity_field_split = self._query.strip().split(".")
+        entity_label, *entity_field_split = cast(str,self._query).strip().split(".")
         entity_field = ".".join(entity_field_split)
-        entity_layer = self.label_layer.get(entity_label, [""])[0]
+        entity_layer = cast(dict,self.label_layer).get(entity_label, [""])[0]
         assert entity_layer in self.config['layer'], RuntimeError(
             f"Couldn't determine which layer to associate the label '{entity_label}' with"
         )
@@ -565,7 +576,7 @@ class Constraint:
             entity_layer,
             self.config,
             self.batch,
-            self.lang
+            cast(str, self.lang)
         ).get("attributes", {}).get(entity_field, {})
         relational_entity_field = entity_field_mapping.get("type","") == "relation"
         if relational_entity_field and field_type == "dict":
@@ -674,7 +685,7 @@ class Constraint:
         return op.upper()
 
     def date(self) -> None:
-        q = self._formatted
+        q: str = f"{self._formatted}"
         op = self.op
         cast = self._cast
         labfield = f"{self.label.lower()}.{self.field.lower()}"
@@ -716,7 +727,10 @@ class Constraint:
                 return f"({str(query)})"
         elif self.type == "function":
             # Hack for simple cases, need to do better
-            return f"{query['functionName']}({query['arguments'][0].get('entity','').repalce('.','_')})"
+            function_name: str = cast(dict,query).get('functionName', '')
+            function_arguments: list = cast(list[dict[str,str]],cast(dict,query).get('arguments',[{}]))
+            first_argument: str = function_arguments[0].get('entity','').replace('.','_')
+            return f"{function_name}({first_argument})"
 
         if isinstance(query, (list, tuple)):
             if len(query) == 1:
@@ -725,7 +739,7 @@ class Constraint:
                 items = [f"'{a}'" if isinstance(a, str) else str(a) for a in query]
                 formed = ", ".join(items)
                 return f"({formed})"
-        return f"'{query}'" if isinstance(query, str) else query
+        return f"'{query}'" if isinstance(query, str) else cast(str,query)
 
 
 class TimeConstraint:
@@ -753,7 +767,7 @@ class TimeConstraint:
         self.label: str = label
         self.quantor: str | None = quantor
         self.boundary: str = boundary
-        self.comp1: str = comp1
+        self.comp1: dict[str,Any] = comp1
         self.obj: str = obj
         self.comp2: str = comp2
         self.label_layer: LabelLayer = label_layer
@@ -780,7 +794,7 @@ class TimeConstraint:
         lab = self._quantor_label or self.label
         formed = f"{func}({lab}.frame_range) {lte} {func}({compare}.frame_range) {sign} {self.diff} * 25"
         self._conditions.add(formed.lower())
-        table: str = _get_table(self.layer, self.conf.config, self.conf.batch, self.conf.lang)
+        table: str = _get_table(self.layer, self.conf.config, self.conf.batch, cast(str,self.conf.lang))
         join = f"{self.schema}.{table} {self.label}"
         self._joins[join.lower()] = self._joins.get(join.lower(), None)
         self._made = True
@@ -835,28 +849,30 @@ def _get_constraint(
     first_key_in_constraint = next(iter(constraint),"")
 
     if first_key_in_constraint.endswith("Quantification"):
-        obj = next(iter(constraint.values()))
+        obj: dict[str,Any] = cast(dict[str,Any], next(iter(constraint.values())))
         if "quantor" in obj:
-            quantor = obj["quantor"]
-            if quantor.endswith(("EXIST","EXISTS")):
-                if quantor.startswith(("!","~","¬","NOT")):
-                    quantor = "NOT EXISTS"
+            quantor_str: str = obj.get("quantor", "")
+            if quantor_str.endswith(("EXIST","EXISTS")):
+                if quantor_str.startswith(("!","~","¬","NOT")):
+                    quantor_str = "NOT EXISTS"
                 else:
-                    quantor = "EXISTS"
+                    quantor_str = "EXISTS"
+            quantor = quantor_str
             constraint = obj.get("args", [{}])[0]
             part_of = label
             first_key_in_constraint = next(iter(constraint),"")
-    
-    if constraint.get("unit",{}).get("constraints"):
-        unit_layer = constraint["unit"].get("layer")
+
+    unit: dict[str,Any] = cast(dict[str,Any], constraint.get("unit",{}))
+    if unit.get("constraints"):
+        unit_layer: str = cast(str, unit.get("layer",""))
         unit_label = label # Pass the parent's label if the layer is a dependency relation
         if unit_layer.lower() not in ["deprel","dependencyrelation"]:
-            unit_label = constraint["unit"].get("label", "")
+            unit_label = unit.get("label", "")
         else:
             label_layer[label] = (layer, dict())
-        part_of = constraint["unit"].get("partOf", label)
+        part_of = unit.get("partOf", label)
         args = (
-            cast(JSONObject, constraint["unit"]["constraints"]),
+            cast(JSONObject, unit["constraints"]),
             unit_layer,
             unit_label,
             conf,
@@ -875,7 +891,7 @@ def _get_constraint(
         return _get_constraints(*args)
 
     elif first_key_in_constraint.startswith("logicalOp"):
-        obj = next(iter(constraint.values()))
+        obj = cast(dict[str,Any], next(iter(constraint.values())))
         # the default operator is AND, and it can be missing
         if "operator" not in obj:
             obj["operator"] = "AND"
@@ -904,20 +920,21 @@ def _get_constraint(
         # This is a hack that needs to be improved to not ignore empty tokens in sequences
         constraint = {'comparison': {'entity': '_', 'operator': '=', 'entityComparison':'_'}}
     
-    comp = constraint.get("comparison", {})
+    comp = cast(dict[str,Any], constraint.get("comparison", {}))
     assert "left" in comp and "operator" in comp, "left and/or operator not found in comparison"
 
     key, op, comparison_type, query = _parse_comparison(comp)
+    key_str: str = key.get("entity", "")
 
     is_time_anchored = conf.config['layer'][conf.config['token']].get("anchoring", {}).get("time", False)
     # Use a TimeConstraint if the right-hand side of a math comparison contains a time unit (ie ending in \d(s|m|ms|h|d|w))
     if is_time_anchored and key.get("entity","") in ("start","end") and comparison_type=="mathComparison": # and re.match(r".*\d(s|m|ms|h|d|w)([\s()*/+-]|$)",query):
         rest: dict = {
-            'boundary': "start" if "start" in key.lower() else "end",
+            'boundary': "start" if "start" in key_str.lower() else "end",
             'comp1': key,
             'obj': query,
             'comp2': query,
-            'diff': re.sub(r"^.*?([0-9][0-9.]*(s|m|ms|h|d|w)?).*$", "\\1", query),
+            'diff': re.sub(r"^.*?([0-9][0-9.]*(s|m|ms|h|d|w)?).*$", "\\1", cast(str,query)),
             'op': op
         }
         return TimeConstraint(conf.schema, layer, label, quantor, label_layer, conf, **rest)
@@ -977,8 +994,8 @@ def _get_constraints(
     if top_level:
         allow_any = True
         # sorry about this:
-        first_unit = next(
-            (cast(str, cast(JSONObject, i)["unit"])
+        first_unit: dict[str,Any] = next(
+            (cast(dict[str,Any], cast(JSONObject, i)["unit"])
             for i in cast(
                 list[JSONObject],
                 sorted(cast(list[dict], constraints), key=arg_sort_key), # why do we assume the existence of an args key here?
@@ -1031,7 +1048,7 @@ def _get_constraints(
         lab,
         conf,
         results,
-        op,
+        cast(str,op),
         quantor,
         label_layer,
         entities,
@@ -1075,14 +1092,15 @@ def process_set(
     if not label:
         label = set_data.get("label", f"unknown_{_n}") + f"_{field}"
 
-    first_unit = next((u["unit"] for u in set_data.get("members", []) if "unit" in u), {})
+    first_unit: dict[str,Any] = next((u["unit"] for u in set_data.get("members", []) if "unit" in u), {})
     from_label = first_unit.get("label", "t")
     lay = first_unit.get("layer", token)
     assert config["layer"][lay].get("layerType") != "relation", TypeError(
         f"Cannot build a set of relational entities ({lay})"
     )
 
-    from_table = batch if lay == token else _get_table(lay,config,batch,_underlang[1:])
+    lang: str = cast(str,_underlang)[1:] if _underlang else ""
+    from_table = batch if lay == token else _get_table(lay,config,batch,lang)
     disallowed = f"{schema}.{lay} {from_label}"
 
     if "partOf" in first_unit:
@@ -1095,7 +1113,7 @@ def process_set(
 
     conn_obj = _get_constraints(
         first_unit.get("constraints", []),
-        first_unit.get("layer"),
+        first_unit.get("layer",""),
         from_label,
         conf,
         label_layer=r.label_layer,

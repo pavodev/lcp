@@ -24,6 +24,7 @@ from .utils import (
     _lama_check_api_key,
     _lama_project_create,
     _lama_user_details,
+    ensure_authorised
 )
 
 
@@ -351,10 +352,11 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        uname = user_acc["account"]["displayName"]
+        uacc: dict[str,Any] = cast(dict[str,Any], user_acc["account"])
+        uname: str = cast(str, uacc["displayName"])
         profile: dict[str, str] = {
             "title": f"{uname}: private group",
-            "unit": user_acc["account"]["homeOrganization"],
+            "unit": uacc["homeOrganization"],
             "startDate": start,
             "finishDate": finish,
         }

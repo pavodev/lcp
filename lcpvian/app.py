@@ -14,6 +14,7 @@ import asyncio
 import uvloop
 
 from collections import defaultdict, deque
+from typing import cast
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
@@ -62,7 +63,7 @@ DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 
 AUTH_CLASS: type | None = None
 try:
-    need = os.getenv("AUTHENTICATION_CLASS")
+    need = cast(str, os.getenv("AUTHENTICATION_CLASS"))
     if need.strip() and "." in need and need.lower() not in FALSES:
         path, name = need.rsplit(".", 1)
         if path and name:

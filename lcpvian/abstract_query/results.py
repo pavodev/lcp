@@ -70,8 +70,9 @@ class ResultsMaker:
         for obj in query:
             if "sequence" in obj:
                 dict_entities: dict[str,list] = {e: [] for e in labels_so_far}
+                set_entities: set[str] = set(e for e in labels_so_far)
                 seq: Sequence = Sequence(obj, sequence_references=dict_entities)
-                sqlseq: SQLSequence = SQLSequence(seq, self.conf, entities=dict_entities, label_layer=self.r.label_layer)
+                sqlseq: SQLSequence = SQLSequence(seq, self.conf, entities=set_entities, label_layer=self.r.label_layer)
                 sqlseq.categorize_members(entities=dict_entities)
                 for t, _, _, _ in sqlseq.fixed_tokens:
                     original_label: str = cast(str, t.obj['unit'].get("label", ""))
@@ -118,6 +119,8 @@ class ResultsMaker:
             if not isinstance(obj, dict):
                 continue
             for k, v in obj.items():
+                if not isinstance(v, dict):
+                    continue
                 if k == "set" and v.get("label") == label:
                     return v
         return None
@@ -143,17 +146,18 @@ class ResultsMaker:
         legal_refs = set()
         for obj in self.query_json.get("query", []):
             if "unit" in obj:
-                legal_refs.add(obj['unit'].get("label",""))
+                legal_refs.add(cast(dict,obj['unit']).get("label",""))
             elif "sequence" in obj:
-                if "repetition" in obj['sequence'] and obj['sequence']['repetition'] != "1..1":
+                sequence: dict[str,Any] = cast(dict[str,Any], obj['sequence'])
+                if "repetition" in sequence and sequence['repetition'] != "1..1":
                     continue
-                legal_refs.add(obj['sequence'].get("label", ""))
-                members = obj['sequence'].get("members", [])
+                legal_refs.add(sequence.get("label", ""))
+                members = sequence.get("members", [])
                 for m in members:
                     if "unit" in m:
                         legal_refs.add(m['unit'].get("label",""))
             elif "set" in obj:
-                legal_refs.add(obj['set'].get("label", ""))
+                legal_refs.add(cast(dict,obj['set']).get("label", ""))
                 continue
 
         for result in results:
@@ -174,7 +178,7 @@ class ResultsMaker:
                 coll = cast(JSONObject, result["resultsCollocation"])
                 if c := coll.get("center"):
                     assert c in legal_refs, ReferenceError(f"Label {c} cannot be referenced (is not declared or scope-bound)")
-                    self.r.entities.add(cast(str, c.lower()))
+                    self.r.entities.add(cast(str, c).lower())
                 # for s in cast(list[str], coll.get("space", [])):
                 #    self.r.entities.add(s)
             elif "resultsAnalysis" in cast(JSONObject, result):
@@ -194,7 +198,7 @@ class ResultsMaker:
             # varname = cast(str, r.get("label", f"untitled_{i}"))
             varname = cast(str, result.get("label", f"untitled_{i}"))
             if kind == "resultsPlain":
-                context = cast(str, next((x for x in r.get("context", ["s"])), "s")) # list in case of parallel corpus
+                context = cast(str, next((x for x in cast(list[str],r.get("context", ["s"]))), "s")) # list in case of parallel corpus
                 # todo: handle 1+ contexts in case of parallel corpus queries
                 enti = cast(list[str], r.get("entities", []))
                 made, meta = self._kwic(i, varname, context, enti)
@@ -262,7 +266,7 @@ class ResultsMaker:
                 self.token,
                 self.segment,
                 self._underlang,
-                self.find_set(space[0]),
+                self.find_set(space[0]) or {},
                 seg_label="___seglabel___",
                 attribute=feat,
             )
@@ -276,9 +280,9 @@ class ResultsMaker:
         Add kwic context joins, selects, needed objects
         """
         lay: str
-        meta: dict
-        lay, meta = self.r.label_layer[context]
-        keys = {self.config["firstClass"][f].lower() for f in {"token", "segment", "document"}}
+        lay, _ = self.r.label_layer[context]
+        first_class: dict[str,str] = cast(dict[str,str], self.config["firstClass"])
+        keys = {first_class[f].lower() for f in {"token", "segment", "document"}}
         err = f"Context not allowed: {lay.lower()} not in {keys}"
         assert lay.lower() in keys, err
         select = f"{context}.{lay.lower()}_id AS {context}"
@@ -367,7 +371,8 @@ class ResultsMaker:
             layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
             table = _get_table(layer, self.config, self.batch, self.lang)
             is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
-            attrs = self.conf_layer[layer]["attributes"]
+            conf_layer_info: dict[str,Any] = cast(dict[str,Any], self.conf_layer[layer])
+            attrs = conf_layer_info["attributes"]
             mapping: dict[str,Any] = _get_mapping(layer, self.config, self.batch, self.lang)
             attrib_table = mapping.get("attributes", {}).get(field,{}).get("name",field)
             if is_meta:
@@ -403,7 +408,7 @@ class ResultsMaker:
         """
         Produce a KWIC query and its JSON metadata
         """
-        entout = []
+        entout: list[str] = []
         select_extra = ""
 
         gest = "Gesture" in self.conf_layer or "gesture" in self.conf_layer
@@ -429,7 +434,7 @@ class ResultsMaker:
                     self.token,
                     self.segment,
                     self._underlang,
-                    self.find_set(e),
+                    self.find_set(e) or {},
                     seg_label="___seglabel___",
                     attribute="___tokenid___",
                     label=e,
@@ -447,14 +452,15 @@ class ResultsMaker:
 
         for e in ents:
             entities_list, attributes = self._process_entity(e)
+            conf_layer_info: dict[str,Any] = cast(dict[str,Any], self.conf_layer.get(lay, {}))
             if (
                 isinstance(attributes, list)
                 and isinstance(attributes[0], dict)
                 and attributes[0].get("type", "") in ("group", "sequence")
             ):
-                entout += [attributes[0].get("name")]
+                entout += [cast(dict,attributes[0]).get("name","")]
                 # entout += [f"ARRAY[{', '.join(entities_list)}]"]
-            elif self.conf_layer.get(lay, {}).get("contains", "").lower() == self.token.lower():
+            elif conf_layer_info.get("contains", "").lower() == self.token.lower():
                 select = """(SELECT array_agg(contained_token.{token_lay}_id)
 FROM {schema}.{token_table} contained_token
 WHERE {entity}.char_range && contained_token.char_range
@@ -696,7 +702,8 @@ WHERE {entity}.char_range && contained_token.char_range
         out: list[dict[str, Any]] = []
         wheres: set[str] = set()
 
-        for k, v in filt.items():
+        comp: dict[str, dict] = cast(dict[str,dict], filt)
+        for k, v in comp.items():
             if k != "comparison":
                 raise NotImplementedError("todo")
             if v.get('entity','').lower() == "frequency":
@@ -801,7 +808,7 @@ WHERE {entity}.char_range && contained_token.char_range
             n=self._n,
             label_layer=self.r.label_layer,
             entities=self.r.entities,
-            part_of=rest.get("partOf", None),
+            part_of=cast(str|None, rest.get("partOf", None)),
             set_objects=self.r.set_objects,
             allow_any=True,
         )
@@ -846,7 +853,10 @@ WHERE {entity}.char_range && contained_token.char_range
         fields: set[str] = set()
         att: str
         data: dict[str, str | bool | dict[str, JSONObject]]
-        for att, data in self.config["layer"][self.token]["attributes"].items():
+        config: dict[str,Any] = cast(dict[str,Any], self.config)
+        layers_config: dict[str,Any] = config["layer"]
+        token_info: dict[str,Any] = cast(dict[str,Any], layers_config[self.token])
+        for att, data in token_info["attributes"].items():
             field = att
             if att == feature:
                 continue
@@ -854,7 +864,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 field = field + "_id"
             fields.add(field)
         if self.lang:
-            for lay, info in self.config["layer"].items():
+            for lay, info in layers_config.items():
                 named = self.token + "@" + self.lang
                 if lay.lower() != named.lower():
                     continue
@@ -905,7 +915,7 @@ WHERE {entity}.char_range && contained_token.char_range
         self,
         i: int,
         label: str,
-        result: dict[str, list[str] | str | None],
+        result: JSONObject,
     ) -> tuple[str, ResultMetadata]:
         """
         Generate a string query and dict of query metadata
@@ -938,7 +948,8 @@ WHERE {entity}.char_range && contained_token.char_range
 
         null_fields = self._other_fields(feat, freq_table)
         feat_tab: str = feat
-        mapping: dict[str,Any] = self.config["mapping"]["layer"].get(self.token,{})
+        config: dict[str,dict] = cast(dict[str,dict], self.config)
+        mapping: dict[str,Any] = config["mapping"]["layer"].get(self.token,{})
         if mapping:
             attributes: dict[str,Any] = mapping.get("attributes", {})
             if self.lang and (partitions := mapping.get("partitions")):

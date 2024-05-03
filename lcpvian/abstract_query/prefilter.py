@@ -202,7 +202,10 @@ class Prefilter:
         if isinstance(col_data, list):
             col_data = {str(ix): name for ix, name in enumerate(col_data, start=1)}
         elif self._has_partitions:
-            col_data = cast(dict[str, str], col_data.get(self.lang, col_data))
+            col_data = cast(
+                dict[str, str] | dict[str, dict[str, str]] | list,
+                col_data.get(cast(str,self.lang), col_data)
+            )
         locations: dict[str, str] = {
             name.split()[0]: str(ix)
             for ix, name in cast(dict[str, str], col_data).items()
@@ -226,7 +229,7 @@ class Prefilter:
             members = cast(list[dict[str, JSON]], seq["members"])
             for member in members:
                 if "unit" not in member: continue # TODO: handle nested sequences
-                cons = cast(dict[str, Any], member["unit"].get("constraints", []))
+                cons = cast(list[dict[str, Any]], cast(dict, member["unit"]).get("constraints", []))
                 # if not cons:
                 #     count += 1
                 #     continue
@@ -245,7 +248,7 @@ class Prefilter:
         prefilters = self._finalise_prefilters(list(strung))
         return self._stringify(prefilters)
 
-    def _process_unit(self, filt: dict[str, Any]) -> SingleNode | Conjuncted | None:
+    def _process_unit(self, filt: list[dict[str, Any]]) -> SingleNode | Conjuncted | None:
         """
         Handle unit json object
         """
@@ -257,11 +260,11 @@ class Prefilter:
                 key, op, type, text = _parse_comparison(filt[0]["comparison"])
                 if "function" in key or type == "functionComparison":
                     return None
-                key = key.get("entity","")
+                key_str = cast(str, key.get("entity",""))
                 if _is_prefix(text,op,type):
-                    return SingleNode(key, op, text, type=="regexComparison")
+                    return SingleNode(key_str, op, cast(str,text), type=="regexComparison")
             elif next(iter(filt[0]),"").startswith("logicalOp"):
-                logic = next(iter(filt[0].values()),{})
+                logic: dict[str,Any] = next(iter(filt[0].values()),{})
                 result = self._attempt_conjunct(logic.get('args',[]), logic.get('operator',"AND"))
                 return result
         return None
@@ -277,8 +280,9 @@ class Prefilter:
         for arg in sorted(filt, key=arg_sort_key):
             # todo recursive ... how to handle?
             if next(iter(arg),"").startswith("logicalOp"):
-                logic = next(iter(arg.values()),{})
-                result = self._attempt_conjunct(logic.get('args',[]), logic.get('operator',"AND"))
+                logic: dict[str,Any] = next(iter(arg.values()),{})
+                filt = cast(list[dict[str,Any]],logic.get('args',[]))
+                result = self._attempt_conjunct(filt, logic.get('operator',"AND"))
                 if result:
                     matches.append(result)
                 continue
@@ -287,9 +291,9 @@ class Prefilter:
             key, op, type, text = _parse_comparison(arg["comparison"])
             if "function" in key or type == "functionComparison":
                 continue # todo: check this?
-            key = key["entity"]
+            key_str = cast(str, key.get("entity", ""))
             if _is_prefix(text,op,type):
-                matches.append(SingleNode(key, op, text, type=="regexComparison"))
+                matches.append(SingleNode(key_str, op, cast(str,text), type=="regexComparison"))
         
         # Do not use any prefilter at all for the disjunction if one of the disjuncts could not be used
         if kind == "OR" and len(matches) < len(filt):
