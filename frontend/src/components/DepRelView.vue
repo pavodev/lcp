@@ -197,6 +197,10 @@ export default {
         }
       })
 
+      while (large_index_counter-- > 0) {
+        matrix.push([])
+      }
+
       // Compile links
       Object.keys(linksDict).sort((a, b) => a - b).forEach(levelIndex => {
         linksDict[levelIndex].forEach(link => {
@@ -217,10 +221,6 @@ export default {
             )
           ) {
             level -= 1
-          }
-
-          while (matrix.length <= level) {
-            matrix.push([])
           }
           if (matrix[level].length < targetIndex) {
             let extendArray = new Array(targetIndex - matrix[level].length + 1).fill(0)
