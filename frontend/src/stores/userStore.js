@@ -23,7 +23,14 @@ export const useUserStore = defineStore("userData", {
     fetchUserData() {
       httpApi.get(`/settings`).then((r) => {
         this.dataFetched = true
-        this.userData = r.data;
+        this.userData = {
+          publicProfiles: {},
+          subscription: {subscriptions: []},
+          termsOfUse: {},
+          user: {},
+          ...(r.data || {})
+        };
+        console.log("userData", this.userData);
         this.debug = r.data.debug
         if (this.userData.publicProfiles.length) {
           this.projects = this.userData.publicProfiles

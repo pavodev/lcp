@@ -593,7 +593,7 @@
 
 <script>
 import Utils from "@/utils.js";
-import * as d3 from "d3/build/d3";
+import * as d3 from "d3";
 import eventDrops from "../../../vian-eventdrops/src/";
 
 import { mapState } from "pinia";
