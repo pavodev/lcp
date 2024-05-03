@@ -95,7 +95,7 @@ dependencies = [
 path = "lcpvian/__init__.py"
 
 [tool.hatch.build]
-packages = ["lcpvian", "abstract-query/abstract_query", "lcp-upload/lcp_upload"]
+packages = ["lcpvian"]
 skip-excluded-dirs = true
 # ?:
 reproducible = false
@@ -138,8 +138,6 @@ python_version = "3.11"
 ignore_missing_imports = true
 
 [tool.hatch.build.targets.wheel.force-include]
-"abstract-query/abstract_query" = "lcpvian/abstract_query"
-"lcp-upload/lcp_upload" = "lcpvian/lcp_upload"
 "frontend" = "frontend"
 "vian-eventdrops" = "vian-eventdrops"
 # "frontend/babel.config.js" = "frontend/babel.config.js"
@@ -151,8 +149,6 @@ ignore_missing_imports = true
 "parser" = "parser"
 
 [tool.hatch.build.targets.sdist.force-include]
-"abstract-query/abstract_query" = "lcpvian/abstract_query"
-"lcp-upload/lcp_upload" = "lcpvian/lcp_upload"
 "frontend/src" = "frontend/src"
 "frontend/babel.config.js" = "frontend/babel.config.js"
 "frontend/jsconfig.json" = "frontend/jsconfig.json"
@@ -234,8 +230,3 @@ exclude = [
 
 #[build.targets.wheel.hooks.mypyc.options]
 #opt_level = "3"
-
-[tool.poetry.dependencies]
-abstract-query = { path = "./abstract-query", develop = true }
-lcp-upload = { path = "./lcp-upload", develop = true }
-
