@@ -158,6 +158,8 @@ export default {
       let pos_id = this.columnHeaders.findIndex(v=>v.endsWith("pos"));
       let head_id = this.columnHeaders.indexOf("head");
       let label_id = this.columnHeaders.indexOf("label");
+      let large_index_counter = 5000;
+
       // Compile tokens and link matrix
       sentences[1].forEach((token, index) => {
         let textWidth = browserText.getWidth(token[form_id], 12, "Arial")
@@ -190,7 +192,7 @@ export default {
             source: currentTokenId,
             target: targetTokenId,
             label: token[label_id],
-            originalLevel: indexLevel,
+            originalLevel: indexLevel > 5000 ? large_index_counter++ : indexLevel,
           })
         }
       })
