@@ -101,13 +101,7 @@
               type="button"
               @click="submit"
               class="btn btn-primary me-1 mb-1"
-              :disabled="
-                (selectedCorpora && selectedCorpora.length == 0) ||
-                loading===true ||
-                (isQueryValidData != null && isQueryValidData.valid == false) ||
-                !query ||
-                !selectedLanguages
-              "
+              :disabled="isSubmitDisabled()"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
               {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
@@ -316,7 +310,7 @@
         </div> -->
         <div class="col">
           <hr class="mt-5 mb-5" />
-          <span v-if="debug">
+          <span>
             <h6 class="mb-3">Query result</h6>
             <div class="progress mb-2">
               <div
@@ -435,8 +429,14 @@
         percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)
       "
       style="text-align: center"
+      class="mb-3"
     >
-      No results found!
+      <div v-if="WSDataResults && WSDataResults.total_results_so_far == 0">
+        No results found!
+      </div>
+      <div>
+        Loading results...
+      </div>
     </div>
     <div class="container-fluid">
       <div class="row">
@@ -587,7 +587,7 @@
       aria-labelledby="exportModalLabel"
       aria-hidden="true"
     >
-      <div class="modal-dialog">
+      <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="exportModalLabel">Export results</h5>
@@ -599,16 +599,34 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label for="exportFormat" class="form-label">Format</label>
-            <select
-              class="form-control"
-              id="exportFormat"
-              v-model="exportFormat"
+            <label class="form-label">Plain fromat (TSV + JSON)</label>
+            <button
+              type="button"
+              @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
-              <option value="swissdox">SwissDoxVis</option>
-              <option value="tsv">TSV</option>
-            </select>
+              Download preview
+            </button>
+            <button
+              type="button"
+              @click="exportResults('plain')"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Launch export
+            </button>
           </div>
+          <!-- <div class="modal-body text-start">
+            <label class="form-label">SwissDox</label>
+            <button
+              type="button"
+              @click="exportResults('swissdox')"
+              class="btn btn-primary me-1"
+            >
+              Launch export
+            </button>
+          </div> -->
           <div class="modal-footer">
             <button
               type="button"
@@ -616,13 +634,6 @@
               data-bs-dismiss="modal"
             >
               Close
-            </button>
-            <button
-              type="button"
-              @click="exportResults"
-              class="btn btn-primary me-1"
-            >
-              Export
             </button>
           </div>
         </div>
@@ -796,7 +807,7 @@ import { setTooltips, removeTooltips } from "@/tooltips";
 
 
 export default {
-  name: "QueryTestView",
+  name: "QueryView",
   data() {
     return {
       query: "",
@@ -814,7 +825,6 @@ export default {
       currentResults: 0,
       selectedLanguages: ["en"],
       queryName: "",
-      exportFormat: "",
       currentTab: "dqd",
       simultaneousMode: false,
       percentageDone: 0,
@@ -857,10 +867,11 @@ export default {
               value: corpus[0].meta.id,
               corpus: corpus[0],
             };
+            this.checkAuthUser()
             this.defaultQueryDQD = corpus[0].sample_query || "";
             this.queryDQD = this.defaultQueryDQD;
+            this.preselectedCorporaId = null;
           }
-          this.preselectedCorporaId = null;
           this.validate();
         }
       },
@@ -879,6 +890,7 @@ export default {
       deep: true,
     },
     selectedCorpora() {
+      this.checkAuthUser();
       let updateGraph = false;
       if (this.corpusGraph) {
         this.corpusGraph = null;
@@ -1011,6 +1023,12 @@ export default {
       this.queryDQD = queryDQD;
       this.validate();
     },
+    checkAuthUser() {
+      // Check if user is authaticated
+      if (this.selectedCorpora.corpus.authUser == true && (!this.userData.user || this.userData.user.swissdoxUser != true)) {
+        window.location.replace("/login");
+      }
+    },
     // sendLeft() {
     //   this.$socket.sendObj({
     //     room: this.roomId,
@@ -1111,7 +1129,13 @@ export default {
         } else if (data["action"] === "store_query") {
           console.log("query stored", data);
           return;
-        } else if (data["action"] === "stopped") {
+        } else if (data["action"] == "export_link") {
+          useCorpusStore().fetchExport(data.fn);
+          useNotificationStore().add({
+            type: "success",
+            text: "Initiated export download"
+          });
+        }else if (data["action"] === "stopped") {
           if (data["n"]) {
             console.log("queries stopped", data);
             useNotificationStore().add({
@@ -1133,6 +1157,9 @@ export default {
           this.sqlQuery = null;
           if (data.sql) {
             this.sqlQuery = data.sql;
+          }
+          if (data.consoleSQL) {
+            console.log("SQL", data.consoleSQL);
           }
           this.failedStatus = false;
           data["n_results"] = data["result"].length;
@@ -1164,6 +1191,10 @@ export default {
           } else {
             this.WSDataSentences = data;
             if (this.WSDataResults) {
+              if (!this.WSDataResults.result)
+                this.WSDataResults.result = {};
+              if (!this.WSDataResults.result["0"] || !this.WSDataResults.result["0"].result_sets)
+                this.WSDataResults.result["0"] = {result_sets: []};
               this.WSDataResults.result["0"].result_sets.forEach(
                 (_resultSet, index) => {
                   if (_resultSet.type == "plain") {
@@ -1192,6 +1223,12 @@ export default {
             this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
             this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
           }
+        } else if (data["action"] === "started_export") {
+          this.loading = false;
+          useNotificationStore().add({
+            type: "success",
+            text: "Started the export process...",
+          });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {
@@ -1243,6 +1280,14 @@ export default {
         this.WSDataResults = data;
       }
     },
+    isSubmitDisabled() {
+      console.log("AA", this.selectedCorpora, this.loading)
+      return (this.selectedCorpora && this.selectedCorpora.length == 0) ||
+              this.loading===true ||
+              (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
+              !this.query ||
+              !this.selectedLanguages
+    },
     switchGraph() {
       if (!this.corpusGraph && this.selectedCorpora)
         this.corpusGraph = this.selectedCorpora.corpus;
@@ -1270,12 +1315,16 @@ export default {
       if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
-    async exportResults() {
-      const to_export = {
-        'tsv':'dump',
+    async exportResults(format, download=false, preview=false) {
+      const to_export = {};
+      to_export.format = {
+        'plain':'dump',
         'swissdox':'swissdox'
-      }[this.exportFormat||'dump'];
-      this.submit(null, true, false, /*full=*/true, /*to_export=*/to_export);
+      }[format];
+      to_export.preview = preview;
+      to_export.download = download;
+      let full = !preview;
+      this.submit(null, true, false, /*full=*/full, /*to_export=*/to_export);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);

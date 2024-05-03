@@ -239,13 +239,17 @@ async def query(
             if not isinstance(qi, QueryIteration):
                 return qi
             elif qi.to_export:
-                if len(qi.done_batches) == len(qi.all_batches):
+                ready_to_export = (
+                    len(qi.done_batches) == len(qi.all_batches)
+                    or (qi.to_export.get("preview") and qi.total_results_so_far >= 200)
+                )
+                if ready_to_export:
                     await export(qi.app, qi.to_export, qi.first_job)
-                elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
+                # elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
+                else:
                     qi_job = cast(Job, qi.job)
                     qi_job.meta["to_export"] = qi.to_export
                     qi_job.save_meta()
-                    pass
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)

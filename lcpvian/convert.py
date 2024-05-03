@@ -400,19 +400,10 @@ def _make_filters(
         for filt in filters:
             name, comp = cast(tuple[str, dict[str, Any]], list(filt.items())[0])
             if name != "comparison":
-                raise ValueError("expected comparion")
+                raise ValueError("expected comparison")
+            if "entity" not in comp:
+                raise ValueError("expected function-free comparison")
 
-            # bits: Sequence[str | int | float] = comp.split()
-            # last_bit = cast(str, bits[-1])
-            # body = bits[:-1]
-            # assert isinstance(body, list)
-            # if last_bit.isnumeric():
-            #     body.append(int(last_bit))
-            # elif last_bit.replace(".", "").isnumeric():
-            #     body.append(float(last_bit))
-            # else:
-            #     body = bits
-            # made = cast(tuple[str, str, int | str | float], tuple(body))
             entity = comp["entity"]
             operator = comp["operator"]
             value = next(

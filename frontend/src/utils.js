@@ -45,16 +45,21 @@ const Utils = {
 
       return hours + ":" + minutes + ":" + seconds + "." + milliseconds;
     },
-    secondsToTime(duration) {
-      var seconds = Math.floor(duration % 60),
+    secondsToTime(duration, showMilliseconds = false) {
+      let seconds = Math.floor(duration % 60),
         minutes = Math.floor((duration / 60) % 60),
-        hours = Math.floor((duration / (60 * 60)) % 24);
+        hours = Math.floor((duration / (60 * 60)) % 24),
+        milliseconds = Math.floor((duration % 1) * 1000);
 
       hours = (hours < 10) ? "0" + hours : hours;
       minutes = (minutes < 10) ? "0" + minutes : minutes;
       seconds = (seconds < 10) ? "0" + seconds : seconds;
 
-      return hours + ":" + minutes + ":" + seconds;
+      let retval = `${hours}:${minutes}:${seconds}`;
+      if (showMilliseconds) {
+        retval += `.${milliseconds}`;
+      }
+      return retval;
     },
     frameNumberToSeconds(frameNumber, frameRate = 25) {
       return frameNumber*1000/frameRate;
@@ -75,10 +80,14 @@ const Utils = {
     formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
       return date ? moment(date).format(format) : '';
     },
-    dictToStr: (dict) => {
+    dictToStr: (dict,replaceYesNo=true) => {
       const vals = [];
-      for (let k of Object.keys(dict).sort())
-        vals.push(dict[k]);
+      for (let k of Object.keys(dict).sort()) {
+        if (replaceYesNo && dict[k].match(/^(yes|no)$/i))
+          vals.push(dict[k].replace(/yes/i,"+").replace(/no/i,"-") + k);
+        else
+          vals.push(dict[k]);
+      }
       return vals.join(" ")
     },
     slugify(str) {
@@ -97,6 +106,22 @@ const Utils = {
         .match(
           /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
         );
+    },
+    corpusDataType (corpus) {
+      let corpusType = "text";
+      console.log(corpus.meta.name, corpus)
+      if (corpus.meta.mediaSlots) {
+        for (let key of Object.keys(corpus.meta.mediaSlots)) {
+          if (corpus.meta.mediaSlots[key].mediaType == "video") {
+            corpusType = "video";
+            break;
+          }
+          if (corpus.meta.mediaSlots[key].mediaType == "audio") {
+            corpusType = "audio";
+          }
+        }
+      }
+      return corpusType
     },
   }
 

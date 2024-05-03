@@ -6,6 +6,7 @@ import {
   faBackward,
   faBackwardStep,
   faBarcode,
+  faCaretDown,
   faCaretLeft,
   faCaretRight,
   faChartSimple,
@@ -16,6 +17,7 @@ import {
   faCopy,
   faExpand,
   faFileExport,
+  faFont,
   faForward,
   faGear,
   faGlobe,
@@ -23,6 +25,7 @@ import {
   faLink,
   faMagnifyingGlass,
   faMagnifyingGlassChart,
+  faMusic,
   faPause,
   faPlay,
   faPlus,
@@ -47,6 +50,7 @@ library.add(faArrowUp);
 library.add(faBackward);
 library.add(faBackwardStep);
 library.add(faBarcode);
+library.add(faCaretDown);
 library.add(faCaretLeft);
 library.add(faCaretRight);
 library.add(faChartSimple);
@@ -57,6 +61,7 @@ library.add(faCircleQuestion);
 library.add(faCopy);
 library.add(faExpand);
 library.add(faFileExport);
+library.add(faFont);
 library.add(faForward);
 library.add(faGear);
 library.add(faGlobe);
@@ -64,6 +69,7 @@ library.add(faHouse);
 library.add(faLink);
 library.add(faMagnifyingGlass);
 library.add(faMagnifyingGlassChart);
+library.add(faMusic);
 library.add(faPause);
 library.add(faPlay);
 library.add(faPlus);

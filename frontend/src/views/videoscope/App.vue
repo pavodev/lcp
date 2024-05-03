@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/"><i>catchphrase</i></a>
+        <a class="navbar-brand" href="/"><i>videoscope</i></a>
         <button
           class="navbar-toggler"
           type="button"
@@ -23,48 +23,24 @@
               </router-link>
             </li>
             <li class="nav-item">
-              <router-link class="nav-link" to="/query">
-                <FontAwesomeIcon
-                  :icon="['fas', 'magnifying-glass']"
-                  class="me-1"
-                />
-                Query
-              </router-link>
-            </li>
-            <li class="nav-item">
-              <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
-                <FontAwesomeIcon
-                  :icon="['fas', 'circle-question']"
-                  class="me-1"
-                />
-                Manual
-              </a>
-            </li>
-            <!-- <li class="nav-item">
-              <router-link class="nav-link" to="/query-test">
-                <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
-                Query Test
-              </router-link>
-            </li> -->
-            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/player">
                 <FontAwesomeIcon
                   :icon="['fas', 'video']"
                   class="me-1"
                 />
-                Player
+                Viewer
               </router-link>
-            </li> -->
+            </li>
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item" v-if="debug">
+            <li class="nav-item">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
             </li>
             <li class="nav-item">
               <a
-                v-if="userData && userData.user && userData.user.id"
+                v-if="userData && userData.user && userData.user.displayName"
                 class="nav-link"
                 href="/Shibboleth.sso/Logout"
               >
@@ -81,7 +57,8 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <router-view class="app-content-box" />
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -94,17 +71,19 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
+import config from "@/config";
 
 export default {
-  name: "AppLCP",
+  name: "AppVideoscope",
   data() {
-    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
     }
   },
   mounted() {
+    document.title = config.appName;
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();
   },
@@ -119,6 +98,7 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),
@@ -132,12 +112,45 @@ export default {
 </script>
 
 <style scoped>
-.navbar-brand {
-  font-style: italic;
-}
 .version-number {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
+}
+
+/* videoscope colors */
+nav.bg-liri {
+  background-color: #622A7F;
+}
+* >>> .nav-tabs {
+    --bs-nav-tabs-link-active-color: #fff;
+    --bs-nav-tabs-link-active-bg: #622A7F;
+    --bs-nav-tabs-link-active-border-color: #622A7F;
+}
+* >>> .nav-link {
+    color: #622A7F;
+}
+* >>> .nav-link:hover {
+    color: #4e1e66;
+}
+* >>> .navbar a:hover {
+  color: #b390c5;
+}
+footer {
+  background-color: #622A7F;
+}
+* >>> .alert-success {
+  --bs-alert-bg: #ede7f0;
+  --bs-alert-border-color: #e1d6e6;
+}
+* >>> .btn-primary {
+  --bs-btn-bg: #622A7F;
+  --bs-btn-border-color: #622A7F;
+  --bs-btn-hover-bg: #7b4596;
+  --bs-btn-hover-border-color: #7b4596;
+  --bs-btn-active-bg: #54226d;
+  --bs-btn-active-border-color: #54226d;
+  --bs-btn-disabled-bg: #622A7F;
+  --bs-btn-disabled-border-color: #622A7F;
 }
 </style>

@@ -169,7 +169,7 @@ async def _handle_error(
     Sanitise errors send to FE if not in debug mode
     """
     payload["debug"] = app["_debug"]
-    bad_keys = {"traceback", "original_query", "sentences_query", "sql"}
+    bad_keys = {"traceback", "original_query", "sentences_query", "sql", "consoleSQL"}
     if not app["_debug"]:
         for key in bad_keys:
             payload.pop(key, None)
@@ -192,6 +192,8 @@ async def _handle_message(
         "background_job_progress",
         "document",
         "document_ids",
+        "started_export",
+        "export_link"
     )
     errors = (
         "failed",
@@ -244,15 +246,17 @@ async def _handle_message(
         # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
-    if action == "sentences":
+    if action in ("sentences","meta"):
         drops = ("can_send", "submit_query")
         for drop in drops:
             payload.pop(drop, None)
 
     if action in simples or sent_allowed:
-        if action == "sentences" and len(cast(Results, payload["result"])) < 3:
-            pass
-        else:
+        send_sents = not payload.get("full") and (
+            action == "sentences" and len(cast(Results, payload["result"])) > 2
+            or action == "meta"
+        )
+        if action in simples or send_sents:
             await push_msg(
                 app["websockets"],
                 room,
@@ -260,6 +264,8 @@ async def _handle_message(
                 skip=None,
                 just=(room, user),
             )
+        else:
+            print(f"Not sending {action} message!")
         if to_submit is not None:
             await to_submit
             to_submit = None
@@ -278,13 +284,14 @@ async def _handle_message(
     # - if corpus was uploaded via gui mode, send a ws message
     #   to all users with the latest config so the FE can show it
     if action == "uploaded":
-        vian = cast(bool, payload["is_vian"])
+        # TODO: Should be chnaged to accept all app types (catchphrase, soundscript, videoscope)
+        app_type = "videoscope" if cast(bool, payload["is_vian"]) else "lcp"
         user_data = cast(JSONObject | None, payload["user_data"])
         conf: CorpusConfig = cast(CorpusConfig, payload["entry"])
         conf["_batches"] = _get_batches(conf)
         app["config"][str(payload["id"])] = conf
         if payload.get("gui"):
-            filt = _filter_corpora(app["config"], vian, user_data)
+            filt = _filter_corpora(app["config"], app_type, user_data)
             payload["config"] = cast(JSONObject, filt)
             await push_msg(app["websockets"], "", payload)
 
@@ -399,6 +406,7 @@ async def _handle_query(
             "projected_results",
             "batches_done",
             "simultaneous",
+            "consoleSQL"
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
         await push_msg(
@@ -413,7 +421,9 @@ async def _handle_query(
         await to_submit
 
     if to_export := the_job.meta.get("to_export"):
-        await export(app, to_export, the_job.kwargs.get("first_job", ""))
+        done_batches, all_batches = the_job.kwargs.get("done_batches"), the_job.kwargs.get("all_batches")
+        if (len(done_batches)+1 == len(all_batches)):
+            await export(app, to_export, the_job.kwargs.get("first_job", ""))
 
 
 async def _ait(self: WSMessage) -> WSMessage:

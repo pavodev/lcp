@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">VIAN-DH</a>
+        <a class="navbar-brand" href="/"><i>soundscript</i></a>
         <button
           class="navbar-toggler"
           type="button"
@@ -23,24 +23,48 @@
               </router-link>
             </li>
             <li class="nav-item">
+              <router-link class="nav-link" to="/query">
+                <FontAwesomeIcon
+                  :icon="['fas', 'magnifying-glass']"
+                  class="me-1"
+                />
+                Query
+              </router-link>
+            </li>
+            <li class="nav-item">
+              <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
+                <FontAwesomeIcon
+                  :icon="['fas', 'circle-question']"
+                  class="me-1"
+                />
+                Manual
+              </a>
+            </li>
+            <!-- <li class="nav-item">
+              <router-link class="nav-link" to="/query-test">
+                <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
+                Query Test
+              </router-link>
+            </li> -->
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/player">
                 <FontAwesomeIcon
                   :icon="['fas', 'video']"
                   class="me-1"
                 />
-                Viewer
+                Player
               </router-link>
-            </li>
+            </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
-            <li class="nav-item">
+            <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
             </li>
             <li class="nav-item">
               <a
-                v-if="userData && userData.user && userData.user.id"
+                v-if="userData && userData.user && userData.user.displayName"
                 class="nav-link"
                 href="/Shibboleth.sso/Logout"
               >
@@ -57,7 +81,8 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <router-view class="app-content-box" />
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -70,16 +95,20 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
+import config from "@/config";
 
 export default {
-  name: "AppVIAN",
+  name: "AppSoundscript",
   data() {
+    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
     }
   },
   mounted() {
+    document.title = config.appName;
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();
   },
@@ -94,6 +123,7 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),
@@ -111,5 +141,41 @@ export default {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
+}
+/* soundscript colors */
+nav.bg-liri {
+  background-color: #0059be;
+}
+* >>> .nav-tabs {
+    --bs-nav-tabs-link-active-color: #fff;
+    --bs-nav-tabs-link-active-bg: #0059be;
+    --bs-nav-tabs-link-active-border-color: #0059be;
+}
+* >>> .nav-link {
+    color: #0059be;
+}
+* >>> .nav-link:hover {
+    color: #00489a;
+}
+* >>> .navbar a:hover {
+  color: #8fa4bd;
+}
+footer {
+  background-color: #0059be;
+}
+* >>> .alert-success {
+  --bs-alert-bg: #e8eff8;
+  --bs-alert-border-color: #d7e2f0;
+}
+
+* >>> .btn-primary {
+  --bs-btn-bg: #0059be;
+  --bs-btn-border-color: #0059be;
+  --bs-btn-hover-bg: #0152af;
+  --bs-btn-hover-border-color: #0152af;
+  --bs-btn-active-bg: #00489a;
+  --bs-btn-active-border-color: #00489a;
+  --bs-btn-disabled-bg: #0059be;
+  --bs-btn-disabled-border-color: #0059be;
 }
 </style>

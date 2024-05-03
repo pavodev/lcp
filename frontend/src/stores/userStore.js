@@ -45,6 +45,11 @@ export const useUserStore = defineStore("userData", {
         if (this.userData.termsOfUse.needToAccept === true) {
           window.location.href = this.userData.termsOfUse.url;
         }
+
+        // When no user, generate random id
+        if (Object.keys(this.userData.user).length === 0) {
+          this.userData.user = {"id": Utils.uuidv4()}
+        }
       });
     },
   },

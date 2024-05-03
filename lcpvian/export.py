@@ -12,6 +12,7 @@ from .typed import JSONObject
 from .utils import _determine_language, format_meta_lines, push_msg
 
 import json
+import os
 import re
 
 EXPORT_TTL = 5000
@@ -30,7 +31,7 @@ SWISSDOX_NE_SELECTS = ["form","type"]
 
 def _format_kwic(
     args: list, columns: list, sentences: dict[str, tuple], result_meta: dict
-) -> tuple[str, str, dict, list]:
+) -> tuple[str, str, dict, list, list]:
     kwic_name: str = result_meta.get("name", "")
     attributes: list = result_meta.get("attributes", [])
     entities_attributes: dict = next(
@@ -38,7 +39,7 @@ def _format_kwic(
     )
     entities: list = entities_attributes.get("data", [])
     sid, matches = args
-    first_token_id, prep_seg = sentences[sid]
+    first_token_id, prep_seg, annotations = sentences[sid]
     matching_entities: dict[str, int | list[int]] = {}
     for n in entities:
         if n.get("type") in ("sequence", "set"):
@@ -62,8 +63,7 @@ def _format_kwic(
         token_dict = {columns[n_col]: col for n_col, col in enumerate(token)}
         token_dict["token_id"] = token_id
         tokens.append(token_dict)
-
-    return (kwic_name, sid, matching_entities, tokens)
+    return (kwic_name, sid, matching_entities, tokens, annotations)
 
 
 async def kwic(jobs: list[Job], resp: Any, config):
@@ -94,14 +94,17 @@ async def kwic(jobs: list[Job], resp: Any, config):
         sentence_job: Job | None = next(
             (sj for sj in sentence_jobs if sj.kwargs.get("depends_on") == j.id), None
         )
-        sentences: dict[str, tuple]
-        if sentence_job:
-            sentences = {
-                str(uuid): (first_token_id, tokens)
-                for (uuid, first_token_id, tokens) in sentence_job.result
-            }
-        else:
+        sentences: dict[str, tuple] = {}
+        if not sentence_job or not sentence_job.result:
             continue
+        for row in sentence_job.result:
+            uuid: str = str(row[0])
+            first_token_id = row[1]
+            tokens = row[2]
+            annotations = []
+            if len(row) > 3:
+                annotations = row[3]
+            sentences[uuid] = (first_token_id, tokens, annotations)
 
         meta_job: Job | None = next(
             (mj for mj in meta_jobs if mj.kwargs.get("depends_on") == j.id), None
@@ -121,10 +124,10 @@ async def kwic(jobs: list[Job], resp: Any, config):
             if n_type not in kwic_indices:
                 continue
             try:
-                kwic_name, sid, matching_entities, tokens = _format_kwic(
+                kwic_name, sid, matching_entities, tokens, annotations = _format_kwic(
                     args, columns, sentences, meta[n_type - 1]
                 )
-                data = {"sid": sid, "matches": matching_entities, "segment": tokens}
+                data = {"sid": sid, "matches": matching_entities, "segment": tokens, "annotations": annotations}
                 if sid in formatted_meta:
                     data["meta"] = formatted_meta[sid]
                 line: str = "\t".join(
@@ -143,10 +146,12 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
-async def export_dump(filepath: str, job_id: str, config: dict) -> None:
+async def export_dump(filepath: str, job_id: str, config: dict, download = False) -> None:
     """
     Read the results from all the query, sentence and meta jobs and write them in dump.tsv
     """
+    if os.path.exists(filepath):
+        return
     output = open(filepath, "w")
     output.write((("\t".join(["index", "type", "label", "data"]) + f"\n")))
 
@@ -156,13 +161,16 @@ async def export_dump(filepath: str, job_id: str, config: dict) -> None:
         Job.fetch(jid, connection=conn)
         for registry in [
             FinishedJobRegistry(name=x, connection=conn)
-            for x in ("queue", "background")
+            for x in ("query", "background")
         ]
         for jid in registry.get_job_ids()
     ]
     associated_jobs = [j for j in finished_jobs if j.kwargs.get("first_job") == job_id]
 
     meta = job.kwargs.get("meta_json", {}).get("result_sets", {})
+
+    # Write query itself in first row
+    output.write("\t".join(["0", "query", "query", json.dumps(job.kwargs.get("original_query", {}))]) + f"\n")
 
     # Write KWIC results
     if next((m for m in meta if m.get("type") == "plain"), None):
@@ -224,6 +232,7 @@ async def export_swissdox(
     first_job_id: str,
     underlang: str,
     config,
+    download = False
 ) -> Job:
     """
     Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
@@ -236,7 +245,7 @@ async def export_swissdox(
         Job.fetch(jid, connection=conn)
         for registry in [
             FinishedJobRegistry(name=x, connection=conn)
-            for x in ("queue","background")
+            for x in ("query","background")
         ]
         for jid in registry.get_job_ids()
     ]
@@ -381,7 +390,10 @@ async def export_swissdox(
             config,
             underlang,
         ),
-        kwargs={"ne_cols": ne_cols},
+        kwargs={
+            "ne_cols": ne_cols,
+            "download": download
+        }
     )
 
 
@@ -411,6 +423,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
             args=(f"./results/dump_{first_job_id}.tsv", first_job_id, corpus_conf),
+            kwargs={'download': payload.get("download", False)}
         )
     elif export_format == "swissdox":
         underlang = _determine_language(first_job.kwargs.get("current_batch")[2]) or ""
@@ -426,7 +439,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 first_job_id,
                 underlang,
                 corpus_conf
-            )
+            ),
+            kwargs={'download': payload.get("download", False)}
         )
 
     room = cast(str, payload.get("room", ""))
@@ -449,3 +463,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     )
 
     return job
+
+
+async def download_export(request: web.Request) -> web.FileResponse:
+    fn = request.match_info["fn"]
+    return web.FileResponse(f"./results/{fn}")

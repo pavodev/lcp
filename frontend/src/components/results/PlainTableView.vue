@@ -20,14 +20,14 @@
       <tbody>
         <tr
           v-for="(item, resultIndex) in results"
-          :key="resultIndex"
+          :key="`tr-results-${resultIndex}`"
           :data-index="resultIndex"
         >
           <td scope="row" class="results">
             <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
               <FontAwesomeIcon :icon="['fas', 'copy']" />
             </span>
-            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="hasAudio(resultIndex)">
+            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
             <span
@@ -151,27 +151,25 @@
       :style="{top: popoverY + 'px', left: popoverX + 'px' }"
     >
       <table class="table popover-table">
-        <thead>
-          <tr>
-            <th v-for="(_, layer) in currentMeta" :key="`th-${layer}`">
+        <template v-for="(meta, layer) in currentMeta" :key="`th-${layer}`">
+          <tr v-if="layer in allowedMetaColums">
+            <td>
               {{ layer }}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td v-for="(meta, layer) in currentMeta" :key="`tr-${layer}-value`">
-              <span
-                v-html="Object.entries(meta).map( ([name,value])=>`<strong>${name}:</strong> ${value}` ).join('<br>')"
-              >
-              </span>
+              <table class="table">
+                <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
+                  <tr v-if="allowedMetaColums[layer].includes(meta_key)">
+                    <td>{{ meta_key }}</td>
+                    <td>{{ meta_value }}</td>
+                  </tr>
+                </template>
+              </table>
             </td>
           </tr>
-        </tbody>
+        </template>
       </table>
     </div>
     <div
-      class="modal fade"
+      class="modal fade modal-xl"
       :id="`detailsModal${randInt}`"
       tabindex="-1"
       aria-labelledby="detailsModalLabel"
@@ -213,7 +211,7 @@
       </div>
     </div>
     <audio controls ref="audioplayer" class="d-none">
-        <source src="/test.mp3" type="audio/mpeg">
+        <source src="" type="audio/mpeg">
         Your browser does not support the audio element.
     </audio>
   </div>
@@ -347,6 +345,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
+import config from "@/config";
 
 import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
@@ -380,6 +379,20 @@ export default {
     "loading",
   ],
   data() {
+    let allowedMetaColums = {}
+
+    Object.keys(this.corpora.corpus.layer).forEach( layer => {
+      if (this.corpora.corpus.layer[layer].attributes/* && this.corpora.corpus.layer[layer].attributes.meta*/) {
+        // allowedMetaColums[layer] = Object.keys(this.corpora.corpus.layer[layer].attributes.meta)
+        allowedMetaColums[layer] = [
+          ...Object.keys(this.corpora.corpus.layer[layer].attributes),
+          ...Object.keys(this.corpora.corpus.layer[layer].attributes.meta||{})
+        ];
+        if ("meta" in allowedMetaColums)
+          delete allowedMetaColums.meta;
+      }
+    })
+
     return {
       popoverY: 0,
       popoverX: 0,
@@ -389,9 +402,10 @@ export default {
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
+      allowedMetaColums: allowedMetaColums,
       groups: this.data ? this.getGroups(this.data[0], true) : [],
       randInt: Math.floor(Math.random() * 1000),
-      playIndex: -1
+      playIndex: -1,
     };
   },
   components: {
@@ -521,13 +535,26 @@ export default {
         text: "Copied to clipboard",
       });
     },
-    hasAudio(resultIndex) {
-      resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+    getAudio(resultIndex) {
       const sentenceId = this.data[resultIndex][0];
       let meta = this.meta[sentenceId];
+      if (!meta) return "";
+      const doc_meta = meta[this.corpora.corpus.firstClass.document];
+      if (!doc_meta) return "";
+      const media = doc_meta.media;
+      if (!media) return "";
+      const media_name = Object.keys(this.corpora.corpus.meta.mediaSlots||{'':0})[0];
+      if (!media_name) return "";
+      return JSON.parse(media)[media_name];
+    },
+    showAudio(resultIndex) {
       let retval = false;
-      if (meta && meta[this.corpora.corpus.firstClass.document] && meta[this.corpora.corpus.firstClass.document].audio) {
-        retval = true;
+      // Just for soundscript
+      if (config.appType == "soundscript") {
+        resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+        if (this.getAudio(resultIndex)) {
+          retval = true;
+        }
       }
       return retval;
     },
@@ -538,7 +565,7 @@ export default {
       let meta = this.meta[sentenceId];
       if (meta) {
         // corpus tamplete,
-        let filename = meta[this.corpora.corpus.firstClass.document].audio
+        let filename = this.getAudio(resultIndex); // meta[this.corpora.corpus.firstClass.document].audio
         let startFrame = meta[this.corpora.corpus.firstClass.document].frame_range[0]
         let startTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[0] - startFrame)/25.
         let endTime = (meta[this.corpora.corpus.firstClass.segment].frame_range[1] - startFrame)/25.
@@ -591,7 +618,7 @@ export default {
     },
     strPopover(token) {
       if (token && token.constructor.name == 'Object')
-        return "<pre>"+Utils.dictToStr(token)+"</pre>";
+        return Utils.dictToStr(token);
       else
         return token;
     }

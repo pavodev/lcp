@@ -5,8 +5,14 @@
         <div class="col">
           <Title :title="appName" :isItalic="appType == 'lcp' ? false : true" />
         </div>
-        <div class="col mt-1 text-end">
-          <button type="button" class="btn btn-secondary btn-sm" data-bs-toggle="modal" data-bs-target="#newProjectModal">
+        <div class="col mt-1 text-end" v-if="userData && userData.user && userData.user.displayName">
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#newProjectModal"
+            @click="modalIndexKey++"
+          >
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
             Add new group
           </button>
@@ -37,10 +43,19 @@
           </div>
           <div class="tabs-wrapper" ref="tabswrapper">
             <div class="nav nav-tabs tabs-list" id="nav-tab" ref="tabslist" role="tablist">
-              <button v-for="(project, index) in projectsGroups" :key="project.id" class="nav-link"
-                :class="index == -1 ? 'active' : ''" :id="`nav-${project.id}-tab`" data-bs-toggle="tab"
-                :data-bs-target="`#nav-${project.id}`" type="button" role="tab" :aria-controls="`nav-${project.id}`"
-                aria-selected="true" @click="currentProject = project">
+              <button
+                v-for="(project, index) in projectsGroups"
+                :key="project.id"
+                class="nav-link"
+                :class="[index == 0 ? 'active' : '', corporaFilter && project.corpora.length == 0 ? 'no-corpora' : '']"
+                :id="`nav-${project.id}-tab`"
+                data-bs-toggle="tab"
+                :data-bs-target="`#nav-${project.id}`"
+                type="button" role="tab"
+                :aria-controls="`nav-${project.id}`"
+                aria-selected="true"
+                @click="currentProject = project"
+              >
                 <FontAwesomeIcon
                   :icon="projectIcons(project)"
                   class="me-1"
@@ -54,93 +69,102 @@
         </nav>
         <div class="tab-content pt-3" id="nav-tabContent">
           <div v-for="(project, index) in projectsGroups" :key="project.id" class="tab-pane fade"
-            :class="index == -1 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
+            :class="index == 0 ? 'active show' : ''" :id="`nav-${project.id}`" role="tabpanel"
             aria-labelledby="nav-results-tab">
-            <div class="alert alert-success" role="alert" v-if="index != -1">
-              <div class="row">
-                <div class="col-11">
-                  <div class="row">
-                    <div class="col-2">
-                      Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
+              <div class="alert alert-success" role="alert" v-if="project.description || project.isAdmin">
+                <div class="row">
+                  <div class="col-11">
+                    <div class="row" v-if="project.isAdmin">
+                      <div class="col-2">
+                        Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
+                      </div>
+                      <div class="col-2">
+                        Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
+                      </div>
+                      <div class="col-2">
+                        Institution: <b>{{ project.institution }}</b>
+                      </div>
+                      <div class="col-2">
+                        API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
+                      </div>
+                      <!-- <div class="col-2">
+                        Visibility: <b>{{ project.additionalData && project.additionalData.visibility ? project.additionalData.visibility : "private" }}</b>
+                      </div> -->
                     </div>
-                    <div class="col-2">
-                      Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
-                    </div>
-                    <div class="col-2">
-                      Institution: <b>{{ project.institution }}</b>
-                    </div>
-                    <div class="col-2">
-                      API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
-                    </div>
-                    <div class="col-2">
-                      Visibility: <b>{{ project.additionalData && project.additionalData.visibility ? project.additionalData.visibility : "private" }}</b>
+                    <div class="row">
+                      <div class="col-12">
+                        Description: <b>{{ project.description }}</b>
+                      </div>
                     </div>
                   </div>
-                  <div class="row">
-                    <div class="col-12">
-                      Description: <b>{{ project.description }}</b>
-                    </div>
+                  <div class="col-1 text-end" v-if="project.isAdmin">
+                    <button
+                      type="button"
+                      class="btn btn-sm btn-light"
+                      data-bs-toggle="modal"
+                      data-bs-target="#editProjectModal"
+                      @click="modalIndexKey++"
+                    >
+                      <FontAwesomeIcon :icon="['fas', 'gear']" />
+                    </button>
                   </div>
-                </div>
-                <div class="col-1 text-end" v-if="project.isAdmin">
-                  <!-- <span v-if="project.api">
-                    <p class="mb-0">API Key: {{ project.api.key }}</p>
-                    <p class="">Secret Key: {{ project.api.secretPart }}</p>
-                    <button type="button" class="btn btn-secondary btn-sm mb-3"
-                      @click="APIKeyRevoke(project.id, project.api.id)">
-                      <FontAwesomeIcon :icon="['fas', 'trash']" class="me-1" />
-                      Revoke API Key
-                    </button>
-                  </span>
-                  <button type="button" class="btn btn-light" @click="APIKeyCreate(project.id)" v-else>
-                    <FontAwesomeIcon :icon="['fas', 'gear']" class="me-1" />
-                  </button> -->
-                  <!-- <span v-if="project.api">
-                    <p class="mb-0">API Key: {{ project.api.key }}</p>
-                    <p class="">Secret Key: {{ project.api.secretPart }}</p>
-                    <button type="button" class="btn btn-secondary btn-sm mb-3"
-                      @click="APIKeyRevoke(project.id, project.api.id)">
-                      <FontAwesomeIcon :icon="['fas', 'trash']" class="me-1" />
-                      Revoke API Key
-                    </button>
-                  </span> -->
-                  <button type="button" class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#editProjectModal">
-                    <FontAwesomeIcon :icon="['fas', 'gear']" />
-                  </button>
                 </div>
               </div>
-            </div>
             <div class="row mt-2">
-              <div class="col-4 mb-3" v-for="corpus in filterCorpora(project.corpora)" :key="corpus.id"
-                @click="openCorpus(corpus)">
-                <div class="corpus-block">
-                  <p class="title mb-0">{{ corpus.meta.name }}</p>
-                  <p class="author mb-0">
-                    <span v-if="corpus.meta.author">by {{ corpus.meta.author }}</span>
-                  </p>
-                  <p class="description mt-3">
-                    {{ corpus.meta.corpusDescription }}
-                  </p>
-                  <p class="word-count mb-0">
-                    Word count:
-                    <b>{{
-                      nFormatter(
-                        calculateSum(Object.values(corpus.token_counts))
-                      )
-                    }}</b>
-                  </p>
-                  <p class="word-count mb-0">
-                    Version: <b>{{ corpus.meta.version }}</b>
-                  </p>
-                  <p class="word-count" v-if="corpus.partitions">
-                    <span class="badge text-bg-primary me-1" v-for="language in corpus.partitions.values"
-                      v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`" />
-                  </p>
-                  <div class="details-button icon-1 tooltips" title="Query corpus"
-                    @click.stop="openQueryWithCorpus(corpus)">
+              <div
+                v-for="corpus in filterCorpora(project.corpora)"
+                :key="corpus.id"
+                @click="openCorpus(corpus)"
+                class="col-4 mb-3"
+              >
+                <div class="corpus-block" :class="corpus.meta.dataType ? `data-type-${corpus.meta.dataType}` : ''">
+                  <div class="corpus-block-header px-4 py-3">
+                    <p class="title mb-0">{{ corpus.meta.name }}</p>
+                    <!-- <p class="author mb-0">
+                      <span v-if="corpus.meta.author">by {{ corpus.meta.author }}</span>
+                    </p> -->
+                  </div>
+                  <div class="px-4">
+                    <p class="description mt-3">
+                      {{ corpus.meta.corpusDescription }}
+                    </p>
+                    <p class="word-count">
+                      <template v-if="corpus.partitions">
+                        <span
+                          class="badge text-bg-primary me-1 tooltips" title="Partition"
+                          v-for="language in corpus.partitions.values"
+                          v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`"
+                        />
+                      </template>
+                      <span class="badge text-bg-primary me-1 tooltips" title="Word count"
+                      >{{
+                        nFormatter(
+                          calculateSum(Object.values(corpus.token_counts))
+                        )
+                      }}</span>
+                      <span
+                        class="badge text-bg-primary me-1 tooltips"
+                        :title="`Revision: ${corpus.meta.revision}`"
+                        v-if="corpus.meta.revision"
+                      >{{ corpus.meta.revision }}</span>
+                    </p>
+                  </div>
+                  <div
+                    class="details-button icon-1 tooltips"
+                    title="Query corpus"
+                    v-if="hasAccess(corpus)"
+                    @click.stop="openQueryWithCorpus(corpus)"
+                  >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
-                  <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus webpage"
+                  <div
+                    class="details-button icon-1 tooltips disabled"
+                    title="Only Swissdox user can query this corpus"
+                    v-else
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+                  </div>
+                  <a class="details-button icon-2 tooltips" :href="corpus.meta.url" title="Corpus origin"
                     :disabled="!corpus.meta.url" target="_blank" @click.stop>
                     <FontAwesomeIcon :icon="['fas', 'link']" />
                   </a>
@@ -154,6 +178,11 @@
                     @click.stop="openCorpusEdit(corpus)"
                   >
                     <FontAwesomeIcon :icon="['fas', 'gear']" />
+                  </div>
+                  <div class="details-data-type icon-3 tooltips" title="Data type" v-if="appType == 'lcp'">
+                    <FontAwesomeIcon :icon="['fas', 'music']" v-if="corpus.meta.dataType == 'audio'" />
+                    <FontAwesomeIcon :icon="['fas', 'video']" v-else-if="corpus.meta.dataType == 'video'" />
+                    <FontAwesomeIcon :icon="['fas', 'font']" v-else />
                   </div>
                 </div>
               </div>
@@ -173,7 +202,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start">
-            <ProjectNewView @updated="updateProjectModalData" />
+            <ProjectNewView @updated="updateProjectModalData" :key="modalIndexKey" />
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -199,18 +228,47 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
+            <div class="row mb-2" v-if="hasAccess(corpusModal)">
+              <div class="col-12">
+                <div
+                  class="btn btn-primary btn-sm btn-catchphrase me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with catchphrase"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" class="me-2" />
+                  <i>catchphrase</i>
+                </div>
+                <div
+                  class="btn btn-primary btn-sm btn-soundscript me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with soundscript"
+                  v-if="['audio', 'video'].includes(corpusModal.meta.dataType)"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
+                  <i>soundscript</i>
+                </div>
+                <div
+                  class="btn btn-primary btn-sm btn-videoscope me-1 tooltips"
+                  @click="openQueryWithCorpus(corpusModal)"
+                  data-bs-dismiss="modal"
+                  title="Query corpus with videoscope"
+                  v-if="['video'].includes(corpusModal.meta.dataType)"
+                >
+                  <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
+                  <i>videoscope</i>
+                </div>
+              </div>
+            </div>
             <div class="row">
               <div class="col-5">
                 <div class="title mb-0">
                   <span>{{ corpusModal.meta.name }}</span>
-                  <div class="icon-1 btn btn-primary btn-sm horizontal-space" title="Query corpus"
-                    @click="openQueryWithCorpus(corpusModal)" data-bs-dismiss="modal">
-                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                  </div>
                 </div>
-                <p class="author mb-0" v-if="corpusModal.meta.author">
+                <!-- <p class="author mb-0" v-if="corpusModal.meta.author">
                   by {{ corpusModal.meta.author }}
-                </p>
+                </p> -->
                 <p class="description mt-3">
                   {{ corpusModal.meta.corpusDescription }}
                 </p>
@@ -223,7 +281,7 @@
                   }}</b>
                 </p>
                 <p class="word-count mb-0">
-                  Version: {{ corpusModal.meta.version }}
+                  Revision: {{ corpusModal.meta.revision }}
                 </p>
                 <p class="word-count mb-0">
                   URL:
@@ -280,7 +338,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="corpusModal">
-            <MetadataEdit :corpus="corpusModal" />
+            <MetadataEdit :corpus="corpusModal" :key="modalIndexKey" />
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="saveModalCorpus">
@@ -305,7 +363,7 @@
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="currentProject && currentProject.id">
-            <ProjectEdit :project="currentProject" :key="currentProject" @updated="updateProjectModalData" />
+            <ProjectEdit :project="currentProject" :key="modalIndexKey" @updated="updateProjectModalData" />
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="saveModalEditProject" :disabled="!allowProjectModalSave">
@@ -337,7 +395,7 @@ import router from "@/router";
 import Utils from "@/utils";
 import config from "@/config";
 import { setTooltips, removeTooltips } from "@/tooltips";
-import { Modal, Tab } from "bootstrap";
+import { Modal } from "bootstrap";
 
 
 export default {
@@ -357,6 +415,7 @@ export default {
       currentEditTab: "metadata",
       inviteEmails: '',
       currentProjectToSubmit: null,
+      modalIndexKey: 0,
     };
   },
   components: {
@@ -367,9 +426,12 @@ export default {
     ProjectEdit,
   },
   methods: {
+    hasAccess(corpus) {
+      return !corpus.authUser || (corpus.authUser == true && this.userData.user.swissdoxUser == true);
+    },
     projectIcons(project) {
       let icons = ['fas']
-      if (project.id == null) {
+      if (project.isPublic == true) {
         icons.push('globe')
       }
       else if (project.isAdmin) {
@@ -413,7 +475,7 @@ export default {
       return itemsWidth;
     },
     updateTabsCarets() {
-      console.log("AE", this.widthOfTabs(), this.scrollBoxSize())
+      // console.log("AE", this.widthOfTabs(), this.scrollBoxSize())
       // if (this.widthOfTabs() > this.scrollBoxSize()) {
         this.$refs.rightcaret.style.display = "block";
         this.$refs.leftcaret.style.display = "block";
@@ -459,27 +521,33 @@ export default {
     openCorpus(corpus) {
       this.corpusModal = { ...corpus };
       let modal = new Modal(document.getElementById('corpusDetailsModal'));
+      this.modalIndexKey++
       modal.show()
-    },
-    inviteUsers(){
-      console.log('inviteUsers', this.inviteEmails)
     },
     openCorpusEdit(corpus) {
       this.corpusModal = { ...corpus };
-      let tab = Tab.getInstance(this.$refs);
-      console.log(this, tab, this.$refs.navEditMetadataTab)
-      // tab.show()
-      // this.currentEditTab = "metadata"
+      // let tab = Tab.getInstance(this.$refs);
+      this.modalIndexKey++
       let modal = new Modal(document.getElementById('corpusEditModal'));
       modal.show()
     },
     openQueryWithCorpus(corpus) {
-      if (config.appType == "vian") {
+      if (config.appType == "videoscope") {
         router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       } else {
         router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       }
     },
+    // getAppLink(appType, corpus) {
+    //   let appLink = config.appLinks[appType]
+    //   if (["catchphrase", "soundscript"].includes(appType)) {
+    //     appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+    //   }
+    //   else {
+    //     appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+    //   }
+    //   return appLink
+    // },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
@@ -540,9 +608,6 @@ export default {
             text: retval.msg,
           });
         }
-        else {
-          console.log("ADADAD")
-        }
       }
     },
     // setTooltips() {
@@ -564,32 +629,56 @@ export default {
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
-    ...mapState(useUserStore, ["projects"]),
+    ...mapState(useUserStore, ["projects", "userData"]),
     projectsGroups() {
-      let retval = {
-        "-1": {
-          id: null,
-          title: "Public",
-          corpora: [],
-        },
-      };
-      let projectIds = [-1];
+      let projects = {}
+      let projectIds = [];
       this.projects.forEach((project) => {
+        let isPublic = project.additionalData && project.additionalData.public == true;
         projectIds.push(project.id);
-        retval[project.id] = {
+        projects[project.id] = {
           ...project,
           corpora: [],
+          isPublic: isPublic,
         };
       });
+      let publicProjects = this.projects.filter(project => project.additionalData && project.additionalData.public == true)
+      let publicProjectId = publicProjects.length ? publicProjects[0].id : -1
+
       this.corpora.forEach((corpus) => {
         corpus.projects.forEach(projectId => {
-          projectId = projectId == "all" ? -1 : projectId;  // -1 for public
-          if (projectIds.includes(projectId) && !retval[projectId].corpora.includes(corpus)) {
-            retval[projectId].corpora.push(corpus);
+          projectId = projectId == "all" ? publicProjectId : projectId;  // -1 for public
+          if (projectIds.includes(projectId) && !projects[projectId].corpora.includes(corpus)) {
+            if (
+              this.corporaFilter == '' ||
+              corpus.meta.name.toLowerCase().includes(this.corporaFilter.toLowerCase()) // Filter corpora by name
+            ) {
+              projects[projectId].corpora.push(corpus);
+            }
           }
         })
       });
-      return retval;
+      let sortedProjects = []
+
+      // Show public projects first
+      Object.keys(projects).forEach((projectId) => {
+        if (projects[projectId].isPublic) {
+          sortedProjects.push(projects[projectId])
+          delete projects[projectId]
+        }
+      })
+      sortedProjects.push(...Object.values(projects))
+      // If there is a filter, remove empty projects
+      // if (this.corporaFilter.length > 0) {
+      //   let _retval = {}
+      //   for (let key in retval) {
+      //     if (retval[key].corpora.length > 0) {
+      //       _retval[key] = retval[key]
+      //     }
+      //   }
+      //   retval = _retval
+      // }
+      return sortedProjects;
     }
   },
   mounted() {
@@ -616,12 +705,16 @@ export default {
   },
   beforeUnmount() {
     // this.removeTooltips();
+    window.removeEventListener('resize', this.updateTabsCarets);
     removeTooltips();
   },
 };
 </script>
 
 <style scoped>
+.no-corpora {
+  opacity: 0.5;
+}
 .tabs-wrapper {
   position: relative;
   margin: 0 auto;
@@ -683,10 +776,35 @@ export default {
 .corpus-block {
   border: 1px solid #d4d4d4;
   border-radius: 5px;
-  padding: 20px;
   cursor: pointer;
   position: relative;
   height: 233px;
+}
+
+.corpus-block-header {
+  width: 100%;
+  background-color: #d1e7dd;
+  transition: all 0.3s;
+}
+
+.corpus-block:hover .corpus-block-header {
+  background-color: #b4d8c8;
+}
+
+.data-type-video .corpus-block-header {
+  background-color: #ede7f0;
+}
+
+.data-type-video:hover .corpus-block-header {
+  background-color: #d7cade;
+}
+
+.data-type-audio .corpus-block-header {
+  background-color: #e8eff8;
+}
+
+.data-type-audio:hover .corpus-block-header {
+  background-color: #c3d5ed;
 }
 
 .author {
@@ -705,7 +823,7 @@ export default {
 
 .description {
   font-size: 90%;
-  height: 70px;
+  height: 108px;
   overflow: hidden;
 }
 
@@ -726,6 +844,14 @@ export default {
 .api-badge {
   font-size: 80%;
   font-weight: bold;
+}
+
+.details-data-type {
+  position: absolute;
+  top: 18px;
+  color: #2a7f62;
+  opacity: 0.9;
+  right: 10px;
 }
 
 .details-button {
@@ -759,6 +885,46 @@ details-button:disabled {
   padding: 15px 10px 10px 15px;
   color: #fff;
   border-radius: 40px 0 0;
+}
+
+.details-button.icon-1:hover {
+  opacity: 1 !important;
+}
+
+.details-button.icon-1:hover .dropdown-app-content {
+  display: block;
+}
+
+.details-button.icon-1.disabled {
+  background-color: #969696;
+}
+
+.data-type-audio .details-data-type,
+.data-type-audio .details-button {
+  color: #0059be;
+}
+
+.data-type-audio .details-button.icon-1 {
+  background-color: #0059be;
+  color: #fff;
+}
+
+.data-type-audio .text-bg-primary {
+  background-color: #0059be !important;
+}
+
+.data-type-video .details-data-type,
+.data-type-video .details-button {
+  color: #622A7F;
+}
+
+.data-type-video .text-bg-primary {
+  background-color: #622A7F !important;
+}
+
+.data-type-video .details-button.icon-1 {
+  background-color: #622A7F;
+  color: #fff;
 }
 
 .details-button.icon-2 {

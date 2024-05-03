@@ -16,7 +16,7 @@ from sqlalchemy.sql import text
 from rq.connections import get_current_connection
 from rq.job import get_current_job, Job
 
-from .callbacks import _export_complete
+from .api import refresh_config
 from .configure import CorpusTemplate
 from .impo import Importer
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
@@ -133,7 +133,7 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if store else "_pool"
+    name = "_upool" if store else ("_wpool" if config else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
     method = "begin" if store else "connect"
@@ -148,6 +148,9 @@ async def _db_query(
                 raise SQLAlchemyError("Job canceled")
 
     params = params or {}
+
+    if job and job.kwargs.get("refresh_config", None):
+        await refresh_config()
 
     async with getattr(pool, method)() as conn:
         try:
@@ -188,6 +191,8 @@ async def _swissdox_export(
 
     if not os.path.exists(path):
         os.mkdir(path)
+    elif os.path.exists(os.path.join(path, "swissdox.db")):
+        return None
 
     # Documents
     docs_by_range: dict[int, tuple[int, str]] = {}
@@ -341,6 +346,4 @@ async def _swissdox_export(
 
     con.close()
 
-    job = cast(Job, get_current_job())
-    _export_complete(job, conn, None)
     return None

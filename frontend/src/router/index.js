@@ -1,7 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
 import HomeView from "../views/HomeView.vue";
 
-import { useUserStore } from "@/stores/userStore";
+// import { useUserStore } from "@/stores/userStore";
 
 const routes = [
   {
@@ -42,20 +42,20 @@ const router = createRouter({
   routes,
 });
 
-router.beforeEach((to, from, next) => {
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
-    // console.log("A", useUserStore().dataFetched, Object.keys(useUserStore().userData.user).length == 0)
-    if (useUserStore().dataFetched && Object.keys(useUserStore().userData.user).length == 0) {
-      window.location.replace("/login");
-      // console.log("Redirect")
-    }
-    else {
-      next()
-    }
-  }
-  else {
-    next()
-  }
-})
+// router.beforeEach((to, from, next) => {
+//   if (to.matched.some((record) => record.meta.requiresAuth)) {
+//     // console.log("A", useUserStore().dataFetched, Object.keys(useUserStore().userData.user).length == 0)
+//     if (useUserStore().dataFetched && Object.keys(useUserStore().userData.user).length == 0) {
+//       window.location.replace("/login");
+//       // console.log("Redirect")
+//     }
+//     else {
+//       next()
+//     }
+//   }
+//   else {
+//     next()
+//   }
+// })
 
 export default router;

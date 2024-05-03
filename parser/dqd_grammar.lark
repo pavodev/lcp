@@ -16,9 +16,12 @@ statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ 
 
 cqp__           : (ANYTHING _NL|_INDENT cqp__ _DEDENT)+
 
-members         : statement__                                                         -> members
+members         : statement__                                       -> members
 
-comparison      : entity operator comparison_type__ _NL                               -> comparison
+comparison      : left operator comparison_type__ _NL               -> comparison
+
+left            : entity
+                | function
 
 constraints     : comparison
                 | statement__
@@ -49,9 +52,9 @@ filter          : "filter" _NL _INDENT comparison _DEDENT                       
 functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
 
 center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
-window          : "window" _NL _INDENT range__ _NL _DEDENT                               -> window
+window          : "window" _NL _INDENT range__ _NL _DEDENT                           -> window
 space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
-attribute       : "attribute" _NL _INDENT attribute__ _NL _DEDENT                        -> attribute
+attribute       : "attribute" _NL _INDENT attribute__ _NL _DEDENT                    -> attribute
 
 entity          : (LABEL|LAYER|DOTENTITY)
 operator        : OPERATOR
@@ -60,6 +63,8 @@ comparison_type__ : NUMBER_EXPRESSION                                           
                   | STRING_LITERAL                                                   -> string_comparison
                   | REGEX                                                            -> regex_comparison
                   | (LABEL|LAYER|DOTENTITY)                                          -> entity_comparison
+                  | function                                                         -> function_comparison
+
 
 label           : LABEL                                                                -> label
 layer           : LAYER                                                                -> layer
@@ -77,6 +82,13 @@ attribute__     : STRING
 filter__        : STRING
 range__         : RANGE
 
+function        : function_name "(" arguments+ ")"                         -> function
+function_name   : FUNCTION
+arguments       : entity ","?
+                | function ","?
+                | NUMBER_EXPRESSION                                        -> argument_number
+                | STRING_LITERAL                                           -> argument_string
+
 GROUP.4               : /group/
 SET.4                 : /set/
 SEQUENCE.4            : /sequence/
@@ -88,20 +100,21 @@ OPERATOR_BINARY.4     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|�
 OPERATOR_N_ARY.4      : /(AND|OR)/
 RESULTS_ARROW.4       : /=>/
 ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
+FUNCTION.4            : /length|size|min|max|century|year|month|day/
 
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
 
+OPERATOR.2       : /((not |!)?contain|<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!)/
 LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/
 LABEL.2          : /[a-z][a-zA-Z0-9_]*/
 
-OPERATOR.1      : /(<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
 REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
 
-STRING_LITERAL  : /('.+'|".+")/
-REGEX           : /\/.+\//
-RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
-STRING          : /[^\n\r ].*/
+STRING_LITERAL.1  : /('.+'|".+")/
+REGEX.1           : /\/.+\//
+RANGE.1           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
+STRING.1          : /[^\n\r ].*/
 
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 

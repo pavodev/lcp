@@ -594,7 +594,7 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
 
 def _filter_corpora(
     config: Config,
-    is_vian: bool,
+    app_type: str,
     user_data: JSONObject | None,
     get_all: bool = False,
 ) -> Config:
@@ -612,26 +612,23 @@ def _filter_corpora(
         for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
             ids.add(proj["id"])
 
+    ids.add("all")
     corpora: dict[str, CorpusConfig] = {}
     for corpus_id, conf in config.items():
+        if get_all is False and len([project_id for project_id in conf["projects"] if project_id in ids]) == 0:
+            continue
         idx = str(corpus_id)
         if idx == "-1":
             corpora[idx] = conf
             continue
-        allowed: list[str] = conf.get("projects", [])
-        if get_all:
+        data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
+        if get_all or app_type in ('lcp', 'catchphrase'):
             corpora[idx] = conf
             continue
-        if "all" in allowed:
+        if app_type == 'videoscope' and data_type in ['video']:
             corpora[idx] = conf
             continue
-        if is_vian and "vian" in allowed:
-            corpora[idx] = conf
-            continue
-        if not is_vian and "lcp" in allowed:
-            corpora[idx] = conf
-            continue
-        if not allowed or any(i in ids for i in allowed):
+        if app_type == 'soundscript' and data_type in ['audio', 'video']:
             corpora[idx] = conf
             continue
     return corpora
@@ -814,9 +811,11 @@ def format_meta_lines(
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if any(
+                    if isinstance(res[n + 1], dict):
+                        segment[layer][prop] = json.dumps(res[n + 1])
+                    elif any(
                         isinstance(res[n + 1], type)
-                        for type in [int, str, bool, dict, list, tuple, UUID, date]
+                        for type in [int, str, bool, list, tuple, UUID, date]
                     ):
                         segment[layer][prop] = str(res[n + 1])
                     elif isinstance(res[n + 1], Range):
@@ -833,6 +832,22 @@ def format_meta_lines(
             continue
         formatted[str(seg_id)] = segment
     return formatted
+
+
+def range_to_array(sql_ref: str) -> str:
+    return f"jsonb_build_array(lower({sql_ref}), upper({sql_ref}))"
+
+
+def _layer_contains(config: CorpusConfig, parent: str, child: str) -> bool:
+    child_layer = config["layer"].get(child)
+    parent_layer = config["layer"].get(parent)
+    if not child_layer or not parent_layer:
+        return False
+    while parent_layer and (parents_child := parent_layer.get("contains")):
+        if parents_child == child:
+            return True
+        parent_layer = config["layer"].get(parents_child)
+    return False
 
 
 def _determine_language(batch: str) -> str | None:

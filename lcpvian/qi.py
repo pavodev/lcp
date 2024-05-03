@@ -50,7 +50,7 @@ from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
-from .utils import _determine_language, push_msg
+from .utils import _determine_language, _layer_contains, push_msg
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 
@@ -230,7 +230,9 @@ class QueryIteration:
         }
         if request_data.get("to_export", False):
             details["to_export"] = {
-                "format": str(request_data["to_export"]),
+                "format": str(request_data["to_export"].get("format","")),
+                "preview": request_data["to_export"].get("preview", False),
+                "download": request_data["to_export"].get("download", False),
                 "config": request.app["config"][str(corpora_to_use[0])],
                 "user": request_data.get("user", ""),
                 "room": request_data.get("room", ""),
@@ -380,15 +382,7 @@ class QueryIteration:
         if not self.current_batch:
             raise ValueError("Need batch")
         config = self.config[str(self.current_batch[0])]
-        child_layer = config["layer"].get(child)
-        parent_layer = config["layer"].get(parent)
-        if not child_layer or not parent_layer:
-            return False
-        while parent_layer and (parents_child := parent_layer.get("contains")):
-            if parents_child == child:
-                return True
-            parent_layer = config["layer"].get(parents_child)
-        return False
+        return _layer_contains(config, parent, child)
 
     def _is_time_anchored(self, layer: str) -> bool:
         if not self.current_batch:
@@ -446,9 +440,11 @@ class QueryIteration:
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
         joins = []
+        group_by = []
         for layer in parents_with_attributes:
             alias = layer
             layer_mapping = config["mapping"]["layer"].get(layer, {})
+            mapping_attrs = layer_mapping.get("attributes", {})
             attributes: dict[str, Any] = {
                 k: v for k, v in config["layer"][layer].get("attributes", {}).items()
             }
@@ -479,14 +475,36 @@ class QueryIteration:
                 prefix_id = layer.lower()
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
+            group_by.append(f"{layer}_id")
+            joins_later = []
             for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
-                # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
-                if attr == "meta":
-                    lb, rb = "{", "}"
-                    attr_name = f"({attr_name} #>> '{lb}{rb}')::jsonb"
-                selects.append(f'{alias}."{attr}" AS {layer}_{attr}')
+                attr_mapping = mapping_attrs.get(attr, {})
+                # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
+                if attr_mapping.get("type","") == "relation":
+                    attr_table = attr_mapping.get("name","")
+                    if v.get("type") == "labels":
+                        nbit: int = int(cast(str, config["layer"][layer].get("nlabels","1")))
+                        # Join the lookup table
+                        joins_later.append(
+                            f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
+                        )
+                        # Select the attribute from the lookup table
+                        selects.append(f'array_agg({attr_table}.label) AS {layer}_{attr}')
+                    else:
+                        # Join the lookup table
+                        joins_later.append(
+                            f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
+                        )
+                        # Select the attribute from the lookup table
+                        selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
+                        group_by.append(f"{layer}_{attr}")
+                else:
+                    # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+                    if attr == "meta":
+                        attr_name = f"meta::jsonb"
+                    selects.append(f'{alias}.{attr_name} AS {layer}_{attr}')
             # Will get char_range from the appropriate table
             char_range_table: str = alias
             # join tables
@@ -513,13 +531,19 @@ class QueryIteration:
                 joins.append(
                     f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
                 )
+            joins += joins_later
             # Get char_range from the main table
             selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
+            group_by.append(f"{layer}_char_range")
             # And frame_range if applicable
             if self._is_time_anchored(layer):
                 selects.append(
                     f'{char_range_table}."frame_range" AS {layer}_frame_range'
                 )
+
+        # Add code here to add "media" if dealing with a multimedia corpus
+        if config.get("meta", config).get("mediaSlots",{}):
+            selects.append(f"{config['document']}.media::jsonb AS {config['document']}_media")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
@@ -528,7 +552,8 @@ class QueryIteration:
             joins
         )  # left join = include non-empty entities even if other ones are empty
         joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
-        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed};"
+        group_by_formed = ", ".join(group_by)
+        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed} GROUP BY {group_by_formed};"
         print("meta script", script)
         return script
 
@@ -547,8 +572,19 @@ class QueryIteration:
         seg = config["segment"]
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
-        seg_name = f"prepared_{name}{underlang}"
-        script = f"SELECT {name}_id, off_set, content FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
+        seg_mapping = config["mapping"]["layer"].get(seg,{}).get("prepared",{})
+        if lang:
+            seg_mapping = config["mapping"]["layer"].get(seg,{}).get("partitions",{}).get(lang,{}).get("prepared")
+        seg_name = seg_mapping.get("relation","")
+        if not seg_name:
+            seg_name = f"prepared_{name}{underlang}"
+        annotations: str = ""
+        for layer, properties in config['layer'].items():
+            if layer == seg or properties.get("contains","") != config["token"]:
+                continue
+            annotations = ", annotations"
+            break
+        script = f"SELECT {name}_id, id_offset, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
         return script
 
     @classmethod

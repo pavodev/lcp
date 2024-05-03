@@ -42,7 +42,7 @@ elif command == "ddl":
     main(sys.argv[-1])
 
 elif command == "corpora":
-    types = {"lcp", "vian", "all"}
+    types = {"lcp", "videoscope", "soundscript", "catchphrase", "all"}
     app_type = next((x for x in reversed(sys.argv) if x in types), "all")
     res = asyncio.run(corpora(app_type))
     print(json.dumps(res, indent=4))

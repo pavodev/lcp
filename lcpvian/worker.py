@@ -64,8 +64,10 @@ if SENTRY_DSN:
 
 UPLOAD_USER = os.environ["SQL_UPLOAD_USERNAME"]
 QUERY_USER = os.environ["SQL_QUERY_USERNAME"]
+WEB_USER = os.environ["SQL_WEB_USERNAME"]
 UPLOAD_PASSWORD = os.environ["SQL_UPLOAD_PASSWORD"]
 QUERY_PASSWORD = os.environ["SQL_QUERY_PASSWORD"]
+WEB_PASSWORD = os.environ["SQL_WEB_PASSWORD"]
 HOST = os.environ["SQL_HOST"]
 DBNAME = os.environ["SQL_DATABASE"]
 _UPLOAD_POOL = os.getenv("UPLOAD_USE_POOL", "false")
@@ -110,6 +112,9 @@ upload_connstr = (
 query_connstr = (
     f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 )
+web_connstr = (
+    f"postgresql+asyncpg://{WEB_USER}:{WEB_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+)
 
 
 query_kwargs = dict(
@@ -147,6 +152,7 @@ class SQLJob(Job):
         super().__init__(*args)
         self._pool = create_async_engine(query_connstr, **query_kwargs)
         self._upool = create_async_engine(upload_connstr, **upload_kwargs)
+        self._wpool = create_async_engine(web_connstr, **upload_kwargs)
 
 
 class MyWorker(Worker):

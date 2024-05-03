@@ -285,6 +285,8 @@ def _query(
 
     if job.kwargs["debug"] and job.kwargs["sql"]:
         jso["sql"] = job.kwargs["sql"]
+    if job.kwargs["sql"]:
+        jso["consoleSQL"] = job.kwargs["sql"]
 
     if is_full and status != "finished":
         jso["progress"] = {
@@ -334,6 +336,7 @@ def _meta(
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
+    full = cast(bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False))))
     status = depended.meta["_status"]
 
     to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
@@ -348,7 +351,9 @@ def _meta(
     base.meta["_meta_jobs"][job.id] = None
     base.save_meta()  # type: ignore
 
-    can_send = not base.meta.get("to_export", False)
+    can_send = not base.meta.get("to_export", False) and (
+        not full or status == "finished"
+    )
 
     action = "meta"
 
@@ -360,6 +365,7 @@ def _meta(
         "room": kwargs.get("room", job.kwargs["room"]),
         "query": depended.id,
         "can_send": can_send,
+        "full": full,
         "table": table,
         "first_job": base.id,
         "msg_id": msg_id,
@@ -431,6 +437,16 @@ def _sentences(
             full,
         )
 
+    for sent in (result or []):
+        if len(sent) < 4:
+            continue
+        if not sent[3]:
+            continue
+        sent_id = str(sent[0])
+        if sent_id not in to_send.get(-1, {}):
+            continue
+        to_send[-1][sent_id].append(sent[3])
+
     more_data = not job.kwargs["no_more_data"]
     submit_query = job.kwargs["start_query_from_sents"]
     if submit_query and more_data:
@@ -498,12 +514,12 @@ def _sentences(
     # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
 
-    if use_cache and not can_send and False:
-        if not connection.get(msg_id):
-            connection.set(msg_id, dumped)
-        connection.expire(msg_id, MESSAGE_TTL)
-        print("not returning sentences because searching whole corpus")
-        return
+    # if use_cache and not can_send:
+    #     if not connection.get(msg_id):
+    #         connection.set(msg_id, dumped)
+    #     connection.expire(msg_id, MESSAGE_TTL)
+    #     print("not returning sentences because searching whole corpus")
+    #     return
 
     job.save_meta()  # type: ignore
 
@@ -526,6 +542,24 @@ def _document(
         return
     if isinstance(result, list) and len(result) == 1:
         result = result[0]
+
+    if job.kwargs["corpus"] == 59:
+        tmp_result: dict[str, dict] = {"structure": {}, "layers": {}, "global_attributes": {}}
+        for row in result:
+            typ, key, props = cast(list, row)
+            if typ == "layer":
+                if key not in tmp_result["structure"]:
+                    tmp_result["structure"][key] = [*props.keys()]
+                if key not in tmp_result["layers"]:
+                    tmp_result["layers"][key] = []
+                keys = tmp_result["structure"][key]
+                line = [props[k] for k in keys]
+                tmp_result["layers"][key].append(line)
+            elif typ == "glob":
+                if key not in tmp_result["global_attributes"]:
+                    tmp_result["global_attributes"][key] = []
+                tmp_result["global_attributes"][key].append(props)
+        result = cast(JSONObject, tmp_result)
 
     msg_id = str(uuid4())
     jso = {
@@ -554,7 +588,17 @@ def _document_ids(
     if not room:
         return None
     msg_id = str(uuid4())
-    formatted = {str(idx): name for idx, name in cast(list[tuple[int, str]], result)}
+    formatted = {
+        str(idx): {
+            'name': name,
+            'media': media,
+            'frame_range': (
+                [frame_range.lower, frame_range.upper] if frame_range
+                else [0,0]
+            )
+        }
+        for idx, name, media, frame_range in cast(list[tuple[int, str, dict, Any]], result)
+    }
     action = "document_ids"
     jso = {
         "document_ids": formatted,
@@ -777,6 +821,19 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
+    if job.dependency and job.args and isinstance(job.args[0],str) and os.path.exists(job.args[0]):
+        user = job.dependency.kwargs.get("user")
+        room = job.dependency.kwargs.get("room")
+        if user and room and job.kwargs.get("download", False):
+            msg_id = str(uuid4())
+            jso: dict[str, Any] = {
+                "user": user,
+                "room": room,
+                "action": "export_link",
+                "msg_id": msg_id,
+                "fn": os.path.basename(job.args[0])
+            }
+            _publish_msg(connection, jso, msg_id)
     return None
 
 

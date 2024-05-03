@@ -68,7 +68,7 @@ export default {
       let data = [
         {
           id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, ""),
+          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, "").replace(/@/gi, "-at-"),
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
@@ -80,10 +80,13 @@ export default {
       Object.keys(corpus.layer).forEach((layer, index) => {
         let next = [], link = [];
         if ("attributes" in corpus.layer[layer]) {
+          let layer_type = corpus.layer[layer].layerType;
           Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
             let text = attribute.replace(/@/gi, "_");
             let attributes = corpus.layer[layer].attributes[attribute];
+            if (layer_type == "relation" && "name" in attributes)
+              text = attributes.name;
             let attributeData = {
               id: attributeId,
               text: text,

@@ -5,6 +5,9 @@ Token@s_en tv_en
 
 Token@s_en to_en
 	upos = "NOUN"
+	keywords contain /something/
+	keywords !contain "something else"
+	length(form) > length(tv_en.form)
 	DepRel
 		head = to_en
 		dep = tv_en

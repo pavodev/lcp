@@ -22,7 +22,7 @@
                 Home
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -30,7 +30,7 @@
                 />
                 Query
               </router-link>
-            </li>
+            </li> -->
             <li class="nav-item">
               <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
                 <FontAwesomeIcon
@@ -64,7 +64,7 @@
             </li>
             <li class="nav-item">
               <a
-                v-if="userData && userData.user && userData.user.id"
+                v-if="userData && userData.user && userData.user.displayName"
                 class="nav-link"
                 href="/Shibboleth.sso/Logout"
               >
@@ -81,7 +81,9 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <HomeView class="app-content-box" />
+    <!-- <router-view /> -->
+    <FooterView />
     <NotificationView />
     <LoadingView />
   </div>
@@ -94,7 +96,10 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import LoadingView from "@/components/LoadingView.vue";
+import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
+import config from "@/config";
+import HomeView from "@/views/lcp/HomeView.vue";
 
 export default {
   name: "AppLCP",
@@ -105,6 +110,7 @@ export default {
     }
   },
   mounted() {
+    document.title = config.appName;
     useUserStore().fetchUserData();
     useCorpusStore().fetchCorpora();
   },
@@ -119,6 +125,8 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    HomeView,
+    FooterView,
   },
   computed: {
     ...mapState(useUserStore, ["userData", "roomId", "debug"]),

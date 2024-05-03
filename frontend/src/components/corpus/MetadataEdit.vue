@@ -31,8 +31,15 @@
       </div>
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-version" class="form-label">Version</label>
-          <input type="text" class="form-control" v-model="corpusData.meta.version" id="corpus-version" />
+          <label for="corpus-revision" class="form-label">Revision</label>
+          <input type="text" class="form-control" v-model="corpusData.meta.revision" id="corpus-revision" />
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="col-7">
+        <div class="mb-3">
+          <label for="corpus-license" class="form-label">Data type: <b>{{ corpusDataType(corpusData) }}</b></label>
         </div>
       </div>
     </div>
@@ -53,7 +60,7 @@
             <div class="col-3 mb-2" v-for="licence in licenses" :key="licence.name">
               <div class="form-check">
                 <input
-                  class="form-check-input"
+                  class="form-check-input form-check-inline"
                   type="radio"
                   v-model="corpusData.meta.license"
                   :id="licence.tag"
@@ -102,6 +109,7 @@ a:hover {
 </style>
 
 <script>
+import Utils from "@/utils";
 
 export default {
   name: "CorpusMetdataEdit",
@@ -121,6 +129,9 @@ export default {
       ],
       corpusData: { ...this.corpus },
     }
+  },
+  methods: {
+    corpusDataType: Utils.corpusDataType,
   },
   watch: {
     userLicense() {

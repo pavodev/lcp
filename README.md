@@ -139,9 +139,7 @@ nvm use 19
 Then, if you haven't before, install the frontend:
 
 ```bash
-cd vian-eventdrops
-yarn install
-cd ../frontend
+cd frontend
 yarn install
 ```
 
@@ -151,12 +149,12 @@ Then you can start it with:
 # in ./frontend:
 # for LCP frontend
 yarn serve:lcp
-# for VIAN frontend
-yarn serve:vian
+# for videoscope frontend
+yarn serve:videoscope
 # for catchphrase frontend
 yarn serve:catchphrase
 # for soundscript frontend
-yarn serve:ofrom
+yarn serve:soundscript
 ```
 
 ## Starting the app
