@@ -31,16 +31,11 @@ LCP = "lcp"
 
 ROOT = os.path.dirname(os.path.dirname(__file__))
 FRONTEND_DIR = os.path.join(ROOT, "frontend")
-EDROPS_DIR = os.path.join(ROOT, "vian-eventdrops")
 KILL_PORT = f"kill -9 `lsof -t -i:{os.getenv('AIO_PORT', '9090')}`"
 
 
 def npm_install() -> subprocess.Popen:
     return subprocess.Popen(FE_INSTALL.split(), cwd=FRONTEND_DIR)
-
-
-def edrop() -> subprocess.Popen:
-    return subprocess.Popen(FE_INSTALL.split(), cwd=EDROPS_DIR)
 
 
 def build(ss: bool = False) -> subprocess.Popen:
@@ -72,7 +67,6 @@ def setup_cp() -> None:
     """
     Build catchphrase project
     """
-    edrop().wait()
     npm_install().wait()
     build().wait()
     print(
@@ -85,7 +79,6 @@ def setup_ss():
     """
     Build soundscipt project
     """
-    edrop().wait()
     npm_install().wait()
     build(ss=True).wait()
     print(

@@ -87,9 +87,6 @@ dependencies = [
   "uvloop~=0.19.0",
 ]
 
-
-
-
 [tool.hatch.version]
 path = "lcpvian/__init__.py"
 
@@ -138,7 +135,6 @@ ignore_missing_imports = true
 
 [tool.hatch.build.targets.wheel.force-include]
 "frontend" = "frontend"
-"vian-eventdrops" = "vian-eventdrops"
 # "frontend/babel.config.js" = "frontend/babel.config.js"
 #"frontend/jsconfig.json" = "frontend/jsconfig.json"
 # "frontend/package.json" = "frontend/package.json"
@@ -161,7 +157,6 @@ ignore_missing_imports = true
 include-only = [
   "lcpvian",
   "parser",
-  # "vian-eventdrops",
   ".env.example",
   "README.md",
   "pyproject.toml",

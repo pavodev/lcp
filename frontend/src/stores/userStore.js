@@ -30,7 +30,6 @@ export const useUserStore = defineStore("userData", {
           user: {},
           ...(r.data || {})
         };
-        console.log("userData", this.userData);
         this.debug = r.data.debug
         if (this.userData.publicProfiles.length) {
           this.projects = this.userData.publicProfiles

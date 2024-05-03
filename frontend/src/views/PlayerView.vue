@@ -1009,14 +1009,14 @@ export default {
           return;
         }
         else if (data["action"] === "document_ids") {
-          console.log("DOC", data);
+          // console.log("DOC", data);
           // this.documentDict = data.document_ids
           this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
           this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media),props.frame_range]);
           return;
         }
         else if (data["action"] === "validate") {
-          console.log("Query validation", data);
+          // console.log("Query validation", data);
           if (data.kind == "dqd" && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
@@ -1278,8 +1278,6 @@ KWIC => plain
           this.updateTimer = setInterval(() => {
             this.playerCurrentTime = this.$refs.videoPlayer1.currentTime;
           }, 30);
-        } else {
-          console.log("Stopped")
         }
       },
       immediate: true,
@@ -1306,7 +1304,7 @@ KWIC => plain
       handler() {
         let _messages = this.messages;
         if (_messages.length > 0) {
-          console.log("WSM", _messages)
+          // console.log("WSM", _messages)
           _messages.forEach(message => this.onSocketMessage(message))
           useWsStore().clear();
         }

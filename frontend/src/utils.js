@@ -109,7 +109,6 @@ const Utils = {
     },
     corpusDataType (corpus) {
       let corpusType = "text";
-      console.log(corpus.meta.name, corpus)
       if (corpus.meta.mediaSlots) {
         for (let key of Object.keys(corpus.meta.mediaSlots)) {
           if (corpus.meta.mediaSlots[key].mediaType == "video") {

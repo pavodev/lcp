@@ -1281,7 +1281,6 @@ export default {
       }
     },
     isSubmitDisabled() {
-      console.log("AA", this.selectedCorpora, this.loading)
       return (this.selectedCorpora && this.selectedCorpora.length == 0) ||
               this.loading===true ||
               (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
