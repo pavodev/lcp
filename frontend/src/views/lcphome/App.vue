@@ -22,7 +22,7 @@
                 Home
               </router-link>
             </li>
-            <li class="nav-item">
+            <!-- <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -30,16 +30,7 @@
                 />
                 Query
               </router-link>
-            </li>
-            <li class="nav-item">
-              <router-link class="nav-link" to="/player">
-                <FontAwesomeIcon
-                  :icon="['fas', 'video']"
-                  class="me-1"
-                />
-                Viewer
-              </router-link>
-            </li>
+            </li> -->
             <li class="nav-item">
               <a href="https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start" target="_blank" class="nav-link">
                 <FontAwesomeIcon
@@ -90,7 +81,8 @@
         </div>
       </div>
     </nav>
-    <router-view />
+    <HomeView class="app-content-box" />
+    <!-- <router-view /> -->
     <FooterView />
     <NotificationView />
     <LoadingView />
@@ -107,6 +99,7 @@ import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
 import config from "@/config";
+import HomeView from "@/views/lcphome/HomeView.vue";
 
 export default {
   name: "AppLCP",
@@ -132,6 +125,7 @@ export default {
   components: {
     LoadingView,
     NotificationView,
+    HomeView,
     FooterView,
   },
   computed: {

@@ -99,8 +99,38 @@ else if (process.env.APP_TYPE == "catchphrase") {
     };
   }
 }
+else if (process.env.APP_TYPE == "lcphome") {
+  // LCP HOME
+  if (process.env.NODE_ENV === "production") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.linguistik.uzh.ch/be",
+      wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else if (process.env.NODE_ENV === "staging") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else {
+    // development
+    config = {
+      appName: "LCP",
+      apiUrl: "http://localhost:9090",
+      wsUrl: "ws://localhost:9090/ws",
+      apiHeaders: testUserHeaders,
+      sentryDSN: null,
+      baseMediaUrl: "http://localhost:8000",
+    };
+  }
+}
 else {
-  // LCP
+  // LCP HOME
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "LCP",

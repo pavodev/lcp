@@ -7,6 +7,20 @@
           <p>
             The LiRI Corpus Platform (LCP) is a software system for handling and querying corpora of different kinds. Users can query corpora directly from their browser, and upload their own corpora using a command-line interface.
           </p>
+          <p>
+            <a :href="appLinks['catchphrase']" target="_blank" class="btn btn-primary me-1 btn-catchphrase">
+              <FontAwesomeIcon :icon="['fas', 'font']" class="me-2" />
+              <i>catchphrase</i>
+            </a>
+            <a :href="appLinks['soundscript']" target="_blank" class="btn btn-primary me-1 btn-soundscript">
+              <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
+              <i>soundscript</i>
+            </a>
+            <a :href="appLinks['videoscope']" target="_blank" class="btn btn-primary me-1 btn-videoscope">
+              <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
+              <i>videoscope</i>
+            </a>
+          </p>
         </div>
       </div>
       <div class="row mt-3">
@@ -135,24 +149,27 @@
                     <FontAwesomeIcon class="ms-1" :icon="['fas', 'caret-down']" />
                     <div class="dropdown-app-content">
                       <a
-                        href="#"
-                        @click.stop="openQueryWithCorpus(corpus, 'catchphrase')"
+                        :href="getAppLink('catchphrase', corpus)"
+                        target="_blank"
+                        @click.stop
                       >
                         <FontAwesomeIcon :icon="['fas', 'font']" class="me-2" />
                         <i>catchphrase</i>
                       </a>
                       <a
-                      href="#"
+                        :href="getAppLink('soundscript', corpus)"
                         v-if="['audio', 'video'].includes(corpusDataType(corpus))"
-                        @click.stop="openQueryWithCorpus(corpus, 'soundscript')"
+                        target="_blank"
+                        @click.stop
                       >
                         <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
                         <i>soundscript</i>
                       </a>
                       <a
-                        href="#"
+                        :href="getAppLink('videoscope', corpus)"
                         v-if="['video'].includes(corpusDataType(corpus))"
-                        @click.stop="openQueryWithCorpus(corpus, 'videoscope')"
+                        target="_blank"
+                        @click.stop
                       >
                         <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
                         <i>videoscope</i>
@@ -235,7 +252,7 @@
                 <div class="title mb-0" v-if="hasAccess(corpusModal)">
                   <span>{{ corpusModal.meta.name }}</span>
                   <div class="icon-1 btn btn-primary btn-sm horizontal-space" title="Query corpus"
-                    @click="openQueryWithCorpus(corpusModal, 'catchphrase')" data-bs-dismiss="modal">
+                    @click="openQueryWithCorpus(corpusModal)" data-bs-dismiss="modal">
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                 </div>
@@ -506,8 +523,8 @@ export default {
       let modal = new Modal(document.getElementById('corpusEditModal'));
       modal.show()
     },
-    openQueryWithCorpus(corpus, type) {
-      if (type == "videoscope") {
+    openQueryWithCorpus(corpus) {
+      if (config.appType == "videoscope") {
         router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
       } else {
         router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);

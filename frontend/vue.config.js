@@ -1,5 +1,5 @@
 const { defineConfig } = require("@vue/cli-service");
-const appTypes = ["lcp", "videoscope", "soundscript", "catchphrase"]
+const appTypes = ["lcp", "lcphome", "videoscope", "soundscript", "catchphrase"]
 const webpack = require('webpack');
 const appType = appTypes.includes(process.env.APP_TYPE) ? process.env.APP_TYPE : "lcp";
 const monacoWebpackPlugin = require("monaco-editor-webpack-plugin");

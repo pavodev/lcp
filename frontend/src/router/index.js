@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from "vue-router";
-import HomeView from "../views/HomeView.vue";
+import config from "@/config";
+import HomeViewBase from "../views/HomeView.vue";
+import HomeViewLCP from "../views/lcp/HomeView.vue";
 
 // import { useUserStore } from "@/stores/userStore";
 
@@ -7,7 +9,7 @@ const routes = [
   {
     path: "/",
     name: "home",
-    component: HomeView,
+    component: config.appType == "lcp" ? HomeViewLCP : HomeViewBase,
     meta: {
       requiresAuth: false,
     },
@@ -20,7 +22,7 @@ const routes = [
     // this generates a separate chunk (about.[hash].js) for this route
     // which is lazy-loaded when the route is visited.
     component: () =>
-      import(/* webpackChunkName: "about" */ "../views/PlayerView.vue"),
+      import("../views/PlayerView.vue"),
     meta: {
       requiresAuth: true,
     },
@@ -30,7 +32,7 @@ const routes = [
     path: "/query",
     alias: "/query/:id/:name/",
     component: () =>
-      import(/* webpackChunkName: "about" */ "../views/QueryView.vue"),
+      import("../views/QueryView.vue"),
     meta: {
       requiresAuth: true,
     },
