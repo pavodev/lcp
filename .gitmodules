@@ -3,4 +3,4 @@
 	url = ../abstract-query.git
 [submodule "lcp-upload"]
 	path = lcp-upload
-	url = ../lcp-upload.git
+	url = ../lcp-upload
