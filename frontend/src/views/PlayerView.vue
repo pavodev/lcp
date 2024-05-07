@@ -552,13 +552,13 @@
                   v-for="(result, index) in currentPageResults"
                   :key="index"
                   class="cursor-pointer hover-opacity"
-                  @click="resultClick(result)"
+                  @click="resultClick(result, index)"
                 >
                   <div class="row">
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(result[5][0][0])"
+                        v-html="frameNumberToTime(frameFromResult(result,index)[0])"
                       ></span>
                     </div>
                     <div class="col">
@@ -693,12 +693,24 @@ export default {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
+    frameFromResult(result,index) {
+      // if (index >= this.WSDataResults.result[0].result_sets.length)
+      //   return [0,0];
+      index = 0; // hard-coded for now
+      const resAttrs = this.WSDataResults.result[0].result_sets[index].attributes;
+      for (let n in resAttrs)
+        if (resAttrs[n].name == "frame_ranges")
+          return result[n];
+      return [0,0];
+    },
     updatePage(currentPage) {
       this.currentPage = currentPage;
     },
-    resultClick(result) {
+    resultClick(result, index) {
+      if (index >= this.WSDataResults.result[0].result_sets.length)
+        return;
       // console.log(result, result[4][0][1], this.currentDocument)
-      let minFrame = Math.min(...result[5].map(x => x[0]))
+      let minFrame = Math.min(...this.frameFromResult(result, index).map(x => x[0]))
       let value = Utils.frameNumberToSeconds(minFrame) / 1000;
       if (this.currentDocument[0] == result[2]) {
         this._playerSetTime(value);

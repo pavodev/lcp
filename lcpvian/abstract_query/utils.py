@@ -121,6 +121,12 @@ def _is_anchored(config: dict[str,Any], layer: str, anchor: str) -> bool:
         return _is_anchored(config, child, anchor)
     return False
 
+def _has_frame_range(config: dict[str,Any]) -> bool:
+    for layer in config.get("layer", {}).values:
+        if layer.get("anchoring", {}).get("time"):
+            return True
+    return False
+
 def _parse_comparison(comparison_object: dict) -> tuple[dict[str,Any],str,str,QueryType]:
     assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")
     assert "operator" in comparison_object, KeyError("Couldn't find 'operator' in comparison")

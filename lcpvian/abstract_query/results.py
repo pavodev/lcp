@@ -23,7 +23,7 @@ from .utils import (
     _get_table,
     _get_mapping,
     _get_underlang,
-    _parse_comparison
+    _is_anchored
 )
 
 import re
@@ -418,7 +418,7 @@ class ResultsMaker:
         self._update_context(context)
         context_layer = self.r.label_layer[context][0]
 
-        g, t, s, d = self._get_labels(gest)
+        # g, t, s, d = self._get_labels(gest)
 
         lay: str
         tokens: list[dict] = []
@@ -486,42 +486,53 @@ WHERE {entity}.char_range && contained_token.char_range
         frame_ranges: list[dict[str, Any]] = []
         any_frame_range: str = ""
 
-        if self.vian:
-            for bit in [t, g, s, d]:
-                if not bit:
-                    continue
-                lab, lay = bit
-                if lay != self.config["document"] and self._label_with_track is None:
-                    self._label_with_track = lab
-                # todo: should this be here?
-                if lab.lower() not in self.r.entities:
-                    continue
-                out_name = f"{lab}_frame_range"
-                if not any_frame_range:
-                    any_frame_range = out_name
-                formed = f"{lab}.frame_range AS {out_name}"
-                self.r.selects.add(formed.lower())
-                self.r.entities.add(out_name.lower())
-                fr = frame_range_base.format(fr=out_name)
-                extras.append(fr)
-                extra_meta.append(lay)
+        # if self.vian:
+        if _is_anchored(self.config, context_layer, 'time'):
+            lab = context # TODO: accommodate corpora using FTS
+            out_name = f"{lab}_frame_range"
+            if not any_frame_range:
+                any_frame_range = out_name
+            formed = f"{lab}.frame_range AS {out_name}"
+            self.r.selects.add(formed.lower())
+            self.r.entities.add(out_name.lower())
+            fr = frame_range_base.format(fr=out_name)
+            extras.append(fr)
+            extra_meta.append(lay)
+            # for bit in [t, g, s, d]:
+            #     if not bit:
+            #         continue
+            #     lab, lay = bit
+            #     if lay != self.config["document"] and self._label_with_track is None:
+            #         self._label_with_track = lab
+            #     # todo: should this be here?
+            #     if lab.lower() not in self.r.entities:
+            #         continue
+            #     out_name = f"{lab}_frame_range"
+            #     if not any_frame_range:
+            #         any_frame_range = out_name
+            #     formed = f"{lab}.frame_range AS {out_name}"
+            #     self.r.selects.add(formed.lower())
+            #     self.r.entities.add(out_name.lower())
+            #     fr = frame_range_base.format(fr=out_name)
+            #     extras.append(fr)
+            #     extra_meta.append(lay)
 
             # self._add_vian_agentname()
 
-            if d:
-                d_label, _ = d
-                doc_id = f"{self.document}_id"
-                get_doc = d_label
-                formed = f"{d_label}.{doc_id} {doc_id}"
-                self.r.selects.add(formed.lower())
-                self.r.entities.add(doc_id.lower())
-                doc_join = ""
-            else:
-                get_doc = "_doc.document_id"
-                doc_join = f"""
-                JOIN {self.schema.lower()}.{self.document.lower()} _doc
-                ON _doc.frame_range @> match_list.{any_frame_range}
-                """.strip()
+            # if d:
+            #     d_label, _ = d
+            #     doc_id = f"{self.document}_id"
+            #     get_doc = d_label
+            #     formed = f"{d_label}.{doc_id} {doc_id}"
+            #     self.r.selects.add(formed.lower())
+            #     self.r.entities.add(doc_id.lower())
+            #     doc_join = ""
+            # else:
+            #     get_doc = "_doc.document_id"
+            #     doc_join = f"""
+            #     JOIN {self.schema.lower()}.{self.document.lower()} _doc
+            #     ON _doc.frame_range @> match_list.{any_frame_range}
+            #     """.strip()
 
             for ex in extra_meta:
                 obj: dict[str, str | bool] = {
@@ -531,18 +542,18 @@ WHERE {entity}.char_range && contained_token.char_range
                 }
                 frame_ranges.append(obj)
 
-            gesture = "null"
-            # agent_name = "null"
-            agent_name = "match_list.agent_name"
+            # gesture = "null"
+            # # agent_name = "null"
+            # agent_name = "match_list.agent_name"
 
-            if g:
-                gesture_type = "str|null"
-                gesture = f"match_list.{g[0]}_gesture"
+            # if g:
+            #     gesture_type = "str|null"
+            #     gesture = f"match_list.{g[0]}_gesture"
 
-            select_extra = f", {get_doc}, {gesture}, {agent_name}"
+            # select_extra = f", {get_doc}, {gesture}, {agent_name}"
             if extras:
                 formed = ", ".join(extras)
-                select_extra += "," + formed
+                select_extra = ", " + formed
 
         attribs = self._make_attribs(
             context, context_layer, gesture_type, tokens, frame_ranges
@@ -564,36 +575,36 @@ WHERE {entity}.char_range && contained_token.char_range
         }
         return out, metadata
 
-    def _add_vian_agentname(self):
-        """
-        For VIAN queries we need access to agent_name
-        """
-        if not self._label_with_track:
-            # segment_table = f"{self.segment}{_get_batch_suffix(self.batch)}"
-            formed = f"{self.schema}.{self.segment} s"
-            self.r.joins[formed] = None
-            formed = f"s.{self.segment}_id = {{_base_label}}.{self.segment}_id"
-            self.r.conditions.add(formed)
-            self.r.entities.add("s")
-            self.r.manual_track = "s"
-            # self._label_with_track = "s"
+    # def _add_vian_agentname(self):
+    #     """
+    #     For VIAN queries we need access to agent_name
+    #     """
+    #     if not self._label_with_track:
+    #         # segment_table = f"{self.segment}{_get_batch_suffix(self.batch)}"
+    #         formed = f"{self.schema}.{self.segment} s"
+    #         self.r.joins[formed] = None
+    #         formed = f"s.{self.segment}_id = {{_base_label}}.{self.segment}_id"
+    #         self.r.conditions.add(formed)
+    #         self.r.entities.add("s")
+    #         self.r.manual_track = "s"
+    #         # self._label_with_track = "s"
 
-        label = self._label_with_track or "s"
+    #     label = self._label_with_track or "s"
 
-        formed = f"{self.schema}.track track0".lower()
-        self.r.joins[formed] = None
+    #     formed = f"{self.schema}.track track0".lower()
+    #     self.r.joins[formed] = None
 
-        # todo: how do we know there is an s?
-        formed = f"track0.track_id = {label}.track_id"
-        self.r.conditions.add(formed)
+    #     # todo: how do we know there is an s?
+    #     formed = f"track0.track_id = {label}.track_id"
+    #     self.r.conditions.add(formed)
 
-        formed = f"{self.schema}.agent agent0".lower()
-        self.r.joins[formed] = None
-        formed = f"track0.agent_id = agent0.agent_id"
-        self.r.conditions.add(formed)
+    #     formed = f"{self.schema}.agent agent0".lower()
+    #     self.r.joins[formed] = None
+    #     formed = f"track0.agent_id = agent0.agent_id"
+    #     self.r.conditions.add(formed)
 
-        formed = f"agent0.name AS agent_name"
-        self.r.selects.add(formed.lower())
+    #     formed = f"agent0.name AS agent_name"
+    #     self.r.selects.add(formed.lower())
 
     def _get_label_layer(self, name: str) -> None | tuple[str, str]:
         """
@@ -648,7 +659,7 @@ WHERE {entity}.char_range && contained_token.char_range
 
         out: list[dict]
 
-        if not self.vian:
+        if not _is_anchored(self.config, context_layer, 'time'):
             out = [
                 {
                     "name": "identifier",
@@ -680,9 +691,9 @@ WHERE {entity}.char_range && contained_token.char_range
                 "data": tokens,
                 "type": "list[dict]",
             },
-            {"name": "document_id", "type": "number", "multiple": False},
-            {"name": "gesture", "type": gesture_type, "multiple": False},
-            {"name": "agent", "type": "str", "multiple": False},
+            # {"name": "document_id", "type": "number", "multiple": False},
+            # {"name": "gesture", "type": gesture_type, "multiple": False},
+            # {"name": "agent", "type": "str", "multiple": False},
             {
                 "name": "frame_ranges",
                 "type": "list[dict]",

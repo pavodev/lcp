@@ -260,13 +260,15 @@ def _format_kwics(
             continue
         if key not in out:
             out[key] = []
-        if is_vian and key in kwics:
-            rest = list(_format_vian(rest))
-        elif key in kwics:
-            if vian_in_lcp is None:
-                vian_in_lcp = len(rest) > 2
-            if vian_in_lcp:
-                rest = rest[:2]
+        # if is_vian and key in kwics:
+        #     rest = list(_format_vian(rest))
+        # elif key in kwics:
+        if key == "frame_range":
+            rest = rest[:2]
+            # if vian_in_lcp is None:
+            #     vian_in_lcp = len(rest) > 2
+            # if vian_in_lcp:
+            #     rest = rest[:2]
         if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
