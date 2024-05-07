@@ -112,6 +112,14 @@ def _layer_contains(config: dict[str,Any], parent: str, child: str) -> bool:
         parent_layer = config["layer"].get(parents_child)
     return False
 
+def _is_anchored(config: dict[str,Any], layer: str, anchor: str) -> bool:
+    layer_config = config["layer"].get(layer)
+    if layer_config.get("anchoring", {}).get(anchor):
+        return True
+    child: str = layer_config.get("contains", "")
+    if child in config["layer"]:
+        return _is_anchored(config, child, anchor)
+    return False
 
 def _parse_comparison(comparison_object: dict) -> tuple[dict[str,Any],str,str,QueryType]:
     assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")

@@ -427,19 +427,21 @@ class QueryIteration:
             batch_suffix = batch_match[1]
         seg_name = f"{name}{underlang}{batch_suffix}".lower()
 
+        has_media = config.get("meta", config).get("mediaSlots",{})
+
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg, k)]
         parents_with_attributes = {
             k: None for k in parents_of_seg if config["layer"][k].get("attributes")
         }
         # Make sure to include Document in there, even if it's not a parent of Segment
-        if config["layer"][config["document"]].get("attributes"):
+        if has_media or config["layer"][config["document"]].get("attributes"):
             parents_with_attributes[config["document"]] = None
 
         parents_with_attributes[seg] = None  # Also query the segment layer itself
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
-        joins = []
+        joins = set()
         group_by = []
         for layer in parents_with_attributes:
             alias = layer
@@ -476,7 +478,7 @@ class QueryIteration:
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
             group_by.append(f"{layer}_id")
-            joins_later = []
+            joins_later = set()
             for attr, v in attributes.items():
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
@@ -487,14 +489,14 @@ class QueryIteration:
                     if v.get("type") == "labels":
                         nbit: int = int(cast(str, config["layer"][layer].get("nlabels","1")))
                         # Join the lookup table
-                        joins_later.append(
+                        joins_later.add(
                             f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
                         )
                         # Select the attribute from the lookup table
                         selects.append(f'array_agg({attr_table}.label) AS {layer}_{attr}')
                     else:
                         # Join the lookup table
-                        joins_later.append(
+                        joins_later.add(
                             f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
                         )
                         # Select the attribute from the lookup table
@@ -515,23 +517,23 @@ class QueryIteration:
                     continue
                 if alignment and relation:
                     # The partition table is aligned to a main document table
-                    joins.append(
+                    joins.add(
                         f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
                     )
-                    joins.append(
+                    joins.add(
                         f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
                     )
                     char_range_table = f"{alias}_{lang}"
                 else:
                     # This is the main document table for this partition
-                    joins.append(
+                    joins.add(
                         f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range"
                     )
             elif relation:
-                joins.append(
+                joins.add(
                     f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
                 )
-            joins += joins_later
+            joins = joins.union(joins_later)
             # Get char_range from the main table
             selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
             group_by.append(f"{layer}_char_range")
@@ -542,15 +544,14 @@ class QueryIteration:
                 )
 
         # Add code here to add "media" if dealing with a multimedia corpus
-        if config.get("meta", config).get("mediaSlots",{}):
+        if has_media:
             selects.append(f"{config['document']}.media::jsonb AS {config['document']}_media")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
-        joins_formed = " LEFT JOIN ".join(
-            joins
-        )  # left join = include non-empty entities even if other ones are empty
+        # left join = include non-empty entities even if other ones are empty
+        joins_formed = " LEFT JOIN ".join([j for j in joins])
         joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
         group_by_formed = ", ".join(group_by)
         script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed} GROUP BY {group_by_formed};"

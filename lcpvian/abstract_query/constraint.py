@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import re
-import sys
 
-from typing import Any, Literal, cast
+from typing import Any, cast
 from uuid import UUID
 
 from .typed import JSONObject, Joins, LabelLayer, QueryType
@@ -16,7 +15,8 @@ from .utils import (
     QueryData,
     _joinstring,
     _parse_comparison,
-    _get_n_from_op_comp
+    _get_n_from_op_comp,
+    _is_anchored
 )
 
 from typing import Self
@@ -926,7 +926,7 @@ def _get_constraint(
     key, op, comparison_type, query = _parse_comparison(comp)
     key_str: str = key.get("entity", "")
 
-    is_time_anchored = conf.config['layer'][conf.config['token']].get("anchoring", {}).get("time", False)
+    is_time_anchored = _is_anchored(conf.config, layer, 'time')
     # Use a TimeConstraint if the right-hand side of a math comparison contains a time unit (ie ending in \d(s|m|ms|h|d|w))
     if is_time_anchored and key.get("entity","") in ("start","end") and comparison_type=="mathComparison": # and re.match(r".*\d(s|m|ms|h|d|w)([\s()*/+-]|$)",query):
         rest: dict = {

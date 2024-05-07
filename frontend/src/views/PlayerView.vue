@@ -1087,13 +1087,13 @@ export default {
 
 sequence@s
   Token t1
-    upos = DET
+    upos = "DET"
   Token t2
-    upos = NOUN
+    upos = "NOUN"
 
 Gesture g1
   agent = s.agent
-  type = PG
+  type = "PG"
   start >= s.start - 3s
   end <= s.end + 3s
 
@@ -1112,13 +1112,13 @@ KWIC => plain
 
 sequence@s
   Token@s t1
-    upos = DET
+    upos = "DET"
   Token@s t2
-    upos = NOUN
+    upos = "NOUN"
 
 Gesture g
   agent = s.agent
-  type in (PG, OG, IG, UG)
+  type = /^(PG|OG|IG|UG)$/
   g.start >= s.start - 5s
   g.end <= s.end + 2s
 
@@ -1137,15 +1137,15 @@ KWIC => plain
   agent.name = speaker_1
 
 Token@s1 t1
-  form = [kK]opf
+  form = /[kK]opf/
 
 Segment s2
-  agent.name = speaker_2
+  agent.name = "speaker_2"
   start >= s1.start
   end <= s1.end
 
 Token@s2 t2
-  form = rechts
+  form = "rechts"
 
 KWIC => plain
   context
@@ -1161,11 +1161,11 @@ KWIC => plain
         this.queryDQD = `Document d
 
 Gesture g1
-  agent.name = speaker_1
+  agent.name = "speaker_1"
 
 NOT EXISTS
   Gesture g2
-    agent.name = speaker_2
+    agent.name = "speaker_2"
     start >= g1.start - 3s
     end <= g1.end + 3s
 
