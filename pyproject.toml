@@ -165,8 +165,7 @@ include-only = [
   "mypy.ini",
 ]
 exclude = [
-  "abstract-query",
-  "lcp-upload",
+  "lcpcli",
   "frontend/dist",
   "frontend/node_modules",
   "frontend/public",
@@ -190,8 +189,7 @@ include-only = [
   "mypy.ini",
 ]
 exclude = [
-  "abstract-query",
-  "lcp-upload",
+  "lcpcli",
   "frontend/dist",
   "frontend/node_modules",
   "frontend/public",

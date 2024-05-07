@@ -1,5 +1,0 @@
-abstract_query.egg-info/
-abstract_query/__pycache__/
-abstract_query/*.so
-build/
-*.so
