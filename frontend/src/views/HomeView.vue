@@ -434,7 +434,12 @@ export default {
   },
   methods: {
     hasAccess(corpus) {
-      return !corpus.authRequired || (corpus.authRequired == true && this.userData.user.swissdoxUser == true);
+      return !corpus.authRequired
+        || (
+          (corpus.authRequired == true && this.userData.user.displayName) && (
+            corpus.isSwissdox != true || this.userData.user.isSwissdox == true
+          )
+        );
     },
     projectIcons(project) {
       let icons = ['fas']
