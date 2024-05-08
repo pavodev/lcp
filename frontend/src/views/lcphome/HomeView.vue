@@ -178,14 +178,14 @@
                   </div>
                   <div
                     class="details-button icon-1 tooltips disabled"
-                    title="Only Swissdox users can query this corpus"
-                    v-else-if="corpus.isSwissdox"
+                    title="You currently don't have permissions to query this corpus. Please see the corpus description to learn how to gain access."
+                    v-else-if="userData.user.displayName"
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                   <div
                     class="details-button icon-1 tooltips disabled"
-                    title="Only users who are logged in are able to query this corpus"
+                    title="Access to this corpus is restricted. We need you to log in to evaluate your permissions."
                     v-else
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
@@ -435,7 +435,7 @@ export default {
     corpusDataType: Utils.corpusDataType,
     projectIcons(project) {
       let icons = ['fas']
-      if (project.isPublic == true) {
+      if (project.isPublic == true || project.isSemiPublic == true) {
         icons.push('globe')
       }
       else if (project.isAdmin) {
@@ -639,11 +639,13 @@ export default {
       let projectIds = [];
       this.projects.forEach((project) => {
         let isPublic = project.additionalData && project.additionalData.public == true;
+        let isSemiPublic = project.additionalData && project.additionalData.semiPublic == true;
         projectIds.push(project.id);
         projects[project.id] = {
           ...project,
           corpora: [],
           isPublic: isPublic,
+          isSemiPublic: isSemiPublic,
         };
       });
       let publicProjects = this.projects.filter(project => project.additionalData && project.additionalData.public == true)
