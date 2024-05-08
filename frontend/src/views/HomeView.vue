@@ -437,7 +437,7 @@ export default {
       return !corpus.authRequired
         || (
           (corpus.authRequired == true && this.userData.user.displayName) && (
-            corpus.isSwissdox != true || this.userData.user.isSwissdox == true
+            corpus.isSwissdox != true || this.userData.user.swissdoxUser == true
           )
         );
     },
@@ -681,6 +681,14 @@ export default {
           delete projects[projectId]
         }
       })
+      // Show semi-public projects second
+      Object.keys(projects).forEach((projectId) => {
+        if (projects[projectId].isSemiPublic) {
+          sortedProjects.push(projects[projectId])
+          delete projects[projectId]
+        }
+      })
+      // Rest
       sortedProjects.push(...Object.values(projects))
       // If there is a filter, remove empty projects
       // if (this.corporaFilter.length > 0) {
