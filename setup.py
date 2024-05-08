@@ -3,14 +3,12 @@ import sys
 
 from setuptools import setup
 
-from typing import Set
-
 
 PACKAGE_DIR = "lcpvian"
 BASEPATH = os.path.dirname(__file__)
 MODULE_PATH = os.path.join(BASEPATH, PACKAGE_DIR)
 
-SKIPS: Set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
+SKIPS: set[str] = {"__main__.py", "deploy.py", "nomypy.py"}
 
 # use build_ext to do mypy c compilation
 if not any(a.endswith("setup.py") for a in sys.argv) or "build_ext" in sys.argv:
@@ -28,18 +26,18 @@ if not any(a.endswith("setup.py") for a in sys.argv) or "build_ext" in sys.argv:
 else:
     ext_modules = []
 
-with open("requirements.txt") as f:
-    REQUIRED = [
-        i.split(" #")[0].strip()
-        for i in f.read().splitlines()
-        if i
-        and not i.strip().startswith("#")
-        and not i.strip().startswith("-r")
-        and "git+" not in i
-    ]
-    REQUIRED.append(
-        "backports.zoneinfo @ http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1"
-    )
+# with open("requirements.txt") as f:
+#     REQUIRED = [
+#         i.split(" #")[0].strip()
+#         for i in f.read().splitlines()
+#         if i
+#         and not i.strip().startswith("#")
+#         and not i.strip().startswith("-r")
+#         and "git+" not in i
+#     ]
+#     REQUIRED.append(
+#         "backports.zoneinfo @ http://github.com/morganwahl/zoneinfo/tarball/master#egg=zoneinfo-0.2.1"
+#     )
 
 
 def read(fname):
@@ -66,7 +64,7 @@ kwargs = dict(
     author_email="mcddjx@gmail.com",
     license="MIT",
     keywords=["corpus", "linguistics"],
-    install_requires=REQUIRED,
+    # install_requires=REQUIRED,
 )
 
 if ext_modules:

@@ -1,96 +1,112 @@
-# LCP/VIAN
+# LiRI Corpus Platform (LCP)
 
-> Boths apps together in one monorepository!
+> A Python/vue.js/PostgreSQL-based web-application for querying large and/or multimodal corpora
 
-First, install Python 3.11 (though anything from 3.9 onward should work) or setup a Python 3.11 virtual environment.
+## Context
 
-Make sure you also have access to `abstract-query` and `lcp-upload` submodule repositories. Ask someone to grant you access if you need it.
+Our aim is to build a platform that can facilitate uploading, display and querying of diverse corpora. This means that a single backend should be used in tandem with one of a number of possible frontends, with each frontend customised for a specific use-case (large text corpora, video corpora, etc).
 
-## Setup
+We will be serving an instance of the app [here](https://lcp.test.linguistik.uzh.ch/) (which is currently in alpha, with certain corpora/features requiring SWITCH/edu-id credentials), but it is also (theoretically) possible to run your own instance of the entire app, with your own authentication logic and database.
 
-Then clone this repo and its submodules:
+## Using our deployed version
+
+We aim to provide an 'authoritative' deployment of the system (including its various frontends), where you can upload, share and access your corpora via both web and API interfaces. Full documentation of the app is a work in progress, to be served [here](https://liri.linguistik.uzh.ch/wiki/langtech/lcp/start).
+
+## Installing the system locally
+
+You will need:
+
+* This repo and its submodules
+* Python 3.11
+* Node/NPM/vue.js
+* PostgreSQL
+* Redis
+
+The simplest way to setup your own instance is to install it into your home folder, in a directory called `lcp`. So enter:
+
+```
+cd
+```
+
+to enter your home directory before anything else.
+
+### Clone our codebases
+
+Clone this repo and its submodules:
 
 ```bash
-git clone --recurse-submodules https://gitlab.uzh.ch/LiRI/projects/lcpvian.git
-cd lcpvian
+git clone --recurse-submodules https://github.com/liri-uzh/lcp.git
+cd lcp
 ````
 
-This will also clone the `abstract-query` and `lcp-upload` submodules. If they are not available in the `lcpvian` directory, you should remove the first two lines from `requirements.txt` before installing.
+This will also clone any needed submodules; each should be available in the root of this repo.
 
-You will also need to copy the `.env` config template to the path it needs to be at in order to be read:
+### Installing Python3.11 / creating a virtual environment
+
+Before installing any cloned code, install Python 3.11+ or setup a Python 3.11+ virtual environment. To make a virtual environment, you can do:
 
 ```bash
-cp .env.dev .env
+python3.11 -m venv ./lcp-venv
 ```
 
-## Virtual Environment
-
-Skip this section if you don't want/need to set up a virtual environment for Python 3.11
-
-Install `virtualenv` for Python:
+Finally activate the environment. Be sure to use activate this environment any time you want to use the app:
 
 ```bash
-pip install virtualenv
+source ./lcp-venv/bin/activate
 ```
 
-Create a virtual environment for lcpvian:
+### Install the codebase
 
-```bash
-# Make sure you are out of lcpvian so you don't include the virtual environment as part of your commits
-cd ~
-virtualenv -p $(which python3.11) lcpvian-environment
+From the repo root dir you can do: 
+
+```python
+pip install -e .
 ```
 
-Finally set your session to run commands from that environment:
+This makes various helper commands available on the system:
 
 ```bash
-source ~/lcpvian-environment/bin/activate
+lcp-setup
 ```
 
-## Things that need to be running for lcpvian to work
+will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required
 
-* The backend (`./lcpvian`)
-* The frontend (`./frontend`)
-* LAMa (local or remote)
-* PostgreSQL (local or remote)
-* Redis (local or remote)
-* At least one RQ worker
-￼
-`.env` defaults point to a local Redis, so install and run Redis or reconfigure to our deployed instance.
-
-To install backend (and `abstract-query`, which is also required):
+You can also run:
 
 ```bash
-pip install -e abstract-query -e .
+lcp-frontend-setup
 ```
 
-If you get an error saying that site-packages is not writeable, it probably means that you are not running in a virtual environment; see [Virtual Environment](#virtual-environment) for instructions on how to set up a virtual environment for Python
+to install the frontend (assuming you have node.js and NPM installed)
 
+### Configuring `.env`
 
-To start backend for development, first edit `.env` so that it contains the correct config. Comment out the `SSH_` variables if not using, or you'll get an SSH gateway error
-
-Then, start as many RQ workers as you want. To start one:
-
-```bash
-# uses c code if available, otherwise py:
-python -m lcpvian worker
-# to only use .py:
-# python lcpvian/worker.py
-````
-
-In another session, start the app with:
+We use a `.env` file to manage the backend configuration. Running the `lcp-setup` command should have created `~/lcp/.env`. If it's not there, copy `.env.example` as seen in this repo to your LCP directory:
 
 ```bash
-python -m lcpvian
+cp .env.example ~/lcp/.env
 ```
 
-It will use C extension modules if they are available, or else straight Python.
+When LCP is started, it will look in `~/lcp` for a `.env` file. If you didn't install into the home directory, hopefully it is smart enough to find a `.env` file in your current working directory. If it can't find either, it is unlikely to work.
 
-For the LAMa connection to work, you might need to do:
+#### `.env` settings
+
+* You will need to provide `.env` with the location of your Redis/PostgeSQL instances, as well as the PostgreSQL database name (the defaults assume a default local installation of both PostgreSQL and Redis)
+* Make sure the `IMPORT` related settings don't exceed your system's resources
+* Comment out the `SSH_` variables if not using, or you'll get an SSH gateway error.
+* If you don't want to use any authentication, make sure `AUTHENTICATION_CLASS` is empty. Otherwise, if you have a custom authentication class you wish to use, point to it: 
 
 ```bash
-ssh -L 18080:192.168.1.57:8080 berlit.liri
+AUTHENTICATION_CLASS=somecodedir.auth.Authentication
 ```
+
+#### Authentication classes
+
+Our app uses LAMa and SWITCH/edu-id for authentication. If you were running your own version, you may want no authentication, or a custom authentication system. For custom authentication, take a look at `lcpvian/authenticate.py`. The class you point to in `.env` will need to have the same methods, each returning booleans which indicate whether a user has access to a given resource.
+
+### Installing the frontend manually
+
+When you install the repo via `pip`, you should have access to commands like `lcp-install`, which can help install the system. However if you are a developer or want to install the frontend manually, the following information will be useful.
 
 For the frontend, you need to install `Node.js`, `npm` and `yarn`. For Ubuntu, that would be something like:
 
@@ -117,15 +133,13 @@ You can now go back to lcpvian and use node 19:
 
 ```bash
 cd lcpvian
-nvm use 0.10
+nvm use 19
 ```
 
 Then, if you haven't before, install the frontend:
 
 ```bash
-cd vian-eventdrops
-yarn install
-cd ../frontend
+cd frontend
 yarn install
 ```
 
@@ -135,11 +149,46 @@ Then you can start it with:
 # in ./frontend:
 # for LCP frontend
 yarn serve:lcp
-# for VIAN frontend
-yarn serve:vian
+# for videoscope frontend
+yarn serve:videoscope
+# for catchphrase frontend
+yarn serve:catchphrase
+# for soundscript frontend
+yarn serve:soundscript
 ```
 
-The app will be available at `http://localhost:8080`.
+## Starting the app
+
+Users of the open-source version can run the `lcp` command to start the app. Assuming everything is correctly configured, it will be available via the host/port configured in `.env`.
+
+### Starting backend manually
+
+The backend uses worker processes to handle long-running database jobs. Therefore, you need to start at least one worker via:
+
+```bash
+# uses c code if available, otherwise py:
+python -m lcpvian worker
+# to only use .py:
+# python lcpvian/worker.py
+```
+
+Note that you can start as many as you want.
+
+In another session, start the backend with:
+
+```bash
+python -m lcpvian
+```
+
+It will use C extension modules if they are compiled available, or else straight Python.
+
+For the LAMa connection to work, you might need to do:
+
+```bash
+ssh -L 18080:192.168.1.57:8080 berlit.liri
+```
+
+The app will be available (by default) at `http://localhost:8080`.
 
 ## Development
 
@@ -160,26 +209,6 @@ git config --global push.recurseSubmodules "on-demand"
 To check that typing is correct (do before commit/push/c-extension building):
 ```bash
 mypy lcpvian
-```
-
-### C extensions
-
-To build optional `c` extensions for both `abstract-query` and `lcpvian` repos:
-
-```bash
-cd abstract-query
-python setup.py build_ext --inplace
-cd ..
-python setup.py build_ext --inplace
-```
-
-When these are built, the C code will be used instead of the Python, so changes to the repos won't be reflected in your development version until you rebuild or delete the C data with:
-
-```bash
-cd abstract-query
-rm *.so; rm abstract_query/*.so; rm -r -f build
-cd ..
-rm *.so; rm lcpvian/*.so; rm -r -f build
 ```
 
 ## Configuration
@@ -256,7 +285,7 @@ A float value `1.0` or smaller, dictating the proportion of logs that get sent t
 
 Currently not used; in theory if there are free resources we could allow a user to query multiple batches simultaneously. If we end up allowing simultaneous mode, this value can be used to limit how many jobs (i.e. queries over batches) can be run at once.
 
-## Command line interface
+## Command line 'interface'
 
 Once `lcpvian` is installed you can run a variety of commands via `python -m lcpvian`
 
@@ -323,11 +352,3 @@ coverage html
 gunicorn --workers 3 --bind 127.0.0.1:9090 lcpvian.deploy:create_app --worker-class aiohttp.GunicornUVLoopWebWorker
 ```
 
-## Count lines of code 😉
-
-```bash
-apt-get install cloc
-cloc . --exclude-dir=dist,build,node_modules,uploads,.mypy_cache,htmlcov \
-       --exclude-lang=JSON \
-       --not-match-f=dqd_parser
-```

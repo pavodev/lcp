@@ -5,11 +5,6 @@
  */
 export default {
   keywords: [
-    'Token',
-    'DepRel',
-    'Document',
-    'Turn',
-    'Segment',
     'group',
     'sequence',
     'set',
@@ -26,11 +21,11 @@ export default {
     'window',
     'attribute',
     'space',
-    'comment',
-    // 'tdeps'
+    'comment'
   ],
 
-  typeKeywords: ['year', 'form', 'dep', 'head', 'from', 'pos', 'loop', 'value', 'label', 'to', 'upos', 'xpos', 'lemma'],
+  // typeKeywords: ['year', 'form', 'dep', 'head', 'from', 'pos', 'loop', 'value', 'label', 'to', 'upos', 'xpos', 'lemma'],
+  typeKeywords: ['label'],
 
   operators: [
     '!',

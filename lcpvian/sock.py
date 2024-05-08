@@ -16,8 +16,6 @@ the Redis channel we are listening to. The main thread gets the message and
 broadcasts it to the correct user/room via websocket.
 """
 
-from __future__ import annotations
-
 import asyncio
 import json
 import logging
@@ -37,13 +35,17 @@ from aiohttp.http_websocket import WSMessage
 from rq.job import Job
 
 from redis.asyncio.client import PubSub
+from redis.exceptions import ConnectionError
 
+
+from .configure import _get_batches, CorpusConfig
+from .export import export
 from .query import query
 from .query_service import QueryService
 from .utils import push_msg
 from .validate import validate
 
-from .typed import JSONObject, RedisMessage, Results, Websockets
+from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
 from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
 
 
@@ -65,7 +67,11 @@ async def _process_message(
         return
     if not message.get("data"):
         return
-    payload = json.loads(cast(bytes, message["data"]))
+    data = json.loads(cast(bytes, message["data"]))
+    raw: bytes = app["redis"].get(data["msg_id"])
+    payload: JSONObject = json.loads(raw)
+    payload["user"] = data.get("user", payload.get("user", ""))
+    payload["room"] = data.get("room", payload.get("room", ""))
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
@@ -73,7 +79,7 @@ async def _process_message(
 
 
 async def handle_redis_response(
-    channel: PubSub, app: web.Application, test: bool = False
+    channel: PubSub, app: web.Application, test: bool = False, retries: int = 5
 ) -> None:
     """
     If redis publishes a message, it gets picked up here in an async loop
@@ -85,19 +91,30 @@ async def handle_redis_response(
     message: RedisMessage = None
 
     try:
-        if app.get("mypy", False) is True:
-            async for message in channel.listen():
-                await _process_message(message, channel, app)
-                if message and test is True:
-                    return None
-        else:
-            while True:
-                message = await channel.get_message(
-                    ignore_subscribe_messages=True, timeout=2.0
-                )
-                await _process_message(message, channel, app)
-                if message and test is True:
-                    return None
+        while True:
+            await asyncio.sleep(0.1)
+            try:
+                if app.get("mypy", False) is True:
+                    async for message in channel.listen():
+                        if message is None:
+                            continue
+                        await _process_message(message, channel, app)
+                        if message and test is True:
+                            return None
+                else:
+                    while True:
+                        await asyncio.sleep(0.1)
+                        message = await channel.get_message(
+                            ignore_subscribe_messages=True, timeout=10.0
+                        )
+                        if message is None:
+                            continue
+                        await _process_message(message, channel, app)
+                        if message and test is True:
+                            return None
+            except ConnectionError as err:
+                print("Possibly too much data for redis pubsub?", err)
+                await asyncio.sleep(app["redis_pubsub_limit_sleep"])
 
     except asyncio.TimeoutError as err:
         print(f"Warning: timeout in websocket listener ({err})")
@@ -116,15 +133,23 @@ async def listen_to_redis(app: web.Application) -> None:
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender, All the try/except logic is shutdown logic only
     """
-    async with app["aredis"].pubsub() as channel:
-        await channel.subscribe(PUBSUB_CHANNEL)
+    while True:
         try:
-            await handle_redis_response(channel, app, test=False)
+            async with app["aredis"].pubsub() as channel:
+                await channel.subscribe(PUBSUB_CHANNEL)
+                await handle_redis_response(channel, app, test=False)
+        except ConnectionError as err:
+            print("Connection error in listen_to_redis", err)
         except KeyboardInterrupt:
             pass
         except Exception as err:
             raise err
-        await channel.unsubscribe(PUBSUB_CHANNEL)
+        try:
+            print("Attempt unsubscribe")
+            await channel.unsubscribe(PUBSUB_CHANNEL)
+            print("unsubscribe success")
+        except:
+            pass
         try:
             await app["aredis"].quit()
         except Exception:
@@ -133,6 +158,8 @@ async def listen_to_redis(app: web.Application) -> None:
             app["redis"].quit()
         except Exception:
             pass
+        await asyncio.sleep(0.1)
+    return None
 
 
 async def _handle_error(
@@ -142,7 +169,7 @@ async def _handle_error(
     Sanitise errors send to FE if not in debug mode
     """
     payload["debug"] = app["_debug"]
-    bad_keys = {"traceback", "original_query", "sentences_query", "sql"}
+    bad_keys = {"traceback", "original_query", "sentences_query", "sql", "consoleSQL"}
     if not app["_debug"]:
         for key in bad_keys:
             payload.pop(key, None)
@@ -165,6 +192,8 @@ async def _handle_message(
         "background_job_progress",
         "document",
         "document_ids",
+        "started_export",
+        "export_link"
     )
     errors = (
         "failed",
@@ -176,9 +205,16 @@ async def _handle_message(
 
     # for non-errors, we attach a msg_id to all messages, and store the message with
     # this key in redis so that the FE can retrieve it by /get_message endpoint anytime
-    if action not in errors and "msg_id" in payload and "no_restart" not in payload:
+    if (
+        action not in errors
+        and "msg_id" in payload
+        and "no_restart" not in payload
+        and app["_use_cache"]
+        # and False
+    ):
         uu = payload["msg_id"]
-        app["redis"].set(uu, json.dumps(payload))
+        if not app["redis"].get(uu):
+            app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
 
     if action == "sentences":
@@ -199,26 +235,28 @@ async def _handle_message(
 
     can_send = payload.get("can_send", True)
 
-    sent_allowed = action == "sentences" and can_send
-    to_submit: None | Coroutine = None
+    sent_allowed = action in ("sentences", "meta") and can_send
+    to_submit: None | Coroutine[None, None, web.Response] = None
 
     if (
-        action == "sentences"
+        action in ("sentences", "meta")
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):
         # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
-    if action == "sentences":
-        drops = ["can_send", "submit_query"]
+    if action in ("sentences","meta"):
+        drops = ("can_send", "submit_query")
         for drop in drops:
             payload.pop(drop, None)
 
     if action in simples or sent_allowed:
-        if action == "sentences" and len(cast(Results, payload["result"])) < 3:
-            pass
-        else:
+        send_sents = not payload.get("full") and (
+            action == "sentences" and len(cast(Results, payload["result"])) > 2
+            or action == "meta"
+        )
+        if action in simples or send_sents:
             await push_msg(
                 app["websockets"],
                 room,
@@ -226,6 +264,8 @@ async def _handle_message(
                 skip=None,
                 just=(room, user),
             )
+        else:
+            print(f"Not sending {action} message!")
         if to_submit is not None:
             await to_submit
             to_submit = None
@@ -244,11 +284,14 @@ async def _handle_message(
     # - if corpus was uploaded via gui mode, send a ws message
     #   to all users with the latest config so the FE can show it
     if action == "uploaded":
-        vian = cast(bool, payload["is_vian"])
+        # TODO: Should be chnaged to accept all app types (catchphrase, soundscript, videoscope)
+        app_type = "videoscope" if cast(bool, payload["is_vian"]) else "lcp"
         user_data = cast(JSONObject | None, payload["user_data"])
-        app["config"][str(payload["id"])] = payload["entry"]
+        conf: CorpusConfig = cast(CorpusConfig, payload["entry"])
+        conf["_batches"] = _get_batches(conf)
+        app["config"][str(payload["id"])] = conf
         if payload.get("gui"):
-            filt = _filter_corpora(app["config"], vian, user_data)
+            filt = _filter_corpora(app["config"], app_type, user_data)
             payload["config"] = cast(JSONObject, filt)
             await push_msg(app["websockets"], "", payload)
 
@@ -283,7 +326,10 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
 
 
 async def _handle_query(
-    app: web.Application, payload: JSONObject, user: str, room: str
+    app: web.Application,
+    payload: JSONObject,
+    user: str,
+    room: str,
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -301,7 +347,7 @@ async def _handle_query(
 
     _print_status_message(payload, status)
 
-    to_submit: None | Coroutine = None
+    to_submit: None | Coroutine[None, None, web.Response] = None
     can_send = payload["can_send"]
     # todo: this should no longer happen, as we send a progress update message instead?
     do_full = payload.get("full") and payload.get("status") != "finished"
@@ -320,8 +366,14 @@ async def _handle_query(
         to_submit = query(None, manual=payload, app=app)
 
     if do_full:
-        prog = cast(dict[str, Any], payload["progress"])
-        await push_msg(app["websockets"], room, prog, skip=None, just=(room, user))
+        prog = cast(dict[str, JSON], payload["progress"])
+        await push_msg(
+            app["websockets"],
+            room,
+            prog,
+            skip=None,
+            just=(room, user),
+        )
 
     if not can_send:
         print("Not sending WS message!")
@@ -354,12 +406,24 @@ async def _handle_query(
             "projected_results",
             "batches_done",
             "simultaneous",
+            "consoleSQL"
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
-        await push_msg(app["websockets"], room, payload, skip=None, just=(room, user))
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
 
     if to_submit is not None:
         await to_submit
+
+    if to_export := the_job.meta.get("to_export"):
+        done_batches, all_batches = the_job.kwargs.get("done_batches"), the_job.kwargs.get("all_batches")
+        if (len(done_batches)+1 == len(all_batches)):
+            await export(app, to_export, the_job.kwargs.get("first_job", ""))
 
 
 async def _ait(self: WSMessage) -> WSMessage:
@@ -385,11 +449,15 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     if request.app["mypy"]:
         while True:
             msg = await ws.receive()
-            await _handle_sock(ws, msg, sockets, request.app["query_service"])
+            await _handle_sock(
+                ws, msg, sockets, request.app["query_service"], request.app["config"]
+            )
     else:
         # mypyc bug?
         async for msg in ws:
-            await _handle_sock(ws, msg, sockets, request.app["query_service"])
+            await _handle_sock(
+                ws, msg, sockets, request.app["query_service"], request.app["config"]
+            )
 
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
@@ -398,7 +466,11 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
 
 async def _handle_sock(
-    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, qs: QueryService
+    ws: web.WebSocketResponse,
+    msg: WSMessage,
+    sockets: Websockets,
+    qs: QueryService,
+    conf: dict[str, Any],
 ) -> None:
     """
     Handle an incoming message based on its `action`
@@ -471,6 +543,7 @@ async def _handle_sock(
 
     # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":
+        payload["config"] = conf
         resp = await validate(**payload)
         await push_msg(sockets, session_id, resp, just=ident)
 
@@ -497,7 +570,7 @@ async def ws_cleanup(sockets: Websockets) -> None:
 
     Send a message to other users about it, too
     """
-    interval = 3600
+    interval = 3600 * 48
     while True:
         for room, conns in sockets.items():
             to_close = set()

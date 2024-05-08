@@ -1,9 +1,3 @@
-[submodule "abstract-query"]
-  path = abstract-query
-  url = ../abstract-query.git
-[submodule "lcp-upload"]
-	path = lcp-upload
-	url = ../lcp-upload.git
-[submodule "vian-eventdrops"]
-	path = vian-eventdrops
-	url = ../vian-eventdrops.git
+[submodule "lcpcli"]
+	path = lcpcli
+	url = ../lcpcli.git

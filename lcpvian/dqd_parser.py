@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import json
 import os
 import re
@@ -12,19 +10,35 @@ from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token
 
-PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'parser'))
+from .cqp_to_json import cqp_to_json
 
-dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".lark")), "")
+PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "parser"))
+PARSER_FILES = [os.path.join(PARSER_PATH, f) for f in sorted(os.listdir(PARSER_PATH))]
+
+# dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".lark")), "")
+dqd_grammar_fn: str = next(
+    (f for f in PARSER_FILES if re.match(r".*dqd[^/]*\.lark$", f)), ""
+)
 assert os.path.isfile(
     dqd_grammar_fn
-), f"Could not find a valid lark file in the current directory"
+), f"Could not find a valid DQD lark file in the current directory"
 dqd_grammar: str = open(dqd_grammar_fn).read()
 
-json_schema_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".json")), "")
+cqp_grammar_fn: str = next(
+    (f for f in PARSER_FILES if re.match(r".*cqp[^/]*\.lark$", f)), ""
+)
+assert os.path.isfile(
+    cqp_grammar_fn
+), f"Could not find a valid CQP lark file in the current directory"
+cqp_grammar: str = open(cqp_grammar_fn).read()
+
+
+json_schema_fn: str = next((f for f in PARSER_FILES if f.endswith(".json")), "")
 assert os.path.isfile(
     json_schema_fn
 ), f"Could not find a valid json file in the current directory"
 json_schema: dict = json.loads(open(json_schema_fn).read())
+
 
 class TreeIndenter(Indenter):
     NL_type: str = "_NL"
@@ -38,6 +52,7 @@ class TreeIndenter(Indenter):
 
 
 parser = Lark(dqd_grammar, parser="lalr", postlex=TreeIndenter())
+cqp_parser = Lark(cqp_grammar, parser="earley", start="top")
 
 
 def to_camel(name: str) -> str:
@@ -50,14 +65,16 @@ def forward(schema: dict) -> tuple[dict, bool]:
     if "items" in schema:
         return forward(schema["items"])[0], True
     if "$ref" in schema:
-        return forward( json_schema.get("$defs", {}).get(re.sub(r".+\/", "", schema["$ref"])) )
-    
+        return forward(
+            json_schema.get("$defs", {}).get(re.sub(r".+\/", "", schema["$ref"]))
+        )
+
     if "oneOf" in schema:
         schema["properties"] = schema.get("properties", {})
         for o in schema["oneOf"]:
             f, _ = forward(o)
-            schema["properties"] = {**schema["properties"], **f.get("properties",{})}
-        
+            schema["properties"] = {**schema["properties"], **f.get("properties", {})}
+
     return (schema, False)
 
 
@@ -81,13 +98,15 @@ def found_rule_down_the_line(property_schema: dict = {}, rule: str = "") -> bool
     return False
 
 
-def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
+def to_dict(
+    tree: Any, properties_parent: dict = {}, conf: dict[str, Any] | None = None
+) -> Any:
     if isinstance(tree, Token):
         return tree.value
 
     name: str = tree.data
     camel_name: str = to_camel(name)
-    
+
     schema, is_parent_array = forward(
         properties_parent.get(camel_name, properties_parent)
     )
@@ -118,7 +137,42 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
         is_child_array = is_parent_array
 
         child_name = to_camel(child.data)
-        
+
+        if child_name == "cqp":
+            label_child: Any = next(
+                (
+                    c
+                    for c in child.children
+                    if not isinstance(c, Token) and c.data == "label"
+                ),
+                None,
+            )
+            part_of_child: Any = next(
+                (
+                    c
+                    for c in child.children
+                    if not isinstance(c, Token) and c.data == "part_of"
+                ),
+                None,
+            )
+            cqp_rules: Any = next(
+                c
+                for c in child.children
+                if not isinstance(c, Token) and c.data == "cqp__"
+            )
+            cqp_str: str = re.sub(r"(^|\n)\s*cqp__", "", cqp_rules.pretty())
+            cqp: Any = cqp_parser.parse(cqp_str)
+            cqp_obj: dict[str, Any] = cqp_to_json(cqp, conf)
+            if cqp_obj:
+                o = cqp_obj.get("sequence", cqp_obj.get("unit", {}))
+                if label_child:
+                    o["label"] = label_child.children[0].value
+                if part_of_child:
+                    o["partOf"] = part_of_child.children[0].value
+                return cqp_obj
+            else:
+                continue
+
         # Retrieve DQD name for Lark rule
         if child_name not in children_properties:
             fallback_name = to_camel(
@@ -136,12 +190,15 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
                 child_schema = schema
             else:
                 skip_children_names = True
-        
+
         if child_name in children_properties:
             child_schema = children_properties[child_name]
             is_child_array = child_schema.get("type", "") == "array"
 
-        child_value = to_dict(child, child_schema)
+        child_value = to_dict(child, child_schema, conf)
+
+        if not child_value:
+            continue
 
         # If the child's name is already in the values, it must be an array
         if child_name in values:
@@ -172,12 +229,13 @@ def to_dict(tree: Any, properties_parent: dict = {}) -> Any:
         ), f"Only one child list (<>{list_values}) can be embedded in a parent list ({camel_name})"
         values = list_values[0]
 
-    return values
+    if values:
+        return values
 
 
-def convert(dqd_query: str) -> dict[str, Any]:
+def convert(dqd_query: str, conf: dict[str, Any] | None = None) -> dict[str, Any]:
     data = parser.parse(dqd_query)
-    res: dict = to_dict(data, {"start": json_schema})
+    res: dict = to_dict(data, {"start": json_schema}, conf)
     return res
 
 

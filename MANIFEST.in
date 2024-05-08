@@ -1,2 +1,2 @@
 include py.typed
-include uplord/py.typed
+include lcpvian/py.typed

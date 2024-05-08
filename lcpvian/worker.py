@@ -23,13 +23,12 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-import sys
 
 from typing import Any
 
 import uvloop
 
-from dotenv import load_dotenv
+from redis import Redis
 from rq.connections import Connection
 from rq.job import Job
 from rq.worker import Worker
@@ -38,7 +37,9 @@ from sqlalchemy.pool import NullPool
 
 from sshtunnel import SSHTunnelForwarder
 
-load_dotenv(override=True)
+from .utils import load_env
+
+load_env()
 
 
 SENTRY_DSN = os.getenv("SENTRY_DSN", None)
@@ -63,8 +64,10 @@ if SENTRY_DSN:
 
 UPLOAD_USER = os.environ["SQL_UPLOAD_USERNAME"]
 QUERY_USER = os.environ["SQL_QUERY_USERNAME"]
+WEB_USER = os.environ["SQL_WEB_USERNAME"]
 UPLOAD_PASSWORD = os.environ["SQL_UPLOAD_PASSWORD"]
 QUERY_PASSWORD = os.environ["SQL_QUERY_PASSWORD"]
+WEB_PASSWORD = os.environ["SQL_WEB_PASSWORD"]
 HOST = os.environ["SQL_HOST"]
 DBNAME = os.environ["SQL_DATABASE"]
 _UPLOAD_POOL = os.getenv("UPLOAD_USE_POOL", "false")
@@ -82,6 +85,11 @@ UPLOAD_MAX_NUM_CONNS = max(UPLOAD_MAX_NUM_CONNS, MAX_CONCURRENT) if UPLOAD_POOL 
 UPLOAD_TIMEOUT = int(os.getenv("UPLOAD_TIMEOUT", 43200))
 
 PORT = int(os.getenv("SQL_PORT", 25432))
+
+REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+
+redis_conn = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}", health_check_interval=10)
 
 
 tunnel: SSHTunnelForwarder
@@ -104,6 +112,9 @@ upload_connstr = (
 query_connstr = (
     f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 )
+web_connstr = (
+    f"postgresql+asyncpg://{WEB_USER}:{WEB_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
+)
 
 
 query_kwargs = dict(
@@ -115,6 +126,9 @@ query_kwargs = dict(
         "server_settings": {"jit": "off"},
     },
     echo_pool=True,
+    pool_recycle=3600,
+    pool_timeout=3600,
+    pool_pre_ping=True,
 )
 upload_kwargs = dict(
     pool_size=UPLOAD_MAX_NUM_CONNS,
@@ -125,6 +139,9 @@ upload_kwargs = dict(
         "server_settings": {"jit": "off"},
     },
     echo_pool=True,
+    pool_recycle=3600,
+    pool_timeout=3600,
+    pool_pre_ping=True,
 )
 if not UPLOAD_POOL:
     upload_kwargs["pool_class"] = NullPool
@@ -135,6 +152,7 @@ class SQLJob(Job):
         super().__init__(*args)
         self._pool = create_async_engine(query_connstr, **query_kwargs)
         self._upool = create_async_engine(upload_connstr, **upload_kwargs)
+        self._wpool = create_async_engine(web_connstr, **upload_kwargs)
 
 
 class MyWorker(Worker):
@@ -144,20 +162,15 @@ class MyWorker(Worker):
 
 
 async def work() -> None:
-    with Connection():
+    with Connection(redis_conn):
         w = MyWorker(["internal", "query", "background"])
         w.work()
 
 
 def start_worker() -> None:
     try:
-        if sys.version_info >= (3, 11):
-            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                runner.run(work())
-        else:
-            uvloop.install()
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            asyncio.run(work())
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(work())
     except KeyboardInterrupt:
         print("Worker stopped.")
 

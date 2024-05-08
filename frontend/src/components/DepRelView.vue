@@ -5,7 +5,8 @@
 
 <style scoped>
   #dep-rel-view {
-    height: 50vh;
+    padding-top: 20px;
+    height: 60vh;
   }
   * >>> svg {
     font-family: Arial, Helvetica, sans-serif;
@@ -17,57 +18,99 @@
   * >>> svg .link-text {
     font-size: 9px;
   }
+  * >>> svg g.text-form text.label-root {
+    text-decoration: underline;
+  }
   * >>> svg g.text-pos {
     font-size: 80%;
     font-weight: bold;
     fill: #1e9989;
   }
-  * >>> svg .link-pointer {
-    fill: #656565;
-  }
   * >>> svg g.text-lemma {
     font-size: 80%;
   }
+
+  /* Deafult line link color */
   * >>> svg line.link-line {
-    stroke:#1e9989;
+    stroke:#b0b0b0;
     stroke-width: 1px;
   }
-
-  * >>> svg g.links g.link-type-det line.link-line {
-    stroke:#0078BF;
+  * >>> svg .link-pointer {
+    fill: #b0b0b0;
   }
-  * >>> svg g.links g.link-type-det .link-text,
-  * >>> svg g.links g.link-type-det .link-pointer {
-    fill: #0078BF;
+  * >>> svg text.link-text {
+    fill:#b0b0b0;
   }
 
-  * >>> svg g.links g.link-type-verb line.link-line {
-    stroke:#EF82F4;
+  /* Group 1 - Issue #199 */
+  * >>> svg g.links g.link-type-nsubj line.link-line,
+  * >>> svg g.links g.link-type-obj line.link-line,
+  * >>> svg g.links g.link-type-iobj line.link-line,
+  * >>> svg g.links g.link-type-csubj line.link-line,
+  * >>> svg g.links g.link-type-ccomp line.link-line,
+  * >>> svg g.links g.link-type-xcomp line.link-line {
+    stroke: #5b77ae;
   }
-  * >>> svg g.links g.link-type-verb .link-text,
-  * >>> svg g.links g.link-type-verb .link-pointer {
-    fill: #EF82F4;
+  * >>> svg g.links g.link-type-nsubj text.link-text,
+  * >>> svg g.links g.link-type-obj text.link-text,
+  * >>> svg g.links g.link-type-iobj text.link-text,
+  * >>> svg g.links g.link-type-csubj text.link-text,
+  * >>> svg g.links g.link-type-ccomp text.link-text,
+  * >>> svg g.links g.link-type-xcomp text.link-text {
+    fill: #003ebb;
   }
 
-  * >>> svg g.links g.link-type-punct line.link-line {
-    stroke:rgb(199, 199, 199);
+  /* Group 2 - Issue #199 */
+  * >>> svg g.links g.link-type-obl line.link-line,
+  * >>> svg g.links g.link-type-vocative line.link-line,
+  * >>> svg g.links g.link-type-expl line.link-line,
+  * >>> svg g.links g.link-type-dislocated line.link-line,
+  * >>> svg g.links g.link-type-advcl line.link-line,
+  * >>> svg g.links g.link-type-advmod line.link-line,
+  * >>> svg g.links g.link-type-discourse line.link-line,
+  * >>> svg g.links g.link-type-aux line.link-line,
+  * >>> svg g.links g.link-type-cop line.link-line,
+  * >>> svg g.links g.link-type-mark line.link-line {
+    stroke: #9d0000;
   }
-  * >>> svg g.links g.link-type-punct .link-text,
-  * >>> svg g.links g.link-type-punct .link-pointer {
-    fill: rgb(199, 199, 199);
+  * >>> svg g.links g.link-type-obl text.link-text,
+  * >>> svg g.links g.link-type-vocative text.link-text,
+  * >>> svg g.links g.link-type-expl text.link-text,
+  * >>> svg g.links g.link-type-dislocated text.link-text,
+  * >>> svg g.links g.link-type-advcl text.link-text,
+  * >>> svg g.links g.link-type-advmod text.link-text,
+  * >>> svg g.links g.link-type-discourse text.link-text,
+  * >>> svg g.links g.link-type-aux text.link-text,
+  * >>> svg g.links g.link-type-cop text.link-text,
+  * >>> svg g.links g.link-type-mark text.link-text {
+    fill: #9d0000;
   }
 
-  * >>> svg g.links g.link-type-conj line.link-line {
-    stroke: #FFA17A;
+  /* Group 3 - Issue #199 */
+  * >>> svg g.links g.link-type-nmod line.link-line,
+  * >>> svg g.links g.link-type-appos line.link-line,
+  * >>> svg g.links g.link-type-nummod line.link-line,
+  * >>> svg g.links g.link-type-acl line.link-line,
+  * >>> svg g.links g.link-type-amod line.link-line,
+  * >>> svg g.links g.link-type-det line.link-line,
+  * >>> svg g.links g.link-type-clf line.link-line,
+  * >>> svg g.links g.link-type-case line.link-line {
+    stroke: #7bcc85;
   }
-  * >>> svg g.links g.link-type-conj .link-text,
-  * >>> svg g.links g.link-type-conj .link-pointer {
-    fill: #FFA17A;
+  * >>> svg g.links g.link-type-nmod text.link-text,
+  * >>> svg g.links g.link-type-appos text.link-text,
+  * >>> svg g.links g.link-type-nummod text.link-text,
+  * >>> svg g.links g.link-type-acl text.link-text,
+  * >>> svg g.links g.link-type-amod text.link-text,
+  * >>> svg g.links g.link-type-det text.link-text,
+  * >>> svg g.links g.link-type-clf text.link-text,
+  * >>> svg g.links g.link-type-case text.link-text {
+    fill: #548c5b;
   }
 </style>
 
 <script>
-import * as d3 from 'd3-v7'
+import * as d3 from 'd3'
 
 const browserText = (function () {
   const canvas = document.createElement('canvas'),
@@ -85,7 +128,7 @@ const browserText = (function () {
 
 export default {
   name: "DepRelView",
-  props: ["data", "sentences"],
+  props: ["data", "sentences", "columnHeaders"],
   data(){
     const { tokens, links } = this.buildGraphData(this.data, this.sentences)
     return {
@@ -104,22 +147,30 @@ export default {
       let matrix = []
       let linksDict = {}
       let groups = {}
-      data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array 
+
+      data[1].forEach( (tokenIdOrArray,groupId) => tokenIdOrArray instanceof Array
         ? tokenIdOrArray.forEach( (tokenId) => groups[tokenId] = tokenId in groups ? groups[tokenId] : groupId )
         : groups[tokenIdOrArray] = tokenIdOrArray in groups ? groups[tokenIdOrArray] : groupId
       )
 
+      let form_id = this.columnHeaders.indexOf("form");
+      let lemma_id = this.columnHeaders.indexOf("lemma");
+      let pos_id = this.columnHeaders.findIndex(v=>v.endsWith("pos"));
+      let head_id = this.columnHeaders.indexOf("head");
+      let label_id = this.columnHeaders.indexOf("label");
+      let large_index_counter = 5000;
+
       // Compile tokens and link matrix
       sentences[1].forEach((token, index) => {
-        let textWidth = browserText.getWidth(token[0], 12, "Arial")
-        let typeWidth = browserText.getWidth(token[2], 12, "Arial")
+        let textWidth = browserText.getWidth(token[form_id], 12, "Arial")
+        let typeWidth = browserText.getWidth(token[pos_id], 12, "Arial")
         let currentTokenId = startId + index
         tokens.push({
           id: currentTokenId,
           // name: startId + index
-          form: token[0],
-          lemma: token[1],
-          pos: token[2],
+          form: token[form_id],
+          lemma: token[lemma_id],
+          pos: token[pos_id],
           width: textWidth,
           sumX: sumX,
           group: currentTokenId in groups ? `color-group-${groups[currentTokenId]}` : ''
@@ -127,10 +178,10 @@ export default {
         sumX += Math.max(textWidth, typeWidth)
 
         // Matrix
-        if (token[4]) {
+        if (head_id) {
           let currentTokenIndex = index
-          let targetTokenIndex = token[4] - startId
-          let targetTokenId = token[4]
+          let targetTokenIndex = token[head_id] - startId
+          let targetTokenId = token[head_id]
           let indexLevel = Math.abs(targetTokenIndex - currentTokenIndex)
 
           if (!(indexLevel in linksDict)) {
@@ -140,12 +191,15 @@ export default {
           linksDict[indexLevel].push({
             source: currentTokenId,
             target: targetTokenId,
-            label: token[5],
-            originalLevel: indexLevel,
+            label: token[label_id],
+            originalLevel: indexLevel > 5000 ? large_index_counter++ : indexLevel,
           })
         }
       })
 
+      while (large_index_counter-- > 0) {
+        matrix.push([])
+      }
 
       // Compile links
       Object.keys(linksDict).sort((a, b) => a - b).forEach(levelIndex => {
@@ -168,10 +222,6 @@ export default {
           ) {
             level -= 1
           }
-
-          while (matrix.length <= level) {
-            matrix.push([])
-          }
           if (matrix[level].length < targetIndex) {
             let extendArray = new Array(targetIndex - matrix[level].length + 1).fill(0)
             matrix[level].push.apply(matrix[level], extendArray)
@@ -184,7 +234,6 @@ export default {
           })
         })
       })
-
       return { tokens, links }
     },
     // calcArc(link) {
@@ -211,7 +260,9 @@ export default {
       let sourceIndex = link.source - startId
       let targetIndex = link.target - startId
       let startX = this.tokens[sourceIndex].sumX + this.tokens[sourceIndex].width/2 + sourceIndex*this.tokenSpace
-      let endX = this.tokens[targetIndex ].sumX + this.tokens[targetIndex].width/2 + targetIndex*this.tokenSpace
+      if (!(targetIndex in this.tokens))
+        return [startX,startX+4,0,'start'];
+      let endX = this.tokens[targetIndex].sumX + this.tokens[targetIndex].width/2 + targetIndex*this.tokenSpace
       let arrowPlacment = 'end';
       if (startX > endX) {
         let tmp = startX
@@ -227,9 +278,9 @@ export default {
     const totalWidth = this.tokens[countTokens - 1].sumX + this.tokens[countTokens - 1].width + countTokens*this.tokenSpace + 100
 
     let maxLevel = Math.max(...Object.values(this.links).map(link => link.level))
-    var margin = { top: 20, right: 50, bottom: 20, left: 50 },
+    var margin = { top: 40, right: 30, bottom: 20, left: 50 },
       width = totalWidth - margin.left - margin.right,
-      height = 90 + maxLevel*15 - margin.top - margin.bottom;
+      height = 110 + maxLevel*15 - margin.top - margin.bottom;
 
     d3.select("div#dep-rel-view").html('')
     const svg = d3.select("div#dep-rel-view").append("svg")
@@ -264,12 +315,14 @@ export default {
       f.append("feComposite").attr("in", "SourceGraphic")
     })
 
+    let label_id = this.columnHeaders.indexOf("label");
     svg.append("g")
+    .attr("class", "text-form")
       .selectAll("text")
       .data(this.tokens)
       .join("text")
       // .attr("class", d => (d.id >= this.data[1] && d.id <= this.data.at(-1)) ? "text-bold text-danger" : "")
-      .attr("class", d => d.group )
+      .attr("class", (d,i) => d.group + ' ' + (this.sentences && this.sentences[1] ? `label-${this.sentences[1][i][label_id]}` : '') )
       .text(d => d.form)
       .attr("x", (d, index) => (this.tokenSpace * index + d.sumX))
       .attr("y", 10 + maxLevel*15)
@@ -325,7 +378,7 @@ export default {
     let links = svg.append("g")
       .attr("class", "links")
       .selectAll(".deprel-link")
-      .data(this.links)
+      .data(this.links.filter( l => l.label != "root" ))
       .enter()
       .append("g")
       .attr("class", d => `link-type-${d.label}`)

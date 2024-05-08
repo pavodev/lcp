@@ -5,7 +5,6 @@ export const useCorpusStore = defineStore("corpusData", {
   state: () => ({
     queryData: null,
     corpora: [],
-    vianCorpus: [],
   }),
   getters: {},
   actions: {
@@ -22,6 +21,11 @@ export const useCorpusStore = defineStore("corpusData", {
     fetchQueries(data) {
       httpApi.post(`/fetch`, data).then((response) => {
         this.fetchedQueries = response.data;
+        return response.data;
+      });
+    },
+    updateMeta(data) {
+      httpApi.put(`/corpora/${data.corpusId}/meta/update`, data.metadata).then((response) => {
         return response.data;
       });
     },
@@ -46,5 +50,14 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
+    async fetchExport(fn) {
+      let url = `${httpApi.getUri()}/download_export/${fn}`;
+      const a = document.createElement("A");
+      a.href = url;
+      a.download = "results";
+      document.body.append(a);
+      a.click();
+      a.remove();
+    }
   },
 });

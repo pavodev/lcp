@@ -8,6 +8,7 @@
               type="text"
               v-model="filters[index]"
               class="form-control form-control-sm"
+              :class="filterErrors[index] ? 'is-invalid' : ''"
               :placeholder="`Filter by ${col.name}`"
             >
           </th>
@@ -32,9 +33,10 @@
             scope="row"
             v-for="(col, index) in calcAttributes"
             :key="index"
-            :class="col.class"
+            :class="[(col.class||''), (item[index] < this.roundBelow ? 'round' : '')]"
           >
-            {{ col.valueType=="float" ? this.round(item[index]) : item[index] }}<template v-if="col.textSuffix">{{ col.textSuffix }}</template>
+            {{ col.valueType=="float" ? this.round(item[index]) : item[index] }}
+            <template v-if="col.textSuffix">{{ col.textSuffix }}</template>
           </td>
         </tr>
       </tbody>
@@ -106,6 +108,21 @@ table {
 .highlight {
   background-color: #1e999967;
 }
+td.round {
+  visibility: hidden;
+}
+td.round::after {
+  content: '< 0.001';
+  display: block;
+  float: right;
+  visibility: visible;
+}
+td.round:hover {
+  visibility: visible;
+}
+td.round:hover::after {
+  display: none;
+}
 </style>
 
 <script>
@@ -113,7 +130,7 @@ import PaginationComponent from "@/components/PaginationComponent.vue";
 
 export default {
   name: "ResultsTableView",
-  props: ["data", "attributes", "corpora", "resultsPerPage", "loading", "type"],
+  props: ["data", "languages", "attributes", "corpora", "resultsPerPage", "loading", "type"],
   data() {
     let attributes = this.getImpovedAttibutes(this.attributes)
     let data = this.calculateAdditionalData(this.data)
@@ -128,9 +145,11 @@ export default {
       sortBy: attributes.length - 1,
       sortDirection: 1,
       filters: attributes.map(() => ''),
+      filterErrors: attributes.map(() => false),
       additionalColumData: [],
       calcData: data,
       calcAttributes: attributes,
+      roundBelow: 0.001
     };
   },
   components: {
@@ -259,11 +278,14 @@ export default {
       }
       else {
         this.sortBy = index
-        this.sortDirection = 0
+        this.sortDirection = 1
       }
     },
     round(float) {
-      return Math.round(1000*float) / 1000;
+      if (float < this.roundBelow)
+        return Number.parseFloat(float).toExponential(2);
+      else
+        return Math.round(1000*float) / 1000;
     }
   },
   computed: {
@@ -281,13 +303,22 @@ export default {
       let start = this.resultsPerPage * (this.currentPage - 1);
       let end = start + this.resultsPerPage;
 
+      let matchFilters = []
+      this.filters.forEach((filter, index) => {
+        let matchCoparator = filter.match(/^\s*(=|<|>|>=|<=|!=).*$/);
+        let isRegExField = this.calcAttributes[index].valueType == "float"  // For now just float
+        let match = filter.match(/^\s*(=|<|>|>=|<=|!=)\s*(-?\d+(\.\d+)?)\s*$/);
+        matchFilters.push(match ? match : null)
+        this.filterErrors[index] = (!match && isRegExField && matchCoparator && filter.length > 0) ? true : false
+      })
+
       let filtered = this.calcData.filter(row => {
         let res = true
         row.forEach((data, index) => {
-          let filter = v=>v.toString().toLowerCase().includes(this.filters[index].toLowerCase());
+          let filter = null;
           if (this.calcAttributes[index].valueType == "float") {
-            let match = this.filters[index].toLowerCase().match(/^\s*(=|<|>|>=|<=|!=)\s*(-?\d+(\.\d+)?)\s*$/);
-            if (match)
+            let match = matchFilters[index];
+            if (match) {
               filter = v=>{
                 let comp = [];
                 if (match[1].includes("=")) comp.push(this.round(Number(v)) == Number(match[2]));
@@ -298,8 +329,10 @@ export default {
                 else
                   return comp.reduce((x,y)=>x||y,false);
               };
-            else
-              filter = null;
+            }
+          }
+          else {
+            filter = v => v.toString().toLowerCase().includes(this.filters[index].toLowerCase());
           }
           // if (filter && (!data || !data.toString().toLowerCase().includes(this.filters[index].toLowerCase()))){
           if (filter && (!data || !filter(data.toString().toLowerCase()))) {

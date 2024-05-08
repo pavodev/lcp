@@ -289,9 +289,14 @@ class Rule:
 
     def process_references_in_line(self, line):
         line = re.sub(r"[\s\t]+", " ", line)
+
         line = re.sub(
-            r"(?<![a-z_])((\".+\")|[_A-Z]+)[+?*]?(?![a-z])", "", line
-        )  # remove literals
+            r"\".+?\"", "", line
+        )  # remove quote literals
+
+        line = re.sub(
+            r"(?<![a-z_])[_A-Z]+[+?*]?(?![a-z])", "", line
+        )  # remove literal references
 
         line = re.sub(
             r"\s+([|+?*~\])0-9.])", "\\1", line
@@ -317,7 +322,7 @@ class Rule:
                 continue_on_next = False
                 continue
             # remove any attached literal
-            piece = re.sub(r"\".+\"", "", piece)  # remove literals
+            piece = re.sub(r"\"[^\"]+\"", "", piece)  # remove literals
             # Special case: at least N
             if n + 1 < len(splitrules) and splitrules[n + 1].startswith(piece):
                 options["minItems"] = 1
@@ -457,7 +462,7 @@ def convert(input_file, output_file=None):
 
     schema = {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
-        "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
+        "$id": "https://liri.linguistik.uzh.ch/cobquec5.schema.json",
         "title": "Constraint-based Query Configuration",
         "description": "A linguistic query for LCP data Representation",
         "type": "object",
