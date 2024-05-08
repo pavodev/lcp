@@ -161,7 +161,14 @@
                   </div>
                   <div
                     class="details-button icon-1 tooltips disabled"
-                    title="Only Swissdox user can query this corpus"
+                    title="Only Swissdox users can query this corpus"
+                    v-else-if="corpus.isSwissdox"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
+                  </div>
+                  <div
+                    class="details-button icon-1 tooltips disabled"
+                    title="Only users who are logged in are able to query this corpus"
                     v-else
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
@@ -401,7 +408,7 @@ export default {
   },
   methods: {
     hasAccess(corpus) {
-      return !corpus.authUser || (corpus.authUser == true && this.userData.user.swissdoxUser == true);
+      return !corpus.authRequired || (corpus.authRequired == true && this.userData.user.swissdoxUser == true);
     },
     corpusDataType: Utils.corpusDataType,
     projectIcons(project) {

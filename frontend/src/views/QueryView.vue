@@ -1025,7 +1025,7 @@ export default {
     },
     checkAuthUser() {
       // Check if user is authaticated
-      if (this.selectedCorpora.corpus.authUser == true && (!this.userData.user || this.userData.user.swissdoxUser != true)) {
+      if (this.selectedCorpora.corpus.authRequired == true && (!this.userData.user || this.userData.user.swissdoxUser != true)) {
         window.location.replace("/login");
       }
     },
