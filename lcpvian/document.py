@@ -24,8 +24,9 @@ async def document(request: web.Request) -> web.Response:
     c: int | str | list[int] | list[str] = request_data["corpora"]
     corpora: list[int] = [int(c)] if not isinstance(c, list) else [int(i) for i in c]
     corpus = corpora[0]
-    schema = request.app["config"][str(corpus)]["schema_path"]
-    job = request.app["query_service"].document(schema, corpus, doc_id, user, room)
+    corpus_conf = request.app["config"][str(corpus)]
+    schema = corpus_conf["schema_path"]
+    job = request.app["query_service"].document(schema, corpus, doc_id, user, room, corpus_conf)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
 

@@ -562,15 +562,13 @@
                       ></span>
                     </div>
                     <div class="col">
-                      <span class="text-bold" v-html="WSDataResults.result[-1][result[0]][1].map(x => x[0]).join(' ')" />
-                      <span v-if="result[3]">
-                        <br>Gesture: <b><span v-html="result[3]"></span></b>
-                      </span>
+                      <span class="text-bold" v-html="contextWithHighlightedEntities(result, index)" />
+                      <span v-html="otherEntityInfo(result, index)"></span>
                     </div>
                     <div class="col-1">
-                      <span v-html="documentDict[result[2]]"></span>
-                      <br>
-                      <span v-html="result[4]"></span>
+                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result,index))]"></span>
+                      <!-- <br>
+                      <span v-html="result[4]"></span> -->
                     </div>
                   </div>
                 </li>
@@ -689,6 +687,26 @@ export default {
     setDocument(document) {
       this.currentDocument = document
     },
+    otherEntityInfo(result, index) {
+      index = 0; // hard-coded for now
+      // const ret = [];
+      // const template = "{layer}: <b><span>{value}</span></b>";
+      // const context = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "identifier");
+      // const entities = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "entities");
+      return ([] || result[index]).join("<br>");
+    },
+    contextWithHighlightedEntities(result, index) {
+      index = 0; // hard-coded for now
+      const n_entities = this.WSDataResults.result[0].result_sets[index].attributes.findIndex(a=>a.name == "entities");
+      const context = [];
+      const offset = parseInt(this.WSDataResults.result[-1][result[0]][0]);
+      const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[0]);
+      for (let n in toks) {
+        if (n_entities<0 || !(result[n_entities]||[]).includes(offset+parseInt(n))) context.push(toks[n]);
+        else context.push("<span style='color:brown;'>"+toks[n]+"</span>");
+      }
+      return context.join(' ')
+    },
     frameNumberToTime(frameNumber) {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
@@ -706,13 +724,19 @@ export default {
     updatePage(currentPage) {
       this.currentPage = currentPage;
     },
+    docIdFromFrame(frame) {
+      let [minFrame, maxFrame] = frame;
+      return this.corpusData.find(c=>c[3][0] <= minFrame && maxFrame <= c[3][1])[0];
+    },
     resultClick(result, index) {
-      if (index >= this.WSDataResults.result[0].result_sets.length)
-        return;
+      // if (index >= this.WSDataResults.result[0].result_sets.length)
+      //   return;
+      index = 0; // hard-coded for now
       // console.log(result, result[4][0][1], this.currentDocument)
-      let minFrame = Math.min(...this.frameFromResult(result, index).map(x => x[0]))
-      let value = Utils.frameNumberToSeconds(minFrame) / 1000;
-      if (this.currentDocument[0] == result[2]) {
+      const frameFromResult = this.frameFromResult(result,index);
+      const doc_result_id = this.docIdFromFrame(frameFromResult);
+      let value = Utils.frameNumberToSeconds(frameFromResult[0]) / 1000;
+      if (this.currentDocument[0] == doc_result_id) {
         this._playerSetTime(value);
         window.scrollTo(0, 120);
         this.playerPlay();
@@ -721,7 +745,7 @@ export default {
         // this.currentDocument = this.documentDict[result[2]];
         this.setResultTime = value;
         // TODO: should be fixed - corpusData changed
-        this.currentDocument = this.corpusData.filter(corpus => corpus[0] == result[2])[0]
+        this.currentDocument = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0]
         //   // console.log("Change document")
         // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
@@ -946,6 +970,7 @@ export default {
       // console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
+          this.documentData = data.document;
           let dataToShow = {};
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
