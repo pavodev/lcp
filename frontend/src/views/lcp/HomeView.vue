@@ -411,7 +411,7 @@ export default {
       return !corpus.authRequired
         || (
           (corpus.authRequired == true && this.userData.user.displayName) && (
-            corpus.isSwissdox != true || this.userData.user.isSwissdox == true
+            corpus.isSwissdox != true || this.userData.user.swissdoxUser == true
           )
         );
     },

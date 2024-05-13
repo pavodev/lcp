@@ -1029,7 +1029,7 @@ export default {
         && this.selectedCorpora.corpus.authRequired == true
         && (
           !this.userData.user.displayName
-          || (this.selectedCorpora.corpus.isSwissdox != true || this.userData.user.swissdoxUser != true)
+          || (this.selectedCorpora.corpus.isSwissdox == true && this.userData.user.swissdoxUser != true)
         )
       ) {
         window.location.replace("/login");
