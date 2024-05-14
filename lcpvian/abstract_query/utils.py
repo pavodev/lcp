@@ -130,15 +130,15 @@ def _has_frame_range(config: dict[str,Any]) -> bool:
 def _parse_comparison(comparison_object: dict) -> tuple[dict[str,Any],str,str,QueryType]:
     assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")
     assert "operator" in comparison_object, KeyError("Couldn't find 'operator' in comparison")
-    type, right = next((a for a in comparison_object.items() if a[0].endswith("Comparison")), (None,None))
-    assert type, KeyError("Couldn't find 'xyzComparison' in comparison")
+    typ, right = next((a for a in comparison_object.items() if a[0].endswith("Comparison")), (None,None))
+    assert typ, KeyError("Couldn't find 'xyzComparison' in comparison")
     key = cast(dict[str,Any], comparison_object["left"])
     op = comparison_object["operator"]
-    if type in ("stringComparison", "regexComparison"):
+    if typ in ("stringComparison", "regexComparison"):
         right = cast(str, right)[1:-1]
-    if op in (">=","<=",">","<") and type != "functionComparison":
-        type = "mathComparison" # Overwrite comparison type
-    return (key,cast(str,op),cast(str,type),cast(str,right))
+    if op in (">=","<=",">","<") and typ != "functionComparison":
+        typ = "mathComparison" # Overwrite comparison type
+    return (key,cast(str,op),cast(str,typ),cast(str,right))
 
 
 def _label_layer(query_json: list | dict[str, Any]) -> LabelLayer:

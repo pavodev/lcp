@@ -501,7 +501,7 @@ class Constraint:
             # Handle date exceptionally for now, but later just use functions (year(date), month(date), etc.)
             self.date()
         else:
-            if field_type in ('categorical') and self.type!="regex":
+            if field_type == 'categorical' and self.type!="regex":
                 self._cast = ""
             formed_comparison = f"{field_ref}{self._cast} {self.op} {formatted}"
             self._conditions.add( formed_comparison )

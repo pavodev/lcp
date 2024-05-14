@@ -172,7 +172,10 @@ class Cte:
         states_needed: dict[str,State] = {n: state for state, (n, _) in state_map.items() if n in automaton_minimized.sigma}
         self.optimal_graph: tuple[NFA,dict[str,State]] = (automaton_minimized,states_needed)
 
-        self.optional = automaton_minimized.initialState in automaton_minimized.F
+        try:
+            self.optional = automaton_minimized.initialState in automaton_minimized.F
+        except:
+            self.optional = True
         
         self.closed = True
 
