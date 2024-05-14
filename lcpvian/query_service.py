@@ -229,7 +229,7 @@ class QueryService:
         The fetch from cache should not be needed, as on subsequent jobs
         we can get the data from app["config"]
         """
-        doc_layer = config.get("document").lower()
+        doc_layer = config.get("document", "document").lower()
         query = f"SELECT {doc_layer}_id, name, media, frame_range FROM {schema}.{doc_layer};"
         kwargs: DocIDArgs = {
             "user": user,
