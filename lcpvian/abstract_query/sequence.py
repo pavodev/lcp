@@ -133,17 +133,17 @@ class Cte:
         current_state: State = self.start_state
 
         for me in self.members:
-            current_state = self.add_state(cast(Member, me), current_state)
+            current_state = self.add_state(me, current_state)
 
         current_state.to(self.end_state)
         self.states[self.end_state] = None
 
         # Create a graph dict to feed to automathon
         # effectivelty create indices (n) to refer to states
-        state_map: dict = {}
+        state_map: dict[State, tuple[str, bool]] = {}
         for n, state in enumerate(self.states):
             state_map[state] = (str(n), not state.constraints)
-        delta: dict = {}
+        delta: dict[str, set[str]] = {}
         for state, (n, epsilon) in state_map.items():
             entry: dict[str, Any] = {}
             for d in state.destinations:
@@ -154,13 +154,13 @@ class Cte:
             delta[str(n)] = entry
 
         # Prepare params for automathon
-        Q = {str(s) for s in delta.keys()}
-        sigma = {y for x in delta.values() for y in x.keys() if y}
-        initialState = str(state_map[self.start_state][0])
-        F = {str(state_map[self.end_state][0])}
+        q = {str(s) for s in delta.keys()}
+        sigma = {y for x in delta.values() for y in x if y}
+        initial_state = str(state_map[self.start_state][0])
+        f = {str(state_map[self.end_state][0])}
 
         # Create the raw automaton first, epsilon-free one then, and finally minimize it
-        automaton_epsilon = NFA(Q, sigma, delta, initialState, F)
+        automaton_epsilon = NFA(q, sigma, delta, initial_state, f)
         automaton_no_epsilon = automaton_epsilon.remove_epsilon_transitions()
         automaton_minimized = automaton_no_epsilon.minimize()
 
@@ -886,22 +886,20 @@ class SQLSequence:
 
         simple_seq_conds: list[tuple[int, str]] = []
         # Go through the subsequences (will add an ALL for each)
-        for n, (prev, s, next) in enumerate(self.simple_sequences):
+        for n, (prev, s, nxt) in enumerate(self.simple_sequences):
             pl: str = prev.internal_label
-            nl: str = next.internal_label if isinstance(next, Unit) else ""
+            nl: str = nxt.internal_label if isinstance(nxt, Unit) else ""
             np: int = len(self.fixed_tokens)
-            n_tokens: int = len(
-                s.members
-            )  # n+1 of the last fixed token, used only if next_n<0
-            mod: int = len(
-                s.members
-            )  # lenght of the subsequence, used as modulo only if next_n<0
+            # n+1 of the last fixed token, used only if next_n<0:
+            n_tokens: int = len(s.members)
+            # lenght of the subsequence, used as modulo only if next_n<0:
+            mod: int = len(s.members)
             sselect: str = ""
             wheres: str = ""
             from_cross: str = "\n                CROSS JOIN ".join(
                 [
                     f"{schema}.{tok}{batch_suffix} s{n}_t{i}"
-                    for i, _ in enumerate(s.members)
+                    for i in range(len(s.members))
                 ]
             )
 
@@ -942,7 +940,7 @@ class SQLSequence:
                                 if prev
                                 else ""
                             ),
-                            (f"s{n}_t{i}.{tok}_id < {from_table}.{nl}" if next else ""),
+                            (f"s{n}_t{i}.{tok}_id < {from_table}.{nl}" if nxt else ""),
                             (
                                 f"s{n}_t{i}.{tok}_id - s{n}_t{i-1}.{tok}_id = 1"
                                 if i > 0
@@ -951,7 +949,7 @@ class SQLSequence:
                             f"s{n}_t{i}.{seg}_id = {from_table}.s",
                             (
                                 f"s{n}_t{i}.{tok}_id <= t{np} AND ({from_table}.t{np} - s{n}_t{i}.{tok}_id) % {mod} = 0"
-                                if next is None and i + 1 == len(s.members)
+                                if nxt is None and i + 1 == len(s.members)
                                 else ""
                             ),
                         ]
@@ -962,11 +960,11 @@ class SQLSequence:
             # The conditions on the tokens go in the SELECT; WHERE simply filters in tokens between the surrounding fixed token
             if not sselect:
                 sselect = "1 = 1"
-            all: str = f"""                SELECT
+            every: str = f"""                SELECT
                 {sselect}
             FROM {from_cross}
             WHERE {wheres}"""
-            simple_seq_conds.append((n_tokens, all))
+            simple_seq_conds.append((n_tokens, every))
         # END for on subsequences
 
         # Now coordinate the subsequence conditions with AND ALL()
