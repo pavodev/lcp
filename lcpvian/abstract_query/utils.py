@@ -230,6 +230,25 @@ def _unique_label(references: dict[str, list], label: str = "anonymous") -> str:
     return new_label
 
 
+def _parse_repetition(repetition: str | dict[str,str]) -> tuple[int,int]:
+    if isinstance(repetition, str):
+        repetition = {"min": repetition}
+    assert "min" in repetition, ValueError("Sequences must define a minimum of repetitions")
+    mini: int = int(repetition["min"])
+    maxi: int = (
+        -1
+        if repetition.get("max","") == "*"
+        else int(repetition.get("max",repetition["min"]))
+    )
+    assert mini > -1, ValueError(
+        f"A sequence cannot repeat less than 0 times (encountered min repetition value of {mini})"
+    )
+    assert maxi < 0 or maxi >= mini, ValueError(
+        f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
+    )
+    return (mini,maxi)
+
+
 labels_map: dict[str,int] = {}
 def _get_n_from_op_comp(op: str, type: str, comp: str) -> str:
     key: str = f"{op} {type} {comp}"

@@ -23,7 +23,8 @@ from .utils import (
     _get_table,
     _get_mapping,
     _get_underlang,
-    _is_anchored
+    _is_anchored,
+    _parse_repetition
 )
 
 import re
@@ -149,7 +150,7 @@ class ResultsMaker:
                 legal_refs.add(cast(dict,obj['unit']).get("label",""))
             elif "sequence" in obj:
                 sequence: dict[str,Any] = cast(dict[str,Any], obj['sequence'])
-                if "repetition" in sequence and sequence['repetition'] != "1..1":
+                if "repetition" in sequence and _parse_repetition(sequence.get('repetition','1')) != (1,1):
                     continue
                 legal_refs.add(sequence.get("label", ""))
                 members = sequence.get("members", [])

@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import cast
 
-from .utils import _unique_label
+from .utils import _unique_label, _parse_repetition
 
 
 class Member:
@@ -75,30 +75,7 @@ class Member:
 
             ret_members: list[Member] = list()
 
-            repetition = obj["sequence"].get("repetition", "1")
-
-            match_repetition: re.Match[str] | None = re.match(
-                r"^(\d+)(\.\.(\d+|\*))?$", repetition
-            )
-            assert match_repetition, SyntaxError(
-                f"Invalid repetition expression ({repetition})"
-            )
-
-            mini: int = int(match_repetition.group(1))
-            maxi: int = (
-                -1
-                if match_repetition.group(3) == "*"
-                else (
-                    int(match_repetition.group(3)) if match_repetition.group(3) else min
-                )
-            )
-
-            assert mini > -1, ValueError(
-                f"A sequence cannot repeat less than 0 times (encountered min repetition value of {mini})"
-            )
-            assert maxi < 0 or maxi >= mini, ValueError(
-                f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
-            )
+            mini, maxi = _parse_repetition(obj["sequence"].get("repetition", "1"))
 
             if mini == 0:
                 return [
@@ -115,7 +92,7 @@ class Member:
                 str_max: str = "*" if diff < 0 else str(diff)
                 newseqobj: dict = {
                     "sequence": {
-                        "repetition": f"0..{str_max}",
+                        "repetition": {"min": "0", "max": str_max},
                         "members": obj["sequence"].get("members", []),
                         "label": obj["sequence"].get("label"),
                     }
@@ -257,38 +234,21 @@ class Sequence(Member):
             for m in self.members
         )
 
-        match_repetition: re.Match[str] | None = re.match(
-            r"^(\d+)(\.\.(\d+|\*))?$", obj["sequence"].get("repetition", "1")
-        )
-        assert match_repetition, SyntaxError(
-            f"Invalid repetition expression ({obj['sequence']['repetition']})"
-        )
+        mini, maxi = _parse_repetition(obj["sequence"].get("repetition", "1"))
+        self.repetition: tuple[int, int] = (mini, maxi)
 
-        min_repetition: int = int(match_repetition.group(1))
-        max_repetition: int
-        if not match_repetition.group(3):
-            max_repetition = min_repetition
-        else:
-            max_repetition = (
-                -1
-                if match_repetition.group(3) == "*"
-                else int(match_repetition.group(3))
-            )
-
-        self.repetition: tuple[int, int] = (min_repetition, max_repetition)
-
-        if min_repetition == 0:
+        if mini == 0:
             self.min_length = 0
         else:
-            self.min_length = min_repetition * sum(sm.min_length for sm in self.members)
+            self.min_length = mini * sum(sm.min_length for sm in self.members)
 
-        if max_repetition == -1:
+        if maxi == -1:
             self.max_length = -1
         else:
             if any(sm.max_length < 0 for sm in self.members):
                 self.max_length = -1
             else:
-                self.max_length = max_repetition * sum(
+                self.max_length = maxi * sum(
                     sm.max_length for sm in self.members
                 )
 
@@ -364,18 +324,19 @@ class Sequence(Member):
         """Helper string representation"""
         ret: str = " ".join([str(m) for m in self.members])
         ret = f"({ret})"
-        if self.repetition[1] == -1:
-            if self.repetition[0] == 0:
+        mini, maxi = self.repetition
+        if maxi == -1:
+            if mini == 0:
                 ret += "*"
-            elif self.repetition[0] == 1:
+            elif mini == 1:
                 ret += "+"
             else:
-                ret += "{" + str(self.repetition[0]) + ",}"
-        elif self.repetition[1] == 1:
-            if self.repetition[0] == 0:
+                ret += "{" + str(mini) + ",}"
+        elif maxi == 1:
+            if mini == 0:
                 ret += "?"
-        elif self.repetition[0] == self.repetition[1]:
-            ret += "{" + str(self.repetition[0]) + "}"
+        elif mini == maxi:
+            ret += "{" + str(mini) + "}"
         else:
-            ret += "{" + str(self.repetition[0]) + "," + str(self.repetition[1]) + "}"
+            ret += "{" + str(mini) + "," + str(maxi) + "}"
         return ret

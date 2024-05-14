@@ -6,7 +6,17 @@ from .constraint import Constraints, _get_constraints, process_set
 from .prefilter import Prefilter
 from .sequence import Cte, SQLSequence
 from .typed import JSON, JSONObject, Joins, LabelLayer, QueryJSON, QueryPart
-from .utils import Config, QueryData, _get_table, _get_batch_suffix, _get_underlang, _joinstring, _layer_contains, _unique_label
+from .utils import (
+    Config,
+    QueryData,
+    _get_table,
+    _get_batch_suffix,
+    _get_underlang,
+    _joinstring,
+    _layer_contains,
+    _unique_label,
+    _parse_repetition
+)
 
 import re
 
@@ -642,7 +652,7 @@ class QueryMaker:
                 max_label = max_seq.split(" as ")[-1]
                 jttable = _unique_label(entities, "t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
-                inwhere: str = f"{jttable}.{seg}_id = gather.s AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
+                inwhere: str = f"{jttable}.{self.segment.lower()}_id = gather.s AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
                 self.selects.add(f"ARRAY(SELECT {jttable}.{tok}_id FROM {infrom} WHERE {inwhere}) AS {seqlab}")
             
             additional_from: str = last_table
@@ -744,8 +754,9 @@ class QueryMaker:
                     return in_scope
             if "sequence" in obj:
                 if obj["sequence"].get("label") == label:
-                    return in_scope 
-                tmp_in_scope = obj["sequence"].get("repetition", "1") != "1"
+                    return in_scope
+                reps = _parse_repetition(obj["sequence"].get("repetition", "1"))
+                tmp_in_scope = reps != (1,1)
                 for m in obj["sequence"].get("members", []):
                     if self._bound_label(label, m, tmp_in_scope):
                         return True
