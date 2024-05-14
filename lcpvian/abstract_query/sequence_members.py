@@ -84,8 +84,8 @@ class Member:
                 f"Invalid repetition expression ({repetition})"
             )
 
-            min: int = int(match_repetition.group(1))
-            max: int = (
+            mini: int = int(match_repetition.group(1))
+            maxi: int = (
                 -1
                 if match_repetition.group(3) == "*"
                 else (
@@ -93,14 +93,14 @@ class Member:
                 )
             )
 
-            assert min > -1, ValueError(
-                f"A sequence cannot repeat less than 0 times (encountered min repetition value of {min})"
+            assert mini > -1, ValueError(
+                f"A sequence cannot repeat less than 0 times (encountered min repetition value of {mini})"
             )
-            assert max < 0 or max >= min, ValueError(
-                f"The maximum number of repetitions of a sequence must be greater than its minimum ({max} < {min})"
+            assert maxi < 0 or maxi >= mini, ValueError(
+                f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
             )
 
-            if min == 0:
+            if mini == 0:
                 return [
                     Sequence(
                         obj,
@@ -111,7 +111,7 @@ class Member:
                 ]
             else:
                 # Create an optional sequence from a new object
-                diff: int = -1 if max < 0 else max - min
+                diff: int = -1 if maxi < 0 else maxi - mini
                 str_max: str = "*" if diff < 0 else str(diff)
                 newseqobj: dict = {
                     "sequence": {
@@ -124,7 +124,7 @@ class Member:
                     newseqobj, parent_sequence, depth + 1, sequence_references=sequence_references
                 )
                 # The members must appear min: return them as individual members
-                for _ in range(min):
+                for _ in range(mini):
                     for m in obj["sequence"].get("members", []):
                         ret_members += Member.from_obj(m, optional_sequence, depth + 1, sequence_references=sequence_references)
                 if diff:

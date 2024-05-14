@@ -220,6 +220,7 @@ class QueryService:
         corpus_id: int,
         user: str,
         room: str | None,
+        config: dict,
         queue: str = "internal",
     ) -> Job:
         """
@@ -228,7 +229,8 @@ class QueryService:
         The fetch from cache should not be needed, as on subsequent jobs
         we can get the data from app["config"]
         """
-        query = f"SELECT document_id, name, media, frame_range FROM {schema}.document;"
+        doc_layer = config.get("document").lower()
+        query = f"SELECT {doc_layer}_id, name, media, frame_range FROM {schema}.{doc_layer};"
         kwargs: DocIDArgs = {
             "user": user,
             "room": room,
@@ -267,8 +269,8 @@ class QueryService:
         Fetch info about a document from DB/cache
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
-        # Start work on new logic with Tangram4 (corpus_id 59)
-        if corpus == 59:
+        # Start work on new logic with Tangram4 and Tagesschau (corpus_id 59 & 38)
+        if corpus in (59,38):
             assert 'tracks' in config, KeyError("Couldn't find 'tracks' in the corpus configuration")
             global_tables: dict = {}
             doc_layer = config.get("document")
