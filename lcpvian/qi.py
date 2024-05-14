@@ -480,6 +480,8 @@ class QueryIteration:
             group_by.append(f"{layer}_id")
             joins_later = set()
             for attr, v in attributes.items():
+                if v.get("type") == "vector":
+                    continue # Don't include vectors
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
                 attr_mapping = mapping_attrs.get(attr, {})

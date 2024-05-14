@@ -34,7 +34,8 @@
               v-if="Object.keys(meta).length"
               style="margin-right: 0.5em"
               @mousemove="showMeta(resultIndex, $event)"
-              @mouseleave="closeMeta"
+              @mouseleave="!stickMeta.x && !stickMeta.y && closeMeta()"
+              @click="setStickMeta($event)"
               class="icon-info ms-2"
             >
               <FontAwesomeIcon :icon="['fas', 'circle-info']" />
@@ -148,9 +149,16 @@
     <div
       class="popover-liri"
       v-if="currentMeta"
-      :style="{top: popoverY + 'px', left: popoverX + 'px' }"
+      :style="{top: (stickMeta.y || popoverY) + 'px', left: (stickMeta.x || popoverX) + 'px' }"
     >
       <table class="table popover-table">
+        <span
+          v-if="stickMeta.x && stickMeta.y"
+          style="position:absolute; right: 0px; cursor: pointer;"
+          @click="(stickMeta = {}) && this.closeMeta()"
+        >
+          [X]
+        </span>
         <template v-for="(meta, layer) in currentMeta" :key="`th-${layer}`">
           <tr v-if="layer in allowedMetaColums">
             <td>
@@ -399,6 +407,7 @@ export default {
       currentToken: null,
       currentResultIndex: null,
       currentMeta: null,
+      stickMeta: {},
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
@@ -463,6 +472,7 @@ export default {
       this.currentResultIndex = null;
     },
     showMeta(resultIndex, event) {
+      if (this.stickMeta.x || this.stickMeta.y) return;
       this.closePopover();
       resultIndex =
         resultIndex + (this.currentPage - 1) * this.resultsPerPage;
@@ -473,6 +483,9 @@ export default {
     },
     closeMeta() {
       this.currentMeta = null;
+    },
+    setStickMeta(event) {
+      this.stickMeta = (this.stickMeta.x && this.stickMeta.y ? {} : {x: event.clientX, y: event.clientY});
     },
     showModal(index) {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
