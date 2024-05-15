@@ -587,7 +587,7 @@ export default {
         // let endTime = meta[this.corpora.corpus.firstClass.segment].end
         if (filename) {
           // TODO: get path from config
-          this.$refs.audioplayer.src = `/media/${filename}`;
+          this.$refs.audioplayer.src = this.baseMediaUrl + filename;
           this.$refs.audioplayer.currentTime = startTime;
           this.$refs.audioplayer.ontimeupdate = () => {
             if (this.$refs.audioplayer.currentTime >= endTime) {
@@ -600,7 +600,7 @@ export default {
               container: `.audioplayer-${resultIndex}`,
               waveColor: '#4F4A85',
               progressColor: '#383351',
-              url: `/media/${filename}`,
+              url: this.baseMediaUrl + filename,
               // media: this.$refs.audioplayer, // <- this is the important part
               height: 32
             })
@@ -717,6 +717,13 @@ export default {
         columns = columns["partitions"][partitions[0]];
       }
       return columns["prepared"]["columnHeaders"];
+    },
+    baseMediaUrl() {
+      let retval = ""
+      if (this.corpora && this.corpora.corpus) {
+        retval = `${config.baseMediaUrl}/${this.corpora.corpus.corpus_id}/`
+      }
+      return retval
     },
   },
 };
