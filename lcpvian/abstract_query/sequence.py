@@ -143,7 +143,7 @@ class Cte:
         state_map: dict[State, tuple[str, bool]] = {}
         for n, state in enumerate(self.states):
             state_map[state] = (str(n), not state.constraints)
-        delta: dict[str, set[str]] = {}
+        delta: dict[str, dict[str, set[str]]] = {}
         for state, (n, epsilon) in state_map.items():
             entry: dict[str, Any] = {}
             for d in state.destinations:
@@ -175,11 +175,8 @@ class Cte:
             states_needed,
         )
 
-        try:
-            self.optional = automaton_minimized.initialState in automaton_minimized.F
-        except:
-            self.optional = True
-        
+        self.optional = automaton_minimized.initial_state in automaton_minimized.f
+
         self.closed = True
 
     def add_state(self, member: Member, source: State) -> State:
@@ -239,8 +236,8 @@ class Cte:
 
     def get_final_states(self) -> list[int]:
         automaton, _ = self.optimal_graph
-        s = sorted(x for x in automaton.F)
-        if automaton.initialState in automaton.F:
+        s = sorted(int(x) for x in automaton.f)
+        if automaton.initial_state in automaton.f:
             s.append(-1)
         return s
 
@@ -261,7 +258,7 @@ class Cte:
 
         if which == "start":
             delta_items = [
-                (k, v) for k, v in delta_items if k == automaton.initialState
+                (k, v) for k, v in delta_items if k == automaton.initial_state
             ]
 
             pl: str = (
@@ -299,9 +296,9 @@ class Cte:
             all_destinations: set = {
                 next(z for z in y) for x in automaton.delta.values() for y in x.values()
             }
-            if automaton.initialState not in all_destinations:
+            if automaton.initial_state not in all_destinations:
                 delta_items = [
-                    (k, v) for k, v in delta_items if k != automaton.initialState
+                    (k, v) for k, v in delta_items if k != automaton.initial_state
                 ]
 
         for source_n, d in delta_items:
@@ -361,8 +358,8 @@ class Cte:
             dict()
         )  # Make sure there's no duplicate, but keep order
 
-        if automaton.initialState in automaton.F:
-            dict_table[f"({automaton.initialState}, -1, 'void', '')"] = None
+        if automaton.initial_state in automaton.f:
+            dict_table[f"({automaton.initial_state}, -1, 'void', '')"] = None
 
         for source, destinations in automaton.delta.items():
             for state_n, destination in destinations.items():
@@ -701,10 +698,10 @@ class SQLSequence:
                     for lab, lay in self.label_layer.items()
                     if lay[0].lower() == self.config.config["segment"].lower()
                 ),
-                None,
+                {},
             )
         ):
-            override[seg_lab] = f"fixed_parts.{seg_lab}"
+            override[str(seg_lab)] = f"fixed_parts.{seg_lab}"
         refs_to_replace = "|".join(
             [
                 f"{e}.{self.label_layer[e][0].lower()}_id"

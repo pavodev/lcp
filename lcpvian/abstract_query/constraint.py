@@ -13,7 +13,7 @@ from .utils import (
     QueryData,
     _joinstring,
     _parse_comparison,
-    _is_anchored
+    _is_anchored,
 )
 
 from typing import Self
@@ -145,7 +145,7 @@ class Constraints:
         out: set[str] = set()
         for member in self.members:
             if isinstance(member, Constraints) and member.quantor:
-                res = self._build_subquery(member)
+                res = self._build_subquery(cast(Self, member))
                 if res.strip():
                     out.add(res)
             elif isinstance(member, Constraints) and not member.quantor:
@@ -493,12 +493,14 @@ class Constraint:
             if self.label_layer is None:
                 self.label_layer = {}
             if label not in self.label_layer:
-                self.label_layer[label] = (self.layer,{})
+                self.label_layer[label] = (self.layer, {})
             meta: dict = self.label_layer[label][1]
-            meta['labels inner conditions'] = meta.get('labels inner conditions', {})
+            meta["labels inner conditions"] = meta.get("labels inner conditions", {})
             comp_str: str = f"{self.op} {self.type} {formatted}"
-            n = meta['labels inner conditions'].get(comp_str, len(meta['labels inner conditions']))
-            meta['labels inner conditions'][comp_str] = n
+            n = meta["labels inner conditions"].get(
+                comp_str, len(meta["labels inner conditions"])
+            )
+            meta["labels inner conditions"][comp_str] = n
             mask_label = f"{label}_mask_{n}"
             formed_join_table = f"{inner_condition} {mask_label}"
             self._add_join_on(formed_join_table, "")
@@ -558,7 +560,7 @@ class Constraint:
             # Handle date exceptionally for now, but later just use functions (year(date), month(date), etc.)
             self.date()
         else:
-            if field_type == 'categorical' and self.type!="regex":
+            if field_type == "categorical" and self.type != "regex":
                 self._cast = ""
             formed_comparison = f"{field_ref}{self._cast} {self.op} {formatted}"
             self._conditions.add(formed_comparison)
@@ -712,7 +714,8 @@ class Constraint:
         """
         Handle dependency query
         """
-        dep_table = _get_table(self.layer, self.config, self.batch, self.lang)
+        lg: str = self.lang or ""
+        dep_table = _get_table(self.layer, self.config, self.batch, lg)
         label = f"deprel_{self.label}".lower()
         source, target = {
             x.get("name", "")
@@ -724,8 +727,9 @@ class Constraint:
             assert self.type == "entity", TypeError(
                 f"Invalid type for '{self.field}': dependency references must be entity labels"
             )
-            entity_label = self._query.strip()
-            entity_layer = self.label_layer.get(entity_label, [""])[0]
+            entity_label = str(self._query).strip()
+            lablay: dict = self.label_layer or {}
+            entity_layer = lablay.get(entity_label, [""])[0]
             formed_condition = (
                 f"{label}.{field} {self.op} {entity_label}.{entity_layer}_id"
             )
