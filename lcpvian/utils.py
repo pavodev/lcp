@@ -592,6 +592,9 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     return None
 
 
+subtype: TypeAlias = list[dict[str, str]]
+
+
 def _filter_corpora(
     config: Config,
     app_type: str,
@@ -601,7 +604,6 @@ def _filter_corpora(
     """
     Filter corpora based on app type and user projects
     """
-    subtype: TypeAlias = list[dict[str, str]]
 
     ids: set[str] = set()
     if isinstance(user_data, dict):
@@ -615,20 +617,35 @@ def _filter_corpora(
     ids.add("all")
     corpora: dict[str, CorpusConfig] = {}
     for corpus_id, conf in config.items():
-        if get_all is False and len([project_id for project_id in conf["projects"] if project_id in ids]) == 0:
+        if (
+            get_all is False
+            and len(
+                [
+                    project_id
+                    for project_id in conf.get("projects", {})
+                    if project_id in ids
+                ]
+            )
+            == 0
+        ):
             continue
         idx = str(corpus_id)
         if idx == "-1":
             corpora[idx] = conf
             continue
-        data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
-        if get_all or app_type in ('lcp', 'catchphrase'):
+        # data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
+        data_type: str = ""
+        for slot in cast(dict, conf).get("meta", {}).get("mediaSlots", {}).values():
+            if data_type == "video":
+                continue
+            data_type = slot.get("mediaType", "")
+        if get_all or app_type in ("lcp", "catchphrase"):
             corpora[idx] = conf
             continue
-        if app_type == 'videoscope' and data_type in ['video']:
+        if app_type == "videoscope" and data_type in ["video"]:
             corpora[idx] = conf
             continue
-        if app_type == 'soundscript' and data_type in ['audio', 'video']:
+        if app_type == "soundscript" and data_type in ["audio", "video"]:
             corpora[idx] = conf
             continue
     return corpora
@@ -662,10 +679,10 @@ def _row_to_value(
     schema_path = schema_path.replace("<version>", ver)
     if not schema_path.endswith(ver):
         schema_path = f"{schema_path}{ver}"
-    layer = corpus_template["layer"]
-    fc = corpus_template["firstClass"]
-    tok = fc["token"]
-    cols = layer[tok]["attributes"]
+    layer = corpus_template.get("layer", {})
+    fc = corpus_template.get("firstClass", {})
+    tok = fc.get("token", "")
+    cols = layer.get(tok, {}).get("attributes", {})
 
     projects: list[str] = corpus_template.get("projects", [])
     if not projects:
@@ -684,9 +701,9 @@ def _row_to_value(
         "token_counts": token_counts,
         "mapping": mapping,
         "enabled": enabled,
-        "segment": fc["segment"],
-        "token": fc["token"],
-        "document": fc["document"],
+        "segment": fc.get("segment"),
+        "token": fc.get("token"),
+        "document": fc.get("document"),
         "column_names": cols,
         "sample_query": sample_query,
     }
@@ -713,7 +730,8 @@ def _get_sent_ids(
         return out
     prev_results = job.result
     seg_ids: set[str | int] = set()
-    rs = job.kwargs["meta_json"]["result_sets"]
+    kwargs: dict = cast(dict, job.kwargs)
+    rs = kwargs.get("meta_json", {})["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
     to_use: int = next((int(i[0]) for i in prev_results if int(i[0]) in kwics), -2)
@@ -839,14 +857,15 @@ def range_to_array(sql_ref: str) -> str:
 
 
 def _layer_contains(config: CorpusConfig, parent: str, child: str) -> bool:
-    child_layer = config["layer"].get(child)
-    parent_layer = config["layer"].get(parent)
+    conf_layers: dict = config.get("layer", {})
+    child_layer = conf_layers.get(child)
+    parent_layer = conf_layers.get(parent)
     if not child_layer or not parent_layer:
         return False
     while parent_layer and (parents_child := parent_layer.get("contains")):
         if parents_child == child:
             return True
-        parent_layer = config["layer"].get(parents_child)
+        parent_layer = conf_layers.get(parents_child)
     return False
 
 
@@ -868,8 +887,9 @@ def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
     Helper to get the base job from a group of query jobs
     """
     first_job = job
-    if job.kwargs.get("first_job"):
-        first_job = Job.fetch(job.kwargs["first_job"], connection=connection)
+    first_job_id_from_kwargs = cast(dict, job.kwargs).get("first_job")
+    if first_job_id_from_kwargs:
+        first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
     return first_job
 
 
@@ -910,7 +930,7 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     total_requested = cast(int, kwargs.get("total_results_requested", -1))
     if total_requested > 0:
         return total_requested
-    total_requested = job.kwargs.get("total_results_requested", -1)
+    total_requested = cast(dict, job.kwargs).get("total_results_requested", -1)
     if total_requested > 0:
         return total_requested
     return -1

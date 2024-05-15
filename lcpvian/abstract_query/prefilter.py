@@ -265,7 +265,7 @@ class Prefilter:
                 if "function" in key or type == "functionComparison":
                     return None
                 key_str = cast(str, key.get("entity", ""))
-                if _is_prefix(text, op, type):
+                if _is_prefix(cast(str, text), op, type):
                     return SingleNode(
                         key_str, op, cast(str, text), type == "regexComparison"
                     )
@@ -300,7 +300,7 @@ class Prefilter:
             if "function" in key or typ == "functionComparison":
                 continue  # todo: check this?
             key_str = cast(str, key.get("entity", ""))
-            if _is_prefix(text, op, typ):
+            if _is_prefix(cast(str, text), op, typ):
                 matches.append(
                     SingleNode(key_str, op, cast(str, text), typ == "regexComparison")
                 )

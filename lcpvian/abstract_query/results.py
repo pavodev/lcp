@@ -22,7 +22,7 @@ from .utils import (
     _get_mapping,
     _get_underlang,
     _is_anchored,
-    _parse_repetition
+    _parse_repetition,
 )
 
 COUNTER = f"""
@@ -160,13 +160,10 @@ class ResultsMaker:
             if "unit" in obj:
                 legal_refs.add(cast(dict, obj["unit"]).get("label", ""))
             elif "sequence" in obj:
-<<<<<<< Updated upstream
-                sequence: dict[str,Any] = cast(dict[str,Any], obj['sequence'])
-                if "repetition" in sequence and _parse_repetition(sequence.get('repetition','1')) != (1,1):
-=======
                 sequence: dict[str, Any] = cast(dict[str, Any], obj["sequence"])
-                if "repetition" in sequence and sequence["repetition"] != "1..1":
->>>>>>> Stashed changes
+                if "repetition" in sequence and _parse_repetition(
+                    sequence.get("repetition", "1")
+                ) != (1, 1):
                     continue
                 legal_refs.add(sequence.get("label", ""))
                 members = sequence.get("members", [])
@@ -522,8 +519,8 @@ WHERE {entity}.char_range && contained_token.char_range
         any_frame_range: str = ""
 
         # if self.vian:
-        if _is_anchored(self.config, context_layer, 'time'):
-            lab = context # TODO: accommodate corpora using FTS
+        if _is_anchored(self.config, context_layer, "time"):
+            lab = context  # TODO: accommodate corpora using FTS
             out_name = f"{lab}_frame_range"
             if not any_frame_range:
                 any_frame_range = out_name
@@ -694,7 +691,7 @@ WHERE {entity}.char_range && contained_token.char_range
 
         out: list[dict]
 
-        if not _is_anchored(self.config, context_layer, 'time'):
+        if not _is_anchored(self.config, context_layer, "time"):
             out = [
                 {
                     "name": "identifier",

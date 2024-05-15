@@ -710,12 +710,11 @@ class Constraint:
         # else:
         self._conditions.add(formed)
 
-    def deprel(self):
+    def deprel(self) -> None:
         """
         Handle dependency query
         """
-        lg: str = self.lang or ""
-        dep_table = _get_table(self.layer, self.config, self.batch, lg)
+        dep_table = _get_table(self.layer, self.config, self.batch, self.lang or "")
         label = f"deprel_{self.label}".lower()
         source, target = {
             x.get("name", "")
@@ -728,7 +727,7 @@ class Constraint:
                 f"Invalid type for '{self.field}': dependency references must be entity labels"
             )
             entity_label = str(self._query).strip()
-            lablay: dict = self.label_layer or {}
+            lablay: dict[str, Any] = self.label_layer or {}
             entity_layer = lablay.get(entity_label, [""])[0]
             formed_condition = (
                 f"{label}.{field} {self.op} {entity_label}.{entity_layer}_id"

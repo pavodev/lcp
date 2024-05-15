@@ -144,14 +144,14 @@ class Cte:
         for n, state in enumerate(self.states):
             state_map[state] = (str(n), not state.constraints)
         delta: dict[str, dict[str, set[str]]] = {}
-        for state, (n, epsilon) in state_map.items():
+        for state, (i, epsilon) in state_map.items():
             entry: dict[str, Any] = {}
             for d in state.destinations:
-                key = "" if epsilon else str(n)
+                key = "" if epsilon else str(i)
                 set_entry = entry.get(key, set())
                 set_entry.add(str(state_map[d][0]))
                 entry[key] = set_entry
-            delta[str(n)] = entry
+            delta[str(i)] = entry
 
         # Prepare params for automathon
         q = {str(s) for s in delta.keys()}
@@ -691,16 +691,15 @@ class SQLSequence:
         # This hack needs to be handled upstream:
         # override is only set when the table in not the main one (fixed_parts)
         # so we replace any occurrence of l.layer_id with just l
-        if override and (
-            seg_lab := next(
-                (
-                    lab
-                    for lab, lay in self.label_layer.items()
-                    if lay[0].lower() == self.config.config["segment"].lower()
-                ),
-                {},
-            )
-        ):
+        seg_lab: str = next(
+            (
+                lab
+                for lab, lay in self.label_layer.items()
+                if lay[0].lower() == self.config.config["segment"].lower()
+            ),
+            "",
+        )
+        if override and seg_lab:
             override[str(seg_lab)] = f"fixed_parts.{seg_lab}"
         refs_to_replace = "|".join(
             [
