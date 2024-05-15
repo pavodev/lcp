@@ -1,3 +1,6 @@
+# need this for the forward-reference type Sequence
+from __future__ import annotations
+
 # Rethink the approach:
 #   from_obj should return a list of Members:
 #       one element when a unit
@@ -6,15 +9,21 @@
 #       units folowed by a sequence if a sequence with min of at least 1, and first member(s) is/are unit(s)
 #           followed by units if last members are units (ie. no more left/right!)
 
-from __future__ import annotations
-
-import re
 from typing import cast
 
 from .utils import _unique_label, _parse_repetition
 
 
 class Member:
+
+    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0):
+        self.obj: dict = obj
+        self.parent_sequence: Sequence | None = parent_sequence
+        self.depth: int = depth
+        self.min_length: int = 0
+        self.max_length: int = 0
+        self.need_cte: bool = False
+
     @staticmethod
     def from_obj(
         obj: dict,
@@ -55,7 +64,7 @@ class Member:
                         },
                         parent_sequence,
                         depth,
-                        sequence_references
+                        sequence_references,
                     )
                 ]
             else:
@@ -98,12 +107,20 @@ class Member:
                     }
                 }
                 optional_sequence: Sequence = Sequence(
-                    newseqobj, parent_sequence, depth + 1, sequence_references=sequence_references
+                    newseqobj,
+                    parent_sequence,
+                    depth + 1,
+                    sequence_references=sequence_references,
                 )
                 # The members must appear min: return them as individual members
                 for _ in range(mini):
                     for m in obj["sequence"].get("members", []):
-                        ret_members += Member.from_obj(m, optional_sequence, depth + 1, sequence_references=sequence_references)
+                        ret_members += Member.from_obj(
+                            m,
+                            optional_sequence,
+                            depth + 1,
+                            sequence_references=sequence_references,
+                        )
                 if diff:
                     ret_members.append(optional_sequence)
 
@@ -111,14 +128,6 @@ class Member:
 
         else:
             raise TypeError(f"Unsupported type of sequence member: {obj}")
-
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0):
-        self.obj: dict = obj
-        self.parent_sequence: Sequence | None = parent_sequence
-        self.depth: int = depth
-        self.min_length: int = 0
-        self.max_length: int = 0
-        self.need_cte: bool = False
 
     def get_all_parent_sequences(self) -> list[Sequence]:
         ret: list[Sequence] = []
@@ -144,7 +153,13 @@ class Member:
 
 
 class Unit(Member):
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0, references: dict[str,list] = {}):
+    def __init__(
+        self,
+        obj: dict,
+        parent_sequence: Sequence | None,
+        depth: int = 0,
+        references: dict[str, list] = {},
+    ):
         super().__init__(obj, parent_sequence, depth)
         self.label: str = str(obj["unit"].get("label", _unique_label(references)))
         self.internal_label: str = self.label
@@ -171,7 +186,13 @@ class Unit(Member):
 
 
 class Disjunction(Member):
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0, references: dict[str,list] = {}):
+    def __init__(
+        self,
+        obj: dict,
+        parent_sequence: Sequence | None,
+        depth: int = 0,
+        references: dict[str, list] = {},
+    ):
         super().__init__(obj, parent_sequence, depth)
         args: list = obj["logicalOpNAry"].get("args", [])
         # Don't extract units from sub-sequences when those are inside a disjunction (otherwise they would become disjuncts too!)
@@ -179,7 +200,11 @@ class Disjunction(Member):
             x
             for a in args
             for x in Member.from_obj(
-                a, parent_sequence, depth + 1, flatten_sequences=False, sequence_references=references
+                a,
+                parent_sequence,
+                depth + 1,
+                flatten_sequences=False,
+                sequence_references=references,
             )
         ]
         self.min_length: int = min(sm.min_length for sm in self.members)
@@ -205,7 +230,7 @@ class Sequence(Member):
         sequence_references: dict[str, list] = dict(),
     ):
         super().__init__(obj, parent_sequence, depth)
-        
+
         if obj["sequence"].get("label"):
             self.anonymous = False
             self.label: str = obj["sequence"]["label"]
@@ -248,9 +273,7 @@ class Sequence(Member):
             if any(sm.max_length < 0 for sm in self.members):
                 self.max_length = -1
             else:
-                self.max_length = maxi * sum(
-                    sm.max_length for sm in self.members
-                )
+                self.max_length = maxi * sum(sm.max_length for sm in self.members)
 
     def is_simple(self) -> bool:
         """Whether the members of this sentence are all units"""
@@ -264,7 +287,7 @@ class Sequence(Member):
         while parent_sequence and parent_sequence is not self:
             parent_sequence = parent_sequence.parent_sequence
         return parent_sequence is self
-    
+
     def labeled_unbound_child_sequences(self) -> list[Sequence]:
         """All the unbound user-labeled sub-sequences contained in this sequence"""
         # If this sequence is optional or repeats itself, all the references it contains are bound
@@ -272,8 +295,10 @@ class Sequence(Member):
             return []
         subseq: list[Sequence] = []
         for m in self.members:
-            if isinstance(m, Unit): continue
-            if isinstance(m, Disjunction): continue
+            if isinstance(m, Unit):
+                continue
+            if isinstance(m, Disjunction):
+                continue
             if isinstance(m, Sequence):
                 if not m.anonymous:
                     subseq.append(m)
@@ -318,7 +343,6 @@ class Sequence(Member):
             repeated_subseq += subseq
 
         return repeated_subseq
-
 
     def __str__(self) -> str:
         """Helper string representation"""
