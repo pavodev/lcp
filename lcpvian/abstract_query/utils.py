@@ -247,11 +247,3 @@ def _parse_repetition(repetition: str | dict[str,str]) -> tuple[int,int]:
         f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
     )
     return (mini,maxi)
-
-
-labels_map: dict[str,int] = {}
-def _get_n_from_op_comp(op: str, type: str, comp: str) -> str:
-    key: str = f"{op} {type} {comp}"
-    if key not in labels_map:
-        labels_map[key] = len(labels_map)
-    return f"{labels_map[key]}"

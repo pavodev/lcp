@@ -15,7 +15,6 @@ from .utils import (
     QueryData,
     _joinstring,
     _parse_comparison,
-    _get_n_from_op_comp,
     _is_anchored
 )
 
@@ -436,7 +435,16 @@ class Constraint:
             inner_op = ('~' if self.type=="regex" else '=')
             nbit = self._layer_info["nlabels"]
             inner_condition = f"(SELECT sum(1<<bit)::bit({nbit}) AS m FROM {self.schema}.{lookup_table} WHERE label {inner_op} {formatted})"
-            n = _get_n_from_op_comp(self.op, self.type, formatted)
+            # Use label_layer to store the inner conditions query-wide and give them unique labels
+            if self.label_layer is None:
+                self.label_layer = {}
+            if label not in self.label_layer:
+                self.label_layer[label] = (self.layer,{})
+            meta: dict = self.label_layer[label][1]
+            meta['labels inner conditions'] = meta.get('labels inner conditions', {})
+            comp_str: str = f"{self.op} {self.type} {formatted}"
+            n = meta['labels inner conditions'].get(comp_str, len(meta['labels inner conditions']))
+            meta['labels inner conditions'][comp_str] = n
             mask_label = f"{label}_mask_{n}"
             formed_join_table = f"{inner_condition} {mask_label}"
             self._add_join_on(
