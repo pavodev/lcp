@@ -61,12 +61,10 @@ from .utils import (
     _set_config,
     PUBSUB_CHANNEL,
     CustomEncoder,
-    range_to_array
+    range_to_array,
 )
-from .abstract_query.utils import (
-    _get_table,
-    _get_mapping
-)
+from .abstract_query.utils import _get_table, _get_mapping
+
 
 @final
 class QueryService:
@@ -177,7 +175,6 @@ class QueryService:
         )
         return cast(Job, job), True
 
-
     async def _attempt_query_from_cache(
         self, hashed: str, **kwargs: Unpack[QueryArgs]
     ) -> tuple[Job | None, bool | None]:
@@ -270,31 +267,37 @@ class QueryService:
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
         # Start work on new logic with Tangram4 and Tagesschau (corpus_id 59 & 38)
-        if corpus in (59,38):
-            assert 'tracks' in config, KeyError("Couldn't find 'tracks' in the corpus configuration")
+        if corpus in (59, 38):
+            assert "tracks" in config, KeyError(
+                "Couldn't find 'tracks' in the corpus configuration"
+            )
             global_tables: dict = {}
             doc_layer = config.get("document")
             query = f"WITH doc AS (SELECT frame_range FROM {schema}.{doc_layer} WHERE {doc_layer}_id = :doc_id)"
-            for layer, props in config['tracks'].get("layers", {}).items():
-                layer_table = _get_table(layer, config, "", "") # no batch and no lang for now
-                mapping = _get_mapping(layer,config,"","")
+            for layer, props in config["tracks"].get("layers", {}).items():
+                layer_table = _get_table(
+                    layer, config, "", ""
+                )  # no batch and no lang for now
+                mapping = _get_mapping(layer, config, "", "")
                 crossjoin = ""
                 whereand = ""
                 lab = layer_table[0]
                 selects = ["'frame_range'", range_to_array(f"{lab}.frame_range")]
-                if layer.lower() == config.get("segment","").lower():
-                    prepared_table = mapping.get("prepared",{}).get("relation", f"prepared_{layer}")
+                if layer.lower() == config.get("segment", "").lower():
+                    prepared_table = mapping.get("prepared", {}).get(
+                        "relation", f"prepared_{layer}"
+                    )
                     crossjoin = f"\n    CROSS JOIN {schema}.{prepared_table} ps"
                     whereand = f"\n    AND {lab}.{layer}_id = ps.{layer}_id"
                     selects += ["'prepared'", "ps.content"]
                 for split in props.get("split", []):
                     split_name = split
-                    split_mapping = mapping.get("attributes", {}).get(split,{})
+                    split_mapping = mapping.get("attributes", {}).get(split, {})
                     if split_mapping.get("type") == "relation":
                         split_name = f"{split_mapping.get('name',split)}_id"
                     selects += [f"'{split_name}'", f"{lab}.{split_name}"]
                 for attr_name, attr_props in mapping.get("attributes", {}).items():
-                    if attr_name not in config.get("globalAttributes",{}):
+                    if attr_name not in config.get("globalAttributes", {}):
                         continue
                     global_tables[attr_name] = attr_props.get("name", attr_name)
                 query += f""",
@@ -303,9 +306,11 @@ class QueryService:
     FROM {schema}.{layer_table} {lab}, doc {crossjoin}
     WHERE {lab}.frame_range && doc.frame_range {whereand}
 )"""
-            layers_ctes = [x for x in config['tracks'].get("layers",{})]
-            for gar in config['tracks'].get("group_by", []):
-                assert "globalAttributes" in config, KeyError("Could not find globalAttributes in corpus config")
+            layers_ctes = [x for x in config["tracks"].get("layers", {})]
+            for gar in config["tracks"].get("group_by", []):
+                assert "globalAttributes" in config, KeyError(
+                    "Could not find globalAttributes in corpus config"
+                )
                 gar_table = global_tables.get(gar, gar)
                 lab = gar_table[0]
                 gar_props = [f"({x}.props->'{gar}_id')::int" for x in layers_ctes]
@@ -317,11 +322,11 @@ class QueryService:
     WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
 )"""
             query += f"\nSELECT * FROM {next(x for x in config['tracks']['layers'])}"
-            for n, layer in enumerate(config['tracks']['layers']):
+            for n, layer in enumerate(config["tracks"]["layers"]):
                 if n == 0:
                     continue
                 query += f"\nUNION ALL SELECT * FROM {layer}"
-            for gar in config['tracks'].get('group_by',{}):
+            for gar in config["tracks"].get("group_by", {}):
                 query += f"\nUNION ALL SELECT * FROM {gar}"
             query += ";"
         params = {"doc_id": doc_id}
@@ -412,7 +417,6 @@ class QueryService:
             return_jobs.append(job_meta.id)
 
         return return_jobs
-
 
     def _attempt_meta_from_cache(
         self, hashed: str, **kwargs: Unpack[SentJob]

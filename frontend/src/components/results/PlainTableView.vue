@@ -721,7 +721,7 @@ export default {
     baseMediaUrl() {
       let retval = ""
       if (this.corpora && this.corpora.corpus) {
-        retval = `${config.baseMediaUrl}/${this.corpora.corpus.corpus_id}/`
+        retval = `${config.baseMediaUrl}/${this.corpora.corpus.schema_path}/`
       }
       return retval
     },
