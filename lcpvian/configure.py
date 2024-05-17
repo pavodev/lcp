@@ -6,6 +6,7 @@ Code for generating batches is also in here
 
 from typing import Any, NotRequired, Sequence, TypedDict
 
+
 class Meta(TypedDict, total=False):
     date: str
     name: str
@@ -101,9 +102,11 @@ def _get_batches(config: CorpusConfig) -> dict[str, int]:
     Get a dict of batch_name: size for a given corpus
     """
     batches: dict[str, int] = {}
-    counts: dict[str, int] = config["token_counts"]
+    counts: dict[str, int] = config.get("token_counts", {})
     try:
-        mapping = config["mapping"]["layer"][config["token"]]
+        mapping = (
+            config.get("mapping", {}).get("layer", {}).get(config.get("token", ""))
+        )
     except (KeyError, TypeError):
         return counts
     if not mapping:

@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import re
 
 from dataclasses import dataclass, field
@@ -86,14 +84,18 @@ def _get_mapping(layer: str, config: Any, batch: str, lang: str) -> dict[str, An
         layer = config["firstClass"]["token"]
     mapping: dict = config["mapping"]["layer"].get(layer, {})
     if "partitions" in mapping and lang:
-        mapping = mapping['partitions'].get(lang,{})
+        mapping = mapping["partitions"].get(lang, {})
     return mapping
 
+
 def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
-    table = _get_mapping(layer,config,batch,lang).get("relation", layer)
+    table = _get_mapping(layer, config, batch, lang).get("relation", layer)
     # Use batch suffixes if layer == batch (token) or if we're working with segments
-    if layer.lower() == batch.lower() or layer.lower() in (config['segment'].lower(), config['token'].lower()):
-        token_mapping = _get_mapping(config['token'], config, batch, lang)
+    if layer.lower() == batch.lower() or layer.lower() in (
+        config["segment"].lower(),
+        config["token"].lower(),
+    ):
+        token_mapping = _get_mapping(config["token"], config, batch, lang)
         n_batches = token_mapping.get("batches", 1)
         batch_suffix: str = _get_batch_suffix(batch, n_batches=n_batches)
         if table.endswith("<batch>"):
@@ -101,7 +103,8 @@ def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
         table += batch_suffix
     return table
 
-def _layer_contains(config: dict[str,Any], parent: str, child: str) -> bool:
+
+def _layer_contains(config: dict[str, Any], parent: str, child: str) -> bool:
     child_layer = config["layer"].get(child)
     parent_layer = config["layer"].get(parent)
     if not child_layer or not parent_layer:
@@ -112,7 +115,8 @@ def _layer_contains(config: dict[str,Any], parent: str, child: str) -> bool:
         parent_layer = config["layer"].get(parents_child)
     return False
 
-def _is_anchored(config: dict[str,Any], layer: str, anchor: str) -> bool:
+
+def _is_anchored(config: dict[str, Any], layer: str, anchor: str) -> bool:
     layer_config = config["layer"].get(layer)
     if layer_config.get("anchoring", {}).get(anchor):
         return True
@@ -121,24 +125,28 @@ def _is_anchored(config: dict[str,Any], layer: str, anchor: str) -> bool:
         return _is_anchored(config, child, anchor)
     return False
 
-def _has_frame_range(config: dict[str,Any]) -> bool:
+
+def _has_frame_range(config: dict[str, Any]) -> bool:
     for layer in config.get("layer", {}).values:
         if layer.get("anchoring", {}).get("time"):
             return True
     return False
 
-def _parse_comparison(comparison_object: dict) -> tuple[dict[str,Any],str,str,QueryType]:
+
+def _parse_comparison(
+    comparison_object: dict,
+) -> tuple[dict[str, Any], str, str, QueryType]:
     assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")
     assert "operator" in comparison_object, KeyError("Couldn't find 'operator' in comparison")
-    type, right = next((a for a in comparison_object.items() if a[0].endswith("Comparison")), (None,None))
-    assert type, KeyError("Couldn't find 'xyzComparison' in comparison")
+    typ, right = next((a for a in comparison_object.items() if a[0].endswith("Comparison")), (None,None))
+    assert typ, KeyError("Couldn't find 'xyzComparison' in comparison")
     key = cast(dict[str,Any], comparison_object["left"])
     op = comparison_object["operator"]
-    if type in ("stringComparison", "regexComparison"):
+    if typ in ("stringComparison", "regexComparison"):
         right = cast(str, right)[1:-1]
-    if op in (">=","<=",">","<") and type != "functionComparison":
-        type = "mathComparison" # Overwrite comparison type
-    return (key,cast(str,op),cast(str,type),cast(str,right))
+    if op in (">=","<=",">","<") and typ != "functionComparison":
+        typ = "mathComparison" # Overwrite comparison type
+    return (key,cast(str,op),cast(str,typ),cast(str,right))
 
 
 def _label_layer(query_json: list | dict[str, Any]) -> LabelLayer:
@@ -197,13 +205,13 @@ def _joinstring(joins: Joins) -> str:
     strung = [
         f"CROSS JOIN {k}" if not k.startswith("join") else k
         for k, v in joins.items()
-        if not (v is True or (isinstance(v,set) and True in v))
+        if not (v is True or (isinstance(v, set) and True in v))
         # if v is None
     ]
     last_joins = [
         f"CROSS JOIN {k}" if not k.startswith("join") else k
         for k, v in joins.items()
-        if (v is True or (isinstance(v,set) and True in v))
+        if (v is True or (isinstance(v, set) and True in v))
         # if v
     ]
     return "\n".join(strung + last_joins)
@@ -230,9 +238,22 @@ def _unique_label(references: dict[str, list], label: str = "anonymous") -> str:
     return new_label
 
 
-labels_map: dict[str,int] = {}
-def _get_n_from_op_comp(op: str, type: str, comp: str) -> str:
-    key: str = f"{op} {type} {comp}"
-    if key not in labels_map:
-        labels_map[key] = len(labels_map)
-    return f"{labels_map[key]}"
+def _parse_repetition(repetition: str | dict[str, str]) -> tuple[int, int]:
+    if isinstance(repetition, str):
+        repetition = {"min": repetition}
+    assert "min" in repetition, ValueError(
+        "Sequences must define a minimum of repetitions"
+    )
+    mini: int = int(repetition["min"])
+    maxi: int = (
+        -1
+        if repetition.get("max", "") == "*"
+        else int(repetition.get("max", repetition["min"]))
+    )
+    assert mini > -1, ValueError(
+        f"A sequence cannot repeat less than 0 times (encountered min repetition value of {mini})"
+    )
+    assert maxi < 0 or maxi >= mini, ValueError(
+        f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
+    )
+    return (mini,maxi)

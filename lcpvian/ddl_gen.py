@@ -20,8 +20,9 @@ TYPES_MAP = {
     "number": "int",
     "dict": "jsonb",
     "array": "text[]",
-    "vector": "main.vector"
+    "vector": "main.vector",
 }
+
 
 @dataclass
 class DataNeededLater:
@@ -71,6 +72,8 @@ class Globs:
 LB = "{"
 RB = "}"
 SG = "'"
+
+
 class DDL:
     """
     base DDL class for DB entities
@@ -118,7 +121,9 @@ class DDL:
                     GROUP BY {x});"""
         )
 
-        self.update_prep_segs: Callable[[str, list[str], str, str, list[tuple]], str] = lambda layer, attrs, seg, tok, joins: dedent(
+        self.update_prep_segs: Callable[
+            [str, list[str], str, str, list[tuple]], str
+        ] = lambda layer, attrs, seg, tok, joins: dedent(
             f"""
             UPDATE prepared_{seg} ps
             SET annotations = jsonb_set(ps.annotations, '{LB}LB{RB}{layer}{LB}RB{RB}', cte.annotations::jsonb)
@@ -582,19 +587,35 @@ class CTProcessor:
                 norm_type = "text"
                 parent = entity_name.lower()
                 if ref:
-                    assert ref in self.global_attributes, ReferenceError(f"Global attribute {ref} could not be found")
+                    assert ref in self.global_attributes, ReferenceError(
+                        f"Global attribute {ref} could not be found"
+                    )
                     norm_type = self.global_attributes[ref].get("type", "text")
                     parent = "global_attribute"
 
                 norm_col = f"{attr}_id"
-                norm_table = Table(
-                    attr,
-                    [
-                        Column(norm_col, "int", primary_key=True),
-                        Column(attr, TYPES_MAP.get(norm_type, norm_type), unique=True),
-                    ],
-                    parent=parent,
+                norm_table: Table
+                existing_table: Table | None = next(
+                    (
+                        t
+                        for t in self.globals.tables
+                        if t.name == f"global_attribute_{attr}"
+                    ),
+                    None,
                 )
+                if existing_table is not None:
+                    norm_table = existing_table
+                else:
+                    norm_table = Table(
+                        attr,
+                        [
+                            Column(norm_col, "int", primary_key=True),
+                            Column(
+                                attr, TYPES_MAP.get(norm_type, norm_type), unique=True
+                            ),
+                        ],
+                        parent=parent,
+                    )
                 map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
@@ -606,7 +627,8 @@ class CTProcessor:
                     )
                 )
 
-                tables.append(norm_table)
+                if existing_table is None:
+                    tables.append(norm_table)
 
             elif typ == "dict":
                 norm_col = f"{attr}_id"
@@ -665,7 +687,7 @@ class CTProcessor:
                 assert "nlabels" in self.layers[entity_name], AttributeError(
                     f"Attribute {attr} is of type labels but no number of distinct labels was provided for entity type {entity_name}"
                 )
-                nbit = self.layers[entity_name]['nlabels']
+                nbit = self.layers[entity_name]["nlabels"]
                 assert str(nbit).isnumeric(), TypeError(
                     f"The value of {entity_name}'s 'nlabels' should be an integer; got '{nbit}' instead"
                 )
@@ -680,7 +702,9 @@ class CTProcessor:
                     elif int(nbit) > 2147483647:
                         inttype = "int8"
                     elif int(nbit) > 9223372036854775807:
-                        raise ValueError(f"Cannot accommodate more than 9223372036854775807 distinct labels")
+                        raise ValueError(
+                            f"Cannot accommodate more than 9223372036854775807 distinct labels"
+                        )
                     label_lookup_table = Table(
                         "labels",
                         [
@@ -751,6 +775,9 @@ class CTProcessor:
             )
             tables.append(ptable)
         else:
+            has_media = self.corpus_temp["meta"].get("mediaSlots")
+            if l_name == self.globals.base_map["document"] and has_media:
+                table_cols.append(Column("media", "jsonb"))
             ptable = None
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)
@@ -977,28 +1004,28 @@ class CTProcessor:
         self.globals.prep_seg_insert = f"\n\n{searchpath}\n{query}"
 
         self.globals.prep_seg_updates = []
-        for layer, props in self.corpus_temp['layer'].items():
+        for layer, props in self.corpus_temp["layer"].items():
             if layer == segname or props.get("contains") != tokname:
                 continue
             attrs = []
-            joins = []
+            joins: list[tuple[Any, ...]] = []
             for a, p in props.get("attributes", {}).items():
                 attrs.append(a)
                 if p.get("type") not in ("text", "dict"):
                     continue
-                mapping: dict[str,Any] = cast(dict[str, Any], self.globals.mapping['layer'])
-                info: dict[str,Any] = mapping.get(layer,{}).get("attributes",{}).get(a,{})
-                assert "name" in mapping and mapping.get("type") == "relation", LookupError(f"Invalid mapping for {layer}->{a}")
-                joins.append((mapping["name"],a))
+                mapping: dict[str, Any] = cast(
+                    dict[str, Any], self.globals.mapping["layer"]
+                )
+                info: dict[str, Any] = (
+                    mapping.get(layer, {}).get("attributes", {}).get(a, {})
+                )
+                assert (
+                    "name" in mapping and mapping.get("type") == "relation"
+                ), LookupError(f"Invalid mapping for {layer}->{a}")
+                joins.append((mapping["name"], a))
             update: str = (
                 # layer, attrs, seg, tok, joins
-                self.ddl.update_prep_segs(
-                    layer,
-                    attrs,
-                    segname,
-                    tokname,
-                    joins
-                )
+                self.ddl.update_prep_segs(layer, attrs, segname, tokname, joins)
             )
             self.globals.prep_seg_updates.append(update)
 

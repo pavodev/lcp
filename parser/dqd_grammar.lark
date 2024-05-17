@@ -70,7 +70,10 @@ label           : LABEL                                                         
 layer           : LAYER                                                                -> layer
 part_of         : LABEL                                                                -> part_of
 partition       : LABEL                                                                -> partition
-repetition      : REPETITION                                                           -> repetition
+repetition      : min(".."max)?                                                        -> repetition
+
+min : NUMBER_MIN
+max : NUMBER_MAX
 
 label__results  : (LABEL|LAYER)
 
@@ -104,6 +107,9 @@ FUNCTION.4            : /length|size|min|max|century|year|month|day/
 
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
+
+NUMBER_MIN : /\d+/
+NUMBER_MAX : /(\d+|\*)/
 
 OPERATOR.2       : /((not |!)?contain|<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!)/
 LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/

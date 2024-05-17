@@ -1,10 +1,8 @@
-from __future__ import annotations
-
 from typing import Any, cast
 
 from .constraint import _get_constraints, Constraints, process_set
 from .sequence import SQLSequence
-from .sequence_members import Member, Sequence
+from .sequence_members import Sequence
 from .typed import (
     QueryJSON,
     Joins,
@@ -23,10 +21,9 @@ from .utils import (
     _get_table,
     _get_mapping,
     _get_underlang,
-    _is_anchored
+    _is_anchored,
+    _parse_repetition,
 )
-
-import re
 
 COUNTER = f"""
     res0 AS (SELECT 0::int2 AS rstype,
@@ -59,7 +56,9 @@ class ResultsMaker:
         self._n = 1
         self._underlang = _get_underlang(self.lang, self.config)
         self._label_with_track: str | None = None
-        self._label_mapping: dict[str,str] = dict() # Map entities' labels to potentially internal labels
+        self._label_mapping: dict[str, str] = (
+            dict()
+        )  # Map entities' labels to potentially internal labels
 
     def add_query_entities(self, query_json: dict[str, Any]) -> None:
         """
@@ -69,22 +68,35 @@ class ResultsMaker:
         labels_so_far: set[str] = {e for e in self.r.entities}
         for obj in query:
             if "sequence" in obj:
-                dict_entities: dict[str,list] = {e: [] for e in labels_so_far}
+                dict_entities: dict[str, list] = {e: [] for e in labels_so_far}
                 set_entities: set[str] = set(e for e in labels_so_far)
                 seq: Sequence = Sequence(obj, sequence_references=dict_entities)
-                sqlseq: SQLSequence = SQLSequence(seq, self.conf, entities=set_entities, label_layer=self.r.label_layer)
+                sqlseq: SQLSequence = SQLSequence(
+                    seq,
+                    self.conf,
+                    entities=set_entities,
+                    label_layer=self.r.label_layer,
+                )
                 sqlseq.categorize_members(entities=dict_entities)
                 for t, _, _, _ in sqlseq.fixed_tokens:
-                    original_label: str = cast(str, t.obj['unit'].get("label", ""))
+                    original_label: str = cast(str, t.obj["unit"].get("label", ""))
                     if original_label:
                         self.r.entities.add(original_label)
                         self._label_mapping[original_label] = t.internal_label
                         if original_label in self.r.label_layer:
-                            self.r.label_layer[t.internal_label] = self.r.label_layer[original_label]
+                            self.r.label_layer[t.internal_label] = self.r.label_layer[
+                                original_label
+                            ]
                 self.r.sqlsequences.append(sqlseq)
-                labels_so_far = labels_so_far.union({x for x in sqlseq._sequence_references})
-                labels_so_far = labels_so_far.union({x for x in sqlseq._internal_references})
-                labels_so_far = labels_so_far.union({x for x in sqlseq._internal_references.values()})
+                labels_so_far = labels_so_far.union(
+                    {x for x in sqlseq._sequence_references}
+                )
+                labels_so_far = labels_so_far.union(
+                    {x for x in sqlseq._internal_references}
+                )
+                labels_so_far = labels_so_far.union(
+                    {x for x in sqlseq._internal_references.values()}
+                )
 
             elif "logicalOpNAry" in obj:
                 coord = obj["logicalOpNAry"]
@@ -92,9 +104,9 @@ class ResultsMaker:
                     self.add_query_entities(arg)
             elif "unit" in obj:
                 unit = obj["unit"]
-                if cast(str, unit.get("layer", "")).lower() == self.token.lower() and cast(
-                    str, unit.get("label", "")
-                ):
+                if cast(
+                    str, unit.get("layer", "")
+                ).lower() == self.token.lower() and cast(str, unit.get("label", "")):
                     lab: str = unit["label"].lower()
                     self.r.entities.add(lab)
                     self._label_mapping[lab] = lab
@@ -146,18 +158,20 @@ class ResultsMaker:
         legal_refs = set()
         for obj in self.query_json.get("query", []):
             if "unit" in obj:
-                legal_refs.add(cast(dict,obj['unit']).get("label",""))
+                legal_refs.add(cast(dict, obj["unit"]).get("label", ""))
             elif "sequence" in obj:
-                sequence: dict[str,Any] = cast(dict[str,Any], obj['sequence'])
-                if "repetition" in sequence and sequence['repetition'] != "1..1":
+                sequence: dict[str, Any] = cast(dict[str, Any], obj["sequence"])
+                if "repetition" in sequence and _parse_repetition(
+                    sequence.get("repetition", "1")
+                ) != (1, 1):
                     continue
                 legal_refs.add(sequence.get("label", ""))
                 members = sequence.get("members", [])
                 for m in members:
                     if "unit" in m:
-                        legal_refs.add(m['unit'].get("label",""))
+                        legal_refs.add(m["unit"].get("label", ""))
             elif "set" in obj:
-                legal_refs.add(cast(dict,obj['set']).get("label", ""))
+                legal_refs.add(cast(dict, obj["set"]).get("label", ""))
                 continue
 
         for result in results:
@@ -165,7 +179,9 @@ class ResultsMaker:
                 plain = cast(JSONObject, result["resultsPlain"])
                 ents = cast(list[str], plain["entities"])
                 for e in ents:
-                    assert e in legal_refs, ReferenceError(f"Label {e} cannot be referenced (is not declared or scope-bound)")
+                    assert e in legal_refs, ReferenceError(
+                        f"Label {e} cannot be referenced (is not declared or scope-bound)"
+                    )
                     self.r.entities.add(e)
                     lay, met = self.r.label_layer.get(e, (None, None))
                     if lay is None and met is None:
@@ -177,7 +193,9 @@ class ResultsMaker:
             elif "resultsCollocation" in cast(JSONObject, result):
                 coll = cast(JSONObject, result["resultsCollocation"])
                 if c := coll.get("center"):
-                    assert c in legal_refs, ReferenceError(f"Label {c} cannot be referenced (is not declared or scope-bound)")
+                    assert c in legal_refs, ReferenceError(
+                        f"Label {c} cannot be referenced (is not declared or scope-bound)"
+                    )
                     self.r.entities.add(cast(str, c).lower())
                 # for s in cast(list[str], coll.get("space", [])):
                 #    self.r.entities.add(s)
@@ -185,8 +203,10 @@ class ResultsMaker:
                 stat = cast(JSONObject, result["resultsAnalysis"])
                 attr = cast(list[str], stat.get("attributes", []))
                 for a in attr:
-                    lab: str = a.split(".",1)[0].lower()
-                    assert lab in legal_refs, ReferenceError(f"Label {lab} cannot be referenced (is not declared or scope-bound)")
+                    lab: str = a.split(".", 1)[0].lower()
+                    assert lab in legal_refs, ReferenceError(
+                        f"Label {lab} cannot be referenced (is not declared or scope-bound)"
+                    )
                     self.r.entities.add(lab)
 
         kind: str
@@ -198,7 +218,10 @@ class ResultsMaker:
             # varname = cast(str, r.get("label", f"untitled_{i}"))
             varname = cast(str, result.get("label", f"untitled_{i}"))
             if kind == "resultsPlain":
-                context = cast(str, next((x for x in cast(list[str],r.get("context", ["s"]))), "s")) # list in case of parallel corpus
+                context = cast(
+                    str,
+                    next((x for x in cast(list[str], r.get("context", ["s"]))), "s"),
+                )  # list in case of parallel corpus
                 # todo: handle 1+ contexts in case of parallel corpus queries
                 enti = cast(list[str], r.get("entities", []))
                 made, meta = self._kwic(i, varname, context, enti)
@@ -240,7 +263,7 @@ class ResultsMaker:
                 raise ValueError(f"center cannot be set ({center})")
             else:
                 # is this use of _id correct? is feat correct?
-                idx = "_id" # if need_id else "" # always append id here
+                idx = "_id"  # if need_id else "" # always append id here
                 formed = f"{center}.{self.token}{idx} as {center}"
                 self.r.selects.add(formed.lower())
                 self.r.entities.add(center)
@@ -281,7 +304,7 @@ class ResultsMaker:
         """
         lay: str
         lay, _ = self.r.label_layer[context]
-        first_class: dict[str,str] = cast(dict[str,str], self.config["firstClass"])
+        first_class: dict[str, str] = cast(dict[str, str], self.config["firstClass"])
         keys = {first_class[f].lower() for f in {"token", "segment", "document"}}
         err = f"Context not allowed: {lay.lower()} not in {keys}"
         assert lay.lower() in keys, err
@@ -299,13 +322,13 @@ class ResultsMaker:
         lay: str
         rest: dict[str, Any]
         lay, rest = self.r.label_layer[ent]
-        
+
         # sets are simple: just return their name
         if rest.get("_is_set"):
             entities_involved.append(ent)
             attribs.append({"name": ent, "type": "set", "multiple": True})
             return entities_involved, attribs
-        
+
         # the user might have passed a sequence ...
         members = cast(list, rest.get("members", []))
         # if it is not a sequence or a set:
@@ -327,7 +350,8 @@ class ResultsMaker:
             details["type"] = "group"
 
         for i, mem in enumerate(members):
-            if "unit" not in mem: continue
+            if "unit" not in mem:
+                continue
             label = cast(str, mem["unit"].get("label", ""))
             if not label:
                 # If the token has no label then we don't need to fetch it?
@@ -371,10 +395,16 @@ class ResultsMaker:
             layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
             table = _get_table(layer, self.config, self.batch, self.lang)
             is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
-            conf_layer_info: dict[str,Any] = cast(dict[str,Any], self.conf_layer[layer])
+            conf_layer_info: dict[str, Any] = cast(
+                dict[str, Any], self.conf_layer[layer]
+            )
             attrs = conf_layer_info["attributes"]
-            mapping: dict[str,Any] = _get_mapping(layer, self.config, self.batch, self.lang)
-            attrib_table = mapping.get("attributes", {}).get(field,{}).get("name",field)
+            mapping: dict[str, Any] = _get_mapping(
+                layer, self.config, self.batch, self.lang
+            )
+            attrib_table = (
+                mapping.get("attributes", {}).get(field, {}).get("name", field)
+            )
             if is_meta:
                 line = f"{shortest}.meta ->> '{field}' AS {lab}"
                 self.r.selects.add(line)
@@ -388,7 +418,7 @@ class ResultsMaker:
             else:
                 line = f"{shortest}.{attrib_table} AS {lab}"
                 self.r.selects.add(line)
-            self.r.joins[ f"{self.schema}.{table} {shortest}".lower() ] = True
+            self.r.joins[f"{self.schema}.{table} {shortest}".lower()] = True
             self.r.entities.add(lab)
 
         functions = cast(list[str], result["functions"])
@@ -452,13 +482,15 @@ class ResultsMaker:
 
         for e in ents:
             entities_list, attributes = self._process_entity(e)
-            conf_layer_info: dict[str,Any] = cast(dict[str,Any], self.conf_layer.get(lay, {}))
+            conf_layer_info: dict[str, Any] = cast(
+                dict[str, Any], self.conf_layer.get(lay, {})
+            )
             if (
                 isinstance(attributes, list)
                 and isinstance(attributes[0], dict)
                 and attributes[0].get("type", "") in ("group", "sequence")
             ):
-                entout += [cast(dict,attributes[0]).get("name","")]
+                entout += [cast(dict, attributes[0]).get("name", "")]
                 # entout += [f"ARRAY[{', '.join(entities_list)}]"]
             elif conf_layer_info.get("contains", "").lower() == self.token.lower():
                 select = """(SELECT array_agg(contained_token.{token_lay}_id)
@@ -468,7 +500,7 @@ WHERE {entity}.char_range && contained_token.char_range
                     schema=self.schema,
                     token_lay=self.token.lower(),
                     token_table=self.batch,
-                    entity=e
+                    entity=e,
                 )
                 container_lab = f"{e}_container"
                 self.r.selects.add(select)
@@ -487,8 +519,8 @@ WHERE {entity}.char_range && contained_token.char_range
         any_frame_range: str = ""
 
         # if self.vian:
-        if _is_anchored(self.config, context_layer, 'time'):
-            lab = context # TODO: accommodate corpora using FTS
+        if _is_anchored(self.config, context_layer, "time"):
+            lab = context  # TODO: accommodate corpora using FTS
             out_name = f"{lab}_frame_range"
             if not any_frame_range:
                 any_frame_range = out_name
@@ -659,7 +691,7 @@ WHERE {entity}.char_range && contained_token.char_range
 
         out: list[dict]
 
-        if not _is_anchored(self.config, context_layer, 'time'):
+        if not _is_anchored(self.config, context_layer, "time"):
             out = [
                 {
                     "name": "identifier",
@@ -713,11 +745,11 @@ WHERE {entity}.char_range && contained_token.char_range
         out: list[dict[str, Any]] = []
         wheres: set[str] = set()
 
-        comp: dict[str, dict] = cast(dict[str,dict], filt)
+        comp: dict[str, dict] = cast(dict[str, dict], filt)
         for k, v in comp.items():
             if k != "comparison":
                 raise NotImplementedError("todo")
-            if v.get('entity','').lower() == "frequency":
+            if v.get("entity", "").lower() == "frequency":
                 out.append({k: v})
             else:
                 # This needs to be revised (use Constraint from .constraints instead?)
@@ -819,7 +851,7 @@ WHERE {entity}.char_range && contained_token.char_range
             n=self._n,
             label_layer=self.r.label_layer,
             entities=self.r.entities,
-            part_of=cast(str|None, rest.get("partOf", None)),
+            part_of=cast(str | None, rest.get("partOf", None)),
             set_objects=self.r.set_objects,
             allow_any=True,
         )
@@ -864,14 +896,14 @@ WHERE {entity}.char_range && contained_token.char_range
         fields: set[str] = set()
         att: str
         data: dict[str, str | bool | dict[str, JSONObject]]
-        config: dict[str,Any] = cast(dict[str,Any], self.config)
-        layers_config: dict[str,Any] = config["layer"]
-        token_info: dict[str,Any] = cast(dict[str,Any], layers_config[self.token])
+        config: dict[str, Any] = cast(dict[str, Any], self.config)
+        layers_config: dict[str, Any] = config["layer"]
+        token_info: dict[str, Any] = cast(dict[str, Any], layers_config[self.token])
         for att, data in token_info["attributes"].items():
             field = att
             if att == feature:
                 continue
-            if data["type"] in ("text","dict"):
+            if data["type"] in ("text", "dict"):
                 field = field + "_id"
             fields.add(field)
         if self.lang:
@@ -883,7 +915,7 @@ WHERE {entity}.char_range && contained_token.char_range
                     field = att
                     if att == feature:
                         continue
-                    if data["type"] in ("text","jsonb"):
+                    if data["type"] in ("text", "jsonb"):
                         field = field + "_id"
                     fields.add(field)
 
@@ -945,7 +977,7 @@ WHERE {entity}.char_range && contained_token.char_range
         assert isinstance(attribs, dict)
         att_feat = cast(JSONObject, cast(JSONObject, attribs)[feat])
         is_text = cast(str, att_feat.get("type", "")) == "text"
-        
+
         need_id = feat in attribs and is_text
         feat_maybe_id = f"{feat}_id" if need_id and not feat.endswith("_id") else feat
         space_feat, lany, rbrack = "", "", ""
@@ -959,13 +991,13 @@ WHERE {entity}.char_range && contained_token.char_range
 
         null_fields = self._other_fields(feat, freq_table)
         feat_tab: str = feat
-        config: dict[str,dict] = cast(dict[str,dict], self.config)
-        mapping: dict[str,Any] = config["mapping"]["layer"].get(self.token,{})
+        config: dict[str, dict] = cast(dict[str, dict], self.config)
+        mapping: dict[str, Any] = config["mapping"]["layer"].get(self.token, {})
         if mapping:
-            attributes: dict[str,Any] = mapping.get("attributes", {})
+            attributes: dict[str, Any] = mapping.get("attributes", {})
             if self.lang and (partitions := mapping.get("partitions")):
-                attributes = partitions.get(self.lang,{}).get("attributes",{})
-            feat_tab = attributes.get(feat,{}).get("name",feat)
+                attributes = partitions.get(self.lang, {}).get("attributes", {})
+            feat_tab = attributes.get(feat, {}).get("name", feat)
         # feat_tab = f"{feat}{self._underlang}"
         within_sent = self._within_sent(segment_id)
 

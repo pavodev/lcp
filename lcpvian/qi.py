@@ -441,7 +441,7 @@ class QueryIteration:
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
-        joins = set()
+        joins: dict[str,Any] = {}
         group_by = []
         for layer in parents_with_attributes:
             alias = layer
@@ -478,7 +478,7 @@ class QueryIteration:
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
             group_by.append(f"{layer}_id")
-            joins_later = set()
+            joins_later: dict[str,Any] = {}
             for attr, v in attributes.items():
                 if v.get("type") == "vector":
                     continue # Don't include vectors
@@ -491,16 +491,16 @@ class QueryIteration:
                     if v.get("type") == "labels":
                         nbit: int = int(cast(str, config["layer"][layer].get("nlabels","1")))
                         # Join the lookup table
-                        joins_later.add(
+                        joins_later[
                             f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
-                        )
+                        ] = None
                         # Select the attribute from the lookup table
                         selects.append(f'array_agg({attr_table}.label) AS {layer}_{attr}')
                     else:
                         # Join the lookup table
-                        joins_later.add(
+                        joins_later[
                             f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
-                        )
+                        ] = None
                         # Select the attribute from the lookup table
                         selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
                         group_by.append(f"{layer}_{attr}")
@@ -519,23 +519,24 @@ class QueryIteration:
                     continue
                 if alignment and relation:
                     # The partition table is aligned to a main document table
-                    joins.add(
+                    joins[
                         f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
-                    )
-                    joins.add(
+                    ] = None
+                    joins[
                         f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
-                    )
+                    ] = None
                     char_range_table = f"{alias}_{lang}"
                 else:
                     # This is the main document table for this partition
-                    joins.add(
+                    joins[
                         f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range"
-                    )
+                    ] = None
             elif relation:
-                joins.add(
+                joins[
                     f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
-                )
-            joins = joins.union(joins_later)
+                ] = None
+            for k in joins_later:
+                joins[k] = None
             # Get char_range from the main table
             selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
             group_by.append(f"{layer}_char_range")

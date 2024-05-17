@@ -121,7 +121,7 @@
                     "$ref": "#/$defs/label"
                 },
                 "repetition": {
-                    "type": "string",
+                    "type": "object",
                     "$ref": "#/$defs/repetition"
                 },
                 "members": {
@@ -918,8 +918,27 @@
             "pattern": "[a-z][a-zA-Z0-9_]*"
         },
         "repetition": {
+            "properties": {
+                "min": {
+                    "type": "string",
+                    "$ref": "#/$defs/min"
+                },
+                "max": {
+                    "type": "string",
+                    "$ref": "#/$defs/max"
+                }
+            },
+            "required": [
+                "min"
+            ]
+        },
+        "min": {
             "type": "string",
-            "pattern": "(\\d+\\.\\.(\\d+|\\*)|[1-9]+\\d*)"
+            "pattern": "\\d+"
+        },
+        "max": {
+            "type": "string",
+            "pattern": "(\\d+|\\*)"
         },
         "label__results": {
             "oneOf": [

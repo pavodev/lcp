@@ -7,6 +7,8 @@ status information about the current task
 import json
 import os
 import re
+
+# import shutil
 import traceback
 
 from datetime import datetime, timedelta
@@ -24,12 +26,13 @@ from .utils import (
     _lama_check_api_key,
     _lama_project_create,
     _lama_user_details,
-    ensure_authorised
+    ensure_authorised,
 )
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
+MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
 
 
 async def _create_status_check(request: web.Request, job_id: str) -> web.Response:
@@ -53,12 +56,13 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
             msg += f": {res.exc_string}"
     elif status == "finished":
         msg = f"""Template validated successfully"""
+    kwargs: dict = cast(dict, job.kwargs)
     ret = {
         "job": job.id,
         "status": status,
         "info": msg,
-        "project": job.kwargs["project"],
-        "project_name": job.kwargs["project_name"],
+        "project": kwargs["project"],
+        "project_name": kwargs["project_name"],
         "target": whole_url,
     }
     return web.json_response(ret)
@@ -185,11 +189,12 @@ async def upload(request: web.Request) -> web.Response:
     is_vian = request.rel_url.query.get("vian", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
-    project_id = job.kwargs["project"]
-    username = job.kwargs["user"]
-    room = job.kwargs["room"]
-    project_name = job.kwargs["project_name"]
-    cpath = job.kwargs["path"]
+    kwargs: dict = cast(dict, job.kwargs)
+    project_id = kwargs["project"]
+    username = kwargs["user"]
+    room = kwargs["room"]
+    project_name = kwargs["project_name"]
+    cpath = kwargs["path"]
 
     ziptar = [
         (".zip", is_zipfile, ZipFile, "namelist"),
@@ -211,7 +216,9 @@ async def upload(request: web.Request) -> web.Response:
     async for bit in data:
         if not isinstance(bit.filename, str):
             continue
-        if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
+        if not bit.filename.endswith(
+            VALID_EXTENSIONS + COMPRESSED_EXTENTIONS + MEDIA_EXTENSIONS
+        ):
             continue
         ext = os.path.splitext(bit.filename)[-1]
         path = os.path.join("uploads", cpath, bit.filename)
@@ -227,6 +234,22 @@ async def upload(request: web.Request) -> web.Response:
                 fp = os.path.basename(path)
                 ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
                 return web.json_response(ret)
+
+    if request.rel_url.query.get("media"):
+        ret = {
+            "status": "finished",
+            "job": job.id,
+            "project": str(project_id),
+            "project_name": project_name,
+        }
+        try:
+            corpus_dir = os.path.split(cpath)[-1]
+            _move_media_files(cpath, corpus_dir)
+            # shutil.rmtree(cpath)  # todo: should we do this?
+        except:
+            ret["status"] = "failed"
+            ret["error"] = "Something went wrong with uploading the media files"
+        return web.json_response(ret)
 
     _ensure_partitioned0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
@@ -265,6 +288,9 @@ async def _save_file(path: str, bit: BodyPartReader, has_file: bool) -> bool:
     """
     Helper to save file sent by FE to server
     """
+    dirname = os.path.dirname(path)
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
     with open(path, "ba") as f:
         while True:
             chunk = await bit.read_chunk()
@@ -300,6 +326,25 @@ def _extract_file(
     print(f"Extracting {ext} done!")
     os.remove(path)  # todo: should we do this now?
     print(f"Deleted: {path}")
+
+
+def _move_media_files(cpath: str, corpus_dir: str) -> None:
+    print("Moving media files")
+    media_path = os.path.join("frontend", "public", "media")
+    if not os.path.exists(media_path):
+        os.mkdir(media_path)
+    dest_path = os.path.join(media_path, corpus_dir)
+    if not os.path.exists(dest_path):
+        os.mkdir(dest_path)
+    source_path = os.path.join("uploads", cpath)
+    for f in os.listdir(source_path):
+        print("File in cpath", f)
+        if not str(f).endswith(MEDIA_EXTENSIONS):
+            continue
+        basename = os.path.basename(f)
+        os.rename(
+            os.path.join(source_path, basename), os.path.join(dest_path, basename)
+        )
 
 
 @ensure_authorised
@@ -352,7 +397,7 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        uacc: dict[str,Any] = cast(dict[str,Any], user_acc["account"])
+        uacc: dict[str, Any] = cast(dict[str, Any], user_acc["account"])
         uname: str = cast(str, uacc["displayName"])
         profile: dict[str, str] = {
             "title": f"{uname}: private group",
