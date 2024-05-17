@@ -151,7 +151,7 @@ async def _db_query(
 
     params = params or {}
 
-    if job and job.kwargs.get("refresh_config", None):
+    if job and cast(dict, job.kwargs).get("refresh_config", None):
         await refresh_config()
 
     async with getattr(pool, method)() as conn:
@@ -215,7 +215,8 @@ async def _swissdox_export(
             elif type in ("text", "string", "vector"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
-                docs_by_range[c.lower] = (c.upper, id)
+                lower, upper = (int(c.lower or 0), int(c.upper or 0))
+                docs_by_range[lower] = (upper, id)
                 c = str(c)
             formed_row.append(c)
         formed_row.append(str(id))
