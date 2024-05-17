@@ -65,6 +65,8 @@ async def _upload_data(
         await importer.cleanup()
     finally:
         shutil.rmtree(corpus)  # todo: should we do this?
+    if not row:
+        raise RuntimeError(msg)
     return row
 
 
@@ -103,7 +105,7 @@ async def _create_schema(
 
 async def _db_query(
     query: str,
-    params: DBQueryParams = None,
+    params: DBQueryParams = {},
     config: bool = False,
     store: bool = False,
     document: bool = False,
