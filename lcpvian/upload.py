@@ -246,9 +246,9 @@ async def upload(request: web.Request) -> web.Response:
             corpus_dir = os.path.split(cpath)[-1]
             _move_media_files(cpath, corpus_dir)
             # shutil.rmtree(cpath)  # todo: should we do this?
-        except:
+        except Exception as err:
             ret["status"] = "failed"
-            ret["error"] = "Something went wrong with uploading the media files"
+            ret["error"] = f"Something went wrong with uploading the media files: {err}"
         return web.json_response(ret)
 
     _ensure_partitioned0(os.path.join("uploads", cpath))
@@ -330,7 +330,9 @@ def _extract_file(
 
 def _move_media_files(cpath: str, corpus_dir: str) -> None:
     print("Moving media files")
-    media_path = os.path.join("frontend", "public", "media")
+    media_path = os.environ.get(
+        "UPLOAD_MEDIA_PATH", os.path.join("frontend", "public", "media")
+    )
     if not os.path.exists(media_path):
         os.mkdir(media_path)
     dest_path = os.path.join(media_path, corpus_dir)
