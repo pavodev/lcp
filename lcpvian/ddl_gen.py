@@ -518,13 +518,16 @@ class Type(DDL):
 
 
 class CTProcessor:
-    def __init__(self, corpus_template: dict[str, Any], glos: Globs) -> None:
+    def __init__(
+        self, corpus_template: dict[str, Any], glos: Globs, corpus_version: int = 1
+    ) -> None:
         self.corpus_temp = corpus_template
         self.schema_name = corpus_template.get("schema_name", "testcorpus")
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.global_attributes = corpus_template.get("globalAttributes", {})
         self.globals = glos
         self.ddl = DDL()
+        self.corpus_version = corpus_version
 
     @staticmethod
     def _order_ct_layers(
@@ -888,9 +891,10 @@ class CTProcessor:
     def process_schema(self) -> str:
         corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
         corpus_name = re.sub(r"_+", "_", corpus_name)
-        corpus_version = str(int(self.corpus_temp["meta"]["version"]))
-        corpus_version = re.sub(r"\W", "_", corpus_version.lower())
-        corpus_version = re.sub(r"_+", "_", corpus_version)
+        # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
+        # corpus_version = re.sub(r"\W", "_", corpus_version.lower())
+        # corpus_version = re.sub(r"_+", "_", corpus_version)
+        corpus_version = str(self.corpus_version)
         schema_name: str = self.schema_name
 
         scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
@@ -1039,12 +1043,12 @@ class CTProcessor:
 
 
 def generate_ddl(
-    corpus_temp: dict[str, Any]
+    corpus_temp: dict[str, Any], corpus_version: int = 1
 ) -> dict[str, str | list[str] | dict[str, int]]:
     globs = Globs()
     globs.base_map = corpus_temp["firstClass"]
 
-    processor = CTProcessor(corpus_temp, globs)
+    processor = CTProcessor(corpus_temp, globs, corpus_version)
 
     schema_name = processor.process_schema()
     processor.process_layers()

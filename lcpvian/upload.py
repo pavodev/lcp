@@ -26,6 +26,7 @@ from .utils import (
     _lama_check_api_key,
     _lama_project_create,
     _lama_user_details,
+    _sanitize_corpus_name,
     ensure_authorised,
 )
 
@@ -434,10 +435,8 @@ async def make_schema(request: web.Request) -> web.Response:
 
     proj_id = cast(str, existing_project["id"])
 
-    corpus_name = template["meta"]["name"]
-    corpus_version = template["meta"]["version"]
-    corpus_name = re.sub(r"\W", "_", template["meta"]["name"].lower())
-    corpus_name = re.sub(r"_+", "_", corpus_name)
+    corpus_name = _sanitize_corpus_name(template["meta"]["name"])
+    # corpus_version = template["meta"]["version"]
     # below we add a random suffix to the corpus name.
     # suffix of the name has 1/65536 chance of collision,
     # which is on the borderline of being too high in prod.
@@ -446,30 +445,36 @@ async def make_schema(request: web.Request) -> web.Response:
 
     #  suffix = corpus_folder.split("-", 2)[1]
     suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
-    version_n = re.sub(r"[^0-9]", "", str(corpus_version))
+    # version_n = re.sub(r"[^0-9]", "", str(corpus_version))
 
-    schema_name = f"{corpus_name}__{suffix}_{version_n}"
+    # schema_name = f"{corpus_name}__{suffix}_{version_n}"
 
     sames = [
-        i["schema_name"]
+        i
         for i in request.app["config"].values()
-        if "meta" in i
-        and "schema_name" in i
-        and i["meta"]["name"] == corpus_name
-        and str(i["meta"]["version"]) == str(corpus_version)
+        if "meta" in i and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        # and str(i["meta"]["version"]) == str(corpus_version)
     ]
-    drops = [f"DROP SCHEMA IF EXISTS {i} CASCADE;" for i in set(sames)]
+    drops = [
+        f"DROP SCHEMA IF EXISTS {i} CASCADE;"
+        for i in set(x["schema_name"] for x in sames if "schema_name" in x)
+    ]
+
+    corpus_version = (max(int(x["current_version"]) for x in sames) if sames else 0) + 1
+    schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
+    template["meta"] = template.get("meta", {})
+    template["meta"]["version"] = corpus_version
 
     # todo: is this the right approach?
     cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
-    delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version = {cv};"
+    delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version < {cv};"
     drops.append(delete)
 
     template["projects"] = [proj_id]
     template["schema_name"] = schema_name
 
     try:
-        pieces = generate_ddl(template)
+        pieces = generate_ddl(template, corpus_version)
         pieces["template"] = template
     except Exception as err:
         tb = traceback.format_exc()

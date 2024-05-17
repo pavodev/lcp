@@ -769,6 +769,12 @@ def _get_associated_query_job(
     return depended
 
 
+def _sanitize_corpus_name(corpus_name: str) -> str:
+    cn = re.sub(r"\W", "_", corpus_name)
+    cn = re.sub(r"_+", "_", cn)
+    return cn
+
+
 def format_query_params(
     query: str, params: dict[str, int | str]
 ) -> tuple[str, tuple[int | str, ...]]:
