@@ -452,7 +452,9 @@ async def make_schema(request: web.Request) -> web.Response:
     sames = [
         i
         for i in request.app["config"].values()
-        if "meta" in i and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        if "meta" in i
+        and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        and proj_id in i.get("projects", [])  # only corpora from the same project
         # and str(i["meta"]["version"]) == str(corpus_version)
     ]
     drops = [

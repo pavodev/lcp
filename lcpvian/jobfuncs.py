@@ -231,13 +231,6 @@ async def _swissdox_export(
     if "partitions" in segment_mapping and underlang:
         segment_mapping = segment_mapping["partitions"][underlang[1:]]
     column_headers = segment_mapping.get("prepared", {}).get("columnHeaders", [])
-    # tok_columns: list[str] = ["segment_id"]
-    # if "partitions" in segment_mapping and underlang:
-    #     tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
-    #         "columnHeaders"
-    #     ]
-    # else:
-    #     tok_columns += segment_mapping["prepared"]["columnHeaders"]
     tok_columns = [
         "form",
         "lemma",
@@ -282,7 +275,6 @@ async def _swissdox_export(
             tok_rows.append(row)
             n_tok += 1
     tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
-    # tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
 
     # Named entities to docs
     ne_to_id: dict[tuple[str, str], str] = {}  # map (form,type) to ne_id
@@ -311,7 +303,6 @@ async def _swissdox_export(
         ne_indices.append(ne_id)
         ne_rows.append([form, typ, ne_id])
     ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_columns)
-    # ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
 
     ne_doc_columns: list[str] = ["doc_id", "ne_id", "freq"]
     ne_doc_indices = []
@@ -325,7 +316,11 @@ async def _swissdox_export(
     ne_document_pandas = pandas.DataFrame(
         data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns
     )
-    # ne_document_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+
+    assert all(
+        isinstance(x, pandas.DataFrame)
+        for x in (tok_pandas, ne_pandas, ne_document_pandas)
+    )
 
     # # Zip file
     # with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:
