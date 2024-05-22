@@ -151,6 +151,7 @@ class Importer:
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
+        self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
     def update_progress(self, msg: str) -> None:
@@ -505,8 +506,8 @@ class Importer:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
-        if self.debug:
-            await self.drop_similar()
+        # if self.debug:
+        #     await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"
@@ -521,4 +522,10 @@ class Importer:
         await self.collocations()
         # run the config glob_attr
         main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
+        # pipeline is over: drop
+        if self.drops:
+            # msg = f"Attempting schema drop (create) * {len(drops)-1}"
+            drop_script = "\n".join(self.drops)
+            print("Dropping existing previous schemata:", drop_script)
+            await self.run_script(drop_script)
         return main_corp

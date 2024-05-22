@@ -1063,8 +1063,8 @@ def generate_ddl(
             globs.mapping["layer"].pop(layer)
 
     create_schema = "\n\n".join([x for x in globs.schema])
-    create_types = "\n\n".join([x.create_DDL() for x in sorted(globs.types)])
-    create_tbls = "\n\n".join([x.create_tbl() for x in sorted(globs.tables)])
+    create_types = "\n\n".join([x.create_DDL() for x in sorted(t for t in globs.types)])
+    create_tbls = "\n\n".join([x.create_tbl() for x in sorted(t for t in globs.tables)])
 
     create = "\n".join([create_schema, create_types, create_tbls])
 
@@ -1094,7 +1094,7 @@ def generate_ddl(
         globs.batchnames,
         globs.mapping,
         globs.perms,
-        refs,
+        refs
     ).asdict()
 
 

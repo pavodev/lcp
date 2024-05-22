@@ -492,6 +492,7 @@ async def make_schema(request: web.Request) -> web.Response:
     directory = os.path.join("uploads", corpus_path)
     os.makedirs(directory)
 
+    pieces["drops"] = drops
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 

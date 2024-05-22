@@ -89,9 +89,10 @@ async def _create_schema(
         con = raw._connection
         async with con.transaction():
             try:
-                if drops:
-                    msg = f"Attempting schema drop (create) * {len(drops)-1}"
-                    create = "\n".join(drops) + "\n" + create
+                # Move this to the end of a successful upload pipeline instead
+                # if drops:
+                #     msg = f"Attempting schema drop (create) * {len(drops)-1}"
+                #     create = "\n".join(drops) + "\n" + create
                 print("Creating schema...\n", create)
                 await con.execute(create)
             except Exception:
