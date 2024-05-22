@@ -490,14 +490,15 @@ async def gather(
     except BaseException as err:
         print(f"Error while gathering tasks: {str(err)[:1000]}. Cancelling others...")
         running_tasks = asyncio.all_tasks()
-        current = asyncio.current_task()
-        if current is not None:
-            try:
-                current.cancel()
-            except Exception:
-                pass
-            name = current.get_name()
-            running_tasks.remove(current)
+        # Commenting this out for now, otherwise importer.cleanup won't run from the exception catcher
+        # current = asyncio.current_task()
+        # if current is not None:
+        #     try:
+        #         current.cancel()
+        #     except Exception:
+        #         pass
+        #     name = current.get_name()
+        #     running_tasks.remove(current)
         for task in running_tasks:
             if name is not None and task.get_name() == name:
                 task.cancel()
