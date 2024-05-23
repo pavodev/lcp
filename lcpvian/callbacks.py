@@ -302,7 +302,7 @@ def _query(
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "total_results_so_far": total_found,
-            "action": "background_job_progress"
+            "action": "background_job_progress",
         }
 
     job.meta["payload"] = jso
@@ -336,7 +336,9 @@ def _meta(
     cb: Batch = depended.kwargs["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
-    full = cast(bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False))))
+    full = cast(
+        bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False)))
+    )
     status = depended.meta["_status"]
 
     to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
@@ -437,7 +439,7 @@ def _sentences(
             full,
         )
 
-    for sent in (result or []):
+    for sent in result or []:
         if len(sent) < 4:
             continue
         if not sent[3]:
@@ -544,7 +546,11 @@ def _document(
         result = result[0]
 
     if job.kwargs["corpus"] == 59:
-        tmp_result: dict[str, dict] = {"structure": {}, "layers": {}, "global_attributes": {}}
+        tmp_result: dict[str, dict] = {
+            "structure": {},
+            "layers": {},
+            "global_attributes": {},
+        }
         for row in result:
             typ, key, props = cast(list, row)
             if typ == "layer":
@@ -590,14 +596,15 @@ def _document_ids(
     msg_id = str(uuid4())
     formatted = {
         str(idx): {
-            'name': name,
-            'media': media,
-            'frame_range': (
-                [frame_range.lower, frame_range.upper] if frame_range
-                else [0,0]
-            )
+            "name": name,
+            "media": media,
+            "frame_range": (
+                [frame_range.lower, frame_range.upper] if frame_range else [0, 0]
+            ),
         }
-        for idx, name, media, frame_range in cast(list[tuple[int, str, dict, Any]], result)
+        for idx, name, media, frame_range in cast(
+            list[tuple[int, str, dict, Any]], result
+        )
     }
     action = "document_ids"
     jso = {
@@ -821,7 +828,12 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
-    if job.dependency and job.args and isinstance(job.args[0],str) and os.path.exists(job.args[0]):
+    if (
+        job.dependency
+        and job.args
+        and isinstance(job.args[0], str)
+        and os.path.exists(job.args[0])
+    ):
         user = job.dependency.kwargs.get("user")
         room = job.dependency.kwargs.get("room")
         if user and room and job.kwargs.get("download", False):
@@ -831,7 +843,7 @@ def _export_complete(
                 "room": room,
                 "action": "export_link",
                 "msg_id": msg_id,
-                "fn": os.path.basename(job.args[0])
+                "fn": os.path.basename(job.args[0]),
             }
             _publish_msg(connection, jso, msg_id)
     return None

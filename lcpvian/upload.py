@@ -452,7 +452,9 @@ async def make_schema(request: web.Request) -> web.Response:
     sames = [
         i
         for i in request.app["config"].values()
-        if "meta" in i and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        if "meta" in i
+        and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        and proj_id in i.get("projects", [])  # only corpora from the same project
         # and str(i["meta"]["version"]) == str(corpus_version)
     ]
     drops = [
@@ -466,9 +468,14 @@ async def make_schema(request: web.Request) -> web.Response:
     template["meta"]["version"] = corpus_version
 
     # todo: is this the right approach?
-    cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
-    delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version < {cv};"
-    drops.append(delete)
+    # cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
+    # delete = f"DELETE FROM main.corpus WHERE name = '{template['meta']['name']}' AND current_version < {cv};"
+    # drops.append(delete)
+    deletes = [
+        f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
+        for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
+    ]
+    drops += deletes
 
     template["projects"] = [proj_id]
     template["schema_name"] = schema_name
@@ -490,6 +497,7 @@ async def make_schema(request: web.Request) -> web.Response:
     directory = os.path.join("uploads", corpus_path)
     os.makedirs(directory)
 
+    pieces["drops"] = drops
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 
