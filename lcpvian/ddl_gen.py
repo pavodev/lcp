@@ -805,8 +805,14 @@ class CTProcessor:
         table_cols: list[Column] = []
         types: list[Type] = []
 
-        source_col = self._get_relation_col(l_params["attributes"].pop("source"))
-        target_col = self._get_relation_col(l_params["attributes"].pop("target"))
+        assert "source" in l_params["attributes"], ReferenceError(
+            f"The attributes of '{l_name}' must include 'source'"
+        )
+        assert "target" in l_params["attributes"], ReferenceError(
+            f"The attributes of '{l_name}' must include 'target'"
+        )
+        source_col = self._get_relation_col(l_params["attributes"]["source"])
+        target_col = self._get_relation_col(l_params["attributes"]["target"])
 
         if not source_col and target_col:
             raise Exception
@@ -814,8 +820,13 @@ class CTProcessor:
         table_cols.append(source_col)
         table_cols.append(target_col)
 
+        attributes_to_process = {
+            k: v
+            for k, v in l_params.get("attributes", {}).items()
+            if k not in ("source", "target")
+        }
         tables, table_cols = self._process_attributes(
-            l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
+            attributes_to_process.items(), tables, table_cols, types, l_name
         )
 
         table = Table(table_name, table_cols)
@@ -827,6 +838,10 @@ class CTProcessor:
 
         self.globals.tables += tables
         self.globals.types += types
+
+        # Discard left_anchor and right_anchor in corpus_template
+        l_params["attributes"].pop("left_anchor")
+        l_params["attributes"].pop("right_anchor")
 
     def _get_relation_col(self, rel_structure: dict[str, str]) -> Column:
         name = rel_structure["name"]
@@ -934,22 +949,15 @@ class CTProcessor:
         self.globals.m_token_freq = f"\n\n{search_path}\n{statement}"
 
     def create_compute_prep_segs(self) -> None:
-        tok_tab = next(
-            x
-            for x in self.globals.tables
-            if x.name == self.globals.base_map["token"].lower() + "0"
-        )
+        tok_lower = self.globals.base_map["token"].lower()
+        tok_tab = next(x for x in self.globals.tables if x.name == tok_lower + "0")
         seg_tab = next(
             x
             for x in self.globals.tables
             if x.name == self.globals.base_map["segment"].lower() + "0"
         )
 
-        tok_pk = next(
-            x
-            for x in tok_tab.primary_key()
-            if self.globals.base_map["token"].lower() in x.name
-        )
+        tok_pk = next(x for x in tok_tab.primary_key() if tok_lower in x.name)
         rel_cols = sorted(
             [
                 x
@@ -959,6 +967,40 @@ class CTProcessor:
             key=lambda x: x.name,
         )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
+        # Process any token dependency
+        for lay_name, lay_conf in self.layers.items():
+            if lay_conf.get("layerType") != "relation":
+                continue
+            target = lay_conf.get("attributes", {}).get("target", {})
+            source = lay_conf.get("attributes", {}).get("source", {})
+            if (
+                not target
+                or not source
+                or not all(
+                    x.get("entity", "") == self.globals.base_map["token"]
+                    for x in (target, source)
+                )
+            ):
+                continue
+            name = target.get("name")
+            if not name:
+                continue
+            rel_cols_names.append(name)
+            dep_table = next(
+                (x for x in self.globals.tables if x.name.lower() == lay_name.lower()),
+                None,
+            )
+            if not dep_table or not source.get("name"):
+                continue
+            dep_column = Column(
+                name,
+                "int",
+                foreign_key={
+                    "table": dep_table.name,
+                    "condition": f"{tok_lower}_id = {source.get('name')}",
+                },
+            )
+            rel_cols.append(dep_column)
 
         mapd: dict[str, Any] = self.globals.mapping
         tokname = self.globals.base_map["token"]
@@ -984,16 +1026,30 @@ class CTProcessor:
 
         self.globals.prep_seg_create = f"\n\n{searchpath}\n{ddl}"
 
+        json_joins = []
+        for x in rel_cols:
+            fk = x.constrs.get("foreign_key")
+            if not fk or not isinstance(fk, dict):
+                continue
+            right_part = (
+                f" ON {fk['condition']}"
+                if "condition" in fk
+                else f" USING ({fk['column']})"
+            )
+            json_joins.append(fk["table"] + right_part)
+
+        json_joins_str = "JOIN " + f"\n                LEFT JOIN ".join(json_joins)
         json_sel = (
             "\n                      , ".join(rel_cols_names)
             + f"\n                     ) AS toks\n                FROM {{batch}}\n                "
-            + "\n                ".join(
-                [
-                    f"{'JOIN' if fk['table'].lstrip('token_') == 'form' else 'LEFT JOIN'} {fk['table']} USING ({fk['column']})"
-                    for x in rel_cols
-                    if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
-                ]
-            )
+            + json_joins_str
+            # + "\n                ".join(
+            #     [
+            #         f"{'JOIN' if fk['table'].lstrip('token_') == 'form' else 'LEFT JOIN'} {fk['table']} USING ({fk['column']})"
+            #         for x in rel_cols
+            #         if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
+            #     ]
+            # )
         )
 
         query: str = (
@@ -1094,7 +1150,7 @@ def generate_ddl(
         globs.batchnames,
         globs.mapping,
         globs.perms,
-        refs
+        refs,
     ).asdict()
 
 
