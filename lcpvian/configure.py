@@ -116,14 +116,16 @@ def _get_batches(config: CorpusConfig) -> dict[str, int]:
             basename = details["relation"]
             if "<language>" in basename:
                 basename = basename.replace("<language>", lang)
-            size = counts[basename.replace("<batch>", "0")]
+            count_key = basename.replace("<batch>", "0").lower()
+            size = next(v for k, v in counts.items() if k.lower() == count_key)
             n_batches = details["batches"]
             more = _generate_batches(n_batches, basename, size)
             batches.update(more)
     else:
         n_batches = mapping["batches"]
         name = mapping["relation"]
-        size = counts[name.replace("<batch>", "0")]
+        count_key = name.replace("<batch>", "0").lower()
+        size = next(v for k, v in counts.items() if k.lower() == count_key)
         more = _generate_batches(n_batches, name, size)
         batches.update(more)
     if not batches:

@@ -785,8 +785,13 @@ class CTProcessor:
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)
 
-        if ptable and not self.globals.num_partitions:
-            self.globals.num_partitions = ptable.num_partitions
+        layer_mapping: dict = cast(dict, self.globals.mapping["layer"][l_name])
+        if ptable:
+            layer_mapping["relation"] = ptable.name.rstrip("0") + "<batch>"
+            if not self.globals.num_partitions:
+                self.globals.num_partitions = ptable.num_partitions
+        else:
+            layer_mapping["relation"] = table.name
 
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["anchoring"] = anchs
@@ -832,6 +837,9 @@ class CTProcessor:
         table = Table(table_name, table_cols)
 
         tables.append(table)
+
+        layer_mapping: dict = cast(dict, self.globals.mapping["layer"][l_name])
+        layer_mapping["relation"] = table.name
 
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["table_name"] = table.name
@@ -1006,13 +1014,13 @@ class CTProcessor:
         tokname = self.globals.base_map["token"]
         batchname = f"{tokname}<batch>"
         mapd["layer"][tokname]["batches"] = self.globals.num_partitions
-        mapd["layer"][tokname]["relation"] = batchname
+        # mapd["layer"][tokname]["relation"] = batchname
         segname = self.globals.base_map["segment"]
         mapd["layer"][segname]["prepared"] = {
             "relation": ("prepared_" + segname),
             "columnHeaders": rel_cols_names,
         }
-        mapd["layer"][segname]["relation"] = segname + "<batch>"
+        # mapd["layer"][segname]["relation"] = segname + "<batch>"
         self.globals.mapping = mapd
 
         # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())

@@ -365,7 +365,7 @@ class Importer:
         TODO: not working for parallel
         """
         fc = cast(dict[str, str], self.template.get("firstClass", {}))
-        token = fc["token"]
+        token = fc["token"].lower()
         names: list[str] = []
         queries: list[str] = []
         for i in range(self.n_batches + 1):
