@@ -251,7 +251,7 @@
                   @click="openQueryWithCorpus(corpusModal)"
                   data-bs-dismiss="modal"
                   title="Query corpus with soundscript"
-                  v-if="['audio', 'video'].includes(corpusDataType(corpus))"
+                  v-if="['audio', 'video'].includes(corpusDataType(corpusModal))"
                 >
                   <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
                   <i>soundscript</i>
@@ -261,7 +261,7 @@
                   @click="openQueryWithCorpus(corpusModal)"
                   data-bs-dismiss="modal"
                   title="Query corpus with videoscope"
-                  v-if="['video'].includes(corpusDataType(corpus))"
+                  v-if="['video'].includes(corpusDataType(corpusModal))"
                 >
                   <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
                   <i>videoscope</i>

@@ -107,9 +107,9 @@ const Utils = {
           /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
         );
     },
-    corpusDataType (corpus) {
+    corpusDataType(corpus) {
       let corpusType = "text";
-      if (corpus.meta.mediaSlots) {
+      if (corpus && corpus.meta && corpus.meta.mediaSlots) {
         for (let key of Object.keys(corpus.meta.mediaSlots)) {
           if (corpus.meta.mediaSlots[key].mediaType == "video") {
             corpusType = "video";
