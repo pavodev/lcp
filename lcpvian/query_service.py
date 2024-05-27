@@ -267,7 +267,7 @@ class QueryService:
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
         # Start work on new logic with Tangram4 and Tagesschau (corpus_id 59 & 38)
-        if corpus in (59, 38):
+        if corpus in (59, 38, 127):
             assert "tracks" in config, KeyError(
                 "Couldn't find 'tracks' in the corpus configuration"
             )

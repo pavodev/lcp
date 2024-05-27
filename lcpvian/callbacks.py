@@ -545,7 +545,7 @@ def _document(
     if isinstance(result, list) and len(result) == 1:
         result = result[0]
 
-    if job.kwargs["corpus"] == 59:
+    if job.kwargs["corpus"] in (59, 127):
         tmp_result: dict[str, dict] = {
             "structure": {},
             "layers": {},
