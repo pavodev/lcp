@@ -65,20 +65,13 @@ def _where_conditions_from_constraints(
             continue
         left_joins.append(f"{table} ON {' AND '.join(real_conds)}")
 
-    # part_of_layer: str = label_layer.get(part_of, ("",None))[0]
-    # if part_of and part_of_layer.lower() != conf.config["segment"].lower():
-    #     all_conditions.append(f"{part_of}.char_range @> {label}.char_range")
-
     return (all_conditions, left_joins)
 
 
 def _prefilter(conf: Config, subseq: list[Unit]) -> str:
     seq: dict = {"sequence": {"members": [s.obj for s in subseq]}}
     p = Prefilter([seq], conf, dict(), "")  # has_segment (remove?)
-    condition = p._condition()
-    return "@@".join(condition.split("@@ E'")[1:])[
-        :-1
-    ]  # Messy, change what Prefilter returns instead
+    return p._condition()
 
 
 class State:

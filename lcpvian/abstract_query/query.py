@@ -329,22 +329,6 @@ class QueryMaker:
             batch_suffix = self.conf.batch[-first_num:]
         batch_suffix = self._underlang + batch_suffix
 
-        # fts_query = self._vector_extra(query_json)
-        # self.has_fts = bool(fts_query)
-        # if self.has_fts:
-        #     seg = next(
-        #         (
-        #             x
-        #             for x in [u["unit"] for u in query_json if "unit" in u]
-        #             if x.get("layer") == self.segment and "label" in x
-        #         ),
-        #         None,
-        #     )
-        #     lab = "s"
-        #     if seg is not None:
-        #         lab = cast(str, seg["label"])
-        #     tab = f"{self.segment}{self._underlang}".lower()
-        #     self._table = (tab, lab)
         seg = next(
             (
                 x
@@ -386,12 +370,6 @@ class QueryMaker:
 
             is_sequence = "sequence" in obj
             is_set = "set" in obj
-            # is_constraint = (
-            #     "constraints" in obj # logicalOp/quantifier?
-            #     and recurse is None
-            #     and "layer" not in obj
-            #     and "label" not in obj
-            # )
             is_constraint = "args" in obj and recurse is None
             is_group = "group" in obj
 
@@ -401,13 +379,6 @@ class QueryMaker:
 
             if is_set:
                 continue  # sets are already handled in ResultsMaker and included as part of selects
-                # set_label = cast(JSONObject, obj["set"]).get("label", "")
-                # print("QueryMaker#query > is_set", self.r.entities)
-                # if set_label not in self.r.entities:
-                #     continue
-                # self.process_set(cast(dict[str, Any], obj["set"]))
-                # self.query([obj["set"]])
-                continue
             elif is_sequence:
                 self.sequence(obj)
                 continue
@@ -592,7 +563,7 @@ class QueryMaker:
                 p for s in self.sqlsequences for p in s.prefilters()
             }
             vector_name = f"fts_vector{batch_suffix}"
-            ps: str = " AND ".join([f"vec.vector @@ E'{p}'" for p in prefilters])
+            ps: str = " AND ".join(prefilters)
             from_table = f"(SELECT {self.config['segment']}_id FROM {self.conf.schema}.{vector_name} vec WHERE {ps}) AS {sl}"
 
         # Make sure the query only scopes over segments that are referenced in the batch being looked up
@@ -601,11 +572,7 @@ class QueryMaker:
         #         f"{label}.{self.segment.lower()}_id IN (SELECT {self.segment.lower()}_id FROM {self.conf.schema}.{self.batch})"
         #     )
 
-        with_track = self._find_with_track()
-
         formed_joins = _joinstring(self.joins)
-        # formed_left_joins = "\nLEFT JOIN "+"\nLEFT JOIN ".join(self.left_joins) if self.left_joins else ""
-        # formed_selects = ",\n".join(sorted(self.selects))
         formed_selects = ",\n".join(sorted(selects_in_fixed))
         join_conditions: set[str] = set()
         for v in self.joins.values():
@@ -620,9 +587,7 @@ class QueryMaker:
         union_conditions: set[str] = join_conditions.union(self.conditions)
         formed_conditions = "\nAND ".join(sorted(union_conditions))
         formed_where = "" if not formed_conditions.strip() else "WHERE"
-        formed_conditions = formed_conditions.format(
-            _base_label=label, _label_with_track=with_track
-        )
+        formed_conditions = formed_conditions.format(_base_label=label)
         # todo: add group bt and having sections
         group_by = self._get_groupby()
         havings = self._get_havings()
@@ -877,27 +842,6 @@ class QueryMaker:
         assert ll
         return next((k for k, v in ll.items() if v[0] == self.segment), "")
 
-    def _find_with_track(self):
-        """
-        Helper to find part of query with track info
-        """
-        if not self.vian:  # and "tangram" not in self.schema.lower():
-            return ""
-
-        if self.r.manual_track:
-            return self.r.manual_track
-
-        query = self.query_json["query"]
-        for o in query:
-            if o.get("unit", {}).get("layer", "").lower() in {
-                self.config["token"].lower(),
-                self.config["segment"].lower(),
-                "gesture",
-            } and "label" in o.get("unit", {}):
-                return o["unit"]["label"]
-
-        return ""
-
     def remove_and_get_base(self) -> tuple[str, str]:
         """
         If we made a join that is equal to the FROM clause, we remove it
@@ -1099,16 +1043,3 @@ class QueryMaker:
             formed = f"{label}.char_range && {segname}.char_range"
             self.conditions.add(formed.lower())
         return None
-
-    def _vector_extra(self, query_json: QueryPart) -> str:
-        """
-        Make the vector component of a query if possible
-        """
-        if self.vian:
-            return ""
-
-        mapping = cast(dict[str, JSON], self.config["mapping"])
-        if not mapping.get("hasFTS", True):
-            return ""
-        pref = Prefilter(query_json, self.conf, self.r.label_layer, self._has_segment)
-        return pref.make()
