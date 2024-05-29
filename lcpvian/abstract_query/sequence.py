@@ -1,8 +1,6 @@
 # needed for forward reference types
 from __future__ import annotations
 
-# TODO: call labeled_unbound_child_sequences on the main sequence and their generate as many selects on the CTEs as needed
-
 import re
 
 from typing import cast, Any, Self
@@ -537,54 +535,6 @@ class SQLSequence:
                         sequence_references=self._sequence_references,
                     )
         return self._members
-
-    # No longer used?
-    # def get_sequence_anchors(self):
-    #     sequence_to_units_ctes: dict[str, tuple[ list[Unit], dict[Cte, set[str]] ]] = dict()
-
-    #     for t, _, _, _ in self.fixed_tokens:
-    #         for s in t.get_all_parent_sequences():
-    #             if s.label not in sequence_to_units_ctes:
-    #                 sequence_to_units_ctes[s.label] = ([], dict())
-    #             sequence_to_units_ctes[s.label][0].append(t)
-
-    #     for c in self.ctes:
-    #         for m in c.members:
-    #             for u in m.get_all_units():
-    #                 for s in t.get_all_parent_sequences():
-    #                     if s.label not in sequence_to_units_ctes:
-    #                         sequence_to_units_ctes[s.label] = ([], dict())
-    #                     old_set: set[str] = sequence_to_units_ctes[s.label][1].get(c, set())
-    #                     sequence_to_units_ctes[s.label][1][c] = old_set.union({u.parent_sequence.label})
-
-    #     return sequence_to_units_ctes
-
-    # No longer used?
-    # def get_sequence_member_occurrences(self, sequence: Sequence) -> tuple[ list[Unit], list[tuple[Cte,set[str]]] ]:
-    #     """Return all the fixed tokens and tokens in CTEs (with their direct parent sequence's label) contained in the passed sequence"""
-    #     units_in_fixed_tokens: list[Unit] = []
-    #     for t, _, _, _ in self.fixed_tokens:
-    #         if sequence.includes(t):
-    #             units_in_fixed_tokens.append(t)
-
-    #     list_cte: list[tuple[Cte,list[str]]] = []
-    #     for c in self.ctes:
-    #         units_in_cte: list[Unit] = []
-    #         for m in c.members:
-    #             if isinstance(m, Unit):
-    #                 units_in_cte.append(m)
-    #             elif isinstance(m, Disjunction) or isinstance(m, Sequence):
-    #                 units_in_cte += m.get_all_units()
-    #         labels: set[str] = set()
-    #         for u in units_in_cte:
-    #             if not sequence.includes(u):
-    #                 continue
-    #             if not isinstance(u.parent_sequence, Sequence):
-    #                 continue
-    #             labels.add(m.parent_sequence.label)
-    #         list_cte.append( (c, labels) )
-
-    #     return ( units_in_fixed_tokens , list_cte )
 
     def add_to_cte(
         self, to_add: Member, fixed_token: Unit | None, current_cte: Cte | None
