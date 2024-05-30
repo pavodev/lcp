@@ -81,7 +81,7 @@ class SQLstats:
                 """
             WITH mc AS (
                 INSERT
-                INTO main.corpus (name, current_version, corpus_template, project, schema_path, token_counts, mapping, enabled)
+                INTO main.corpus (name, current_version, corpus_template, project_id, schema_path, token_counts, mapping, enabled)
                 VALUES (:name, :ver, :template, :project, :schema, :counts, :mapping, true)
                 RETURNING *
             )

@@ -533,9 +533,12 @@ class Constraint:
             # Join any necessary table for the field
             if relational_field:
                 field_table = field_mapping.get("name", field)
-                field_label: str = f"{label}_{field}".lower()
+                field_key = field_mapping.get("key", field)
+                field_label: str = f"{label}_{field_key}".lower()
                 join_table: str = f"{self.schema}.{field_table} {field_label}"
-                formed_join_condition = f"{label}.{field}_id = {field_label}.{field}_id"
+                formed_join_condition = (
+                    f"{label}.{field_key}_id = {field_label}.{field_key}_id"
+                )
                 self._add_join_on(join_table.lower(), formed_join_condition.lower())
                 formed_field = re.sub(r"^([^.]+)\.(.+)$", "\\1->>'\\2'", self.field)
                 field_ref = f"({field_label}.{formed_field})"
@@ -604,12 +607,13 @@ class Constraint:
         field_ref = f"{fn}({self.label}.{arg_field})"
         if arg_mapping.get("type") == "relation":
             arg_table = arg_mapping.get("name", "")
+            arg_key = arg_mapping.get("name", arg_field)
             self._add_join_on(
-                f"{self.schema}.{arg_table} {self.label}_{arg_field}".lower(),
-                f"{self.label}.{arg_field}_id = {self.label}_{arg_field}.{arg_field}_id".lower(),
+                f"{self.schema}.{arg_table} {self.label}_{arg_key}".lower(),
+                f"{self.label}.{arg_key}_id = {self.label}_{arg_key}.{arg_key}_id".lower(),
             )
             formed_field = re.sub(r"^([^.]+)\.(.+)$", "\\1->>'\\2'", single_arg)
-            field_ref = f"{fn}({self.label}_{arg_field}.{formed_field})"
+            field_ref = f"{fn}({self.label}_{arg_key}.{formed_field})"
         return field_ref
 
     def parse_entity(self, field_type, relational_field) -> dict[str, Any]:

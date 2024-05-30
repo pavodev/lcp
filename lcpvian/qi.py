@@ -135,7 +135,9 @@ class QueryIteration:
         if not has_kwic:
             self.sentences = False
 
-        sql_query, meta_json, post_processes = json_to_sql(cast(QueryJSON, json_query), **kwa)
+        sql_query, meta_json, post_processes = json_to_sql(
+            cast(QueryJSON, json_query), **kwa
+        )
         self.jso = json_query
         self.sql = sql_query
         self.meta = meta_json
@@ -230,7 +232,7 @@ class QueryIteration:
         }
         if request_data.get("to_export", False):
             details["to_export"] = {
-                "format": str(request_data["to_export"].get("format","")),
+                "format": str(request_data["to_export"].get("format", "")),
                 "preview": request_data["to_export"].get("preview", False),
                 "download": request_data["to_export"].get("download", False),
                 "config": request.app["config"][str(corpora_to_use[0])],
@@ -427,7 +429,7 @@ class QueryIteration:
             batch_suffix = batch_match[1]
         seg_name = f"{name}{underlang}{batch_suffix}".lower()
 
-        has_media = config.get("meta", config).get("mediaSlots",{})
+        has_media = config.get("meta", config).get("mediaSlots", {})
 
         parents_of_seg = [k for k in config["layer"] if self._parent_of(seg, k)]
         parents_with_attributes = {
@@ -441,7 +443,7 @@ class QueryIteration:
         selects = [f"s.{name}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
         wheres = [f"s.{name}_id = ANY(:ids)"]
-        joins: dict[str,Any] = {}
+        joins: dict[str, Any] = {}
         group_by = []
         for layer in parents_with_attributes:
             alias = layer
@@ -478,37 +480,41 @@ class QueryIteration:
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
             group_by.append(f"{layer}_id")
-            joins_later: dict[str,Any] = {}
+            joins_later: dict[str, Any] = {}
             for attr, v in attributes.items():
                 if v.get("type") == "vector":
-                    continue # Don't include vectors
+                    continue  # Don't include vectors
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
                 attr_mapping = mapping_attrs.get(attr, {})
                 # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
-                if attr_mapping.get("type","") == "relation":
-                    attr_table = attr_mapping.get("name","")
+                if attr_mapping.get("type", "") == "relation":
+                    attr_table = attr_mapping.get("name", "")
                     if v.get("type") == "labels":
-                        nbit: int = int(cast(str, config["layer"][layer].get("nlabels","1")))
+                        nbit: int = int(
+                            cast(str, config["layer"][layer].get("nlabels", "1"))
+                        )
                         # Join the lookup table
                         joins_later[
                             f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
                         ] = None
                         # Select the attribute from the lookup table
-                        selects.append(f'array_agg({attr_table}.label) AS {layer}_{attr}')
+                        selects.append(
+                            f"array_agg({attr_table}.label) AS {layer}_{attr}"
+                        )
                     else:
                         # Join the lookup table
                         joins_later[
                             f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
                         ] = None
                         # Select the attribute from the lookup table
-                        selects.append(f'{attr_table}.{attr_name} AS {layer}_{attr}')
+                        selects.append(f"{attr_table}.{attr_name} AS {layer}_{attr}")
                         group_by.append(f"{layer}_{attr}")
                 else:
                     # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
                     if attr == "meta":
                         attr_name = f"meta::jsonb"
-                    selects.append(f'{alias}.{attr_name} AS {layer}_{attr}')
+                    selects.append(f"{alias}.{attr_name} AS {layer}_{attr}")
             # Will get char_range from the appropriate table
             char_range_table: str = alias
             # join tables
@@ -548,13 +554,15 @@ class QueryIteration:
 
         # Add code here to add "media" if dealing with a multimedia corpus
         if has_media:
-            selects.append(f"{config['document']}.media::jsonb AS {config['document']}_media")
+            selects.append(
+                f"{config['document']}.media::jsonb AS {config['document']}_media"
+            )
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
         # left join = include non-empty entities even if other ones are empty
-        joins_formed = " LEFT JOIN ".join([j for j in joins])
+        joins_formed = " LEFT JOIN ".join(joins)
         joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
         group_by_formed = ", ".join(group_by)
         script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed} GROUP BY {group_by_formed};"
@@ -576,15 +584,21 @@ class QueryIteration:
         seg = config["segment"]
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
-        seg_mapping = config["mapping"]["layer"].get(seg,{}).get("prepared",{})
+        seg_mapping = config["mapping"]["layer"].get(seg, {}).get("prepared", {})
         if lang:
-            seg_mapping = config["mapping"]["layer"].get(seg,{}).get("partitions",{}).get(lang,{}).get("prepared")
-        seg_name = seg_mapping.get("relation","")
+            seg_mapping = (
+                config["mapping"]["layer"]
+                .get(seg, {})
+                .get("partitions", {})
+                .get(lang, {})
+                .get("prepared")
+            )
+        seg_name = seg_mapping.get("relation", "")
         if not seg_name:
             seg_name = f"prepared_{name}{underlang}"
         annotations: str = ""
-        for layer, properties in config['layer'].items():
-            if layer == seg or properties.get("contains","") != config["token"]:
+        for layer, properties in config["layer"].items():
+            if layer == seg or properties.get("contains", "") != config["token"]:
                 continue
             annotations = ", annotations"
             break
