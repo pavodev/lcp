@@ -50,7 +50,13 @@ from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, Results
-from .utils import _determine_language, _layer_contains, push_msg
+from .utils import (
+    _determine_language,
+    _format_meta_query,
+    _get_table,
+    _layer_contains,
+    push_msg,
+)
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 
@@ -136,7 +142,7 @@ class QueryIteration:
             self.sentences = False
 
         sql_query, meta_json, post_processes = json_to_sql(
-            cast(QueryJSON, json_query), **kwa
+            cast(QueryJSON, json_query), **kwa  # type: ignore
         )
         self.jso = json_query
         self.sql = sql_query
@@ -161,14 +167,15 @@ class QueryIteration:
         all_langs = tuple([f"_{la}" for la in all_languages])
         langs = tuple([f"_{la}" for la in languages])
         for corpus in corpora:
-            batches = config[str(corpus)]["_batches"]
+            corp_conf: dict[str, Any] = cast(dict[str, Any], config[str(corpus)])
+            batches = corp_conf["_batches"]
             for name, size in batches.items():
                 stripped = name.rstrip("0123456789")
                 if stripped.endswith("rest"):
                     stripped = stripped[:-4]
                 if not stripped.endswith(langs) and stripped.endswith(all_langs):
                     continue
-                schema = config[str(corpus)]["schema_path"]
+                schema = corp_conf["schema_path"]
                 out.append((corpus, schema, name, size))
         return sorted(out, key=lambda x: x[-1])
 
@@ -196,8 +203,9 @@ class QueryIteration:
         needed = total_requested
         if previous:
             prev = Job.fetch(previous, connection=request.app["redis"])
-            first_job_id = prev.kwargs.get("first_job") or previous
-            total_duration = prev.kwargs.get("total_duration", 0.0)
+            prev_kwargs: dict[str, Any] = cast(dict[str, Any], prev.kwargs)
+            first_job_id = prev_kwargs.get("first_job") or previous
+            total_duration = prev_kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
         is_vian = request_data.get("appType") == "vian"
@@ -389,7 +397,7 @@ class QueryIteration:
     def _is_time_anchored(self, layer: str) -> bool:
         if not self.current_batch:
             raise ValueError("Need batch")
-        config = self.config[str(self.current_batch[0])]
+        config = cast(dict[str, Any], self.config[str(self.current_batch[0])])
         layer_config = config["layer"].get(layer)
         if not layer_config:
             return False
@@ -410,111 +418,77 @@ class QueryIteration:
         """
         if not self.current_batch:
             raise ValueError("Need batch")
-        config = self.config[str(self.current_batch[0])]
+        config = cast(dict[str, Any], self.config[str(self.current_batch[0])])
+        doc = config["document"]
         seg = config["segment"]
+        layer_info = config["layer"]
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
-        name = seg.strip()
-        underlang = f"_{lang}" if lang else ""
-        batch_suffix: str = ""
-        # token: str = config['token']
-        # token_mapping = config['mapping']['layer'][token]
-        # n_batches: int = token_mapping.get("batches", token_mapping.get("partitions",{}).get(lang,{}).get("batches",1))
-        # if n_batches > 1:
-        batch_rgx = f"{config['token'].lower()}{underlang}([0-9]+|rest)$"
-        batch_match = re.match(
-            rf"{batch_rgx.lower()}", str(self.current_batch[2]).lower()
-        )
-        if batch_match:
-            batch_suffix = batch_match[1]
-        seg_name = f"{name}{underlang}{batch_suffix}".lower()
+        seg_name = _get_table(seg, config, self.current_batch[2], lang or "")
 
         has_media = config.get("meta", config).get("mediaSlots", {})
 
-        parents_of_seg = [k for k in config["layer"] if self._parent_of(seg, k)]
+        parents_of_seg = [k for k in layer_info if self._parent_of(seg, k)]
         parents_with_attributes = {
-            k: None for k in parents_of_seg if config["layer"][k].get("attributes")
+            k: None for k in parents_of_seg if layer_info[k].get("attributes")
         }
         # Make sure to include Document in there, even if it's not a parent of Segment
-        if has_media or config["layer"][config["document"]].get("attributes"):
-            parents_with_attributes[config["document"]] = None
+        if has_media or layer_info[doc].get("attributes"):
+            parents_with_attributes[doc] = None
 
         parents_with_attributes[seg] = None  # Also query the segment layer itself
-        selects = [f"s.{name}_id AS seg_id"]
+        selects = [f"s.{seg}_id AS seg_id"]
         froms = [f"{schema}.{seg_name} s"]
-        wheres = [f"s.{name}_id = ANY(:ids)"]
+        wheres = [f"s.{seg}_id = ANY(:ids)"]
         joins: dict[str, Any] = {}
         group_by = []
         for layer in parents_with_attributes:
-            alias = layer
+            alias = "s" if layer == seg else layer
             layer_mapping = config["mapping"]["layer"].get(layer, {})
             mapping_attrs = layer_mapping.get("attributes", {})
-            attributes: dict[str, Any] = {
-                k: v for k, v in config["layer"][layer].get("attributes", {}).items()
-            }
-            prefix_id: str
-            partitions = layer_mapping.get("partitions")
-            alignment = layer_mapping.get("alignment", {})
-            relation = (
-                alignment.get("relation")
-                if alignment
-                else layer_mapping.get("relation", layer.lower())
-            )
+            partitions = None if layer == seg else layer_mapping.get("partitions")
+            alignment = {} if layer == seg else layer_mapping.get("alignment", {})
+            relation = alignment.get("relation", None)
+            if not relation and layer != seg:
+                relation = layer_mapping.get("relation", layer.lower())
             if not relation and lang and partitions:
                 relation = partitions.get(lang, {}).get("relation")
-            if layer == seg:
-                # The segment table is the main from table aliased as 's' so make sure to use it
-                alias = "s"
-                relation = None
-                partitions = None
-                alignment = None
+            prefix_id: str = layer.lower()
             if alignment:
                 prefix_id = "alignment"
-            # hard-coded exception management -- change document_id for movie_id in open subtitles
-            elif (
-                layer == config["document"] and layer.lower() == "movie"
-            ):  # not partitions:
-                prefix_id = "document"
-            else:
-                prefix_id = layer.lower()
             # Select the ID
             selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
             group_by.append(f"{layer}_id")
             joins_later: dict[str, Any] = {}
-            for attr, v in attributes.items():
-                if v.get("type") == "vector":
-                    continue  # Don't include vectors
+            attributes: dict[str, Any] = layer_info[layer].get("attributes", {})
+            relational_attributes = {
+                k: v for k, v in attributes.items() if v.get("type") == "relation"
+            }
+            # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+            selects += [
+                f"{alias}.\"{attr}\"{'::jsonb' if attr=='meta' else ''} AS {layer}_{attr}"
+                for attr, v in attributes.items()
+                if attr not in relational_attributes and v.get("type") != "vector"
+            ]
+            nbit: int = int(layer_info[layer].get("nlabels", 1))
+            for attr, v in relational_attributes.items():
                 # Quote attribute name (is arbitrary)
                 attr_name = f'"{attr}"'
                 attr_mapping = mapping_attrs.get(attr, {})
                 # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
-                if attr_mapping.get("type", "") == "relation":
-                    attr_table = attr_mapping.get("name", "")
-                    if v.get("type") == "labels":
-                        nbit: int = int(
-                            cast(str, config["layer"][layer].get("nlabels", "1"))
-                        )
-                        # Join the lookup table
-                        joins_later[
-                            f"{schema}.{attr_table} {attr_table} ON get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
-                        ] = None
-                        # Select the attribute from the lookup table
-                        selects.append(
-                            f"array_agg({attr_table}.label) AS {layer}_{attr}"
-                        )
-                    else:
-                        # Join the lookup table
-                        joins_later[
-                            f"{schema}.{attr_table} {attr_table} ON {alias}.{attr}_id = {attr_table}.{attr}_id"
-                        ] = None
-                        # Select the attribute from the lookup table
-                        selects.append(f"{attr_table}.{attr_name} AS {layer}_{attr}")
-                        group_by.append(f"{layer}_{attr}")
+                attr_table = attr_mapping.get("name", "")
+                on_cond = f"{alias}.{attr}_id = {attr_table}.{attr}_id"
+                sel = f"{attr_table}.{attr_name} AS {layer}_{attr}"
+                if v.get("type") == "labels":
+                    on_cond = f"get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
+                    sel = f"array_agg({attr_table}.label) AS {layer}_{attr}"
                 else:
-                    # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
-                    if attr == "meta":
-                        attr_name = f"meta::jsonb"
-                    selects.append(f"{alias}.{attr_name} AS {layer}_{attr}")
+                    group_by.append(f"{layer}_{attr}")
+                # Join the lookup table
+                joins_later[f"{schema}.{attr_table} {attr_table} ON {on_cond}"] = None
+                # Select the attribute from the lookup table
+                selects.append(sel)
+
             # Will get char_range from the appropriate table
             char_range_table: str = alias
             # join tables
@@ -541,6 +515,7 @@ class QueryIteration:
                 joins[
                     f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
                 ] = None
+
             for k in joins_later:
                 joins[k] = None
             # Get char_range from the main table
@@ -554,18 +529,22 @@ class QueryIteration:
 
         # Add code here to add "media" if dealing with a multimedia corpus
         if has_media:
-            selects.append(
-                f"{config['document']}.media::jsonb AS {config['document']}_media"
-            )
+            selects.append(f"{doc}.media::jsonb AS {doc}_media")
 
         selects_formed = ", ".join(selects)
         froms_formed = ", ".join(froms)
         wheres_formed = " AND ".join(wheres)
         # left join = include non-empty entities even if other ones are empty
-        joins_formed = " LEFT JOIN ".join(joins)
-        joins_formed = "" if not joins_formed else f" LEFT JOIN {joins_formed}"
+        joins_formed = f"\n    LEFT JOIN ".join(joins)
+        joins_formed = "" if not joins_formed else f"LEFT JOIN {joins_formed}"
         group_by_formed = ", ".join(group_by)
-        script = f"SELECT -2::int2 AS rstype, {selects_formed} FROM {froms_formed}{joins_formed} WHERE {wheres_formed} GROUP BY {group_by_formed};"
+        script = _format_meta_query(
+            selects_formed=selects_formed,
+            froms_formed=froms_formed,
+            joins_formed=joins_formed,
+            wheres_formed=wheres_formed,
+            group_by_formed=group_by_formed,
+        )
         print("meta script", script)
         return script
 
@@ -580,7 +559,7 @@ class QueryIteration:
             raise ValueError("Need batch")
         schema = self.current_batch[1]
         lang = self._determine_language(self.current_batch[2])
-        config = self.config[str(self.current_batch[0])]
+        config = cast(dict[str, Any], self.config[str(self.current_batch[0])])
         seg = config["segment"]
         name = seg.strip()
         underlang = f"_{lang}" if lang else ""
@@ -636,6 +615,8 @@ class QueryIteration:
         from_memory = manual.get("from_memory", False)
         sentences = manual.get("sentences", True)
 
+        kwargs = cast(dict[str, Any], job.kwargs)
+
         details = {
             "corpora": corpora_to_use,
             "existing_results": manual.get("full_result", manual["result"]),
@@ -643,7 +624,7 @@ class QueryIteration:
             "room": manual["room"],
             "job": job,
             "app": app,
-            "jso": job.kwargs["jso"],
+            "jso": kwargs["jso"],
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
@@ -651,11 +632,11 @@ class QueryIteration:
             "simultaneous": manual.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),
-            "page_size": job.kwargs.get("page_size", 20),
+            "page_size": kwargs.get("page_size", 20),
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
-            "query": job.kwargs["original_query"],
+            "query": kwargs["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
             "offset": manual["offset"],
@@ -666,7 +647,7 @@ class QueryIteration:
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
             "is_vian": manual.get("is_vian", False),
-            "to_export": manual.get("to_export", job.kwargs.get("to_export", "")),
+            "to_export": manual.get("to_export", kwargs.get("to_export", "")),
         }
         return cls(**details)
 

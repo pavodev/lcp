@@ -324,25 +324,25 @@ def _meta(
     job: Job,
     connection: "RedisConnection[bytes]",
     result: list[Any] | None,
-    **kwargs: Unpack[SentJob],
+    **kwargs: Unpack[SentJob],  # type: ignore
 ) -> None:
     """
     Process meta data and send via websocket
     """
     if not result:
         return None
-    base = Job.fetch(job.kwargs["first_job"], connection=connection)
-    depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
-    cb: Batch = depended.kwargs["current_batch"]
+    job_kwargs = cast(dict[str, Any], job.kwargs)
+    base = Job.fetch(job_kwargs["first_job"], connection=connection)
+    depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
+    cb: Batch = cast(dict, depended.kwargs)["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
     full = cast(
-        bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False)))
+        bool, kwargs.get("full", job_kwargs.get("full", base.kwargs.get("full", False)))  # type: ignore
     )
     status = depended.meta["_status"]
 
-    to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
-
+    to_send = {"-2": format_meta_lines(job_kwargs.get("meta_query", ""), result)}
     if not to_send["-2"]:
         return None
 
@@ -363,8 +363,8 @@ def _meta(
         "result": to_send,
         "status": status,
         "action": action,
-        "user": kwargs.get("user", job.kwargs["user"]),
-        "room": kwargs.get("room", job.kwargs["room"]),
+        "user": kwargs.get("user", job_kwargs["user"]),
+        "room": kwargs.get("room", job_kwargs["room"]),
         "query": depended.id,
         "can_send": can_send,
         "full": full,

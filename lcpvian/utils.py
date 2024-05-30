@@ -113,6 +113,18 @@ CONFIG_JOIN = """CROSS JOIN
 ) a
 """
 
+META_QUERY = """SELECT
+    -2::int2 AS rstype,
+    {selects_formed}
+FROM
+    {froms_formed}
+    {joins_formed}
+WHERE
+    {wheres_formed}
+GROUP BY
+    {group_by_formed}
+;"""
+
 
 class Interrupted(Exception):
     """
@@ -578,6 +590,10 @@ def _format_config_query(template: str) -> str:
     return template.format(selects=CONFIG_SELECT, join=CONFIG_JOIN)
 
 
+def _format_meta_query(**params) -> str:
+    return META_QUERY.format(**params)
+
+
 async def _set_config(payload: JSONObject, app: web.Application) -> None:
     """
     Helper to set the configuration on the app
@@ -801,8 +817,9 @@ def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
     # replace this with actual upstream handling of column names
+    slb = r"[\s\n]+"
     pre_columns = re.match(
-        r"SELECT -2::int2 AS rstype, ((.+ AS .+[, ])+?)FROM.+", query
+        rf"SELECT{slb}-2::int2 AS rstype,{slb}((.+ AS .+[, ])+?)\nFROM(.|{slb})+", query
     )
     if not pre_columns:
         return None
@@ -887,6 +904,39 @@ def _determine_language(batch: str) -> str | None:
         if batch.endswith(f"_{lan}"):
             return lan
     return None
+
+
+def _get_batch_suffix(batch: str, n_batches: int = 2) -> str:
+    if batch and n_batches > 1:
+        batchsuffix = re.match(r".+?(\d+|rest)$", batch)
+        if batchsuffix:
+            return batchsuffix.group(1)
+    return "0"
+
+
+def _get_mapping(layer: str, config: Any, batch: str, lang: str) -> dict[str, Any]:
+    if layer.lower() == batch.lower():
+        layer = config["firstClass"]["token"]
+    mapping: dict = config["mapping"]["layer"].get(layer, {})
+    if "partitions" in mapping and lang:
+        mapping = mapping["partitions"].get(lang, {})
+    return mapping
+
+
+def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
+    table = _get_mapping(layer, config, batch, lang).get("relation", layer)
+    # Use batch suffixes if layer == batch (token) or if we're working with segments
+    if layer.lower() == batch.lower() or layer.lower() in (
+        config["segment"].lower(),
+        config["token"].lower(),
+    ):
+        token_mapping = _get_mapping(config["token"], config, batch, lang)
+        n_batches = token_mapping.get("batches", 1)
+        batch_suffix: str = _get_batch_suffix(batch, n_batches=n_batches)
+        if table.endswith("<batch>"):
+            table = table[:-7]
+        table += batch_suffix
+    return table
 
 
 def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
