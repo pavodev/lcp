@@ -1089,10 +1089,10 @@ class CTProcessor:
                 info: dict[str, Any] = (
                     mapping.get(layer, {}).get("attributes", {}).get(a, {})
                 )
-                assert (
-                    "name" in mapping and mapping.get("type") == "relation"
-                ), LookupError(f"Invalid mapping for {layer}->{a}")
-                joins.append((mapping["name"], a))
+                assert "name" in info and info.get("type") == "relation", LookupError(
+                    f"Invalid mapping for {layer}->{a}"
+                )
+                joins.append((info["name"], a))
             update: str = (
                 # layer, attrs, seg, tok, joins
                 self.ddl.update_prep_segs(layer, attrs, segname, tokname, joins)

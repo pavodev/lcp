@@ -43,10 +43,10 @@ async def _upload_data(
     perms = cast(str, data["perms"])
     constraints.append(perms)
 
-    template = cast(CorpusTemplate, data["template"])
+    # template = cast(CorpusTemplate, data["template"])
 
-    if not template.get("project"):
-        template["project"] = project
+    # if not template.get("project"):
+    #     template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
     importer = Importer(upool, data, corpus, debug)

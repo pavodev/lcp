@@ -478,6 +478,7 @@ async def make_schema(request: web.Request) -> web.Response:
     drops += deletes
 
     template["projects"] = [proj_id]
+    template["project"] = proj_id
     template["schema_name"] = schema_name
 
     try:

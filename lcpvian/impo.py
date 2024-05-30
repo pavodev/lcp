@@ -81,8 +81,8 @@ class SQLstats:
                 """
             WITH mc AS (
                 INSERT
-                INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-                VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
+                INTO main.corpus (name, current_version, corpus_template, project, schema_path, token_counts, mapping, enabled)
+                VALUES (:name, :ver, :template, :project, :schema, :counts, :mapping, true)
                 RETURNING *
             )
             SELECT {selects}
@@ -471,6 +471,7 @@ class Importer:
             name=self.name,
             ver=int(self.version),
             template=json.dumps(dict(self.template)),
+            project=self.template.get("project", ""),
             schema=self.schema,
             counts=json.dumps(self.token_count),
             mapping=json.dumps(dict(self.mapping)),
