@@ -109,7 +109,7 @@ class MyAppTestCase(AioHTTPTestCase):
             self.assertTrue(meta_json is not None)
             self.assertTrue(post_processes is not None)
             self.assertEqual(sql_norm(sql_query), sql_norm(sql))
-            cb: Batch = (3, meta["schema"], meta["batch"], 1)
+            cb: Batch = (meta["idx"], meta["schema"], meta["batch"], 1)
             mq = _meta_query(cb, meta)
             mm = sqlparse.format(mq, reindent=True, keyword_case="upper")
             self.assertEqual(sql_norm(meta_q), sql_norm(mm))

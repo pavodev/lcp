@@ -388,6 +388,8 @@ class QueryIteration:
         The placeholder cannot be calculated until the associated query job
         has finished, so we get those in jobfuncs._db_query with _get_sent_ids
         """
+        if not self.current_batch:
+            return ""
         return _meta_query(self.current_batch, self.config[str(self.current_batch[0])])
 
     def sents_query(self) -> str:

@@ -4,7 +4,7 @@ Model the various parts of the corpus template/corpus config
 Code for generating batches is also in here
 """
 
-from typing import Any, NotRequired, Sequence, TypedDict
+from typing import Any, Required, NotRequired, Sequence, TypedDict
 
 
 class Meta(TypedDict, total=False):
@@ -34,9 +34,9 @@ class Layer(TypedDict, total=False):
 
 
 class FirstClass(TypedDict, total=False):
-    segment: str
-    token: str
-    document: str
+    segment: Required[str]
+    token: Required[str]
+    document: Required[str]
 
 
 class Partitions(TypedDict, total=False):
@@ -45,8 +45,8 @@ class Partitions(TypedDict, total=False):
 
 class CorpusTemplate(TypedDict, total=False):
     meta: Meta
-    layer: dict[str, Layer]
-    firstClass: FirstClass
+    layer: Required[dict[str, Layer]]
+    firstClass: Required[FirstClass]
     partitions: NotRequired[Partitions]
     projects: NotRequired[list[str]]
     project: NotRequired[str]
@@ -56,17 +56,17 @@ class CorpusTemplate(TypedDict, total=False):
 
 class CorpusConfig(CorpusTemplate, total=False):
     shortname: NotRequired[str]
-    corpus_id: int
-    current_version: int | str | float
+    corpus_id: Required[int]
+    current_version: Required[int | str | float]
     version_history: str | None
     description: str | None
-    schema_path: str
+    schema_path: Required[str]
     token_counts: dict[str, int]
-    mapping: dict[str, Any]
+    mapping: Required[dict[str, Any]]
     enabled: bool
-    segment: str
-    token: str
-    document: str
+    segment: Required[str]
+    token: Required[str]
+    document: Required[str]
     column_names: list[str]
     sample_query: str
     # doc ids is stored as [job_id, {1: "AKAW"}]

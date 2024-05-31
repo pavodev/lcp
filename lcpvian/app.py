@@ -46,25 +46,15 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import TRUES, FALSES, handle_lama_error, handle_timeout, load_env
+from .utils import (
+    TRUES,
+    FALSES,
+    LCPApplication,
+    handle_lama_error,
+    handle_timeout,
+    load_env,
+)
 from .video import video
-
-
-class LCPApplication(web.Application):
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self._keys: dict[str, web.AppKey] = {}
-
-    def addkey(self, name: str, kind: type | TypeAlias | Type | Any, value: Any):
-        key = web.AppKey(name, kind)
-        self[key] = value
-        self._keys[name] = key
-
-    def __getitem__(self, a: str):
-        if a in self._keys:
-            return self[self._keys[a]]
-        return super().__getitem__(a)
 
 
 load_env()
@@ -136,8 +126,9 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    app.addkey("redis_listener", Task, asyncio.create_task(listen_to_redis(app)))
-    app.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
+    lapp = cast(LCPApplication, app)
+    lapp.addkey("redis_listener", Task, asyncio.create_task(listen_to_redis(app)))
+    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -278,15 +269,15 @@ async def create_app(test: bool = False) -> web.Application:
         ),
     )
 
+    redis = cast(web.Application, app)["redis"]
+
     # different queues for different kinds of jobs
-    app.addkey(
-        "internal", Queue, Queue("internal", connection=app["redis"], job_timeout=-1)
-    )
-    app.addkey("query", Queue, Queue("query", connection=app["redis"]))
+    app.addkey("internal", Queue, Queue("internal", connection=redis, job_timeout=-1))
+    app.addkey("query", Queue, Queue("query", connection=redis))
     app.addkey(
         "background",
         Queue,
-        Queue("background", connection=app["redis"], job_timeout=-1),
+        Queue("background", connection=redis, job_timeout=-1),
     )
     app.addkey("_use_cache", bool, os.getenv("USE_CACHE", "1").lower() in TRUES)
 
@@ -295,21 +286,22 @@ async def create_app(test: bool = False) -> web.Application:
     app.addkey(
         "failed_registry_internal",
         FailedJobRegistry,
-        FailedJobRegistry(queue=app["internal"]),
+        FailedJobRegistry(queue=cast(Queue, app["internal"])),
     )
     app.addkey(
         "failed_registry_query",
         FailedJobRegistry,
-        FailedJobRegistry(queue=app["query"]),
+        FailedJobRegistry(queue=cast(Queue, app["query"])),
     )
     app.addkey(
         "failed_registry_background",
         FailedJobRegistry,
-        FailedJobRegistry(queue=app["background"]),
+        FailedJobRegistry(queue=cast(Queue, app["background"])),
     )
 
-    app.addkey("query_service", QueryService, QueryService(app))
-    await app["query_service"].get_config()
+    qs: QueryService = QueryService(app)
+    app.addkey("query_service", QueryService, qs)
+    await qs.get_config()
     app.addkey("canceled", deque[str], deque(maxlen=99999))
 
     if test:

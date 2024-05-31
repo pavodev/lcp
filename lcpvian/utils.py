@@ -126,6 +126,24 @@ GROUP BY
 ;"""
 
 
+class LCPApplication(web.Application):
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._keys: dict[str, web.AppKey] = {}
+
+    def addkey(self, name: str, kind: Any, value: Any):
+        key: web.AppKey = web.AppKey(name, kind)
+        self[key] = value
+        self._keys[name] = key
+
+    def __getitem__(self, a: str | web.AppKey):
+        if a in self._keys:
+            assert isinstance(a, str)
+            return self[self._keys[a]]
+        return super().__getitem__(a)
+
+
 class Interrupted(Exception):
     """
     Used when a user interrupts a query from frontend
@@ -590,10 +608,6 @@ def _format_config_query(template: str) -> str:
     return template.format(selects=CONFIG_SELECT, join=CONFIG_JOIN)
 
 
-def _format_meta_query(**params) -> str:
-    return META_QUERY.format(**params)
-
-
 async def _set_config(payload: JSONObject, app: web.Application) -> None:
     """
     Helper to set the configuration on the app
@@ -601,7 +615,7 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     # assert needed for mypy
     assert isinstance(payload["config"], dict)
     print(f"Config loaded: {len(payload['config'])} corpora")
-    app.addkey("config", Config, payload["config"])
+    cast(LCPApplication, app).addkey("config", Config, payload["config"])
     payload["action"] = "update_config"
     await push_msg(app["websockets"], "", payload)
     app["redis"].set("app_config", json.dumps(payload["config"]))
@@ -811,7 +825,8 @@ def format_meta_lines(
     # replace this with actual upstream handling of column names
     slb = r"[\s\n]+"
     pre_columns = re.match(
-        rf"SELECT{slb}-2::int2 AS rstype,{slb}((.+ AS .+[, ])+?)\nFROM(.|{slb})+", query
+        rf"SELECT{slb}-2::int2 AS rstype,{slb}((.+ AS .+)+?){slb}FROM(.|{slb})+",
+        query,
     )
     if not pre_columns:
         return None
@@ -1080,7 +1095,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             for attr, v in attributes.items()
             if attr not in relational_attributes and v.get("type") != "vector"
         ]
-        nbit: int = int(layer_info[layer].get("nlabels", 1))
+        nbit: int = cast(int, layer_info[layer].get("nlabels", 1))
         for attr, v in relational_attributes.items():
             # Quote attribute name (is arbitrary)
             attr_name = f'"{attr}"'
@@ -1145,7 +1160,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     joins_formed = f"\n    LEFT JOIN ".join(joins)
     joins_formed = "" if not joins_formed else f"LEFT JOIN {joins_formed}"
     group_by_formed = ", ".join(group_by)
-    script = _format_meta_query(
+    script = META_QUERY.format(
         selects_formed=selects_formed,
         froms_formed=froms_formed,
         joins_formed=joins_formed,
