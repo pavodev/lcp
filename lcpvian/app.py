@@ -13,7 +13,7 @@ import asyncio
 import uvloop
 
 from collections import defaultdict, deque
-from typing import cast, Type, Any, TypeAlias
+from typing import cast, Type
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
@@ -127,8 +127,10 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that periodically removes stale websocket connections
     """
     lapp = cast(LCPApplication, app)
-    lapp.addkey("redis_listener", Task, asyncio.create_task(listen_to_redis(app)))
-    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
+    lapp.addkey("redis_listener", Task[None], asyncio.create_task(listen_to_redis(app)))
+    lapp.addkey(
+        "ws_cleanup", Task[None], asyncio.create_task(ws_cleanup(app["websockets"]))
+    )
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -168,7 +170,7 @@ async def create_app(test: bool = False) -> web.Application:
     #     .with_status_code(403)
     #     .and_stringify()
     #     .with_additional_fields(
-    #         {"message": "Authentical..."}
+    #         {"message": "Authentication issue..."}
     #     )
     #     .and_call(handle_lama_error)
     # )

@@ -128,16 +128,18 @@ GROUP BY
 
 class LCPApplication(web.Application):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._keys: dict[str, web.AppKey] = {}
+        return None
 
-    def addkey(self, name: str, kind: Any, value: Any):
+    def addkey(self, name: str, kind: Any, value: Any) -> None:
         key: web.AppKey = web.AppKey(name, kind)
         self[key] = value
         self._keys[name] = key
+        return None
 
-    def __getitem__(self, a: str | web.AppKey):
+    def __getitem__(self, a: str | web.AppKey) -> Any:
         if a in self._keys:
             assert isinstance(a, str)
             return self[self._keys[a]]
