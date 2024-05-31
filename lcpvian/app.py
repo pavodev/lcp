@@ -71,7 +71,7 @@ DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 AUTH_CLASS: type | None = None
 try:
     need = cast(str, os.getenv("AUTHENTICATION_CLASS"))
-    if need.strip() and "." in need and need.lower() not in FALSES:
+    if need and need.strip() and "." in need and need.lower() not in FALSES:
         path, name = need.rsplit(".", 1)
         if path and name:
             modu = importlib.import_module(path)
