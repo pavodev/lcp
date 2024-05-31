@@ -36,7 +36,7 @@ test:
     # - apt-get install redis -y
     - apt-get install redis-server -y
     - redis-cli -h redis ping
-    - redis-cli config get client-output-buffer-limit
+    - redis-cli -h config get client-output-buffer-limit
     - cd /builds/LiRI/projects/lcpvian
     - cp .env.example .env
     - mypy lcpvian
