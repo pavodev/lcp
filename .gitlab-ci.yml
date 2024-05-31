@@ -38,7 +38,8 @@ test:
     - redis-cli -h redis ping
     - cd /builds/LiRI/projects/lcpvian
     - mypy lcpvian
-    - python setup.py build_ext --inplace
+    # - python setup.py build_ext --inplace
+    - python -m unittest discover tests
     # unit tests will not work until db access exists
     # - coverage run -m unittest
     # - coverage report

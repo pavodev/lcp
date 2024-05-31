@@ -142,17 +142,17 @@ class Constraints:
         Build a single condition string from all constraints recursively
         """
         formed_out: str = self.part_of or ""
-        out: set[str] = set()
+        out: dict[str, None] = {}
         for member in self.members:
             if isinstance(member, Constraints) and member.quantor:
                 res = self._build_subquery(cast(Self, member))
                 if res.strip():
-                    out.add(res)
+                    out[res] = None
             elif isinstance(member, Constraints) and not member.quantor:
                 member.make()
                 cons = member.conditions()
                 if cons.strip():
-                    out.add(cons)
+                    out[cons] = None
             elif isinstance(member, (TimeConstraint, Constraint)):
                 # do we need a sublevel here?
                 member.make()
@@ -160,9 +160,9 @@ class Constraints:
                 stripped_conditions = [c for c in member._conditions if c.strip()]
                 conjunction = " AND ".join(stripped_conditions)
                 if len(stripped_conditions) > 1 and self.conj.upper() != "AND":
-                    out.add(f"({conjunction})")
+                    out[f"({conjunction})"] = None
                 elif stripped_conditions:
-                    out.add(conjunction)
+                    out[conjunction] = None
         if not out:
             return formed_out
         formed_conj: str

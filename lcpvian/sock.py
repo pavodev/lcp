@@ -128,7 +128,7 @@ async def handle_redis_response(
         logging.error(str(err), extra=extra)
 
 
-async def listen_to_redis(app: web.Application) -> None:
+async def listen_to_redis(app: web.Application, test: bool = False) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender, All the try/except logic is shutdown logic only
@@ -137,7 +137,7 @@ async def listen_to_redis(app: web.Application) -> None:
         try:
             async with app["aredis"].pubsub() as channel:
                 await channel.subscribe(PUBSUB_CHANNEL)
-                await handle_redis_response(channel, app, test=False)
+                await handle_redis_response(channel, app, test=test)
         except ConnectionError as err:
             print("Connection error in listen_to_redis", err)
         except KeyboardInterrupt:

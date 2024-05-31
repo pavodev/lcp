@@ -42,9 +42,7 @@ def json_to_sql(
     result_data: QueryData = ResultsMaker(query_json, conf).results()
     query_part: str
     seg_label: str
-    query_part, seg_label, has_char_range = QueryMaker(
-        query_json, result_data, conf
-    ).query()
+    query_part, seg_label, has_char_range = QueryMaker(query_json, result_data, conf).query()
     unions_part: str = unions(query_json)
     result = result_data.needed_results
     result = result.replace("__seglabel__", seg_label)
@@ -56,6 +54,6 @@ def json_to_sql(
     }
 
     script = BASE.format(**formatters)
-    script = sqlparse.format(script, reindent=True, keyword_case="upper")
+    script = sqlparse.format(script, reindent=True, keyword_case="upper", use_space_around_operators=False)
 
     return script, result_data.meta_json, result_data.post_processes
