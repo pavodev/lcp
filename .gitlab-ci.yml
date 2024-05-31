@@ -6,7 +6,8 @@
 image: python:3.11-slim
 
 services:
-  - redis:latest
+  - name: redis:latest
+    alias: 0.0.0.0
 
 # Change pip's cache directory to be inside the project directory since we can
 # only cache local items.
@@ -36,7 +37,7 @@ test:
     # - apt-get install redis -y
     - apt-get install redis-server -y
     - redis-cli -h redis ping
-    - redis-cli -h config get client-output-buffer-limit
+    - redis-cli -h redis config get client-output-buffer-limit
     - cd /builds/LiRI/projects/lcpvian
     - cp .env.example .env
     - mypy lcpvian
