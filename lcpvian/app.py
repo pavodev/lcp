@@ -234,7 +234,9 @@ async def create_app(test: bool = False) -> web.Application:
     for url, method, func in endpoints:
         cors.add(cors.add(app.router.add_resource(url)).add_route(method, func))
 
-    redis_url: str = f"{REDIS_URL}/{REDIS_DB_INDEX}"
+    redis_url: str = (
+        f"{REDIS_URL}/{REDIS_DB_INDEX}" if REDIS_DB_INDEX > -1 else REDIS_URL
+    )
     redis_settings = Redis.from_url(redis_url)
     limit = "client-output-buffer-limit"
     pubsub_limit = redis_settings.config_get(limit)[limit]
