@@ -137,16 +137,21 @@ def _parse_comparison(
     comparison_object: dict,
 ) -> tuple[dict[str, Any], str, str, QueryType]:
     assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")
-    assert "operator" in comparison_object, KeyError("Couldn't find 'operator' in comparison")
-    typ, right = next((a for a in comparison_object.items() if a[0].endswith("Comparison")), (None,None))
+    assert "operator" in comparison_object, KeyError(
+        "Couldn't find 'operator' in comparison"
+    )
+    typ, right = next(
+        (a for a in comparison_object.items() if a[0].endswith("Comparison")),
+        (None, None),
+    )
     assert typ, KeyError("Couldn't find 'xyzComparison' in comparison")
-    key = cast(dict[str,Any], comparison_object["left"])
+    key = cast(dict[str, Any], comparison_object["left"])
     op = comparison_object["operator"]
     if typ in ("stringComparison", "regexComparison"):
         right = cast(str, right)[1:-1]
-    if op in (">=","<=",">","<") and typ != "functionComparison":
-        typ = "mathComparison" # Overwrite comparison type
-    return (key,cast(str,op),cast(str,typ),cast(str,right))
+    if op in (">=", "<=", ">", "<") and typ != "functionComparison":
+        typ = "mathComparison"  # Overwrite comparison type
+    return (key, cast(str, op), cast(str, typ), cast(str, right))
 
 
 def _label_layer(query_json: list | dict[str, Any]) -> LabelLayer:
@@ -217,13 +222,30 @@ def _joinstring(joins: Joins) -> str:
     return "\n".join(strung + last_joins)
 
 
-def arg_sort_key(d: dict[str, Any]) -> str:
+def arg_sort_key(d: dict[str, Any] | Any) -> str:
     """
     for use in as sorted(args, key=arg_sort_key), to ensure
     that we always get data in same order and so we can hash
     the resultant SQL query and get the same result
+
+    todo: not sure if all the different value types being handled
+    here actually appear in code ... some could be removable
     """
-    return "".join(str(x).strip() for x in d.values())
+    if not isinstance(d, dict):
+        return str(d)
+    out: list[str] = []
+    for v in d.values():
+        if v is None:
+            out.append("None")
+        elif isinstance(v, (list, tuple, set)):
+            for i in v:
+                out.append(arg_sort_key(i))
+        elif not isinstance(v, dict):
+            out.append(str(v))
+        else:
+            assert isinstance(v, dict)
+            out.append(arg_sort_key(v))
+    return "".join(out)
 
 
 def _unique_label(references: dict[str, list], label: str = "anonymous") -> str:
@@ -256,4 +278,4 @@ def _parse_repetition(repetition: str | dict[str, str]) -> tuple[int, int]:
     assert maxi < 0 or maxi >= mini, ValueError(
         f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
     )
-    return (mini,maxi)
+    return (mini, maxi)

@@ -151,43 +151,13 @@ class Prefilter:
         _cols = cast(JSONObject, layers[self.config["segment"]])
         return self.lang in cast(JSONObject, _cols.get("partitions", {}))
 
-    def make(self) -> str:
-        """
-        The main entrypoint: return iterables of conditions and joins to be
-        added to the main query
-        """
-        # first_pass = self.initialise(self.query_json)
-        # strung = set()
-        # for k, v in first_pass.items():
-        #     if not v:
-        #         continue
-        #     strung.add(self._build_one_prefilter(v))
-        # prefilters = self._finalise_prefilters(list(strung))
-        # condition = self._stringify(prefilters)
-        condition = self._condition()
-        if not condition:
-            return ""
-
-        batch_num: str = "rest"
-        if self.conf.batch[-1].isnumeric():
-            e: enumerate[str] = enumerate(reversed(self.conf.batch))
-            first_num: int = next(i for i, c in e if not c.isnumeric())
-            batch_num = self.conf.batch[-first_num:]
-
-        vector_name = f"fts_vector{self._underlang}{batch_num}"
-        return f"""
-            (SELECT {self.config['segment']}_id
-            FROM {self.conf.schema}.{vector_name} vec
-            WHERE {condition}) AS
-        """
-
-    def _stringify(self, prefilters: str) -> str:
+    def _stringify(self, prefilters: list[str]) -> str:
         """
         Build the actual SQL query part
         """
         if not self.config["mapping"].get("hasFTS", True):
             return ""
-        if not prefilters.strip():
+        if not any(x.strip() for x in prefilters):
             return ""
 
         # todo: remove list when main.corpus standardised
@@ -204,19 +174,38 @@ class Prefilter:
                 dict[str, str] | dict[str, dict[str, str]] | list,
                 col_data.get(cast(str, self.lang), col_data),
             )
-        locations: dict[str, str] = {
-            name.split()[0]: str(ix)
-            for ix, name in cast(dict[str, str], col_data).items()
-        }
-        prefilters = prefilters.format(**locations)
-        return f"vec.vector @@ E'{prefilters}'"
+        locations: dict[str, str] = {}
+        conjuncts: list[str] = []
+        tok_name = self.config["firstClass"]["token"]
+        tok_attrs = self.config["layer"][tok_name].get("attributes", {})
+        for ix, name in cast(dict[str, str], col_data).items():
+            attr_name = name.split()[0]
+            locations[attr_name] = str(ix)
+            if tok_attrs.get(attr_name, {}).get("type") != "text":
+                continue
+            for pf in prefilters:
+                if "|" in pf:
+                    continue
+                for c in pf.split("&"):
+                    stripped_c = c.strip(" ()")
+                    if stripped_c.startswith(
+                        ("{" + attr_name + "}", "!{" + attr_name + "}")
+                    ):
+                        conjuncts.append(stripped_c)
+        ps = [pf.format(**locations) for pf in prefilters]
+        conjuncts = [c.format(**locations) for c in conjuncts]
+        stringified = f"vec.vector @@ E'{' <1> '.join(ps) }'"
+        if conjuncts:
+            cond_conjuncts = [f"vec.vector @@ E'{c}'" for c in conjuncts]
+            stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
+        return stringified
 
-    def initialise(self, query_json: QueryPart) -> dict[int, Any]:
+    def initialise(self, query_json: QueryPart) -> list[SingleNode | Conjuncted | None]:
         """
         todo: update this for latest query json
         """
         # query_json = query_json["query"]
-        sections = defaultdict(list)
+        list_nodes: list[SingleNode | Conjuncted | None] = []
         count = 0
         for obj in query_json:
             if not isinstance(obj, dict):
@@ -239,16 +228,17 @@ class Prefilter:
                 res = None  # No constraints
                 if cons:
                     res = self._process_unit(cons)
-                sections[count].append(res)
-        return dict(sections)
+                list_nodes.append(res)
+        return list_nodes
+
+    def _prefilter_conjuncts(self) -> list[str]:
+        first_pass = self.initialise(self.query_json)
+        return self._stringify_nodes(first_pass)
+        # strung: list[str] = self._stringify_nodes(first_pass)
+        # return self._finalise_prefilters(strung)
 
     def _condition(self) -> str:
-        first_pass = self.initialise(self.query_json)
-        strung = set()
-        for k, v in first_pass.items():
-            strung.add(self._build_one_prefilter(v))
-        prefilters = self._finalise_prefilters(list(strung))
-        return self._stringify(prefilters)
+        return self._stringify(self._prefilter_conjuncts())
 
     def _process_unit(
         self, filt: list[dict[str, Any]]
@@ -316,14 +306,14 @@ class Prefilter:
         Create a prefilter string with everything but the column-conversion
         """
         if isinstance(item, Conjuncted):
-            return self._build_one_prefilter([item])
+            return " <1> ".join(self._stringify_nodes([item]))
         elif isinstance(item, SingleNode):
             return item.as_prefilter()
         raise NotImplementedError("should not be here")
 
-    def _build_one_prefilter(
+    def _stringify_nodes(
         self, prefilter: list[Conjuncted | SingleNode | None]
-    ) -> str:
+    ) -> list[str]:
         """
         Create the prefilter string from a single item in the defaultdict value
         """
@@ -359,8 +349,7 @@ class Prefilter:
                 joined = f"({joined})"
             all_made.append(joined)
 
-        final = " <1> ".join(all_made).strip()
-        return final
+        return all_made
 
     def _finalise_prefilters(self, prefilters: list[str]) -> str:
         """

@@ -5,7 +5,6 @@ Register URLs and endpoints, add redis, query_service, websockets, etc.
 """
 
 import importlib
-import json
 import logging
 import os
 
@@ -14,7 +13,7 @@ import asyncio
 import uvloop
 
 from collections import defaultdict, deque
-from typing import cast
+from typing import cast, Type, Any, TypeAlias
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
@@ -47,7 +46,14 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import TRUES, FALSES, handle_lama_error, handle_timeout, load_env
+from .utils import (
+    TRUES,
+    FALSES,
+    LCPApplication,
+    handle_lama_error,
+    handle_timeout,
+    load_env,
+)
 from .video import video
 
 
@@ -120,10 +126,9 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    listener: Task = asyncio.create_task(listen_to_redis(app))
-    app["redis_listener"] = listener
-    cleanup: Task = asyncio.create_task(ws_cleanup(app["websockets"]))
-    app["ws_cleanup"] = cleanup
+    lapp = cast(LCPApplication, app)
+    lapp.addkey("redis_listener", Task, asyncio.create_task(listen_to_redis(app)))
+    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -168,8 +173,8 @@ async def create_app(test: bool = False) -> web.Application:
     #     .and_call(handle_lama_error)
     # )
 
-    app = web.Application(middlewares=[catcher.middleware])
-    app["mypy"] = C_COMPILED
+    app = LCPApplication(middlewares=[catcher.middleware])
+    app.addkey("mypy", bool, C_COMPILED)
     if C_COMPILED:
         print("Running mypy/c app!")
 
@@ -188,14 +193,10 @@ async def create_app(test: bool = False) -> web.Application:
     # when a user leaves the app, the connection should be removed. If it's not,
     # the dict is periodically cleaned by a separate thread, to stop this from always growing
     ws: Websockets = defaultdict(set)
-    app["websockets"] = ws
-    app["_debug"] = DEBUG
-
-    app["auth_class"] = AUTH_CLASS
-
-    # here we store corpus_id: config
-    conf: dict[str, CorpusConfig] = {}
-    app["config"] = conf
+    app.addkey("websockets", Websockets, ws)
+    app.addkey("_debug", bool, DEBUG)
+    app.addkey("auth_class", Type, AUTH_CLASS)
+    app.addkey("config", CorpusConfig, {})
 
     # app["auth"] = Authenticator(app)
 
@@ -240,44 +241,68 @@ async def create_app(test: bool = False) -> web.Application:
     redis_settings.quit()
     _pieces = pubsub_limit.split()
     sleep_time = int(_pieces[-1]) + 2
-    app["redis_pubsub_limit_sleep"] = sleep_time
+    app.addkey("redis_pubsub_limit_sleep", int, sleep_time)
     retry_policy: Retry = Retry(ConstantBackoff(sleep_time), 3)
     async_retry_policy: AsyncRetry = AsyncRetry(ConstantBackoff(sleep_time), 3)
 
     # Danny seemed to say mypy used to need a parser_class here, but newer redis releases seem to do away with parser_class
     # app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
-    app["aredis"] = aioredis.Redis.from_url(
-        redis_url,
-        health_check_interval=10,
-        # parser_class=ParserClass,
-        retry_on_error=[ConnectionError],
-        retry=async_retry_policy,
+    app.addkey(
+        "aredis",
+        aioredis.Redis,
+        aioredis.Redis.from_url(
+            redis_url,
+            health_check_interval=10,
+            # parser_class=ParserClass,
+            retry_on_error=[ConnectionError],
+            retry=async_retry_policy,
+        ),
     )
-    app["redis"] = Redis.from_url(
-        redis_url,
-        health_check_interval=10,
-        retry_on_error=[ConnectionError],
-        retry=retry_policy,
+    app.addkey(
+        "redis",
+        Redis,
+        Redis.from_url(
+            redis_url,
+            health_check_interval=10,
+            retry_on_error=[ConnectionError],
+            retry=retry_policy,
+        ),
     )
-    app["redis"].set("timebytes", json.dumps([]))
-    app["_redis_url"] = redis_url
+
+    redis = cast(web.Application, app)["redis"]
 
     # different queues for different kinds of jobs
-    app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)
-    app["query"] = Queue("query", connection=app["redis"])
-    app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
-    app["_use_cache"] = os.getenv("USE_CACHE", "1").lower() in TRUES
+    app.addkey("internal", Queue, Queue("internal", connection=redis, job_timeout=-1))
+    app.addkey("query", Queue, Queue("query", connection=redis))
+    app.addkey(
+        "background",
+        Queue,
+        Queue("background", connection=redis, job_timeout=-1),
+    )
+    app.addkey("_use_cache", bool, os.getenv("USE_CACHE", "1").lower() in TRUES)
 
     # so far unused, we could potentially provide users with detailed feedback by
     # exploiting the 'failed job registry' provided by RQ.
-    app["failed_registry_internal"] = FailedJobRegistry(queue=app["internal"])
-    app["failed_registry_query"] = FailedJobRegistry(queue=app["query"])
-    app["failed_registry_background"] = FailedJobRegistry(queue=app["background"])
+    app.addkey(
+        "failed_registry_internal",
+        FailedJobRegistry,
+        FailedJobRegistry(queue=cast(Queue, app["internal"])),
+    )
+    app.addkey(
+        "failed_registry_query",
+        FailedJobRegistry,
+        FailedJobRegistry(queue=cast(Queue, app["query"])),
+    )
+    app.addkey(
+        "failed_registry_background",
+        FailedJobRegistry,
+        FailedJobRegistry(queue=cast(Queue, app["background"])),
+    )
 
-    app["query_service"] = QueryService(app)
-    await app["query_service"].get_config()
-    canceled: deque[str] = deque(maxlen=99999)
-    app["canceled"] = canceled
+    qs: QueryService = QueryService(app)
+    app.addkey("query_service", QueryService, qs)
+    await qs.get_config()
+    app.addkey("canceled", deque[str], deque(maxlen=99999))
 
     if test:
         return app

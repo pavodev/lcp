@@ -121,10 +121,9 @@ class DDL:
                     GROUP BY {x});"""
         )
 
-        self.update_prep_segs: Callable[
-            [str, list[str], str, str, list[tuple]], str
-        ] = lambda layer, attrs, seg, tok, joins: dedent(
-            f"""
+        self.update_prep_segs: Callable[[str, list[str], str, str, list[str]], str] = (
+            lambda layer, attrs, seg, tok, joins: dedent(
+                f"""
             UPDATE prepared_{seg} ps
             SET annotations = jsonb_set(ps.annotations, '{LB}LB{RB}{layer}{LB}RB{RB}', cte.annotations::jsonb)
             FROM (
@@ -134,22 +133,26 @@ class DDL:
                 FROM (
                     SELECT
                         subs.{seg}_id,
-                        jsonb_build_array((array_agg({tok}_id))[1], array_length(array_agg({tok}_id),1), json_build_object({', '.join([SG+a+SG+', subs.'+a for a in attrs])})) AS annotations
+                        jsonb_build_array(
+                            (array_agg({tok}_id))[1],
+                            array_length(array_agg({tok}_id),1),
+                            json_build_object({', '.join([SG+a+SG+', subs.'+a for a in [x.split('.')[1] for x in attrs]])})
+                        ) AS annotations
                     FROM (
                         SELECT
                             t.{seg}_id,
-                            ann.{layer.lower()}_id{', '+', '.join([('ann_'+a+'.' if a in [j[1] for j in joins] else 'ann.')+a+' AS '+a for a in attrs]) if attrs else ''},
+                            ann.{layer.lower()}_id{', '+(', '.join(attrs) if attrs else '')},
                             ann.char_range,
                             t.{tok}_id
                         FROM {LB}batch{RB} t
-                        CROSS JOIN {layer.lower()} ann
-                        {'JOIN '+' JOIN '.join([j[0]+' ann_'+j[1]+' ON ann.'+j[1]+'_id = ann_'+j[1]+'.'+j[1]+'_id' for j in joins]) if joins else ''}
-                        WHERE t.char_range && ann.char_range
+                        JOIN {layer.lower()} ann ON t.char_range && ann.char_range
+                        {'JOIN '+' JOIN '.join(joins) if joins else ''}
                     ) subs
-                    GROUP BY {layer.lower()}_id{(', '+', '.join(attrs) if attrs else '')}, {seg}_id
+                    GROUP BY {layer.lower()}_id{(', '+', '.join([a.split('.')[1] for a in attrs]) if attrs else '')}, {seg}_id
                 ) sub GROUP BY {seg}_id
             ) cte
             WHERE cte.{seg}_id = ps.{seg}_id;"""
+            )
         )
 
         self.m_token_n: Callable[[str, str], str] = lambda x, y: dedent(
@@ -778,9 +781,11 @@ class CTProcessor:
             )
             tables.append(ptable)
         else:
-            has_media = self.corpus_temp["meta"].get("mediaSlots")
+            has_media = self.corpus_temp["meta"].get("mediaSlots", {})
             if l_name == self.globals.base_map["document"] and has_media:
                 table_cols.append(Column("media", "jsonb"))
+            if any(x.get("mediaType") == "video" for x in has_media.values()):
+                table_cols.append(Column("name", "text"))
             ptable = None
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)
@@ -1014,17 +1019,12 @@ class CTProcessor:
         tokname = self.globals.base_map["token"]
         batchname = f"{tokname}<batch>"
         mapd["layer"][tokname]["batches"] = self.globals.num_partitions
-        # mapd["layer"][tokname]["relation"] = batchname
         segname = self.globals.base_map["segment"]
         mapd["layer"][segname]["prepared"] = {
             "relation": ("prepared_" + segname),
             "columnHeaders": rel_cols_names,
         }
-        # mapd["layer"][segname]["relation"] = segname + "<batch>"
         self.globals.mapping = mapd
-
-        # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
-        # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
 
         searchpath = f"\nSET search_path TO {self.schema_name};"
 
@@ -1051,13 +1051,6 @@ class CTProcessor:
             "\n                      , ".join(rel_cols_names)
             + f"\n                     ) AS toks\n                FROM {{batch}}\n                "
             + json_joins_str
-            # + "\n                ".join(
-            #     [
-            #         f"{'JOIN' if fk['table'].lstrip('token_') == 'form' else 'LEFT JOIN'} {fk['table']} USING ({fk['column']})"
-            #         for x in rel_cols
-            #         if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
-            #     ]
-            # )
         )
 
         query: str = (
@@ -1075,22 +1068,21 @@ class CTProcessor:
         for layer, props in self.corpus_temp["layer"].items():
             if layer == segname or props.get("contains") != tokname:
                 continue
+            mapping_attrs = cast(
+                dict[str, Any], self.globals.mapping["layer"].get(layer, {})
+            ).get("attributes", {})
             attrs = []
-            joins: list[tuple[Any, ...]] = []
-            for a, p in props.get("attributes", {}).items():
-                attrs.append(a)
-                if p.get("type") not in ("text", "dict"):
+            joins: list[str] = []
+            for a in props.get("attributes", {}):
+                info: dict[str, Any] = mapping_attrs.get(a, {})
+                if info.get("type") != "relation":
+                    attrs.append(f"ann.{a}")
                     continue
-                mapping: dict[str, Any] = cast(
-                    dict[str, Any], self.globals.mapping["layer"]
-                )
-                info: dict[str, Any] = (
-                    mapping.get(layer, {}).get("attributes", {}).get(a, {})
-                )
-                assert (
-                    "name" in mapping and mapping.get("type") == "relation"
-                ), LookupError(f"Invalid mapping for {layer}->{a}")
-                joins.append((mapping["name"], a))
+                table = info.get("name", "")
+                assert table, LookupError(f"Mapping missing 'name' for {layer}->{a}")
+                attrs.append(f"ann_{a}.{a}")
+                key = info.get("key", a)
+                joins.append(f"{table} ann_{a} ON ann.{key}_id = ann_{a}.{key}_id")
             update: str = (
                 # layer, attrs, seg, tok, joins
                 self.ddl.update_prep_segs(layer, attrs, segname, tokname, joins)
@@ -1186,45 +1178,6 @@ def main(corpus_template_path: str) -> None:
     print("Mapping:", data["mapping"])
 
     return
-    # need to comment out the below for mypy
-    """
-
-    globs = Globs()
-
-    globs.base_map = corpus_temp["firstClass"]
-
-    processor = CTProcessor(corpus_temp, globs)
-    processor.ddl.tabwidth = args.tabwidth
-
-    processor.process_schema()
-    processor.process_layers()
-
-    processor.create_compute_prep_segs()
-
-    print("\n\n".join([x for x in globs.schema]))
-    print()
-    print(
-        "\n\n".join([x.create_DDL() for x in sorted(globs.types, key=lambda x: x.name)])
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_tbl() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_idxs() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    """
 
 
 if __name__ == "__main__":

@@ -27,7 +27,6 @@ from .utils import (
     _lama_project_create,
     _lama_user_details,
     _sanitize_corpus_name,
-    ensure_authorised,
 )
 
 
@@ -173,7 +172,6 @@ def _correct_doc(path: str) -> None:
         fo.write(data)
 
 
-@ensure_authorised
 async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
@@ -350,7 +348,6 @@ def _move_media_files(cpath: str, corpus_dir: str) -> None:
         )
 
 
-@ensure_authorised
 async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTs JSON
@@ -478,6 +475,7 @@ async def make_schema(request: web.Request) -> web.Response:
     drops += deletes
 
     template["projects"] = [proj_id]
+    template["project"] = proj_id
     template["schema_name"] = schema_name
 
     try:
