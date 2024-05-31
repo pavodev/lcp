@@ -301,7 +301,8 @@ async def create_app(test: bool = False) -> web.Application:
 
     qs: QueryService = QueryService(app)
     app.addkey("query_service", QueryService, qs)
-    await qs.get_config()
+    if not test:
+        await qs.get_config()
     app.addkey("canceled", deque[str], deque(maxlen=99999))
 
     if test:
