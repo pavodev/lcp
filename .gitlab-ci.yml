@@ -37,6 +37,7 @@ test:
     - apt-get install redis-server -y
     - redis-cli -h redis ping
     - cd /builds/LiRI/projects/lcpvian
+    - cp .env.example .env
     - mypy lcpvian
     # - python setup.py build_ext --inplace
     - python -m unittest discover tests
