@@ -1089,7 +1089,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         joins_later: dict[str, Any] = {}
         attributes: dict[str, Any] = layer_info[layer].get("attributes", {})
         relational_attributes = {
-            k: v for k, v in attributes.items() if v.get("type") == "relation"
+            k: v
+            for k, v in attributes.items()
+            if mapping_attrs.get(k, {}).get("type") == "relation"
         }
         # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
         selects += [
