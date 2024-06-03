@@ -1,9 +1,5 @@
-from __future__ import annotations
-
-import sys
-
 from collections import defaultdict
-from typing import Any, Sequence, TypeVar, cast
+from typing import Any, Sequence, cast
 
 from .typed import JSON, LabelLayer, QueryPart, JSONObject
 from .utils import (
@@ -24,11 +20,13 @@ class SingleNode:
     Store a query like pos=NOUN , whether it can be prefiltered, and its realisation as prefilter
     """
 
-    def __init__(self, field: str, op: str, query: str, isRegex: bool = False, *args, **kwargs) -> None:
+    def __init__(
+        self, field: str, op: str, query: str, is_regex: bool = False, *args, **kwargs
+    ) -> None:
         self.field = field
         self.op = op
         self.query = query
-        self.is_regex = isRegex
+        self.is_regex = is_regex
         self.inverse = "!" in op
         self.ignore_diacritics = False
         self.case_sensitive = True
@@ -73,7 +71,7 @@ class SingleNode:
         """
         Can this node be used as a prefilter?
         """
-        if self.op not in ("=","!="):
+        if self.op not in ("=", "!="):
             return False
         if self.is_prefix and self.query in MATCHES_ALL:
             return False
@@ -153,43 +151,13 @@ class Prefilter:
         _cols = cast(JSONObject, layers[self.config["segment"]])
         return self.lang in cast(JSONObject, _cols.get("partitions", {}))
 
-    def make(self) -> str:
-        """
-        The main entrypoint: return iterables of conditions and joins to be
-        added to the main query
-        """
-        # first_pass = self.initialise(self.query_json)
-        # strung = set()
-        # for k, v in first_pass.items():
-        #     if not v:
-        #         continue
-        #     strung.add(self._build_one_prefilter(v))
-        # prefilters = self._finalise_prefilters(list(strung))
-        # condition = self._stringify(prefilters)
-        condition = self._condition()
-        if not condition:
-            return ""
-
-        batch_num: str = "rest"
-        if self.conf.batch[-1].isnumeric():
-            e: enumerate[str] = enumerate(reversed(self.conf.batch))
-            first_num: int = next(i for i, c in e if not c.isnumeric())
-            batch_num = self.conf.batch[-first_num:]
-
-        vector_name = f"fts_vector{self._underlang}{batch_num}"
-        return f"""
-            (SELECT {self.config['segment']}_id
-            FROM {self.conf.schema}.{vector_name} vec
-            WHERE {condition}) AS
-        """
-
-    def _stringify(self, prefilters: str) -> str:
+    def _stringify(self, prefilters: list[str]) -> str:
         """
         Build the actual SQL query part
         """
         if not self.config["mapping"].get("hasFTS", True):
             return ""
-        if not prefilters.strip():
+        if not any(x.strip() for x in prefilters):
             return ""
 
         # todo: remove list when main.corpus standardised
@@ -204,21 +172,40 @@ class Prefilter:
         elif self._has_partitions:
             col_data = cast(
                 dict[str, str] | dict[str, dict[str, str]] | list,
-                col_data.get(cast(str,self.lang), col_data)
+                col_data.get(cast(str, self.lang), col_data),
             )
-        locations: dict[str, str] = {
-            name.split()[0]: str(ix)
-            for ix, name in cast(dict[str, str], col_data).items()
-        }
-        prefilters = prefilters.format(**locations)
-        return f"vec.vector @@ E'{prefilters}'"
+        locations: dict[str, str] = {}
+        conjuncts: list[str] = []
+        tok_name = self.config["firstClass"]["token"]
+        tok_attrs = self.config["layer"][tok_name].get("attributes", {})
+        for ix, name in cast(dict[str, str], col_data).items():
+            attr_name = name.split()[0]
+            locations[attr_name] = str(ix)
+            if tok_attrs.get(attr_name, {}).get("type") != "text":
+                continue
+            for pf in prefilters:
+                if "|" in pf:
+                    continue
+                for c in pf.split("&"):
+                    stripped_c = c.strip(" ()")
+                    if stripped_c.startswith(
+                        ("{" + attr_name + "}", "!{" + attr_name + "}")
+                    ):
+                        conjuncts.append(stripped_c)
+        ps = [pf.format(**locations) for pf in prefilters]
+        conjuncts = [c.format(**locations) for c in conjuncts]
+        stringified = f"vec.vector @@ E'{' <1> '.join(ps) }'"
+        if conjuncts:
+            cond_conjuncts = [f"vec.vector @@ E'{c}'" for c in conjuncts]
+            stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
+        return stringified
 
-    def initialise(self, query_json: QueryPart) -> dict[int, Any]:
+    def initialise(self, query_json: QueryPart) -> list[SingleNode | Conjuncted | None]:
         """
         todo: update this for latest query json
         """
         # query_json = query_json["query"]
-        sections = defaultdict(list)
+        list_nodes: list[SingleNode | Conjuncted | None] = []
         count = 0
         for obj in query_json:
             if not isinstance(obj, dict):
@@ -228,27 +215,34 @@ class Prefilter:
             seq = cast(dict[str, JSON], obj["sequence"])
             members = cast(list[dict[str, JSON]], seq["members"])
             for member in members:
-                if "unit" not in member: continue # TODO: handle nested sequences
-                cons = cast(list[dict[str, Any]], cast(dict, member["unit"]).get("constraints", []))
+                if "unit" not in member:
+                    continue  # TODO: handle nested sequences
+                cons = cast(
+                    list[dict[str, Any]],
+                    cast(dict, member["unit"]).get("constraints", []),
+                )
                 # if not cons:
                 #     count += 1
                 #     continue
                 # res = self._process_unit(cons)
-                res = None # No constraints
+                res = None  # No constraints
                 if cons:
                     res = self._process_unit(cons)
-                sections[count].append(res)
-        return dict(sections)
+                list_nodes.append(res)
+        return list_nodes
+
+    def _prefilter_conjuncts(self) -> list[str]:
+        first_pass = self.initialise(self.query_json)
+        return self._stringify_nodes(first_pass)
+        # strung: list[str] = self._stringify_nodes(first_pass)
+        # return self._finalise_prefilters(strung)
 
     def _condition(self) -> str:
-        first_pass = self.initialise(self.query_json)
-        strung = set()
-        for k, v in first_pass.items():
-            strung.add(self._build_one_prefilter(v))
-        prefilters = self._finalise_prefilters(list(strung))
-        return self._stringify(prefilters)
+        return self._stringify(self._prefilter_conjuncts())
 
-    def _process_unit(self, filt: list[dict[str, Any]]) -> SingleNode | Conjuncted | None:
+    def _process_unit(
+        self, filt: list[dict[str, Any]]
+    ) -> SingleNode | Conjuncted | None:
         """
         Handle unit json object
         """
@@ -260,12 +254,16 @@ class Prefilter:
                 key, op, type, text = _parse_comparison(filt[0]["comparison"])
                 if "function" in key or type == "functionComparison":
                     return None
-                key_str = cast(str, key.get("entity",""))
-                if _is_prefix(text,op,type):
-                    return SingleNode(key_str, op, cast(str,text), type=="regexComparison")
-            elif next(iter(filt[0]),"").startswith("logicalOp"):
-                logic: dict[str,Any] = next(iter(filt[0].values()),{})
-                result = self._attempt_conjunct(logic.get('args',[]), logic.get('operator',"AND"))
+                key_str = cast(str, key.get("entity", ""))
+                if _is_prefix(cast(str, text), op, type):
+                    return SingleNode(
+                        key_str, op, cast(str, text), type == "regexComparison"
+                    )
+            elif next(iter(filt[0]), "").startswith("logicalOp"):
+                logic: dict[str, Any] = next(iter(filt[0].values()), {})
+                result = self._attempt_conjunct(
+                    logic.get("args", []), logic.get("operator", "AND")
+                )
                 return result
         return None
 
@@ -279,26 +277,28 @@ class Prefilter:
 
         for arg in sorted(filt, key=arg_sort_key):
             # todo recursive ... how to handle?
-            if next(iter(arg),"").startswith("logicalOp"):
-                logic: dict[str,Any] = next(iter(arg.values()),{})
-                filt = cast(list[dict[str,Any]],logic.get('args',[]))
-                result = self._attempt_conjunct(filt, logic.get('operator',"AND"))
+            if next(iter(arg), "").startswith("logicalOp"):
+                logic: dict[str, Any] = next(iter(arg.values()), {})
+                filt = cast(list[dict[str, Any]], logic.get("args", []))
+                result = self._attempt_conjunct(filt, logic.get("operator", "AND"))
                 if result:
                     matches.append(result)
                 continue
             if "comparison" not in arg:
                 continue
-            key, op, type, text = _parse_comparison(arg["comparison"])
-            if "function" in key or type == "functionComparison":
-                continue # todo: check this?
+            key, op, typ, text = _parse_comparison(arg["comparison"])
+            if "function" in key or typ == "functionComparison":
+                continue  # todo: check this?
             key_str = cast(str, key.get("entity", ""))
-            if _is_prefix(text,op,type):
-                matches.append(SingleNode(key_str, op, cast(str,text), type=="regexComparison"))
-        
+            if _is_prefix(cast(str, text), op, typ):
+                matches.append(
+                    SingleNode(key_str, op, cast(str, text), typ == "regexComparison")
+                )
+
         # Do not use any prefilter at all for the disjunction if one of the disjuncts could not be used
         if kind == "OR" and len(matches) < len(filt):
             return None
-         
+
         return Conjuncted(kind, matches) if matches else None
 
     def _as_string(self, item: Conjuncted | SingleNode) -> str:
@@ -306,12 +306,14 @@ class Prefilter:
         Create a prefilter string with everything but the column-conversion
         """
         if isinstance(item, Conjuncted):
-            return self._build_one_prefilter([item])
+            return " <1> ".join(self._stringify_nodes([item]))
         elif isinstance(item, SingleNode):
             return item.as_prefilter()
         raise NotImplementedError("should not be here")
 
-    def _build_one_prefilter(self, prefilter: list[Conjuncted | SingleNode | None]) -> str:
+    def _stringify_nodes(
+        self, prefilter: list[Conjuncted | SingleNode | None]
+    ) -> list[str]:
         """
         Create the prefilter string from a single item in the defaultdict value
         """
@@ -319,9 +321,9 @@ class Prefilter:
 
         for prefilt in prefilter:
             if prefilt is None:
-                all_made.append("(!1a|1a)") # Add a tautology
+                all_made.append("(!1a|1a)")  # Add a tautology
                 continue
-            
+
             single = []
             if isinstance(prefilt, Conjuncted):
                 connective = prefilt.conj
@@ -347,8 +349,7 @@ class Prefilter:
                 joined = f"({joined})"
             all_made.append(joined)
 
-        final = " <1> ".join(all_made).strip()
-        return final
+        return all_made
 
     def _finalise_prefilters(self, prefilters: list[str]) -> str:
         """
@@ -364,13 +365,13 @@ class Prefilter:
         return " & ".join(sorted(final))
 
 
-def _is_prefix(query, op: str = "=", type = "string") -> bool:
+def _is_prefix(query: str, op: str = "=", typ: str = "string") -> bool:
     """
     Can a query be treated as a prefix in a prefilter? regex like ^a.* for example
     """
-    if op not in ("=","!="):
+    if op not in ("=", "!="):
         return False
-    if type == "stringComparison":
+    if typ == "stringComparison":
         return True
     if query.startswith("^") and query.lstrip("^").isalnum():
         return True
@@ -378,7 +379,9 @@ def _is_prefix(query, op: str = "=", type = "string") -> bool:
         if query.rstrip().endswith(pattern):
             query = query[: -len(pattern)]
             query = query.lstrip().lstrip("^")
-            if not query or any(i in query for i in ".^$*+-?[]{}\\/()|"): # there remain regex characters in the rest of the pattern
+            if not query or any(
+                i in query for i in ".^$*+-?[]{}\\/()|"
+            ):  # there remain regex characters in the rest of the pattern
                 continue
             return True
     return False

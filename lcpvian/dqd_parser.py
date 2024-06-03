@@ -16,27 +16,17 @@ PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "par
 PARSER_FILES = [os.path.join(PARSER_PATH, f) for f in sorted(os.listdir(PARSER_PATH))]
 
 # dqd_grammar_fn: str = next((os.path.join(PARSER_PATH,f) for f in sorted(os.listdir(PARSER_PATH)) if f.endswith(".lark")), "")
-dqd_grammar_fn: str = next(
-    (f for f in PARSER_FILES if re.match(r".*dqd[^/]*\.lark$", f)), ""
-)
-assert os.path.isfile(
-    dqd_grammar_fn
-), f"Could not find a valid DQD lark file in the current directory"
+dqd_grammar_fn: str = next((f for f in PARSER_FILES if re.match(r".*dqd[^/]*\.lark$", f)), "")
+assert os.path.isfile(dqd_grammar_fn), f"Could not find a valid DQD lark file in the current directory"
 dqd_grammar: str = open(dqd_grammar_fn).read()
 
-cqp_grammar_fn: str = next(
-    (f for f in PARSER_FILES if re.match(r".*cqp[^/]*\.lark$", f)), ""
-)
-assert os.path.isfile(
-    cqp_grammar_fn
-), f"Could not find a valid CQP lark file in the current directory"
+cqp_grammar_fn: str = next((f for f in PARSER_FILES if re.match(r".*cqp[^/]*\.lark$", f)), "")
+assert os.path.isfile(cqp_grammar_fn), f"Could not find a valid CQP lark file in the current directory"
 cqp_grammar: str = open(cqp_grammar_fn).read()
 
 
 json_schema_fn: str = next((f for f in PARSER_FILES if f.endswith(".json")), "")
-assert os.path.isfile(
-    json_schema_fn
-), f"Could not find a valid json file in the current directory"
+assert os.path.isfile(json_schema_fn), f"Could not find a valid json file in the current directory"
 json_schema: dict = json.loads(open(json_schema_fn).read())
 
 
@@ -65,9 +55,7 @@ def forward(schema: dict) -> tuple[dict, bool]:
     if "items" in schema:
         return forward(schema["items"])[0], True
     if "$ref" in schema:
-        return forward(
-            json_schema.get("$defs", {}).get(re.sub(r".+\/", "", schema["$ref"]))
-        )
+        return forward(json_schema.get("$defs", {}).get(re.sub(r".+\/", "", schema["$ref"])))
 
     if "oneOf" in schema:
         schema["properties"] = schema.get("properties", {})
@@ -98,31 +86,23 @@ def found_rule_down_the_line(property_schema: dict = {}, rule: str = "") -> bool
     return False
 
 
-def to_dict(
-    tree: Any, properties_parent: dict = {}, conf: dict[str, Any] | None = None
-) -> Any:
+def to_dict(tree: Any, properties_parent: dict = {}, conf: dict[str, Any] | None = None) -> Any:
     if isinstance(tree, Token):
         return tree.value
 
     name: str = tree.data
     camel_name: str = to_camel(name)
 
-    schema, is_parent_array = forward(
-        properties_parent.get(camel_name, properties_parent)
-    )
+    schema, is_parent_array = forward(properties_parent.get(camel_name, properties_parent))
 
     if schema.get("type", "") == "string" and not is_parent_array:
-        assert (
-            len(tree.children) == 1
-        ), f"{camel_name} is a string but it has more than one child {tree.pretty()}"
+        assert len(tree.children) == 1, f"{camel_name} is a string but it has more than one child {tree.pretty()}"
         if isinstance(tree.children[0], Token):
             return tree.children[0].value
         elif isinstance(tree.children[0].children[0], Token):
             return tree.children[0].children[0].value
         else:
-            assert (
-                False
-            ), f"Couldn't find a string for {camel_name} even going two levels deep {tree.pretty()}"
+            assert False, f"Couldn't find a string for {camel_name} even going two levels deep {tree.pretty()}"
 
     children_properties = schema.get("properties", schema)
 
@@ -140,26 +120,14 @@ def to_dict(
 
         if child_name == "cqp":
             label_child: Any = next(
-                (
-                    c
-                    for c in child.children
-                    if not isinstance(c, Token) and c.data == "label"
-                ),
+                (c for c in child.children if not isinstance(c, Token) and c.data == "label"),
                 None,
             )
             part_of_child: Any = next(
-                (
-                    c
-                    for c in child.children
-                    if not isinstance(c, Token) and c.data == "part_of"
-                ),
+                (c for c in child.children if not isinstance(c, Token) and c.data == "part_of"),
                 None,
             )
-            cqp_rules: Any = next(
-                c
-                for c in child.children
-                if not isinstance(c, Token) and c.data == "cqp__"
-            )
+            cqp_rules: Any = next(c for c in child.children if not isinstance(c, Token) and c.data == "cqp__")
             cqp_str: str = re.sub(r"(^|\n)\s*cqp__", "", cqp_rules.pretty())
             cqp: Any = cqp_parser.parse(cqp_str)
             cqp_obj: dict[str, Any] = cqp_to_json(cqp, conf)
@@ -219,11 +187,7 @@ def to_dict(
             values[child_name] = child_value
 
     list_values: list = list(values.values())
-    if (
-        skip_children_names
-        and is_parent_array
-        and all(isinstance(v, list) for v in list_values)
-    ):
+    if skip_children_names and is_parent_array and all(isinstance(v, list) for v in list_values):
         assert (
             len(list_values) == 1
         ), f"Only one child list (<>{list_values}) can be embedded in a parent list ({camel_name})"

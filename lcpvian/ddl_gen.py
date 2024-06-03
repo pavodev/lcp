@@ -20,8 +20,9 @@ TYPES_MAP = {
     "number": "int",
     "dict": "jsonb",
     "array": "text[]",
-    "vector": "main.vector"
+    "vector": "main.vector",
 }
+
 
 @dataclass
 class DataNeededLater:
@@ -71,6 +72,8 @@ class Globs:
 LB = "{"
 RB = "}"
 SG = "'"
+
+
 class DDL:
     """
     base DDL class for DB entities
@@ -118,8 +121,9 @@ class DDL:
                     GROUP BY {x});"""
         )
 
-        self.update_prep_segs: Callable[[str, list[str], str, str, list[tuple]], str] = lambda layer, attrs, seg, tok, joins: dedent(
-            f"""
+        self.update_prep_segs: Callable[[str, list[str], str, str, list[str]], str] = (
+            lambda layer, attrs, seg, tok, joins: dedent(
+                f"""
             UPDATE prepared_{seg} ps
             SET annotations = jsonb_set(ps.annotations, '{LB}LB{RB}{layer}{LB}RB{RB}', cte.annotations::jsonb)
             FROM (
@@ -129,22 +133,26 @@ class DDL:
                 FROM (
                     SELECT
                         subs.{seg}_id,
-                        jsonb_build_array((array_agg({tok}_id))[1], array_length(array_agg({tok}_id),1), json_build_object({', '.join([SG+a+SG+', subs.'+a for a in attrs])})) AS annotations
+                        jsonb_build_array(
+                            (array_agg({tok}_id))[1],
+                            array_length(array_agg({tok}_id),1),
+                            json_build_object({', '.join([SG+a+SG+', subs.'+a for a in [x.split('.')[1] for x in attrs]])})
+                        ) AS annotations
                     FROM (
                         SELECT
                             t.{seg}_id,
-                            ann.{layer.lower()}_id{', '+', '.join([('ann_'+a+'.' if a in [j[1] for j in joins] else 'ann.')+a+' AS '+a for a in attrs]) if attrs else ''},
+                            ann.{layer.lower()}_id{', '+(', '.join(attrs) if attrs else '')},
                             ann.char_range,
                             t.{tok}_id
                         FROM {LB}batch{RB} t
-                        CROSS JOIN {layer.lower()} ann
-                        {'JOIN '+' JOIN '.join([j[0]+' ann_'+j[1]+' ON ann.'+j[1]+'_id = ann_'+j[1]+'.'+j[1]+'_id' for j in joins]) if joins else ''}
-                        WHERE t.char_range && ann.char_range
+                        JOIN {layer.lower()} ann ON t.char_range && ann.char_range
+                        {'JOIN '+' JOIN '.join(joins) if joins else ''}
                     ) subs
-                    GROUP BY {layer.lower()}_id{(', '+', '.join(attrs) if attrs else '')}, {seg}_id
+                    GROUP BY {layer.lower()}_id{(', '+', '.join([a.split('.')[1] for a in attrs]) if attrs else '')}, {seg}_id
                 ) sub GROUP BY {seg}_id
             ) cte
             WHERE cte.{seg}_id = ps.{seg}_id;"""
+            )
         )
 
         self.m_token_n: Callable[[str, str], str] = lambda x, y: dedent(
@@ -513,13 +521,16 @@ class Type(DDL):
 
 
 class CTProcessor:
-    def __init__(self, corpus_template: dict[str, Any], glos: Globs) -> None:
+    def __init__(
+        self, corpus_template: dict[str, Any], glos: Globs, corpus_version: int = 1
+    ) -> None:
         self.corpus_temp = corpus_template
         self.schema_name = corpus_template.get("schema_name", "testcorpus")
         self.layers = self._order_ct_layers(corpus_template["layer"])
         self.global_attributes = corpus_template.get("globalAttributes", {})
         self.globals = glos
         self.ddl = DDL()
+        self.corpus_version = corpus_version
 
     @staticmethod
     def _order_ct_layers(
@@ -582,19 +593,35 @@ class CTProcessor:
                 norm_type = "text"
                 parent = entity_name.lower()
                 if ref:
-                    assert ref in self.global_attributes, ReferenceError(f"Global attribute {ref} could not be found")
+                    assert ref in self.global_attributes, ReferenceError(
+                        f"Global attribute {ref} could not be found"
+                    )
                     norm_type = self.global_attributes[ref].get("type", "text")
                     parent = "global_attribute"
 
                 norm_col = f"{attr}_id"
-                norm_table = Table(
-                    attr,
-                    [
-                        Column(norm_col, "int", primary_key=True),
-                        Column(attr, TYPES_MAP.get(norm_type, norm_type), unique=True),
-                    ],
-                    parent=parent,
+                norm_table: Table
+                existing_table: Table | None = next(
+                    (
+                        t
+                        for t in self.globals.tables
+                        if t.name == f"global_attribute_{attr}"
+                    ),
+                    None,
                 )
+                if existing_table is not None:
+                    norm_table = existing_table
+                else:
+                    norm_table = Table(
+                        attr,
+                        [
+                            Column(norm_col, "int", primary_key=True),
+                            Column(
+                                attr, TYPES_MAP.get(norm_type, norm_type), unique=True
+                            ),
+                        ],
+                        parent=parent,
+                    )
                 map_attr[attr] = {"name": norm_table.name, "type": "relation"}
 
                 table_cols.append(
@@ -606,7 +633,8 @@ class CTProcessor:
                     )
                 )
 
-                tables.append(norm_table)
+                if existing_table is None:
+                    tables.append(norm_table)
 
             elif typ == "dict":
                 norm_col = f"{attr}_id"
@@ -665,7 +693,7 @@ class CTProcessor:
                 assert "nlabels" in self.layers[entity_name], AttributeError(
                     f"Attribute {attr} is of type labels but no number of distinct labels was provided for entity type {entity_name}"
                 )
-                nbit = self.layers[entity_name]['nlabels']
+                nbit = self.layers[entity_name]["nlabels"]
                 assert str(nbit).isnumeric(), TypeError(
                     f"The value of {entity_name}'s 'nlabels' should be an integer; got '{nbit}' instead"
                 )
@@ -680,7 +708,9 @@ class CTProcessor:
                     elif int(nbit) > 2147483647:
                         inttype = "int8"
                     elif int(nbit) > 9223372036854775807:
-                        raise ValueError(f"Cannot accommodate more than 9223372036854775807 distinct labels")
+                        raise ValueError(
+                            f"Cannot accommodate more than 9223372036854775807 distinct labels"
+                        )
                     label_lookup_table = Table(
                         "labels",
                         [
@@ -751,12 +781,22 @@ class CTProcessor:
             )
             tables.append(ptable)
         else:
+            has_media = self.corpus_temp["meta"].get("mediaSlots", {})
+            if l_name == self.globals.base_map["document"] and has_media:
+                table_cols.append(Column("media", "jsonb"))
+            if any(x.get("mediaType") == "video" for x in has_media.values()):
+                table_cols.append(Column("name", "text"))
             ptable = None
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)
 
-        if ptable and not self.globals.num_partitions:
-            self.globals.num_partitions = ptable.num_partitions
+        layer_mapping: dict = cast(dict, self.globals.mapping["layer"][l_name])
+        if ptable:
+            layer_mapping["relation"] = ptable.name.rstrip("0") + "<batch>"
+            if not self.globals.num_partitions:
+                self.globals.num_partitions = ptable.num_partitions
+        else:
+            layer_mapping["relation"] = table.name
 
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["anchoring"] = anchs
@@ -775,8 +815,14 @@ class CTProcessor:
         table_cols: list[Column] = []
         types: list[Type] = []
 
-        source_col = self._get_relation_col(l_params["attributes"].pop("source"))
-        target_col = self._get_relation_col(l_params["attributes"].pop("target"))
+        assert "source" in l_params["attributes"], ReferenceError(
+            f"The attributes of '{l_name}' must include 'source'"
+        )
+        assert "target" in l_params["attributes"], ReferenceError(
+            f"The attributes of '{l_name}' must include 'target'"
+        )
+        source_col = self._get_relation_col(l_params["attributes"]["source"])
+        target_col = self._get_relation_col(l_params["attributes"]["target"])
 
         if not source_col and target_col:
             raise Exception
@@ -784,19 +830,31 @@ class CTProcessor:
         table_cols.append(source_col)
         table_cols.append(target_col)
 
+        attributes_to_process = {
+            k: v
+            for k, v in l_params.get("attributes", {}).items()
+            if k not in ("source", "target")
+        }
         tables, table_cols = self._process_attributes(
-            l_params.get("attributes", {}).items(), tables, table_cols, types, l_name
+            attributes_to_process.items(), tables, table_cols, types, l_name
         )
 
         table = Table(table_name, table_cols)
 
         tables.append(table)
 
+        layer_mapping: dict = cast(dict, self.globals.mapping["layer"][l_name])
+        layer_mapping["relation"] = table.name
+
         self.globals.layers[l_name] = {}
         self.globals.layers[l_name]["table_name"] = table.name
 
         self.globals.tables += tables
         self.globals.types += types
+
+        # Discard left_anchor and right_anchor in corpus_template
+        l_params["attributes"].pop("left_anchor")
+        l_params["attributes"].pop("right_anchor")
 
     def _get_relation_col(self, rel_structure: dict[str, str]) -> Column:
         name = rel_structure["name"]
@@ -861,9 +919,10 @@ class CTProcessor:
     def process_schema(self) -> str:
         corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
         corpus_name = re.sub(r"_+", "_", corpus_name)
-        corpus_version = str(int(self.corpus_temp["meta"]["version"]))
-        corpus_version = re.sub(r"\W", "_", corpus_version.lower())
-        corpus_version = re.sub(r"_+", "_", corpus_version)
+        # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
+        # corpus_version = re.sub(r"\W", "_", corpus_version.lower())
+        # corpus_version = re.sub(r"_+", "_", corpus_version)
+        corpus_version = str(self.corpus_version)
         schema_name: str = self.schema_name
 
         scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
@@ -903,22 +962,15 @@ class CTProcessor:
         self.globals.m_token_freq = f"\n\n{search_path}\n{statement}"
 
     def create_compute_prep_segs(self) -> None:
-        tok_tab = next(
-            x
-            for x in self.globals.tables
-            if x.name == self.globals.base_map["token"].lower() + "0"
-        )
+        tok_lower = self.globals.base_map["token"].lower()
+        tok_tab = next(x for x in self.globals.tables if x.name == tok_lower + "0")
         seg_tab = next(
             x
             for x in self.globals.tables
             if x.name == self.globals.base_map["segment"].lower() + "0"
         )
 
-        tok_pk = next(
-            x
-            for x in tok_tab.primary_key()
-            if self.globals.base_map["token"].lower() in x.name
-        )
+        tok_pk = next(x for x in tok_tab.primary_key() if tok_lower in x.name)
         rel_cols = sorted(
             [
                 x
@@ -928,22 +980,51 @@ class CTProcessor:
             key=lambda x: x.name,
         )
         rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
+        # Process any token dependency
+        for lay_name, lay_conf in self.layers.items():
+            if lay_conf.get("layerType") != "relation":
+                continue
+            target = lay_conf.get("attributes", {}).get("target", {})
+            source = lay_conf.get("attributes", {}).get("source", {})
+            if (
+                not target
+                or not source
+                or not all(
+                    x.get("entity", "") == self.globals.base_map["token"]
+                    for x in (target, source)
+                )
+            ):
+                continue
+            name = target.get("name")
+            if not name:
+                continue
+            rel_cols_names.append(name)
+            dep_table = next(
+                (x for x in self.globals.tables if x.name.lower() == lay_name.lower()),
+                None,
+            )
+            if not dep_table or not source.get("name"):
+                continue
+            dep_column = Column(
+                name,
+                "int",
+                foreign_key={
+                    "table": dep_table.name,
+                    "condition": f"{tok_lower}_id = {source.get('name')}",
+                },
+            )
+            rel_cols.append(dep_column)
 
         mapd: dict[str, Any] = self.globals.mapping
         tokname = self.globals.base_map["token"]
         batchname = f"{tokname}<batch>"
         mapd["layer"][tokname]["batches"] = self.globals.num_partitions
-        mapd["layer"][tokname]["relation"] = batchname
         segname = self.globals.base_map["segment"]
         mapd["layer"][segname]["prepared"] = {
             "relation": ("prepared_" + segname),
             "columnHeaders": rel_cols_names,
         }
-        mapd["layer"][segname]["relation"] = segname + "<batch>"
         self.globals.mapping = mapd
-
-        # corpus_name = re.sub(r"\W", "_", self.corpus_temp["meta"]["name"].lower())
-        # corpus_version = str(int(self.corpus_temp["meta"]["version"]))
 
         searchpath = f"\nSET search_path TO {self.schema_name};"
 
@@ -953,16 +1034,23 @@ class CTProcessor:
 
         self.globals.prep_seg_create = f"\n\n{searchpath}\n{ddl}"
 
+        json_joins = []
+        for x in rel_cols:
+            fk = x.constrs.get("foreign_key")
+            if not fk or not isinstance(fk, dict):
+                continue
+            right_part = (
+                f" ON {fk['condition']}"
+                if "condition" in fk
+                else f" USING ({fk['column']})"
+            )
+            json_joins.append(fk["table"] + right_part)
+
+        json_joins_str = "JOIN " + f"\n                LEFT JOIN ".join(json_joins)
         json_sel = (
             "\n                      , ".join(rel_cols_names)
             + f"\n                     ) AS toks\n                FROM {{batch}}\n                "
-            + "\n                ".join(
-                [
-                    f"{'JOIN' if fk['table'].lstrip('token_') == 'form' else 'LEFT JOIN'} {fk['table']} USING ({fk['column']})"
-                    for x in rel_cols
-                    if (fk := x.constrs.get("foreign_key")) and (isinstance(fk, dict))
-                ]
-            )
+            + json_joins_str
         )
 
         query: str = (
@@ -977,28 +1065,27 @@ class CTProcessor:
         self.globals.prep_seg_insert = f"\n\n{searchpath}\n{query}"
 
         self.globals.prep_seg_updates = []
-        for layer, props in self.corpus_temp['layer'].items():
+        for layer, props in self.corpus_temp["layer"].items():
             if layer == segname or props.get("contains") != tokname:
                 continue
+            mapping_attrs = cast(
+                dict[str, Any], self.globals.mapping["layer"].get(layer, {})
+            ).get("attributes", {})
             attrs = []
-            joins = []
-            for a, p in props.get("attributes", {}).items():
-                attrs.append(a)
-                if p.get("type") not in ("text", "dict"):
+            joins: list[str] = []
+            for a in props.get("attributes", {}):
+                info: dict[str, Any] = mapping_attrs.get(a, {})
+                if info.get("type") != "relation":
+                    attrs.append(f"ann.{a}")
                     continue
-                mapping: dict[str,Any] = cast(dict[str, Any], self.globals.mapping['layer'])
-                info: dict[str,Any] = mapping.get(layer,{}).get("attributes",{}).get(a,{})
-                assert "name" in mapping and mapping.get("type") == "relation", LookupError(f"Invalid mapping for {layer}->{a}")
-                joins.append((mapping["name"],a))
+                table = info.get("name", "")
+                assert table, LookupError(f"Mapping missing 'name' for {layer}->{a}")
+                attrs.append(f"ann_{a}.{a}")
+                key = info.get("key", a)
+                joins.append(f"{table} ann_{a} ON ann.{key}_id = ann_{a}.{key}_id")
             update: str = (
                 # layer, attrs, seg, tok, joins
-                self.ddl.update_prep_segs(
-                    layer,
-                    attrs,
-                    segname,
-                    tokname,
-                    joins
-                )
+                self.ddl.update_prep_segs(layer, attrs, segname, tokname, joins)
             )
             self.globals.prep_seg_updates.append(update)
 
@@ -1012,12 +1099,12 @@ class CTProcessor:
 
 
 def generate_ddl(
-    corpus_temp: dict[str, Any]
+    corpus_temp: dict[str, Any], corpus_version: int = 1
 ) -> dict[str, str | list[str] | dict[str, int]]:
     globs = Globs()
     globs.base_map = corpus_temp["firstClass"]
 
-    processor = CTProcessor(corpus_temp, globs)
+    processor = CTProcessor(corpus_temp, globs, corpus_version)
 
     schema_name = processor.process_schema()
     processor.process_layers()
@@ -1032,8 +1119,8 @@ def generate_ddl(
             globs.mapping["layer"].pop(layer)
 
     create_schema = "\n\n".join([x for x in globs.schema])
-    create_types = "\n\n".join([x.create_DDL() for x in sorted(globs.types)])
-    create_tbls = "\n\n".join([x.create_tbl() for x in sorted(globs.tables)])
+    create_types = "\n\n".join([x.create_DDL() for x in sorted(t for t in globs.types)])
+    create_tbls = "\n\n".join([x.create_tbl() for x in sorted(t for t in globs.tables)])
 
     create = "\n".join([create_schema, create_types, create_tbls])
 
@@ -1091,45 +1178,6 @@ def main(corpus_template_path: str) -> None:
     print("Mapping:", data["mapping"])
 
     return
-    # need to comment out the below for mypy
-    """
-
-    globs = Globs()
-
-    globs.base_map = corpus_temp["firstClass"]
-
-    processor = CTProcessor(corpus_temp, globs)
-    processor.ddl.tabwidth = args.tabwidth
-
-    processor.process_schema()
-    processor.process_layers()
-
-    processor.create_compute_prep_segs()
-
-    print("\n\n".join([x for x in globs.schema]))
-    print()
-    print(
-        "\n\n".join([x.create_DDL() for x in sorted(globs.types, key=lambda x: x.name)])
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_tbl() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_idxs() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    print()
-    print(
-        "\n\n".join(
-            [x.create_constrs() for x in sorted(globs.tables, key=lambda x: x.name)]
-        )
-    )
-    """
 
 
 if __name__ == "__main__":

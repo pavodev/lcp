@@ -7,6 +7,8 @@ status information about the current task
 import json
 import os
 import re
+
+# import shutil
 import traceback
 
 from datetime import datetime, timedelta
@@ -24,12 +26,13 @@ from .utils import (
     _lama_check_api_key,
     _lama_project_create,
     _lama_user_details,
-    ensure_authorised
+    _sanitize_corpus_name,
 )
 
 
 VALID_EXTENSIONS = ("vrt", "csv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
+MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
 
 
 async def _create_status_check(request: web.Request, job_id: str) -> web.Response:
@@ -53,12 +56,13 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
             msg += f": {res.exc_string}"
     elif status == "finished":
         msg = f"""Template validated successfully"""
+    kwargs: dict = cast(dict, job.kwargs)
     ret = {
         "job": job.id,
         "status": status,
         "info": msg,
-        "project": job.kwargs["project"],
-        "project_name": job.kwargs["project_name"],
+        "project": kwargs["project"],
+        "project_name": kwargs["project_name"],
         "target": whole_url,
     }
     return web.json_response(ret)
@@ -168,7 +172,6 @@ def _correct_doc(path: str) -> None:
         fo.write(data)
 
 
-@ensure_authorised
 async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
@@ -185,11 +188,12 @@ async def upload(request: web.Request) -> web.Response:
     is_vian = request.rel_url.query.get("vian", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
-    project_id = job.kwargs["project"]
-    username = job.kwargs["user"]
-    room = job.kwargs["room"]
-    project_name = job.kwargs["project_name"]
-    cpath = job.kwargs["path"]
+    kwargs: dict = cast(dict, job.kwargs)
+    project_id = kwargs["project"]
+    username = kwargs["user"]
+    room = kwargs["room"]
+    project_name = kwargs["project_name"]
+    cpath = kwargs["path"]
 
     ziptar = [
         (".zip", is_zipfile, ZipFile, "namelist"),
@@ -211,7 +215,9 @@ async def upload(request: web.Request) -> web.Response:
     async for bit in data:
         if not isinstance(bit.filename, str):
             continue
-        if not bit.filename.endswith(VALID_EXTENSIONS + COMPRESSED_EXTENTIONS):
+        if not bit.filename.endswith(
+            VALID_EXTENSIONS + COMPRESSED_EXTENTIONS + MEDIA_EXTENSIONS
+        ):
             continue
         ext = os.path.splitext(bit.filename)[-1]
         path = os.path.join("uploads", cpath, bit.filename)
@@ -227,6 +233,22 @@ async def upload(request: web.Request) -> web.Response:
                 fp = os.path.basename(path)
                 ret = {"status": "failed", "msg": f"Problem uncompressing {fp}"}
                 return web.json_response(ret)
+
+    if request.rel_url.query.get("media"):
+        ret = {
+            "status": "finished",
+            "job": job.id,
+            "project": str(project_id),
+            "project_name": project_name,
+        }
+        try:
+            corpus_dir = os.path.split(cpath)[-1]
+            _move_media_files(cpath, corpus_dir)
+            # shutil.rmtree(cpath)  # todo: should we do this?
+        except Exception as err:
+            ret["status"] = "failed"
+            ret["error"] = f"Something went wrong with uploading the media files: {err}"
+        return web.json_response(ret)
 
     _ensure_partitioned0(os.path.join("uploads", cpath))
     _correct_doc(os.path.join("uploads", cpath))
@@ -265,6 +287,9 @@ async def _save_file(path: str, bit: BodyPartReader, has_file: bool) -> bool:
     """
     Helper to save file sent by FE to server
     """
+    dirname = os.path.dirname(path)
+    if not os.path.exists(dirname):
+        os.mkdir(dirname)
     with open(path, "ba") as f:
         while True:
             chunk = await bit.read_chunk()
@@ -302,7 +327,27 @@ def _extract_file(
     print(f"Deleted: {path}")
 
 
-@ensure_authorised
+def _move_media_files(cpath: str, corpus_dir: str) -> None:
+    print("Moving media files")
+    media_path = os.environ.get(
+        "UPLOAD_MEDIA_PATH", os.path.join("frontend", "public", "media")
+    )
+    if not os.path.exists(media_path):
+        os.mkdir(media_path)
+    dest_path = os.path.join(media_path, corpus_dir)
+    if not os.path.exists(dest_path):
+        os.mkdir(dest_path)
+    source_path = os.path.join("uploads", cpath)
+    for f in os.listdir(source_path):
+        print("File in cpath", f)
+        if not str(f).endswith(MEDIA_EXTENSIONS):
+            continue
+        basename = os.path.basename(f)
+        os.rename(
+            os.path.join(source_path, basename), os.path.join(dest_path, basename)
+        )
+
+
 async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTs JSON
@@ -352,7 +397,7 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        uacc: dict[str,Any] = cast(dict[str,Any], user_acc["account"])
+        uacc: dict[str, Any] = cast(dict[str, Any], user_acc["account"])
         uname: str = cast(str, uacc["displayName"])
         profile: dict[str, str] = {
             "title": f"{uname}: private group",
@@ -387,10 +432,8 @@ async def make_schema(request: web.Request) -> web.Response:
 
     proj_id = cast(str, existing_project["id"])
 
-    corpus_name = template["meta"]["name"]
-    corpus_version = template["meta"]["version"]
-    corpus_name = re.sub(r"\W", "_", template["meta"]["name"].lower())
-    corpus_name = re.sub(r"_+", "_", corpus_name)
+    corpus_name = _sanitize_corpus_name(template["meta"]["name"])
+    # corpus_version = template["meta"]["version"]
     # below we add a random suffix to the corpus name.
     # suffix of the name has 1/65536 chance of collision,
     # which is on the borderline of being too high in prod.
@@ -399,30 +442,44 @@ async def make_schema(request: web.Request) -> web.Response:
 
     #  suffix = corpus_folder.split("-", 2)[1]
     suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
-    version_n = re.sub(r"[^0-9]", "", str(corpus_version))
+    # version_n = re.sub(r"[^0-9]", "", str(corpus_version))
 
-    schema_name = f"{corpus_name}__{suffix}_{version_n}"
+    # schema_name = f"{corpus_name}__{suffix}_{version_n}"
 
     sames = [
-        i["schema_name"]
+        i
         for i in request.app["config"].values()
         if "meta" in i
-        and "schema_name" in i
-        and i["meta"]["name"] == corpus_name
-        and str(i["meta"]["version"]) == str(corpus_version)
+        and _sanitize_corpus_name(i["meta"]["name"]) == corpus_name
+        and proj_id in i.get("projects", [])  # only corpora from the same project
+        # and str(i["meta"]["version"]) == str(corpus_version)
     ]
-    drops = [f"DROP SCHEMA IF EXISTS {i} CASCADE;" for i in set(sames)]
+    drops = [
+        f"DROP SCHEMA IF EXISTS {i} CASCADE;"
+        for i in set(x["schema_name"] for x in sames if "schema_name" in x)
+    ]
+
+    corpus_version = (max(int(x["current_version"]) for x in sames) if sames else 0) + 1
+    schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
+    template["meta"] = template.get("meta", {})
+    template["meta"]["version"] = corpus_version
 
     # todo: is this the right approach?
-    cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
-    delete = f"DELETE FROM main.corpus WHERE name = '{corpus_name}' AND current_version = {cv};"
-    drops.append(delete)
+    # cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
+    # delete = f"DELETE FROM main.corpus WHERE name = '{template['meta']['name']}' AND current_version < {cv};"
+    # drops.append(delete)
+    deletes = [
+        f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
+        for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
+    ]
+    drops += deletes
 
     template["projects"] = [proj_id]
+    template["project"] = proj_id
     template["schema_name"] = schema_name
 
     try:
-        pieces = generate_ddl(template)
+        pieces = generate_ddl(template, corpus_version)
         pieces["template"] = template
     except Exception as err:
         tb = traceback.format_exc()
@@ -438,6 +495,7 @@ async def make_schema(request: web.Request) -> web.Response:
     directory = os.path.join("uploads", corpus_path)
     os.makedirs(directory)
 
+    pieces["drops"] = drops
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 

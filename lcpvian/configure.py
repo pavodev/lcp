@@ -4,7 +4,8 @@ Model the various parts of the corpus template/corpus config
 Code for generating batches is also in here
 """
 
-from typing import Any, NotRequired, Sequence, TypedDict
+from typing import Any, Required, NotRequired, Sequence, TypedDict
+
 
 class Meta(TypedDict, total=False):
     date: str
@@ -33,9 +34,9 @@ class Layer(TypedDict, total=False):
 
 
 class FirstClass(TypedDict, total=False):
-    segment: str
-    token: str
-    document: str
+    segment: Required[str]
+    token: Required[str]
+    document: Required[str]
 
 
 class Partitions(TypedDict, total=False):
@@ -44,8 +45,8 @@ class Partitions(TypedDict, total=False):
 
 class CorpusTemplate(TypedDict, total=False):
     meta: Meta
-    layer: dict[str, Layer]
-    firstClass: FirstClass
+    layer: Required[dict[str, Layer]]
+    firstClass: Required[FirstClass]
     partitions: NotRequired[Partitions]
     projects: NotRequired[list[str]]
     project: NotRequired[str]
@@ -55,17 +56,17 @@ class CorpusTemplate(TypedDict, total=False):
 
 class CorpusConfig(CorpusTemplate, total=False):
     shortname: NotRequired[str]
-    corpus_id: int
-    current_version: int | str | float
+    corpus_id: Required[int]
+    current_version: Required[int | str | float]
     version_history: str | None
     description: str | None
-    schema_path: str
+    schema_path: Required[str]
     token_counts: dict[str, int]
-    mapping: dict[str, Any]
+    mapping: Required[dict[str, Any]]
     enabled: bool
-    segment: str
-    token: str
-    document: str
+    segment: Required[str]
+    token: Required[str]
+    document: Required[str]
     column_names: list[str]
     sample_query: str
     # doc ids is stored as [job_id, {1: "AKAW"}]
@@ -101,9 +102,11 @@ def _get_batches(config: CorpusConfig) -> dict[str, int]:
     Get a dict of batch_name: size for a given corpus
     """
     batches: dict[str, int] = {}
-    counts: dict[str, int] = config["token_counts"]
+    counts: dict[str, int] = config.get("token_counts", {})
     try:
-        mapping = config["mapping"]["layer"][config["token"]]
+        mapping = (
+            config.get("mapping", {}).get("layer", {}).get(config.get("token", ""))
+        )
     except (KeyError, TypeError):
         return counts
     if not mapping:
@@ -113,14 +116,16 @@ def _get_batches(config: CorpusConfig) -> dict[str, int]:
             basename = details["relation"]
             if "<language>" in basename:
                 basename = basename.replace("<language>", lang)
-            size = counts[basename.replace("<batch>", "0")]
+            count_key = basename.replace("<batch>", "0").lower()
+            size = next(v for k, v in counts.items() if k.lower() == count_key)
             n_batches = details["batches"]
             more = _generate_batches(n_batches, basename, size)
             batches.update(more)
     else:
         n_batches = mapping["batches"]
         name = mapping["relation"]
-        size = counts[name.replace("<batch>", "0")]
+        count_key = name.replace("<batch>", "0").lower()
+        size = next(v for k, v in counts.items() if k.lower() == count_key)
         more = _generate_batches(n_batches, name, size)
         batches.update(more)
     if not batches:

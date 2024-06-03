@@ -48,7 +48,7 @@ async def document_ids(request: web.Request) -> web.Response:
 
     if "doc_ids" not in config[corpus_id]:
         job = request.app["query_service"].document_ids(
-            schema, int(corpus_id), user, room
+            schema, int(corpus_id), user, room, config[corpus_id]
         )
         info: dict[str, str] = {"status": "started", "job": job.id}
         return web.json_response(info)
