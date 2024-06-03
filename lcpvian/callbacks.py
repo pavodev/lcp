@@ -10,8 +10,6 @@ These callbacks are hooked up as on_success and on_failure kwargs in
 calls to Queue.enqueue in query_service.py
 """
 
-from __future__ import annotations
-
 import json
 import os
 import shutil
@@ -33,15 +31,18 @@ from .convert import (
     _get_all_sents,
 )
 from .typed import (
-    MainCorpus,
-    JSONObject,
-    UserQuery,
-    RawSent,
-    Config,
-    QueryArgs,
-    Results,
+    BaseArgs,
     Batch,
+    Config,
+    DocIDArgs,
+    JSONObject,
+    MainCorpus,
+    QueryArgs,
     QueryMeta,
+    RawSent,
+    Results,
+    SentJob,
+    UserQuery,
 )
 from .utils import (
     CustomEncoder,
@@ -53,15 +54,21 @@ from .utils import (
     _get_total_requested,
     _decide_can_send,
     _time_remaining,
-    PUBSUB_CHANNEL,
+    _publish_msg,
+    format_meta_lines,
+    TRUES,
 )
+
+
+PUBSUB_LIMIT = int(os.getenv("PUBSUB_LIMIT", 31999999))
+MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
 
 
 def _query(
     job: Job,
-    connection: RedisConnection[bytes],
-    result: list,
-    **kwargs: Unpack[QueryArgs],  # type: ignore
+    connection: "RedisConnection[bytes]",
+    result: list[Any],
+    **kwargs: Unpack[QueryArgs],
 ) -> None:
     """
     Job callback, publishes a redis message containing the results
@@ -96,8 +103,9 @@ def _query(
     first_job = _get_first_job(job, connection)
     stored = first_job.meta.get("progress_info", {})
     existing_results = first_job.meta.get("all_non_kwic_results", existing_results)
-    total_requested = kwargs.get(
-        "total_results_requested", job.kwargs["total_results_requested"]
+    total_requested = cast(
+        int,
+        kwargs.get("total_results_requested", job.kwargs["total_results_requested"]),
     )
     just_finished = tuple(job.kwargs["current_batch"])
 
@@ -209,6 +217,13 @@ def _query(
 
     msg_id = str(uuid4())  # todo: hash instead?
 
+    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
+
+    # todo: this should no longer happen, as we send a progress update message instead?
+    do_full = is_full and status != "finished"
+    if do_full:
+        can_send = False
+
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
     if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
@@ -216,6 +231,8 @@ def _query(
 
     if "_sent_jobs" not in first_job.meta:
         first_job.meta["_sent_jobs"] = {}
+    if "_meta_jobs" not in first_job.meta:
+        first_job.meta["_meta_jobs"] = {}
 
     first_job.save_meta()  # type: ignore
 
@@ -228,6 +245,8 @@ def _query(
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_kwic_lines = min(max_kwic, total_found)
 
+    action = "query_result"
+
     jso = dict(**job.kwargs)
     jso.update(
         {
@@ -237,7 +256,7 @@ def _query(
             "room": room,
             "status": status,
             "job": job.id,
-            "action": "query_result",
+            "action": action,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
@@ -266,6 +285,8 @@ def _query(
 
     if job.kwargs["debug"] and job.kwargs["sql"]:
         jso["sql"] = job.kwargs["sql"]
+    if job.kwargs["sql"]:
+        jso["consoleSQL"] = job.kwargs["sql"]
 
     if is_full and status != "finished":
         jso["progress"] = {
@@ -275,24 +296,90 @@ def _query(
             "user": user,
             "room": room,
             "duration": duration,
+            "batches_done": batches_done_string,
             "total_duration": total_duration,
             "projected_results": projected_results,
             "percentage_done": round(perc_matches, 3),
             "percentage_words_done": round(perc_words, 3),
             "total_results_so_far": total_found,
-            "action": "background_job_progress",
+            "action": "background_job_progress"
         }
 
     job.meta["payload"] = jso
     job.save_meta()  # type: ignore
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    dumped = json.dumps(jso, cls=CustomEncoder)
+
+    # todo: just update progress here, but do not send the rest
+    if use_cache and not can_send and False:
+        if not connection.get(msg_id):
+            connection.set(msg_id, dumped)
+        connection.expire(msg_id, MESSAGE_TTL)
+        return None
+
+    return _publish_msg(connection, dumped, msg_id)
+
+
+def _meta(
+    job: Job,
+    connection: "RedisConnection[bytes]",
+    result: list[Any] | None,
+    **kwargs: Unpack[SentJob],
+) -> None:
+    """
+    Process meta data and send via websocket
+    """
+    if not result:
+        return None
+    base = Job.fetch(job.kwargs["first_job"], connection=connection)
+    depended = _get_associated_query_job(job.kwargs["depends_on"], connection)
+    cb: Batch = depended.kwargs["current_batch"]
+    table = f"{cb[1]}.{cb[2]}"
+
+    full = cast(bool, kwargs.get("full", job.kwargs.get("full", base.kwargs.get("full", False))))
+    status = depended.meta["_status"]
+
+    to_send = {"-2": format_meta_lines(job.kwargs.get("meta_query", ""), result)}
+
+    if not to_send["-2"]:
+        return None
+
+    msg_id = str(uuid4())  # todo: hash instead!
+    if "meta_job_ws_messages" not in base.meta:
+        base.meta["meta_job_ws_messages"] = {}
+    base.meta["meta_job_ws_messages"][msg_id] = None
+    base.meta["_meta_jobs"][job.id] = None
+    base.save_meta()  # type: ignore
+
+    can_send = not base.meta.get("to_export", False) and (
+        not full or status == "finished"
+    )
+
+    action = "meta"
+
+    jso = {
+        "result": to_send,
+        "status": status,
+        "action": action,
+        "user": kwargs.get("user", job.kwargs["user"]),
+        "room": kwargs.get("room", job.kwargs["room"]),
+        "query": depended.id,
+        "can_send": can_send,
+        "full": full,
+        "table": table,
+        "first_job": base.id,
+        "msg_id": msg_id,
+    }
+
+    # # todo: just update progress here, but do not send the rest
+    dumped = json.dumps(jso, cls=CustomEncoder)
+
+    return _publish_msg(connection, dumped, msg_id)
 
 
 def _sentences(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[RawSent] | None,
     **kwargs: int | bool | str | None,
 ) -> None:
@@ -323,7 +410,7 @@ def _sentences(
     status = depended.meta["_status"]
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
-    depended.save_meta()
+    depended.save_meta()  # type: ignore
 
     # in full mode, we need to combine all the sentences into one message when finished
     get_all_sents = full and status == "finished"
@@ -350,18 +437,35 @@ def _sentences(
             full,
         )
 
+    for sent in (result or []):
+        if len(sent) < 4:
+            continue
+        if not sent[3]:
+            continue
+        sent_id = str(sent[0])
+        if sent_id not in to_send.get(-1, {}):
+            continue
+        to_send[-1][sent_id].append(sent[3])
+
     more_data = not job.kwargs["no_more_data"]
     submit_query = job.kwargs["start_query_from_sents"]
     if submit_query and more_data:
         status = "partial"
+
+    if status == "finished" and more_data:
+        more_data = base.meta["total_results_so_far"] >= total_requested
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
         print(f"No results found for {table} kwic -- skipping WS message")
         return None
 
-    trues = {"true", "1", "y", "yes"}
-    use_cache = os.getenv("USE_CACHE", "true").lower() in trues
+    # if we previously sent a warning about there being too much data, stop here
+    if base.meta.get("been_warned"):
+        print("Processed too much data -- skipping WS message")
+        return None
+
+    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
 
     if not use_cache:
         perc_done = depended.meta["payload"]["percentage_done"]
@@ -373,23 +477,26 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
+    submit_payload["to_export"] = depended.meta.get("to_export", "")
 
-    can_send = not full or status == "finished"
+    # Do not send if this is an "export" query
+    can_send = not base.meta.get("to_export", False) and (
+        not full or status == "finished"
+    )
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "sent_job_ws_messages" not in base.meta:
         base.meta["sent_job_ws_messages"] = {}
     base.meta["sent_job_ws_messages"][msg_id] = None
     base.meta["_sent_jobs"][job.id] = None
-    base.save_meta()
+    base.save_meta()  # type: ignore
 
-    if status == "finished" and more_data:
-        more_data = base.meta["total_results_so_far"] >= total_requested
+    action = "sentences"
 
     jso = {
         "result": to_send,
         "status": status,
-        "action": "sentences",
+        "action": action,
         "full": full,
         "more_data_available": more_data,
         "submit_query": submit_payload if submit_query else False,
@@ -404,19 +511,31 @@ def _sentences(
         "percentage_words_done": words_done,
     }
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    # todo: just update progress here, but do not send the rest
+    dumped = json.dumps(jso, cls=CustomEncoder)
+
+    # if use_cache and not can_send:
+    #     if not connection.get(msg_id):
+    #         connection.set(msg_id, dumped)
+    #     connection.expire(msg_id, MESSAGE_TTL)
+    #     print("not returning sentences because searching whole corpus")
+    #     return
+
+    job.save_meta()  # type: ignore
+
+    return _publish_msg(connection, dumped, msg_id)
 
 
 def _document(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[JSONObject] | JSONObject,
-    **kwargs,
+    **kwargs: Unpack[BaseArgs],
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
     """
+    action = "document"
     user = cast(str, kwargs.get("user", job.kwargs["user"]))
     room = cast(str | None, kwargs.get("room", job.kwargs["room"]))
     if not room:
@@ -424,25 +543,42 @@ def _document(
     if isinstance(result, list) and len(result) == 1:
         result = result[0]
 
+    if job.kwargs["corpus"] == 59:
+        tmp_result: dict[str, dict] = {"structure": {}, "layers": {}, "global_attributes": {}}
+        for row in result:
+            typ, key, props = cast(list, row)
+            if typ == "layer":
+                if key not in tmp_result["structure"]:
+                    tmp_result["structure"][key] = [*props.keys()]
+                if key not in tmp_result["layers"]:
+                    tmp_result["layers"][key] = []
+                keys = tmp_result["structure"][key]
+                line = [props[k] for k in keys]
+                tmp_result["layers"][key].append(line)
+            elif typ == "glob":
+                if key not in tmp_result["global_attributes"]:
+                    tmp_result["global_attributes"][key] = []
+                tmp_result["global_attributes"][key].append(props)
+        result = cast(JSONObject, tmp_result)
+
     msg_id = str(uuid4())
     jso = {
         "document": result,
-        "action": "document",
+        "action": action,
         "user": user,
         "room": room,
         "msg_id": msg_id,
         "corpus": job.kwargs["corpus"],
         "doc_id": job.kwargs["doc"],
     }
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _document_ids(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[JSONObject] | JSONObject,
-    **kwargs,
+    **kwargs: Unpack[DocIDArgs],
 ) -> None:
     """
     When a user requests a document, we give it to them via websocket
@@ -452,23 +588,33 @@ def _document_ids(
     if not room:
         return None
     msg_id = str(uuid4())
-    formatted = {str(idx): name for idx, name in cast(list[tuple], result)}
+    formatted = {
+        str(idx): {
+            'name': name,
+            'media': media,
+            'frame_range': (
+                [frame_range.lower, frame_range.upper] if frame_range
+                else [0,0]
+            )
+        }
+        for idx, name, media, frame_range in cast(list[tuple[int, str, dict, Any]], result)
+    }
+    action = "document_ids"
     jso = {
         "document_ids": formatted,
-        "action": "document_ids",
+        "action": action,
         "user": user,
         "msg_id": msg_id,
         "room": room,
         "job": job.id,
         "corpus_id": job.kwargs["corpus_id"],
     }
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _schema(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: bool | None = None,
 ) -> None:
     """
@@ -480,12 +626,13 @@ def _schema(
     if not room:
         return None
     msg_id = str(uuid4())
+    action = "uploaded"
     jso = {
         "user": user,
         "status": "success" if not result else "error",
         "project": job.kwargs["project"],
         "project_name": job.kwargs["project_name"],
-        "action": "uploaded",
+        "action": action,
         "gui": job.kwargs.get("gui", False),
         "room": room,
         "msg_id": msg_id,
@@ -493,13 +640,12 @@ def _schema(
     if result:
         jso["error"] = result
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _upload(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: MainCorpus | None,
 ) -> None:
     """
@@ -515,9 +661,10 @@ def _upload(
     is_vian: bool = job.kwargs["is_vian"]
     gui: bool = job.kwargs["gui"]
     msg_id = str(uuid4())
+    action = "uploaded"
 
-    if not room or not result:
-        return None
+    # if not room or not result:
+    #     return None
     jso = {
         "user": user,
         "room": room,
@@ -527,20 +674,19 @@ def _upload(
         "entry": _row_to_value(result, project=project),
         "status": "success" if not result else "error",
         "project": project,
-        "action": "uploaded",
+        "action": action,
         "gui": gui,
         "msg_id": msg_id,
     }
     if result:
         jso["error"] = result
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, cast(JSONObject, jso), msg_id)
 
 
 def _upload_failure(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     typ: type,
     value: BaseException,
     trace: TracebackType,
@@ -549,6 +695,7 @@ def _upload_failure(
     Cleanup on upload fail, and maybe send ws message
     """
     print(f"Upload failure: {typ} : {value}: {traceback}")
+    msg_id = str(uuid4())
 
     project: str
     user: str
@@ -575,25 +722,27 @@ def _upload_failure(
     except Exception as err:
         print(f"cannot format object: {trace} / {err}")
 
+    action = "upload_fail"
+
     if user and room:
         jso = {
             "user": user,
             "room": room,
             "project": project,
-            "action": "upload_fail",
+            "action": action,
             "status": "failed",
             "job": job.id,
+            "msg_id": msg_id,
             "traceback": form_error,
             "kind": str(typ),
             "value": str(value),
         }
-        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+        return _publish_msg(connection, jso, msg_id)
 
 
 def _general_failure(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     typ: type,
     value: BaseException,
     trace: TracebackType,
@@ -601,7 +750,9 @@ def _general_failure(
     """
     On job failure, return some info ... probably hide some of this from prod eventually!
     """
+    msg_id = str(uuid4())
     form_error = str(trace)
+    action = "failed"
     try:
         form_error = "".join(traceback.format_tb(trace))
     except Exception as err:
@@ -617,7 +768,8 @@ def _general_failure(
             "status": "failed",
             "kind": str(typ),
             "value": str(value),
-            "action": "failed",
+            "action": action,
+            "msg_id": msg_id,
             "traceback": form_error,
             "job": job.id,
             **job.kwargs,
@@ -627,13 +779,12 @@ def _general_failure(
         jso["status"] = "timeout"
         jso["action"] = "timeout"
 
-    connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
-    return None
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _queries(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[UserQuery] | None,
 ) -> None:
     """
@@ -661,20 +812,41 @@ def _queries(
             dct: dict[str, Any] = dict(zip(cols, x))
             queries.append(dct)
         jso["queries"] = queries
-    made = json.dumps(jso, cls=CustomEncoder)
-    connection.publish(PUBSUB_CHANNEL, made)
+    return _publish_msg(connection, jso, msg_id)
+
+
+def _export_complete(
+    job: Job,
+    connection: "RedisConnection[bytes]",
+    result: list[UserQuery] | None,
+) -> None:
+    print("export complete!")
+    if job.dependency and job.args and isinstance(job.args[0],str) and os.path.exists(job.args[0]):
+        user = job.dependency.kwargs.get("user")
+        room = job.dependency.kwargs.get("room")
+        if user and room and job.kwargs.get("download", False):
+            msg_id = str(uuid4())
+            jso: dict[str, Any] = {
+                "user": user,
+                "room": room,
+                "action": "export_link",
+                "msg_id": msg_id,
+                "fn": os.path.basename(job.args[0])
+            }
+            _publish_msg(connection, jso, msg_id)
     return None
 
 
 def _config(
     job: Job,
-    connection: RedisConnection[bytes],
+    connection: "RedisConnection[bytes]",
     result: list[MainCorpus],
     publish: bool = True,
 ) -> dict[str, str | bool | Config]:
     """
     Run by worker: make config data
     """
+    action = "set_config"
     fixed: Config = {}
     msg_id = str(uuid4())
     for tup in result:
@@ -690,9 +862,9 @@ def _config(
     jso: dict[str, str | bool | Config] = {
         "config": fixed,
         "_is_config": True,
-        "action": "set_config",
+        "action": action,
         "msg_id": msg_id,
     }
     if publish:
-        connection.publish(PUBSUB_CHANNEL, json.dumps(jso, cls=CustomEncoder))
+        _publish_msg(connection, cast(JSONObject, jso), msg_id)
     return jso

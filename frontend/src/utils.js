@@ -1,3 +1,5 @@
+import moment from 'moment';
+
 const Utils = {
     uuidv4(){
       return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
@@ -43,19 +45,82 @@ const Utils = {
 
       return hours + ":" + minutes + ":" + seconds + "." + milliseconds;
     },
-    secondsToTime(duration) {
-      var seconds = Math.floor(duration % 60),
+    secondsToTime(duration, showMilliseconds = false) {
+      let seconds = Math.floor(duration % 60),
         minutes = Math.floor((duration / 60) % 60),
-        hours = Math.floor((duration / (60 * 60)) % 24);
+        hours = Math.floor((duration / (60 * 60)) % 24),
+        milliseconds = Math.floor((duration % 1) * 1000);
 
       hours = (hours < 10) ? "0" + hours : hours;
       minutes = (minutes < 10) ? "0" + minutes : minutes;
       seconds = (seconds < 10) ? "0" + seconds : seconds;
 
-      return hours + ":" + minutes + ":" + seconds;
+      let retval = `${hours}:${minutes}:${seconds}`;
+      if (showMilliseconds) {
+        retval += `.${milliseconds}`;
+      }
+      return retval;
     },
     frameNumberToSeconds(frameNumber, frameRate = 25) {
       return frameNumber*1000/frameRate;
+    },
+    copyToClip(item) {
+      let space = t=>!('spaceAfter' in t) || t.spaceAfter;
+      let plain = item.map(t=>`${t.form}${space(t)?' ':''}`).join('');
+      let rich = item.map(t=>`${t.group>=0?'<strong>':''}${t.form}${space(t)?' ':''}${t.group>=0?'</strong>':''}`).join('');
+      function listener(e) {
+        e.clipboardData.setData("text/html", rich);
+        e.clipboardData.setData("text/plain", plain);
+        e.preventDefault();
+      }
+      document.addEventListener("copy", listener);
+      document.execCommand("copy");
+      document.removeEventListener("copy", listener);
+    },
+    formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
+      return date ? moment(date).format(format) : '';
+    },
+    dictToStr: (dict,replaceYesNo=true) => {
+      const vals = [];
+      for (let k of Object.keys(dict).sort()) {
+        if (replaceYesNo && dict[k].match(/^(yes|no)$/i))
+          vals.push(dict[k].replace(/yes/i,"+").replace(/no/i,"-") + k);
+        else
+          vals.push(dict[k]);
+      }
+      return vals.join(" ")
+    },
+    slugify(str) {
+      return String(str)
+        .normalize('NFKD') // split accented characters into their base characters and diacritical marks
+        .replace(/[\u0300-\u036f]/g, '') // remove all the accents, which happen to be all in the \u03xx UNICODE block.
+        .trim() // trim leading or trailing whitespace
+        // .toLowerCase() // convert to lowercase
+        .replace(/[^a-zA-Z0-9 -]/g, '') // remove non-alphanumeric characters
+        .replace(/\s+/g, '-') // replace spaces with hyphens
+        .replace(/-+/g, '-'); // remove consecutive hyphens
+    },
+    validateEmail(email) {
+      return String(email)
+        .toLowerCase()
+        .match(
+          /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|.(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+        );
+    },
+    corpusDataType (corpus) {
+      let corpusType = "text";
+      if (corpus.meta.mediaSlots) {
+        for (let key of Object.keys(corpus.meta.mediaSlots)) {
+          if (corpus.meta.mediaSlots[key].mediaType == "video") {
+            corpusType = "video";
+            break;
+          }
+          if (corpus.meta.mediaSlots[key].mediaType == "audio") {
+            corpusType = "audio";
+          }
+        }
+      }
+      return corpusType
     },
   }
 

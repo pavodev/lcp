@@ -6,16 +6,26 @@ import {
   faBackward,
   faBackwardStep,
   faBarcode,
+  faCaretDown,
+  faCaretLeft,
+  faCaretRight,
   faChartSimple,
   faCircleInfo,
   faCircleNodes,
   faCirclePlus,
+  faCircleQuestion,
+  faCopy,
   faExpand,
+  faFileExport,
+  faFont,
   faForward,
+  faGear,
+  faGlobe,
   faHouse,
   faLink,
   faMagnifyingGlass,
   faMagnifyingGlassChart,
+  faMusic,
   faPause,
   faPlay,
   faPlus,
@@ -23,6 +33,8 @@ import {
   faTable,
   faTrash,
   faUser,
+  faUserGear,
+  faUsers,
   faVideo,
   faVolumeDown,
   faVolumeHigh,
@@ -38,16 +50,26 @@ library.add(faArrowUp);
 library.add(faBackward);
 library.add(faBackwardStep);
 library.add(faBarcode);
+library.add(faCaretDown);
+library.add(faCaretLeft);
+library.add(faCaretRight);
 library.add(faChartSimple);
 library.add(faCircleInfo);
 library.add(faCircleNodes);
 library.add(faCirclePlus);
+library.add(faCircleQuestion);
+library.add(faCopy);
 library.add(faExpand);
+library.add(faFileExport);
+library.add(faFont);
 library.add(faForward);
+library.add(faGear);
+library.add(faGlobe);
 library.add(faHouse);
 library.add(faLink);
 library.add(faMagnifyingGlass);
 library.add(faMagnifyingGlassChart);
+library.add(faMusic);
 library.add(faPause);
 library.add(faPlay);
 library.add(faPlus);
@@ -55,6 +77,8 @@ library.add(faPowerOff);
 library.add(faTable);
 library.add(faTrash);
 library.add(faUser);
+library.add(faUserGear);
+library.add(faUsers);
 library.add(faVideo);
 library.add(faVolumeDown);
 library.add(faVolumeLow);

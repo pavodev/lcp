@@ -37,8 +37,6 @@ Look at upload._get_progress to understand how the pgoress info is parsed
 
 """
 
-from __future__ import annotations
-
 import importlib
 import json
 import os
@@ -57,7 +55,7 @@ from sqlalchemy.sql import text
 
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
-from .utils import format_query_params, gather
+from .utils import _format_config_query, format_query_params, gather
 
 
 class SQLstats:
@@ -78,12 +76,19 @@ class SQLstats:
             WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
         )
 
-        self.main_corp: str = dedent(
-            f"""
-            INSERT
-              INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-            VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
-            RETURNING *;"""
+        self.main_corp: str = _format_config_query(
+            dedent(
+                """
+            WITH mc AS (
+                INSERT
+                INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
+                VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
+                RETURNING *
+            )
+            SELECT {selects}
+            FROM mc
+            {join} WHERE mc.enabled = true;"""
+            )
         )
 
         self.token_count: Callable[[str, str], str] = lambda x, y: dedent(
@@ -97,9 +102,9 @@ class Table:
     def __init__(
         self, schema: str, name: str, columns: list[str] | None = None
     ) -> None:
-        self.schema = schema
-        self.name = name
-        self.columns = columns
+        self.schema: str = schema
+        self.name: str = name
+        self.columns: list[str] | None = columns
 
     def col_repr(self) -> str:
         if self.columns:
@@ -125,8 +130,12 @@ class Importer:
         self.schema = self.template["schema_name"]
         self.batches = cast(list[str], data["batchnames"])
         self.insert = cast(str, data["prep_seg_insert"])
+        self.updates = cast(list[str], data["prep_seg_updates"])
         self.constraints = cast(list[str], data["constraints"])
         self.create = cast(str, data["prep_seg_create"])
+        self.m_token_freq = cast(str, data["m_token_freq"])
+        self.m_token_n = cast(str, data["m_token_n"])
+        self.m_lemma_freqs = cast(str, data["m_lemma_freqs"])
         self.refs = cast(list[str], data["refs"])
         self.n_batches = len(self.batches)
         self.num_extras = self.n_batches + len(self.constraints)
@@ -315,7 +324,7 @@ class Importer:
         gathered: list[Any] = []
         cs: float | int = 0.0
         first: str | int = ""
-        more: list[RunScript] | list[()] = []
+        more: list[RunScript] | list[Any] = []
         give: bool = cast(bool, kwargs.get("give", False))
         mname = method.__name__
         progs = "Doing {} {} tasks {}...({}MB vs {}GB)"
@@ -373,8 +382,7 @@ class Importer:
         *args: Any,
         give: bool = False,
         progress: str | None = None,
-        # todo: params could get a more general type if it is used for anything else:
-        params: Params = None,
+        params: dict[str, int | str] = {},
     ) -> RunScript:
         """
         Run a simple script, and return the result if give
@@ -384,10 +392,10 @@ class Importer:
         Messing with this method in even trivial ways can cause segfaults for mysterious reasons
         """
 
-        base: dict[str, str] = {}
-        out: list[tuple]
+        base: dict[str, int | str] = {}
+        out: list[tuple[Any, ...]]
         params = params or base
-        ares: list[Row] | str | None
+        ares: list[Row[Any]] | str | None
         async with self.pool.begin() as conn:
             # bit of a hack to deal with sqlalchemy problem with prepared_statements
             if script.count(";") > 1:
@@ -426,8 +434,26 @@ class Importer:
         await self.run_script(self.create)
         msg = f"Running {len(self.batches)} insert tasks:\n{self.insert}\n"
         self.update_progress(msg)
-        inserts = [self.insert.format(batch=batch) for batch in self.batches]
+        inserts = [self.insert.format('{}', batch=batch) for batch in self.batches]
         await self.process_data(inserts, self.run_script, progress=progress)
+        msg = f"Running {len(self.updates)} * {len(self.batches)} prepared annotations tasks:\n{self.updates}\n"
+        self.update_progress(msg)
+        updates = [u.format(LB='{', RB='}', batch=batch) for batch in self.batches for u in self.updates]
+        await self.process_data(updates, self.run_script, progress=progress)
+        return None
+
+    async def collocations(self) -> None:
+        """
+        Run the prepared segment scripts, potentially concurrently
+        """
+        self.update_progress("Creating materialized views for collocations...")
+        self.update_progress("- token_freq")
+        await self.run_script(self.m_token_freq)
+        self.update_progress("- token_n")
+        await self.run_script(self.m_token_n)
+        self.update_progress("- lemma_freqs")
+        await self.run_script(self.m_lemma_freqs)
+        self.update_progress("Done with collocations!")
         return None
 
     async def create_entry_maincorpus(self) -> MainCorpus:
@@ -435,9 +461,9 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
-        params = dict(
+        params: dict[str, str | int] = dict(
             name=self.name,
-            ver=self.version,
+            ver=int(self.version),
             template=json.dumps(dict(self.template)),
             schema=self.schema,
             counts=json.dumps(self.token_count),
@@ -446,6 +472,7 @@ class Importer:
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)
         rows = cast(list[MainCorpus], await task)
+        # The row is now in main.corpus, time to update the app's config?
         return rows[0]
 
     async def drop_similar(self) -> None:
@@ -486,4 +513,7 @@ class Importer:
             self.update_progress(f"Running:\n{strung}")
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
-        return cast(MainCorpus, await self.create_entry_maincorpus())
+        await self.collocations()
+        # run the config glob_attr
+        main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
+        return main_corp

@@ -18,16 +18,15 @@ this job ID; if it's available, we can trigger the callback manually, and thus
 save ourselves from running duplicate DB queries.
 """
 
-from __future__ import annotations
-
 import json
 import os
 
 from collections.abc import Coroutine
-from typing import final, Unpack, cast
+from typing import Any, final, Unpack, cast
 
 from aiohttp import web
 from redis import Redis as RedisConnection
+from rq import Callback
 from rq.command import send_stop_job_command
 from rq.exceptions import InvalidJobOperation, NoSuchJobError
 from rq.job import Job
@@ -38,6 +37,7 @@ from .callbacks import (
     _document_ids,
     _general_failure,
     _upload_failure,
+    _meta,
     _queries,
     _query,
     _schema,
@@ -46,61 +46,27 @@ from .callbacks import (
 )
 from .convert import _apply_filters
 from .jobfuncs import _db_query, _upload_data, _create_schema
-from .typed import JSONObject, QueryArgs, Config, Results, ResultsValue
-from .utils import _set_config, PUBSUB_CHANNEL, CustomEncoder
-
-
-# The query in get_config is complex because we inject the possible values of the global attributes in corpus_template
-CONFIG_SELECT = """
-mc.corpus_id,
-mc.name,
-mc.current_version,
-mc.version_history,
-mc.description,
-mc.corpus_template::jsonb || a.glob_attr::jsonb AS corpus_template,
-mc.schema_path,
-mc.token_counts,
-mc.mapping,
-mc.enabled,
-mc.sample_query
-"""
-CONFIG_FROM = """
-main.corpus mc
-CROSS JOIN
-(SELECT
-    json_build_object('glob_attr', jsonb_object_agg(
-        t4.typ,
-        case
-            when array_length(t4.labels,1)=1 then to_json(t4.labels[1])
-            else to_json(t4.labels)
-        end
-    )) AS glob_attr
-    FROM
-        (SELECT
-            pg_type.typname AS typ,
-            array_agg(pg_enum.enumlabel) AS labels
-            FROM pg_enum
-            JOIN pg_type ON pg_type.oid = pg_enum.enumtypid
-            JOIN
-                (SELECT
-                    DISTINCT t2each.key AS typname
-                    FROM
-                        (SELECT
-                            t1each.key AS layer,
-                            t1each.value->>'attributes' AS attributes
-                            FROM
-                                (SELECT corpus_template->>'layer' AS lay FROM main.corpus) t1,
-                                json_each(t1.lay::json) t1each
-                        ) t2,
-                        json_each(t2.attributes::json) t2each
-                    WHERE
-                        t2each.value->>'isGlobal' = 'true'
-                ) t3 ON t3.typname = pg_type.typname
-            GROUP BY typ
-        ) t4
-) a
-"""
-
+from .typed import (
+    BaseArgs,
+    Config,
+    DocIDArgs,
+    JSONObject,
+    QueryArgs,
+    Results,
+    ResultsValue,
+    SentJob,
+)
+from .utils import (
+    _format_config_query,
+    _set_config,
+    PUBSUB_CHANNEL,
+    CustomEncoder,
+    range_to_array
+)
+from .abstract_query.utils import (
+    _get_table,
+    _get_mapping
+)
 
 @final
 class QueryService:
@@ -113,12 +79,15 @@ class QueryService:
     def __init__(self, app: web.Application) -> None:
         self.app = app
         self.timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+        self.whole_corpus_timeout = int(
+            os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999)
+        )
+        self.callback_timeout = int(os.getenv("QUERY_CALLBACK_TIMEOUT", 5000))
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
-        trues = {"true", "1", "y", "yes"}
-        self.use_cache = os.getenv("USE_CACHE", "true").lower() in trues
+        self.use_cache = app["_use_cache"]
 
-    async def send_all_data(self, job: Job, **kwargs) -> bool:
+    async def send_all_data(self, job: Job, **kwargs: Unpack[QueryArgs]) -> bool:
         """
         Get the stored messages related to a query and send them to frontend
         """
@@ -131,12 +100,14 @@ class QueryService:
         payload["user"] = kwargs["user"]
         payload["room"] = kwargs["room"]
         # we may have to apply the latest post-processes...
-        pps = cast(dict, kwargs["post_processes"] or payload["post_processes"])
+        pps = cast(
+            dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
+        )
         # json serialises the Results keys to strings, so we have to convert
         # them back into int for the Results object to be correctly typed:
         full_res = cast(dict[str, ResultsValue], payload["full_result"])
         res = cast(Results, {int(k): v for k, v in full_res.items()})
-        if pps and pps != payload["post_processes"]:
+        if pps and pps != cast(dict[int, Any], payload["post_processes"]):
             filtered = _apply_filters(res, pps)
             payload["result"] = cast(JSONObject, filtered)
         payload["no_restart"] = True
@@ -144,10 +115,17 @@ class QueryService:
         strung: str = json.dumps(payload, cls=CustomEncoder)
 
         failed = False
-        tasks: list[Coroutine] = [self.app["aredis"].publish(PUBSUB_CHANNEL, strung)]
+        tasks: list[Coroutine[None, None, None]] = [
+            self.app["aredis"].publish(PUBSUB_CHANNEL, strung)
+        ]
 
-        for msg in job.meta.get("sent_job_ws_messages", {}):
-            print(f"Retrieving sentences message: {msg}")
+        sent_and_meta_msgs = {
+            **job.meta.get("sent_job_ws_messages", {}),
+            **job.meta.get("meta_job_ws_messages", {}),
+        }
+        for msg in sent_and_meta_msgs:
+            # print(f"Retrieving sentences message: {msg}")
+            print(f"Retrieving sentences or metadata message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
                 failed = True
@@ -172,7 +150,7 @@ class QueryService:
         self,
         query: str,
         queue: str = "query",
-        **kwargs: Unpack[QueryArgs],  # type: ignore
+        **kwargs: Unpack[QueryArgs],
     ) -> tuple[Job | None, bool | None]:
         """
         Here we send the query to RQ and therefore to redis
@@ -185,20 +163,23 @@ class QueryService:
             if job is not None:
                 return job, submitted
 
+        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
+
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_query,
-            on_failure=_general_failure,
+            on_success=Callback(_query, timeout),
+            on_failure=Callback(_general_failure, timeout),
             result_ttl=self.query_ttl,
-            job_timeout=self.timeout,
+            job_timeout=timeout,
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
         )
         return cast(Job, job), True
 
+
     async def _attempt_query_from_cache(
-        self, hashed: str, **kwargs
+        self, hashed: str, **kwargs: Unpack[QueryArgs]
     ) -> tuple[Job | None, bool | None]:
         """
         Try to get a query from cache. Return the job and an indicator of
@@ -207,7 +188,9 @@ class QueryService:
         job: Job | None
         try:
             job = Job.fetch(hashed, connection=self.app["redis"])
-            is_first = not job.kwargs["first_job"] or job.kwargs["first_job"] == job.id
+            first_job_id = cast(str, kwargs.get("first_job", str(job.id)))
+            first_job = Job.fetch(first_job_id, connection=self.app["redis"])
+            is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
                 if is_first and not kwargs["full"]:
@@ -245,8 +228,12 @@ class QueryService:
         The fetch from cache should not be needed, as on subsequent jobs
         we can get the data from app["config"]
         """
-        query = f"SELECT document_id, name FROM {schema}.document;"
-        kwargs = {"user": user, "room": room, "corpus_id": corpus_id}
+        query = f"SELECT document_id, name, media, frame_range FROM {schema}.document;"
+        kwargs: DocIDArgs = {
+            "user": user,
+            "room": room,
+            "corpus_id": corpus_id,
+        }
         hashed = str(hash((query, corpus_id)))
         job: Job
         if self.use_cache:
@@ -259,8 +246,8 @@ class QueryService:
                 pass
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_document_ids,
-            on_failure=_general_failure,
+            on_success=Callback(_document_ids, self.timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             args=(query, {}),
             kwargs=kwargs,
         )
@@ -273,12 +260,68 @@ class QueryService:
         doc_id: int,
         user: str,
         room: str | None,
+        config: dict,
         queue: str = "internal",
     ) -> Job:
         """
         Fetch info about a document from DB/cache
         """
         query = f"SELECT {schema}.doc_export(:doc_id);"
+        # Start work on new logic with Tangram4 (corpus_id 59)
+        if corpus == 59:
+            assert 'tracks' in config, KeyError("Couldn't find 'tracks' in the corpus configuration")
+            global_tables: dict = {}
+            doc_layer = config.get("document")
+            query = f"WITH doc AS (SELECT frame_range FROM {schema}.{doc_layer} WHERE {doc_layer}_id = :doc_id)"
+            for layer, props in config['tracks'].get("layers", {}).items():
+                layer_table = _get_table(layer, config, "", "") # no batch and no lang for now
+                mapping = _get_mapping(layer,config,"","")
+                crossjoin = ""
+                whereand = ""
+                lab = layer_table[0]
+                selects = ["'frame_range'", range_to_array(f"{lab}.frame_range")]
+                if layer.lower() == config.get("segment","").lower():
+                    prepared_table = mapping.get("prepared",{}).get("relation", f"prepared_{layer}")
+                    crossjoin = f"\n    CROSS JOIN {schema}.{prepared_table} ps"
+                    whereand = f"\n    AND {lab}.{layer}_id = ps.{layer}_id"
+                    selects += ["'prepared'", "ps.content"]
+                for split in props.get("split", []):
+                    split_name = split
+                    split_mapping = mapping.get("attributes", {}).get(split,{})
+                    if split_mapping.get("type") == "relation":
+                        split_name = f"{split_mapping.get('name',split)}_id"
+                    selects += [f"'{split_name}'", f"{lab}.{split_name}"]
+                for attr_name, attr_props in mapping.get("attributes", {}).items():
+                    if attr_name not in config.get("globalAttributes",{}):
+                        continue
+                    global_tables[attr_name] = attr_props.get("name", attr_name)
+                query += f""",
+{layer} AS (
+    SELECT 'layer', '{layer}', jsonb_build_object({','.join(selects)}) AS props
+    FROM {schema}.{layer_table} {lab}, doc {crossjoin}
+    WHERE {lab}.frame_range && doc.frame_range {whereand}
+)"""
+            layers_ctes = [x for x in config['tracks'].get("layers",{})]
+            for gar in config['tracks'].get("group_by", []):
+                assert "globalAttributes" in config, KeyError("Could not find globalAttributes in corpus config")
+                gar_table = global_tables.get(gar, gar)
+                lab = gar_table[0]
+                gar_props = [f"({x}.props->'{gar}_id')::int" for x in layers_ctes]
+                selects = [f"'{gar}'", f"{lab}.{gar}", f"'{gar}_id'", f"{lab}.{gar}_id"]
+                query += f""",
+{gar} AS (
+    SELECT DISTINCT 'glob', '{gar}', jsonb_build_object({','.join(selects)}) AS props
+    FROM {schema}.{gar_table} {lab}, {', '.join(layers_ctes)}
+    WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
+)"""
+            query += f"\nSELECT * FROM {next(x for x in config['tracks']['layers'])}"
+            for n, layer in enumerate(config['tracks']['layers']):
+                if n == 0:
+                    continue
+                query += f"\nUNION ALL SELECT * FROM {layer}"
+            for gar in config['tracks'].get('group_by',{}):
+                query += f"\nUNION ALL SELECT * FROM {gar}"
+            query += ";"
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
         job: Job
@@ -286,7 +329,7 @@ class QueryService:
             try:
                 job = Job.fetch(hashed, connection=self.app["redis"])
                 if job and job.get_status(refresh=True) == "finished":
-                    kwa: dict[str, str | None] = {"user": user, "room": room}
+                    kwa: BaseArgs = {"user": user, "room": room}
                     _document(job, self.app["redis"], job.result, **kwa)
                     return job
             except NoSuchJobError:
@@ -301,8 +344,8 @@ class QueryService:
         }
         job = self.app[queue].enqueue(
             _db_query,
-            on_success=_document,
-            on_failure=_general_failure,
+            on_success=Callback(_document, self.timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query, params),
@@ -313,36 +356,92 @@ class QueryService:
     def sentences(
         self,
         query: str,
+        meta: str = "",
         queue: str = "query",
-        **kwargs: int | bool | str | None | list[str],
+        **kwargs: Unpack[SentJob],
     ) -> list[str]:
-        depend = cast(str | list[str], kwargs["depends_on"])
-        hash_dep = tuple(depend) if isinstance(depend, list) else depend
+        depends_on = kwargs["depends_on"]
+        hash_dep = tuple(depends_on) if isinstance(depends_on, list) else depends_on
         hashed = str(
             hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
         )
         kwargs["sentences_query"] = query
-        job: Job
+        hashed_meta = str(
+            hash((meta, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
+        )
+        job_sent: Job
 
         if self.use_cache:
             ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
+            if meta:
+                ids += self._attempt_meta_from_cache(hashed_meta, **kwargs)
             if ids:
                 return ids
 
-        job = self.app[queue].enqueue(
+        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
+
+        job_sent = self.app[queue].enqueue(
             _db_query,
-            on_success=_sentences,
-            on_failure=_general_failure,
+            on_success=Callback(_sentences, timeout),
+            on_failure=Callback(_general_failure, timeout),
             result_ttl=self.query_ttl,
-            depends_on=kwargs["depends_on"],
-            job_timeout=self.timeout,
+            depends_on=depends_on,
+            job_timeout=timeout,
             job_id=hashed,
             args=(query,),
             kwargs=kwargs,
         )
-        return [job.id]
 
-    def _attempt_sent_from_cache(self, hashed: str, **kwargs) -> list[str]:
+        return_jobs = [job_sent.id]
+
+        if meta:
+            kwargs["meta_query"] = meta
+            job_meta: Job = self.app[queue].enqueue(
+                _db_query,
+                on_success=Callback(_meta, timeout),
+                on_failure=Callback(_general_failure, timeout),
+                result_ttl=self.query_ttl,
+                depends_on=depends_on,
+                job_timeout=timeout,
+                job_id=hashed_meta,
+                args=(meta,),
+                kwargs=kwargs,
+            )
+            return_jobs.append(job_meta.id)
+
+        return return_jobs
+
+
+    def _attempt_meta_from_cache(
+        self, hashed: str, **kwargs: Unpack[SentJob]
+    ) -> list[str]:
+        """
+        Try to return meta from redis cache, instead of doing a new query
+        """
+        jobs: list[str] = []
+        kwa: SentJob
+        job: Job
+        try:
+            job = Job.fetch(hashed, connection=self.app["redis"])
+            self.app["redis"].expire(job.id, self.query_ttl)
+            if job.get_status() == "finished":
+                print("Meta found in redis memory. Retrieving...")
+                kwa = {
+                    "full": kwargs["full"],
+                    "user": kwargs["user"],
+                    "room": kwargs["room"],
+                    "from_memory": True,
+                    "total_results_requested": kwargs["total_results_requested"],
+                }
+                _meta(job, self.app["redis"], job.result, **kwa)
+                return [job.id]
+        except NoSuchJobError:
+            pass
+        return jobs
+
+    def _attempt_sent_from_cache(
+        self, hashed: str, **kwargs: Unpack[SentJob]
+    ) -> list[str]:
         """
         Try to return sentences from redis cache, instead of doing a new query
         """
@@ -355,13 +454,11 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Sentences found in redis memory. Retrieving...")
                 kwa = {
-                    "full": cast(bool, kwargs["full"]),
-                    "user": cast(str, kwargs["user"]),
-                    "room": cast(str | None, kwargs["room"]),
+                    "full": kwargs["full"],
+                    "user": kwargs["user"],
+                    "room": kwargs["room"],
                     "from_memory": True,
-                    "total_results_requested": cast(
-                        int, kwargs["total_results_requested"]
-                    ),
+                    "total_results_requested": kwargs["total_results_requested"],
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
@@ -369,19 +466,20 @@ class QueryService:
             pass
         return jobs
 
-    async def get_config(self) -> Job:
+    async def get_config(self, force_refresh: bool = False) -> Job:
         """
         Get initial app configuration JSON
         """
         job: Job
         job_id = "app_config"
 
-        query_format = "SELECT {selects} FROM {froms} WHERE mc.enabled = true;"
-        query = query_format.format(selects=CONFIG_SELECT, froms=CONFIG_FROM)
+        query = _format_config_query(
+            "SELECT {selects} FROM main.corpus mc {join} WHERE mc.enabled = true;"
+        )
 
         redis: RedisConnection[bytes] = self.app["redis"]
         opts: dict[str, bool] = {"config": True}
-        if self.use_cache:
+        if self.use_cache and not force_refresh:
             try:
                 already = Job.fetch(job_id, connection=redis)
                 if already and already.result is not None:
@@ -395,9 +493,9 @@ class QueryService:
                 pass
         job = self.app["internal"].enqueue(
             _db_query,
-            on_success=_config,
+            on_success=Callback(_config, self.callback_timeout),
             job_id=job_id,
-            on_failure=_general_failure,
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query,),
@@ -428,8 +526,8 @@ class QueryService:
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
-            on_success=_queries,
-            on_failure=_general_failure,
+            on_success=Callback(_queries, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query.strip(), params),
@@ -465,8 +563,44 @@ class QueryService:
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
-            on_success=_queries,
-            on_failure=_general_failure,
+            on_success=Callback(_queries, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            job_timeout=self.timeout,
+            args=(query, params),
+            kwargs=kwargs,
+        )
+        return job
+
+    def update_metadata(
+        self,
+        corpus_id: int,
+        query_data: JSONObject,
+        queue: str = "internal",
+    ) -> Job:
+        """
+        Update metadata for a corpus
+        """
+        query = """UPDATE main.corpus SET
+            corpus_template = jsonb_set(
+                corpus_template,
+                '{meta}',
+                corpus_template->'meta' || :metadata_json
+            )
+        WHERE corpus_id = :corpus_id;"""
+        kwargs = {
+            "store": True,
+            "config": True,
+            "refresh_config": True,
+        }
+        params: dict[str, str | int | None | JSONObject] = {
+            "corpus_id": corpus_id,
+            "metadata_json": json.dumps(query_data),
+        }
+        # TODO: use the uploader user/pool instead (ie the one that can upload corpora)
+        # and update app's config once done
+        job: Job = self.app[queue].enqueue(
+            _db_query,
+            result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query, params),
             kwargs=kwargs,
@@ -493,8 +627,8 @@ class QueryService:
         }
         job: Job = self.app[queue].enqueue(
             _upload_data,
-            on_success=_upload,
-            on_failure=_upload_failure,
+            on_success=Callback(_upload, self.callback_timeout),
+            on_failure=Callback(_upload_failure, self.callback_timeout),
             result_ttl=self.query_ttl,
             job_timeout=self.upload_timeout,
             args=(project, user, room, self.app["_debug"]),
@@ -528,8 +662,8 @@ class QueryService:
             # schema job remembered for one day?
             result_ttl=60 * 60 * 24,
             job_timeout=self.timeout,
-            on_success=_schema,
-            on_failure=_upload_failure,
+            on_success=Callback(_schema, self.callback_timeout),
+            on_failure=Callback(_upload_failure, self.callback_timeout),
             args=(create, schema_name, drops),
             kwargs=kwargs,
         )

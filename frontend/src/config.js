@@ -1,96 +1,119 @@
-let config = null;
-if (process.env.APP_TYPE == "vian") {
-  if (process.env.NODE_ENV === "production") {
+let config = {};
+
+const testUserHeaders = {
+  "X-Remote-User": "firstname.lastname@uzh.ch",
+  "X-Display-Name": "Firstname Lastname",
+  "X-Mail": "firstname.lastname@uzh.ch",
+  "X-Edu-Person-Unique-Id": "test_user_uniq_id@uzh.ch",
+}
+// const testUserHeaders = {}
+
+if (process.env.APP_TYPE == "videoscope") {
+  if (process.env.NODE_ENV == "production") {
     config = {
-      appName: "VIAN-DH",
-      apiUrl: "https://vian.linguistik.uzh.ch/be",
-      wsUrl: "wss://vian.linguistik.uzh.ch/ws",
-      appDomain: "vian.linguistik.uzh.ch",
-      environment: "production",
+      appName: "videoscope",
+      apiUrl: "https://videoscope.linguistik.uzh.ch/be",
+      wsUrl: "wss://videoscope.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
-      baseVideoUrl: "https://vian.linguistik.uzh.ch/video",
+      baseMediaUrl: "https://videoscope.linguistik.uzh.ch/video",
     };
-  } else if (process.env.NODE_ENV === "test") {
+  } else if (process.env.NODE_ENV == "staging") {
     config = {
-      appName: "VIAN-DH",
-      apiUrl: "https://vian.test.linguistik.uzh.ch/be",
-      wsUrl: "wss://vian.test.linguistik.uzh.ch/ws",
-      appDomain: "vian.test.linguistik.uzh.ch",
-      environment: "test",
+      appName: "videoscope",
+      apiUrl: "https://videoscope.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://videoscope.test.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
-      baseVideoUrl: "https://vian.test.linguistik.uzh.ch/video",
-    };
-  } else if (process.env.NODE_ENV === "dev") {
-    config = {
-      appName: "VIAN-DH",
-      apiUrl: "http://localhost:9090",
-      appDomain: "vian.dev.linguistik.uzh.ch",
-      environment: "development",
-      apiHeaders: {},
-      sentryDSN: null,
-      baseVideoUrl: "https://vian.dev.linguistik.uzh.ch/video",
+      baseMediaUrl: "https://videoscope.test.linguistik.uzh.ch/media",
     };
   } else {
     // development
     config = {
-      appName: "VIAN-DH",
+      appName: "videoscope",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
-      appDomain: "localhost",
-      environment: "development",
-      apiHeaders: {
-        // "X-Remote-User": "nikolina.rajovic@uzh.ch",
-        // "X-Display-Name": "Nikolina Rajovic",
-        // "X-Edu-Person-Unique-Id": "8599941289f8@uzh.ch",
-        // "X-Home-Organization": "uzh.ch",
-
-        "X-Remote-User": "igor.mustac@uzh.ch",
-        "X-Display-Name": "Igor Mustac",
-        "X-Edu-Person-Unique-Id": "553131353436323302@uzh.ch",
-        "X-Home-Organization": "uzh.ch",
-        "X-Schac-Home-Organization": "uzh.ch",
-        "X-Persistent-Id":
-          "https://aai-idp.uzh.ch/idp/shibboleth!https://liri.linguistik.uzh.ch/shibboleth!O7bJIkf8gJ9QnxHUi4aIyJGRB+o=",
-        "X-Given-Name": "Igor",
-        "X-Surname": "Mustac",
-        "X-Principal-Name": "553131353436323302@uzh.ch",
-        "X-Mail": "igor.mustac@uzh.ch",
-        "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
-      },
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
-      baseVideoUrl: "http://localhost:8000",
+      baseMediaUrl: "http://localhost:8000",
     };
   }
 }
-else {
+else if (process.env.APP_TYPE == "soundscript") {
+  if (process.env.NODE_ENV === "production") {
+    config = {
+      appName: "soundscript",
+      apiUrl: "https://soundscript.linguistik.uzh.ch/be",
+      wsUrl: "wss://soundscript.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://soundscript.linguistik.uzh.ch/media",
+    };
+  } else if (process.env.NODE_ENV === "staging") {
+    config = {
+      appName: "soundscript",
+      apiUrl: "https://soundscript.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://soundscript.test.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://soundscript.test.linguistik.uzh.ch/media",
+    };
+  } else {
+    // development
+    config = {
+      appName: "soundscript",
+      apiUrl: "http://localhost:9090",
+      wsUrl: "ws://localhost:9090/ws",
+      apiHeaders: testUserHeaders,
+      sentryDSN: null,
+      baseMediaUrl: "http://localhost:8000",
+    };
+  }
+}
+else if (process.env.APP_TYPE == "catchphrase") {
+  if (process.env.NODE_ENV === "production") {
+    config = {
+      appName: "catchphrase",
+      apiUrl: "https://catchphrase.linguistik.uzh.ch/be",
+      wsUrl: "wss://catchphrase.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else if (process.env.NODE_ENV === "staging") {
+    config = {
+      appName: "catchphrase",
+      apiUrl: "https://catchphrase.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://catchphrase.test.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else {
+    // development
+    config = {
+      appName: "catchphrase",
+      apiUrl: "http://localhost:9090",
+      wsUrl: "ws://localhost:9090/ws",
+      apiHeaders: testUserHeaders,
+      sentryDSN: null,
+      baseMediaUrl: "http://localhost:8000",
+    };
+  }
+}
+else if (process.env.APP_TYPE == "lcphome") {
+  // LCP HOME
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "LCP",
       apiUrl: "https://lcp.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
-      appDomain: "lcp.linguistik.uzh.ch",
-      environment: "production",
       apiHeaders: {},
       sentryDSN: null,
     };
-  } else if (process.env.NODE_ENV === "test") {
+  } else if (process.env.NODE_ENV === "staging") {
     config = {
       appName: "LCP",
       apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
       wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
-      appDomain: "lcp.test.linguistik.uzh.ch",
-      environment: "test",
-      apiHeaders: {},
-      sentryDSN: null,
-    };
-  } else if (process.env.NODE_ENV === "dev") {
-    config = {
-      appName: "LCP",
-      apiUrl: "http://localhost:9090",
-      appDomain: "lcp.dev.linguistik.uzh.ch",
-      environment: "development",
       apiHeaders: {},
       sentryDSN: null,
     };
@@ -100,32 +123,65 @@ else {
       appName: "LCP",
       apiUrl: "http://localhost:9090",
       wsUrl: "ws://localhost:9090/ws",
-      appDomain: "localhost",
-      environment: "development",
-      apiHeaders: {
-        // "X-Remote-User": "nikolina.rajovic@uzh.ch",
-        // "X-Display-Name": "Nikolina Rajovic",
-        // "X-Edu-Person-Unique-Id": "8599941289f8@uzh.ch",
-        // "X-Home-Organization": "uzh.ch",
-
-        "X-Remote-User": "igor.mustac@uzh.ch",
-        "X-Display-Name": "Igor Mustac",
-        "X-Edu-Person-Unique-Id": "553131353436323302@uzh.ch",
-        "X-Home-Organization": "uzh.ch",
-        "X-Schac-Home-Organization": "uzh.ch",
-        "X-Persistent-Id":
-          "https://aai-idp.uzh.ch/idp/shibboleth!https://liri.linguistik.uzh.ch/shibboleth!O7bJIkf8gJ9QnxHUi4aIyJGRB+o=",
-        "X-Given-Name": "Igor",
-        "X-Surname": "Mustac",
-        "X-Principal-Name": "553131353436323302@uzh.ch",
-        "X-Mail": "igor.mustac@uzh.ch",
-        "X-Shib-Identity-Provider": "https://aai-idp.uzh.ch/idp/shibboleth",
-      },
+      apiHeaders: testUserHeaders,
       sentryDSN: null,
-      baseVideoUrl: "http://localhost:8000",
+      baseMediaUrl: "http://localhost:8000",
     };
   }
 }
-config.appType = process.env.APP_TYPE == "vian" ? "vian" : "lcp";
+else {
+  // LCP HOME
+  if (process.env.NODE_ENV === "production") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.linguistik.uzh.ch/be",
+      wsUrl: "wss://lcp.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else if (process.env.NODE_ENV === "staging") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.test.linguistik.uzh.ch/be",
+      wsUrl: "wss://lcp.test.linguistik.uzh.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+    };
+  } else {
+    // development
+    config = {
+      appName: "LCP",
+      apiUrl: "http://localhost:9090",
+      wsUrl: "ws://localhost:9090/ws",
+      apiHeaders: testUserHeaders,
+      sentryDSN: null,
+      baseMediaUrl: "http://localhost:8000",
+    };
+  }
+}
+config.appType = process.env.APP_TYPE;
+
+if (process.env.NODE_ENV == "production") {
+  config['appLinks'] = {
+    "catchphrase": "https://catchphrase.linguistik.uzh.ch",
+    "soundscript": "https://soundscript.linguistik.uzh.ch",
+    "videoscope": "https://videoscope.linguistik.uzh.ch",
+  }
+}
+else if (process.env.NODE_ENV == "staging") {
+  config['appLinks'] = {
+    "catchphrase": "https://catchphrase.test.linguistik.uzh.ch",
+    "soundscript": "https://soundscript.test.linguistik.uzh.ch",
+    "videoscope": "https://videoscope.test.linguistik.uzh.ch"
+  }
+}
+else {
+  config['appLinks'] = {
+    "catchphrase": "http://localhost:8081",
+    "soundscript": "http://localhost:8082",
+    "videoscope": "http://localhost:8083",
+
+  }
+}
 
 export default config;

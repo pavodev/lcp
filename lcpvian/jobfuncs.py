@@ -1,18 +1,22 @@
-from __future__ import annotations
-
 import json
 import logging
 import os
+import pandas
 import shutil
 import traceback
 
-from typing import cast
+import duckdb
+
+from asyncpg import Range
+from typing import Any, cast
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.sql import text
 
-from rq.job import get_current_job
+from rq.connections import get_current_connection
+from rq.job import get_current_job, Job
 
+from .api import refresh_config
 from .configure import CorpusTemplate
 from .impo import Importer
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
@@ -104,9 +108,16 @@ async def _db_query(
     store: bool = False,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
-) -> list[tuple] | tuple | list[JSONObject] | JSONObject | list[MainCorpus] | list[
-    UserQuery
-] | list[Sentence] | None:
+) -> (
+    list[tuple[Any, ...]]
+    | tuple[Any, ...]
+    | list[JSONObject]
+    | JSONObject
+    | list[MainCorpus]
+    | list[UserQuery]
+    | list[Sentence]
+    | None
+):
     """
     The function queued by RQ, which executes our DB query
     """
@@ -122,19 +133,217 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if store else "_pool"
-    pool = getattr(get_current_job(), name)
+    name = "_upool" if store else ("_wpool" if config else "_pool")
+    job = get_current_job()
+    pool = getattr(job, name)
     method = "begin" if store else "connect"
 
+    first_job_id = cast(str, kwargs.get("first_job", ""))
+    if first_job_id:
+        first_job: Job = Job.fetch(first_job_id, connection=get_current_connection())
+        if first_job:
+            first_job_status = first_job.get_status(refresh=True)
+            if first_job_status in ("stopped", "canceled"):
+                print("First job was stopped or canceled - not executing the query")
+                raise SQLAlchemyError("Job canceled")
+
     params = params or {}
+
+    if job and job.kwargs.get("refresh_config", None):
+        await refresh_config()
 
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)
             if store:
                 return None
-            out: list[tuple] = [tuple(i) for i in res.fetchall()]
+            out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")
             raise err
+
+
+# TODO:
+# - save to proper path (based on hash) + create symlinks in projects (name queries?)
+# - handle existing duckdb files (duckdb won't overwrite)
+# - what happens for huge results? might need rethinking approach
+# - launch export even when queries fetched from cache
+# - communicate with frontend
+async def _swissdox_export(
+    job_ids: dict[str, str],
+    documents: dict[str, Any] = {},
+    config: dict[str, Any] = {},
+    underlang: str = "",
+    ne_cols: list[str] = [],
+) -> None:
+    """
+    Take all the results from the relevant jobs and write them to storage
+    """
+    conn = get_current_connection()
+
+    prepared_segments_job: Job = Job.fetch(
+        job_ids["prepared_segments"], connection=conn
+    )
+    named_entities_job: Job = Job.fetch(job_ids["named_entities"], connection=conn)
+
+    path = os.path.join("results", config["meta"].get("name", "anonymous_corpus"))
+
+    if not os.path.exists(path):
+        os.mkdir(path)
+    elif os.path.exists(os.path.join(path, "swissdox.db")):
+        return None
+
+    # Documents
+    docs_by_range: dict[int, tuple[int, str]] = {}
+    doc_columns = [c for c in documents["columns"] if c != "id"]
+    doc_indices = []
+    doc_rows = []
+    doc_attrs = config["layer"][config["document"]]["attributes"]
+    for n, row in enumerate(documents["rows"]):
+        id = row.pop("id", n)
+        doc_indices.append(str(id))
+        # Sanitize types -- should do the same for all dfs
+        formed_row = []
+        for cl in doc_columns:
+            c = row.get(cl, "")
+            type = doc_attrs.get(cl, doc_attrs.get("meta", {}).get(cl, {})).get("type")
+            if type == "integer":
+                c = int(c or 0)
+            elif type in ("text", "string", "vector"):
+                c = str(c)
+            elif cl == "char_range" and isinstance(c, Range):
+                docs_by_range[c.lower] = (c.upper, id)
+                c = str(c)
+            formed_row.append(c)
+        formed_row.append(str(id))
+        doc_rows.append(formed_row)
+    doc_columns.append("doc_id")
+    doc_pandas = pandas.DataFrame(data=doc_rows, index=doc_indices, columns=doc_columns)
+    # doc_pandas.to_feather(os.path.join(path, "documents.feather"))
+
+    # Tokens
+    seg: str = config["segment"]
+    segment_mapping: dict[str, Any] = config["mapping"]["layer"][seg]
+    if "partitions" in segment_mapping and underlang:
+        segment_mapping = segment_mapping["partitions"][underlang[1:]]
+    column_headers = segment_mapping.get("prepared", {}).get("columnHeaders", [])
+    # tok_columns: list[str] = ["segment_id"]
+    # if "partitions" in segment_mapping and underlang:
+    #     tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
+    #         "columnHeaders"
+    #     ]
+    # else:
+    #     tok_columns += segment_mapping["prepared"]["columnHeaders"]
+    tok_columns = [
+        "form",
+        "lemma",
+        "upos",
+        "xpos",
+        "tense",
+        "voice",
+        "mood",
+        "doc_id",
+        "position",
+    ]
+    tok_indices = []
+    tok_rows = []
+    n_tok = 1
+    for content, char_range in prepared_segments_job.result:
+        if char_range.lower is None:
+            continue  # Ignore segments that are not anchored
+        doc_id: str
+        for lower, (upper, did) in docs_by_range.items():
+            if lower > char_range.upper or upper < char_range.lower:
+                continue
+            doc_id = str(did)
+            break
+        for n, token in enumerate(content):
+            tok_indices.append(str(n_tok))
+            row = []
+            for col in tok_columns[0:4]:
+                row.append(str(token[column_headers.index(col)]))
+            if token[4]:
+                ufeat: dict = {}
+                if isinstance(token[4], str):
+                    ufeat = json.loads(token[4])
+                else:
+                    ufeat = token[4] or {}
+                row.append(ufeat.get("Tense", None))
+                row.append(ufeat.get("Voice", None))
+                row.append(ufeat.get("Mood", None))
+            else:
+                row += [None, None, None]
+            row.append(doc_id)
+            row.append(str(n))
+            tok_rows.append(row)
+            n_tok += 1
+    tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
+    # tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
+
+    # Named entities to docs
+    ne_to_id: dict[tuple[str, str], str] = {}  # map (form,type) to ne_id
+    ne_to_docs: dict[str, dict[str, int]] = {}  # map ne_id to {doc_id: n}
+
+    # Named entities
+    # TODO: store named entities as a dict, whose keys are tuple[form,type]
+    # if a key already exists, don't add it again (or do, whatever)
+    ne_columns: list[str] = ["form", "type", "ned_id"]
+    ne_indices = []
+    ne_rows = []
+    for char_range, form, typ in named_entities_job.result:
+        doc_id = ""
+        for lower, (upper, did) in docs_by_range.items():
+            if lower > char_range.upper or upper < char_range.lower:
+                continue
+            doc_id = str(did)
+            break
+        ne_id: str = ne_to_id.get((form, typ), "")
+        if not ne_id:
+            ne_id = str(len(ne_to_id) + 1)
+            ne_to_id[(form, typ)] = ne_id
+            ne_to_docs[ne_id] = {}
+        ne_to_docs[ne_id][doc_id] = ne_to_docs[ne_id].get(doc_id, 0) + 1
+    for (form, typ), ne_id in ne_to_id.items():
+        ne_indices.append(ne_id)
+        ne_rows.append([form, typ, ne_id])
+    ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_columns)
+    # ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+
+    ne_doc_columns: list[str] = ["doc_id", "ne_id", "freq"]
+    ne_doc_indices = []
+    ne_doc_rows: list[tuple[str, str, str]] = []
+    ne_doc_idx = 1
+    for ne_id, doc_counts in ne_to_docs.items():
+        for doc_id, count in doc_counts.items():
+            ne_doc_indices.append(str(ne_doc_idx))
+            ne_doc_idx += 1
+            ne_doc_rows.append((doc_id, ne_id, str(count)))
+    ne_document_pandas = pandas.DataFrame(
+        data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns
+    )
+    # ne_document_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+
+    # # Zip file
+    # with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:
+    #     # archive.write(f"results/{corpus_index}/documents.tsv", "documents.tsv")
+    #     archive.write(os.path.join(path, "documents.feather"), "documents.feather")
+    #     archive.write(os.path.join(path, "tokens.feather"), "tokens.feather")
+    #     archive.write(
+    #         os.path.join(path, "namedentities.feather"), "namedentities.feather"
+    #     )
+
+    con = duckdb.connect(database=os.path.join(path, "swissdox.db"), read_only=False)
+
+    con.execute("CREATE TABLE token AS SELECT * FROM tok_pandas")
+    con.execute("CREATE TABLE ne AS SELECT * FROM ne_pandas")
+    con.execute("CREATE TABLE document AS SELECT * FROM doc_pandas")
+    con.execute("CREATE TABLE ne_document AS SELECT * FROM ne_document_pandas")
+
+    # con.execute("ALTER TABLE token ADD FOREIGN KEY (doc_id) REFERENCES document(doc_id)")
+    # con.execute("ALTER TABLE ne_document ADD FOREIGN KEY (doc_id) REFERENCES document(doc_id)")
+    # con.execute("ALTER TABLE ne_document ADD FOREIGN KEY (ne_id) REFERENCES ne(ned_id)")
+
+    con.close()
+
+    return None

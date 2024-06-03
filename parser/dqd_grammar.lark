@@ -2,20 +2,26 @@
 
 query           : statement__
 
-statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ _DEDENT     -> sequence
-                | SET label? _NL _INDENT members+ _DEDENT                                   -> set
-                | GROUP label? _NL _INDENT members+ _DEDENT                                 -> group
-                | quantor__universal _NL _INDENT args__q_two _DEDENT                        -> universal_quantification
-                | quantor__existential _NL _INDENT args__q_one _DEDENT                      -> existential_quantification
-                | operator__unary _NL _INDENT args__one _DEDENT                             -> logical_op_unary
-                | operator__binary _NL _INDENT args__two _DEDENT                            -> logical_op_binary
-                | operator__n_ary _NL _INDENT args__any _DEDENT                             -> logical_op_n_ary
-                | layer("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT]              -> unit
-                | LABEL _NL*                                                                -> reference
+statement__     : SEQUENCE("@"part_of)? label? repetition? _NL _INDENT members+ _DEDENT       -> sequence
+                | SET label? _NL _INDENT members+ _DEDENT                                     -> set
+                | GROUP label? _NL _INDENT members+ _DEDENT                                   -> group
+                | quantor__universal _NL _INDENT args__q_two _DEDENT                          -> universal_quantification
+                | quantor__existential _NL _INDENT args__q_one _DEDENT                        -> existential_quantification
+                | operator__unary _NL _INDENT args__one _DEDENT                               -> logical_op_unary
+                | operator__binary _NL _INDENT args__two _DEDENT                              -> logical_op_binary
+                | operator__n_ary _NL _INDENT args__any _DEDENT                               -> logical_op_n_ary
+                | layer(":"partition)?("@"part_of)? label? _NL [_INDENT constraints+ _DEDENT] -> unit
+                | "```cqp" label? ("@"part_of)? _NL _INDENT cqp__ _DEDENT "```" _NL           -> cqp
+                | LABEL _NL*                                                                  -> reference
 
-members         : statement__                                                         -> members
+cqp__           : (ANYTHING _NL|_INDENT cqp__ _DEDENT)+
 
-comparison      : entity operator comparison_type__ _NL                               -> comparison
+members         : statement__                                       -> members
+
+comparison      : left operator comparison_type__ _NL               -> comparison
+
+left            : entity
+                | function
 
 constraints     : comparison
                 | statement__
@@ -38,7 +44,7 @@ results_type__  : "plain" _NL _INDENT context entities _DEDENT                  
                 | "analysis" _NL _INDENT attributes functions filter? _DEDENT        -> results_analysis
                 | "collocation" _NL _INDENT (center window|space) attribute _DEDENT  -> results_collocation
 
-context         : "context" _NL _INDENT label _NL* _DEDENT _NL*                      -> context
+context         : "context" _NL _INDENT context__+ _NL* _DEDENT _NL*                 -> context
 entities        : "entities" _NL _INDENT entity_ref__+ _NL* _DEDENT _NL*             -> entities
 
 attributes      : "attributes" _NL _INDENT (attribute__ _NL)+ _DEDENT                -> attributes
@@ -46,9 +52,9 @@ filter          : "filter" _NL _INDENT comparison _DEDENT                       
 functions       : "functions" _NL _INDENT functions__+ _DEDENT                       -> functions
 
 center          : "center" _NL _INDENT entity_ref__ _DEDENT                          -> center
-window          : "window" _NL _INDENT range__ _NL _DEDENT                               -> window
+window          : "window" _NL _INDENT range__ _NL _DEDENT                           -> window
 space           : "space" _NL _INDENT entity_ref__+ _DEDENT                          -> space
-attribute       : "attribute" _NL _INDENT attribute__ _NL _DEDENT                        -> attribute
+attribute       : "attribute" _NL _INDENT attribute__ _NL _DEDENT                    -> attribute
 
 entity          : (LABEL|LAYER|DOTENTITY)
 operator        : OPERATOR
@@ -57,48 +63,62 @@ comparison_type__ : NUMBER_EXPRESSION                                           
                   | STRING_LITERAL                                                   -> string_comparison
                   | REGEX                                                            -> regex_comparison
                   | (LABEL|LAYER|DOTENTITY)                                          -> entity_comparison
+                  | function                                                         -> function_comparison
+
 
 label           : LABEL                                                                -> label
 layer           : LAYER                                                                -> layer
 part_of         : LABEL                                                                -> part_of
+partition       : LABEL                                                                -> partition
 repetition      : REPETITION                                                           -> repetition
 
 label__results  : (LABEL|LAYER)
 
 entity_ref__    : LABEL _NL*
+context__       : LABEL _NL*
 
 functions__     : ENUM_FUNCTIONS _NL*
 attribute__     : STRING
 filter__        : STRING
 range__         : RANGE
 
+function        : function_name "(" arguments+ ")"                         -> function
+function_name   : FUNCTION
+arguments       : entity ","?
+                | function ","?
+                | NUMBER_EXPRESSION                                        -> argument_number
+                | STRING_LITERAL                                           -> argument_string
+
 GROUP.4               : /group/
 SET.4                 : /set/
 SEQUENCE.4            : /sequence/
 
 QUANTOR_UNIVERSAL.4   : /(ALL|!ALL|¬ALL)/
-QUANTOR_EXISTENTIAL.4 : /(EXIST|!EXIST|¬EXIST)/
+QUANTOR_EXISTENTIAL.4 : /(EXISTS?|[!¬~]EXISTS?|NOT EXISTS?)/
 OPERATOR_UNARY.4      : /NOT/
 OPERATOR_BINARY.4     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|¬IMPLY)/
 OPERATOR_N_ARY.4      : /(AND|OR)/
 RESULTS_ARROW.4       : /=>/
 ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
+FUNCTION.4            : /length|size|min|max|century|year|month|day/
 
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
+NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
 
+OPERATOR.2       : /((not |!)?contain|<(-|\d+(\.\.\d+)?)?>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!)/
 LAYER.2          : /[A-Z_][a-zA-Z0-9_]*/
 LABEL.2          : /[a-z][a-zA-Z0-9_]*/
 
-OPERATOR.1      : /(<>|>=|<=|<|>|!=|¬=|¬~|~|¬|=|!|in)/
-NUMBER_EXPRESSION.1 : /[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*/
 REPETITION.1    : /(\d+\.\.(\d+|\*)|[1-9]+\d*)/
 
-STRING_LITERAL  : /('.+'|".+")/
-REGEX           : /\/.+\//
-RANGE           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
-STRING          : /[^\n\r ].*/
+STRING_LITERAL.1  : /('.+'|".+")/
+REGEX.1           : /\/.+\//
+RANGE.1           : /([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)/
+STRING.1          : /[^\n\r ].*/
 
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
+
+ANYTHING        : /.+/
 
 %import common.CNAME                                                                -> NAME
 %import common.WS_INLINE

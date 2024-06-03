@@ -50,6 +50,14 @@ export default {
       graphIndex: 0,
       mermaidConfig: {
         theme: "neutral",
+        // themeVariables: {
+        //   'primaryColor': '#BB2528',
+        //   'primaryTextColor': '#fff',
+        //   'primaryBorderColor': '#7C0000',
+        //   'lineColor': '#F8B229',
+        //   'secondaryColor': '#006100',
+        //   'tertiaryColor': '#fff'
+        // }
       }
     };
   },
@@ -60,24 +68,30 @@ export default {
       let data = [
         {
           id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, ""),
+          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, "").replace(/@/gi, "-at-"),
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
+          style: "fill:#FFF,stroke:#000,stroke-width:1px",
+          edgeType: "round"
         },
       ];
       let partOfs = {};
       Object.keys(corpus.layer).forEach((layer, index) => {
         let next = [], link = [];
         if ("attributes" in corpus.layer[layer]) {
+          let layer_type = corpus.layer[layer].layerType;
           Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
             let attributeId = `a-${index}-${attribute.toLowerCase()}`;
             let text = attribute.replace(/@/gi, "_");
             let attributes = corpus.layer[layer].attributes[attribute];
+            if (layer_type == "relation" && "name" in attributes)
+              text = attributes.name;
             let attributeData = {
               id: attributeId,
               text: text,
-              edgeType: "circle",
+              edgeType: "round",
+              style: "fill:#FBD573,stroke:#333,stroke-width:2px",
             };
             if ("entity" in attributes && attributes.entity in corpus.layer) {
               attributeData.next = [`l-${attributes.entity.toLowerCase().replace(/@/gi, "_")}`];
@@ -116,7 +130,8 @@ export default {
             data.push({
               id: metaId,
               text: meta.replace(/@/gi, "_"),
-              edgeType: "circle",
+              edgeType: "round",
+              style: "fill:#FBD573,stroke:#333,stroke-width:2px",
             });
             next.push(metaId);
             link.push("---")

@@ -23,7 +23,13 @@ export const useUserStore = defineStore("userData", {
     fetchUserData() {
       httpApi.get(`/settings`).then((r) => {
         this.dataFetched = true
-        this.userData = r.data;
+        this.userData = {
+          publicProfiles: {},
+          subscription: {subscriptions: []},
+          termsOfUse: {},
+          user: {},
+          ...(r.data || {})
+        };
         this.debug = r.data.debug
         if (this.userData.publicProfiles.length) {
           this.projects = this.userData.publicProfiles
@@ -37,6 +43,11 @@ export const useUserStore = defineStore("userData", {
         // Terms of use
         if (this.userData.termsOfUse.needToAccept === true) {
           window.location.href = this.userData.termsOfUse.url;
+        }
+
+        // When no user, generate random id
+        if (Object.keys(this.userData.user).length === 0) {
+          this.userData.user = {"id": Utils.uuidv4()}
         }
       });
     },

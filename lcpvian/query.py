@@ -15,20 +15,18 @@ The logic is basically:
     6. Process repeats until query is satisfied/finished
 
 """
-from __future__ import annotations
 
 import json
 import logging
 import os
 import traceback
 
-from collections.abc import Sequence
-
 from typing import cast
 
 from aiohttp import web
 from rq.job import Job
 
+from .export import export
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
@@ -48,7 +46,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    dones = cast(list[Sequence], prev_job.kwargs["done_batches"])
+    dones = cast(list[tuple[int, str, str, int]], prev_job.kwargs["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
     so_far = cast(int, prev_job.meta["total_results_so_far"])
     tot_req = qi.total_results_requested
@@ -64,7 +62,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
 
-    prev = cast(Sequence, prev_job.kwargs["current_batch"])
+    prev = cast(Batch, tuple(prev_job.kwargs["current_batch"]))
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)
@@ -129,6 +127,20 @@ async def _query_iteration(
     if not qi.current_batch and qi.no_more_data:
         return await qi.no_batch()
 
+    # Handle cases where the query was canceled or stopped prematurely
+    if qi.first_job:
+        first_job: Job = Job.fetch(qi.first_job, connection=qi.app["redis"])
+        first_job_status = first_job.get_status(refresh=True)
+        if (
+            first_job_status in ("stopped", "canceled")
+            or qi.first_job in qi.app["canceled"]
+        ):
+            if qi.first_job not in qi.app["canceled"]:
+                qi.app["canceled"].append(qi.first_job)
+            qi.app["query_service"].cancel_running_jobs(qi.user, qi.room)
+            print(f"Query was stopped: {qi.first_job} -- preventing update")
+            return await qi.no_batch()
+
     qi.make_query()
 
     # print query info to terminal for first batch only
@@ -178,7 +190,6 @@ async def _query_iteration(
 
     return qi
 
-
 @ensure_authorised
 @logged
 async def query(
@@ -227,6 +238,18 @@ async def query(
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
+            elif qi.to_export:
+                ready_to_export = (
+                    len(qi.done_batches) == len(qi.all_batches)
+                    or (qi.to_export.get("preview") and qi.total_results_so_far >= 200)
+                )
+                if ready_to_export:
+                    await export(qi.app, qi.to_export, qi.first_job)
+                # elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
+                else:
+                    qi_job = cast(Job, qi.job)
+                    qi_job.meta["to_export"] = qi.to_export
+                    qi_job.save_meta()
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)
@@ -254,3 +277,13 @@ async def query(
         return web.json_response(http_response)
     else:
         return web.json_response(http_response[0])
+
+
+@ensure_authorised
+async def refresh_config(request: web.Request) -> web.Response:
+    """
+    Force a refresh of the config via the /config endpoint
+    """
+    qs = request.app["query_service"]
+    job: Job = await qs.get_config(force_refresh=True)
+    return web.json_response({"job": str(job.id)})

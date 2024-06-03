@@ -37,7 +37,15 @@ from typing import Any, cast
 from redis import Redis as RedisConnection
 from rq.job import Job
 
-from .typed import Batch, QueryMeta, RawSent, ResultSents, Results, VianKWIC
+from .typed import (
+    Batch,
+    QueryMeta,
+    RawSent,
+    ResultSents,
+    ResultsValue,
+    Results,
+    VianKWIC,
+)
 from .utils import _get_associated_query_job
 
 OPS = {
@@ -52,12 +60,60 @@ OPS = {
 }
 
 
+def _prepare_existing(
+    res: Results, kwics: set[int], colls: set[int]
+) -> dict[int, dict[str, tuple[int, float]]]:
+    out: dict[int, Any] = {}
+    for k, v in res.items():
+        k = int(k)
+        if k < 1 or k in kwics:
+            continue
+        if k not in out:
+            out[k] = {}
+        v = cast(list, v)
+        if k in colls:
+            for text, total, e in v:
+                if text not in out[k]:
+                    out[k][text] = (total, e)
+                else:
+                    print("Todo: if this happens, we need to combine scores")
+                    pretotal, pree = out[k][text]
+                    out[k][text] = (total + pretotal, (e + pree / 2))
+        else:
+            for r in v:
+                body = r[:-1]
+                if tuple(body) not in out[k]:
+                    out[k][tuple(body)] = 0
+                out[k][tuple(body)] += r[-1]
+    return out
+
+
+def _unfold(exist: dict, kwics: set[int], colls: set[int]) -> Results:
+    out: Results = {}
+    for k, v in exist.items():
+        k = int(k)
+        if k < 1:
+            continue
+        if k in kwics:
+            continue
+        if k not in out:
+            out[k] = []
+        if k in colls:
+            for text, (a, b) in v.items():
+                ok = cast(list, out[k])
+                ok.append([text, a, b])
+        else:
+            for body, score in v.items():
+                ok = cast(list, out[k])
+                ok.append(list(body) + [score])
+    return out
+
+
 def _aggregate_results(
     result: list,
     existing: Results,
     meta_json: QueryMeta,
     post_processes: dict[int, Any],
-    # current: Batch | None = None,
     current: Any,
     done: list[Batch] | None = None,
 ) -> tuple[Results, Results, int, bool, bool]:
@@ -74,6 +130,11 @@ def _aggregate_results(
     )
     counts: defaultdict[int, int] = defaultdict(int)
 
+    minus_one: ResultsValue = existing.get(-1, cast(ResultsValue, {}))
+    zero: ResultsValue = existing.get(0, cast(ResultsValue, {}))
+
+    precalcs: dict = _prepare_existing(existing, kwics, colls)
+
     for line in result:
         key = int(line[0])
         rest: list[Any] = line[1]
@@ -85,27 +146,28 @@ def _aggregate_results(
             continue
         if key not in existing:
             existing[key] = []
+        if key not in precalcs:
+            precalcs[key] = {}
         if key in colls:
             text, total_this_batch, e = rest
-            preexist = sum(i[1] for i in cast(list, existing[key]) if i[0] == text)
-            preexist_e = next(
-                (i[-1] for i in cast(list, existing[key]) if i[0] == text), 0
-            )
+            preexist, preexist_e = precalcs[key].get(text, (0, 0))
             combined = preexist + total_this_batch
             counts[key] = combined
             combined_e = _combine_e(e, preexist_e, current, done)
-            fixed = [text, combined, combined_e]
-            existing[key] = [*[i for i in cast(list, existing[key]) if i[0] != text], fixed]
+            precalcs[key][text] = (combined, combined_e)
             continue
         # frequency table:
-        body = cast(list, rest[:-1])
+        body = cast(list, [str(x) for x in rest[:-1]])
         total_this_batch = rest[-1]
-        preexist = sum(i[-1] for i in cast(list, existing[key]) if i[:-1] == body)
+        # need_update = body in precalcs[key]
+        preexist = precalcs[key].get(tuple(body), 0)
         combined = preexist + total_this_batch
+        precalcs[key][tuple(body)] = combined
         counts[key] = combined
-        existing[key] = [i for i in cast(list, existing[key]) if i[:-1] != body]
-        body.append(combined)
-        cast(list, existing[key]).append(body)
+
+    existing = _unfold(precalcs, kwics, colls)
+    existing[-1] = minus_one
+    existing[0] = zero
 
     results_to_send = _apply_filters(existing, post_processes)
 
@@ -198,13 +260,15 @@ def _format_kwics(
             continue
         if key not in out:
             out[key] = []
-        if is_vian and key in kwics:
-            rest = list(_format_vian(rest))
-        elif key in kwics:
-            if vian_in_lcp is None:
-                vian_in_lcp = len(rest) > 2
-            if vian_in_lcp:
-                rest = rest[:2]
+        # if is_vian and key in kwics:
+        #     rest = list(_format_vian(rest))
+        # elif key in kwics:
+        if key == "frame_range":
+            rest = rest[:2]
+            # if vian_in_lcp is None:
+            #     vian_in_lcp = len(rest) > 2
+            # if vian_in_lcp:
+            #     rest = rest[:2]
         if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
@@ -243,7 +307,7 @@ def _get_all_sents(
     max_kwic: int,
     current_lines: int,
     full: bool,
-    connection: RedisConnection,
+    connection: "RedisConnection[bytes]",
 ) -> Results:
     """
     Combine all sent jobs into one -- only done at the end of a `full` query
@@ -336,29 +400,22 @@ def _make_filters(
     for idx, filters in post.items():
         fixed: list[tuple[str, str, str | int | float]] = []
         for filt in filters:
-            name, comp = cast(tuple[str, dict[str,Any]], list(filt.items())[0])
+            name, comp = cast(tuple[str, dict[str, Any]], list(filt.items())[0])
             if name != "comparison":
-                raise ValueError("expected comparion")
+                raise ValueError("expected comparison")
+            if "entity" not in comp:
+                raise ValueError("expected function-free comparison")
 
-            # bits: Sequence[str | int | float] = comp.split()
-            # last_bit = cast(str, bits[-1])
-            # body = bits[:-1]
-            # assert isinstance(body, list)
-            # if last_bit.isnumeric():
-            #     body.append(int(last_bit))
-            # elif last_bit.replace(".", "").isnumeric():
-            #     body.append(float(last_bit))
-            # else:
-            #     body = bits
-            # made = cast(tuple[str, str, int | str | float], tuple(body))
-            entity = comp['entity']
-            operator = comp['operator']
-            value = next(c[1] for c in comp.items() if c[0] not in ('entity','operator'))
+            entity = comp["entity"]
+            operator = comp["operator"]
+            value = next(
+                c[1] for c in comp.items() if c[0] not in ("entity", "operator")
+            )
             if value.isnumeric():
                 value = int(value)
             elif value.replace(".", "").isnumeric():
                 value = float(value)
-            made = cast(tuple[str, str, int | str | float], (entity,operator,value))
+            made = cast(tuple[str, str, int | str | float], (entity, operator, value))
             fixed.append(made)
         out[idx] = fixed
     return out

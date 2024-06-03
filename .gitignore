@@ -6,7 +6,9 @@ run.cpython*
 build/
 worker.cpython*
 uploads/*
+results/*
 .coverage
 .env
 *.so
 *.c
+frontend/public/media/

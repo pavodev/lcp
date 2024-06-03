@@ -4,18 +4,14 @@ importing data into them. These endpoints can also be polled, which returns
 status information about the current task
 """
 
-from __future__ import annotations
-
 import json
 import os
 import re
 import traceback
 
-from collections.abc import Callable
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
-from typing import cast
-from uuid import uuid4
+from typing import cast, Any
 from zipfile import ZipFile, is_zipfile
 
 from aiohttp import web, BodyPartReader
@@ -27,8 +23,8 @@ from .typed import Headers, JSON
 from .utils import (
     _lama_check_api_key,
     _lama_project_create,
-    ensure_authorised,
     _lama_user_details,
+    ensure_authorised
 )
 
 
@@ -144,14 +140,15 @@ def _ensure_partitioned0(path: str) -> None:
         data = json.load(fo)
         data = data["template"]
     srcs = [os.path.join(path, "fts_vector.csv")]
-    for layer in ('token','segment'):
+    for layer in ("token", "segment"):
         lay = data["firstClass"][layer]
-        srcs.append( os.path.join(path, lay.lower() + ".csv") )
+        srcs.append(os.path.join(path, lay.lower() + ".csv"))
     for src in srcs:
         if os.path.isfile(src):
             dest = src.replace(".csv", "0.csv")
             os.rename(src, dest)
             print(f"Moved: {src}->{dest}")
+
 
 def _correct_doc(path: str) -> None:
     """
@@ -279,7 +276,7 @@ async def _save_file(path: str, bit: BodyPartReader, has_file: bool) -> bool:
 
 
 def _extract_file(
-    bit, path: str, cpath: str, ext: str, opener: Callable, method: str
+    bit: BodyPartReader, path: str, cpath: str, ext: str, opener: type, method: str
 ) -> None:
     print(f"Extracting {ext} file: {bit.filename}")
     with opener(path, "r") as compressed:
@@ -341,29 +338,29 @@ async def make_schema(request: web.Request) -> web.Response:
         return web.json_response(error)
 
     # user_id = status["account"]["eduPersonId"]
-    user_acc = cast(dict[str, dict | str], status["account"])
+    user_acc = cast(dict[str, dict[Any, Any] | str], status["account"])
     user_id: str = cast(str, user_acc["email"])
     # home_org = status["account"]["homeOrganization"]
     existing_project = cast(dict[str, JSON], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
+
     if project and project not in ids:
-        admin = os.environ["LAMA_USER"]
-        admin_org = os.getenv("LAMA_HOME_ORGANIZATION", admin.split("@")[-1])
         headers: Headers = {
             "X-API-Key": os.environ["LAMA_API_KEY"],
-            "X-Remote-User": admin,
-            "X-Schac-Home-Organization": admin_org,
-            "X-Persistent-Id": os.environ["LAMA_PERSISTENT_ID"],
+            "X-User-API-Key": key,
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
+        uacc: dict[str,Any] = cast(dict[str,Any], user_acc["account"])
+        uname: str = cast(str, uacc["displayName"])
         profile: dict[str, str] = {
-            "title": project,
-            "unit": "LiRI",
+            "title": f"{uname}: private group",
+            "unit": uacc["homeOrganization"],
             "startDate": start,
             "finishDate": finish,
         }
+
         try:
             existing_project = await _lama_project_create(headers, profile)
             if existing_project.get("status", True) is not False:
@@ -380,7 +377,7 @@ async def make_schema(request: web.Request) -> web.Response:
             error["message"] = f"{msg} -- {err}"
             return web.json_response(error)
 
-    corpus_folder = str(uuid4())
+    # corpus_folder = str(uuid4())
     if existing_project.get("status", True) is False:
         error = {
             "status": "failed",
@@ -399,11 +396,11 @@ async def make_schema(request: web.Request) -> web.Response:
     # which is on the borderline of being too high in prod.
     # becomes 1/4.3b chance if we use [0] instead of [1]
     # but the schema name gets noticeably uglier, so ...
-    
+
     #  suffix = corpus_folder.split("-", 2)[1]
     suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
     version_n = re.sub(r"[^0-9]", "", str(corpus_version))
-    
+
     schema_name = f"{corpus_name}__{suffix}_{version_n}"
 
     sames = [
@@ -424,8 +421,17 @@ async def make_schema(request: web.Request) -> web.Response:
     template["projects"] = [proj_id]
     template["schema_name"] = schema_name
 
-    pieces = generate_ddl(template)
-    pieces["template"] = template
+    try:
+        pieces = generate_ddl(template)
+        pieces["template"] = template
+    except Exception as err:
+        tb = traceback.format_exc()
+        msg = f"Could not create schema:"
+        error = {"traceback": tb, "status": "failed"}
+        # logging.error(msg, extra=error)
+        error["message"] = f"{msg} -- {err}"
+        print(error["message"])
+        return web.json_response(error)
 
     corpus_path = os.path.join(proj_id, schema_name)
 

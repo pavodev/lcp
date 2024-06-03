@@ -2,13 +2,12 @@
 Endpoints for multimodal document/document ids fetching
 """
 
-from typing import Sequence, cast
+from typing import Sequence, Any
 
 from aiohttp import web
 
-from .sock import push_msg
 from .typed import Config, JSONObject
-from .utils import ensure_authorised
+from .utils import ensure_authorised, push_msg
 
 
 @ensure_authorised
@@ -25,8 +24,9 @@ async def document(request: web.Request) -> web.Response:
     c: int | str | list[int] | list[str] = request_data["corpora"]
     corpora: list[int] = [int(c)] if not isinstance(c, list) else [int(i) for i in c]
     corpus = corpora[0]
-    schema = request.app["config"][str(corpus)]["schema_path"]
-    job = request.app["query_service"].document(schema, corpus, doc_id, user, room)
+    corpus_conf = request.app["config"][str(corpus)]
+    schema = corpus_conf["schema_path"]
+    job = request.app["query_service"].document(schema, corpus, doc_id, user, room, corpus_conf)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
 
@@ -44,7 +44,7 @@ async def document_ids(request: web.Request) -> web.Response:
     user: str = request_data.get("user", "")
     corpus_id = str(request.match_info["corpus_id"])
     config: Config = request.app["config"]
-    schema = cast(str, config[corpus_id]["schema_path"])
+    schema = config[corpus_id]["schema_path"]
 
     if "doc_ids" not in config[corpus_id]:
         job = request.app["query_service"].document_ids(
@@ -55,7 +55,7 @@ async def document_ids(request: web.Request) -> web.Response:
 
     job_id: str
     doc_ids: JSONObject
-    ids: Sequence = config[corpus_id]["doc_ids"]
+    ids: Sequence[Any] = config[corpus_id]["doc_ids"]
     job_id, doc_ids = ids
     payload: JSONObject = {
         "document_ids": doc_ids,

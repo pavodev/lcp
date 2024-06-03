@@ -4,25 +4,27 @@ The main setup for the aiohttp backend.
 Register URLs and endpoints, add redis, query_service, websockets, etc.
 """
 
-from __future__ import annotations
-
 import importlib
+import json
 import logging
 import os
-import sys
-
-from collections import defaultdict, deque
 
 import aiohttp_cors
 import asyncio
 import uvloop
 
+from collections import defaultdict, deque
+from typing import cast
+
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
 from aiohttp_catcher import Catcher, catch
-from dotenv import load_dotenv
 from redis import Redis
 from redis import asyncio as aioredis
+from redis.asyncio.retry import Retry as AsyncRetry
+from redis.backoff import ConstantBackoff
+from redis.exceptions import ConnectionError
+from redis.retry import Retry
 from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 from rq.registry import FailedJobRegistry
@@ -30,20 +32,26 @@ from rq.registry import FailedJobRegistry
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
+from .corpora import corpora_meta_update
 from .document import document, document_ids
+from .export import download_export
 from .lama_user_data import lama_user_data
 from .message import get_message
-from .project import project_api_create, project_api_revoke, project_create
-from .query import query
+from .project import project_api_create, project_api_revoke
+from .project import project_create, project_update
+from .project import project_users_invite, project_users
+from .project import project_users_invitation_remove, project_user_update
+from .query import query, refresh_config
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import ParserClass, handle_lama_error, handle_timeout
+from .utils import TRUES, FALSES, handle_lama_error, handle_timeout, load_env
 from .video import video
 
-load_dotenv(override=True)
+
+load_env()
 
 # this is all just a way to find out if utils (and therefore the codebase) is a c extension
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
@@ -52,7 +60,19 @@ SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
-DEBUG = bool(os.getenv("DEBUG", "false").lower() in ("true", "1"))
+DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
+
+AUTH_CLASS: type | None = None
+try:
+    need = cast(str, os.getenv("AUTHENTICATION_CLASS"))
+    if need.strip() and "." in need and need.lower() not in FALSES:
+        path, name = need.rsplit(".", 1)
+        if path and name:
+            modu = importlib.import_module(path)
+            AUTH_CLASS = getattr(modu, name)
+            print(f"Using authenication class: {need}")
+except Exception as err:
+    print(f"Warning: no authentication class found! ({err})")
 
 
 if SENTRY_DSN:
@@ -100,9 +120,9 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that listens to redis pubsub
     Start the thread that periodically removes stale websocket connections
     """
-    listener: Task = asyncio.create_task(listen_to_redis(app))
+    listener: Task[None] = asyncio.create_task(listen_to_redis(app))
     app["redis_listener"] = listener
-    cleanup: Task = asyncio.create_task(ws_cleanup(app["websockets"]))
+    cleanup: Task[None] = asyncio.create_task(ws_cleanup(app["websockets"]))
     app["ws_cleanup"] = cleanup
 
 
@@ -138,6 +158,15 @@ async def create_app(test: bool = False) -> web.Application:
         )
         .and_call(handle_lama_error)
     )
+    # await catcher.add_scenario(
+    #     catch(AuthError)
+    #     .with_status_code(403)
+    #     .and_stringify()
+    #     .with_additional_fields(
+    #         {"message": "Authentical..."}
+    #     )
+    #     .and_call(handle_lama_error)
+    # )
 
     app = web.Application(middlewares=[catcher.middleware])
     app["mypy"] = C_COMPILED
@@ -162,21 +191,37 @@ async def create_app(test: bool = False) -> web.Application:
     app["websockets"] = ws
     app["_debug"] = DEBUG
 
+    app["auth_class"] = AUTH_CLASS
+
     # here we store corpus_id: config
     conf: dict[str, CorpusConfig] = {}
     app["config"] = conf
 
+    # app["auth"] = Authenticator(app)
+
     endpoints: list[tuple[str, str, Endpoint]] = [
         ("/check-file-permissions", "GET", check_file_permissions),
+        ("/config", "POST", refresh_config),
         ("/corpora", "POST", corpora),
+        ("/corpora/{corpora_id}/meta/update", "PUT", corpora_meta_update),
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
+        ("/download_export/{fn}", "GET", download_export),
         ("/fetch", "POST", fetch_queries),
-        ("/get_message/{uuid}", "GET", get_message),
+        ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),
+        ("/project/{project}", "POST", project_update),
         ("/project/{project}/api/create", "POST", project_api_create),
         ("/project/{project}/api/{key}/revoke", "POST", project_api_revoke),
+        ("/project/{project}/users", "GET", project_users),
+        ("/project/{project}/user/{user}/update", "POST", project_user_update),
+        ("/project/{project}/users/invite", "POST", project_users_invite),
+        (
+            "/project/{project}/users/invitation/{invitation}",
+            "DELETE",
+            project_users_invitation_remove,
+        ),
         ("/query", "POST", query),
         ("/settings", "GET", lama_user_data),
         ("/store", "POST", store_query),
@@ -188,17 +233,40 @@ async def create_app(test: bool = False) -> web.Application:
     for url, method, func in endpoints:
         cors.add(cors.add(app.router.add_resource(url)).add_route(method, func))
 
-    # we keep two redis connections, for reasons
-    redis_url = f"{REDIS_URL}/{REDIS_DB_INDEX}"
+    redis_url: str = f"{REDIS_URL}/{REDIS_DB_INDEX}"
+    redis_settings = Redis.from_url(redis_url)
+    limit = "client-output-buffer-limit"
+    pubsub_limit = redis_settings.config_get(limit)[limit]
+    redis_settings.quit()
+    _pieces = pubsub_limit.split()
+    sleep_time = int(_pieces[-1]) + 2
+    app["redis_pubsub_limit_sleep"] = sleep_time
+    retry_policy: Retry = Retry(ConstantBackoff(sleep_time), 3)
+    async_retry_policy: AsyncRetry = AsyncRetry(ConstantBackoff(sleep_time), 3)
+
     # Danny seemed to say mypy used to need a parser_class here, but newer redis releases seem to do away with parser_class
     # app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
-    app["aredis"] = aioredis.Redis.from_url(url=redis_url)
-    app["redis"] = Redis.from_url(redis_url)
+    app["aredis"] = aioredis.Redis.from_url(
+        redis_url,
+        health_check_interval=10,
+        # parser_class=ParserClass,
+        retry_on_error=[ConnectionError],
+        retry=async_retry_policy,
+    )
+    app["redis"] = Redis.from_url(
+        redis_url,
+        health_check_interval=10,
+        retry_on_error=[ConnectionError],
+        retry=retry_policy,
+    )
+    app["redis"].set("timebytes", json.dumps([]))
+    app["_redis_url"] = redis_url
 
     # different queues for different kinds of jobs
     app["internal"] = Queue("internal", connection=app["redis"], job_timeout=-1)
     app["query"] = Queue("query", connection=app["redis"])
     app["background"] = Queue("background", connection=app["redis"], job_timeout=-1)
+    app["_use_cache"] = os.getenv("USE_CACHE", "1").lower() in TRUES
 
     # so far unused, we could potentially provide users with detailed feedback by
     # exploiting the 'failed job registry' provided by RQ.
@@ -246,13 +314,8 @@ def start() -> None:
         return
 
     try:
-        if sys.version_info >= (3, 11):
-            with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
-                runner.run(start_app())
-        else:
-            uvloop.install()
-            asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-            asyncio.run(start_app())
+        with asyncio.Runner(loop_factory=uvloop.new_event_loop) as runner:
+            runner.run(start_app())
     except KeyboardInterrupt:
         print("Application stopped.")
     except (BaseException, OSError) as err:

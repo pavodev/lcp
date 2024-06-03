@@ -1,6 +1,6 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://liri.linguistik.uzh.ch/cobquec4.schema.json",
+    "$id": "https://liri.linguistik.uzh.ch/cobquec5.schema.json",
     "title": "Constraint-based Query Configuration",
     "description": "A linguistic query for LCP data Representation",
     "type": "object",
@@ -42,6 +42,10 @@
                 "unit": {
                     "type": "object",
                     "$ref": "#/$defs/unit"
+                },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
                 },
                 "reference": {
                     "type": "string",
@@ -92,6 +96,11 @@
                 {
                     "required": [
                         "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "cqp"
                     ]
                 },
                 {
@@ -162,6 +171,10 @@
                     "type": "object",
                     "$ref": "#/$defs/unit"
                 },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
+                },
                 "reference": {
                     "type": "string",
                     "$ref": "#/$defs/reference"
@@ -211,6 +224,11 @@
                 {
                     "required": [
                         "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "cqp"
                     ]
                 },
                 {
@@ -336,6 +354,10 @@
                     "type": "string",
                     "$ref": "#/$defs/layer"
                 },
+                "partition": {
+                    "type": "string",
+                    "$ref": "#/$defs/partition"
+                },
                 "partOf": {
                     "type": "string",
                     "$ref": "#/$defs/part_of"
@@ -356,9 +378,35 @@
                 "layer"
             ]
         },
+        "cqp": {
+            "properties": {
+                "label": {
+                    "type": "string",
+                    "$ref": "#/$defs/label"
+                },
+                "partOf": {
+                    "type": "string",
+                    "$ref": "#/$defs/part_of"
+                },
+                "cqp": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/cqp__"
+                    },
+                    "minItems": 1
+                }
+            }
+        },
         "reference": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
+        "cqp__": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/cqp__"
+            },
+            "minItems": 1
         },
         "members": {
             "properties": {
@@ -397,6 +445,10 @@
                 "unit": {
                     "type": "object",
                     "$ref": "#/$defs/unit"
+                },
+                "cqp": {
+                    "type": "object",
+                    "$ref": "#/$defs/cqp"
                 },
                 "reference": {
                     "type": "string",
@@ -451,6 +503,11 @@
                 },
                 {
                     "required": [
+                        "cqp"
+                    ]
+                },
+                {
+                    "required": [
                         "reference"
                     ]
                 }
@@ -458,9 +515,9 @@
         },
         "comparison": {
             "properties": {
-                "entity": {
-                    "type": "string",
-                    "$ref": "#/$defs/entity"
+                "left": {
+                    "type": "object",
+                    "$ref": "#/$defs/left"
                 },
                 "operator": {
                     "type": "string",
@@ -481,6 +538,10 @@
                 "entityComparison": {
                     "type": "string",
                     "$ref": "#/$defs/entity_comparison"
+                },
+                "functionComparison": {
+                    "type": "object",
+                    "$ref": "#/$defs/function_comparison"
                 }
             },
             "oneOf": [
@@ -503,11 +564,40 @@
                     "required": [
                         "entityComparison"
                     ]
+                },
+                {
+                    "required": [
+                        "functionComparison"
+                    ]
                 }
             ],
             "required": [
-                "entity",
+                "left",
                 "operator"
+            ]
+        },
+        "left": {
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity"
+                },
+                "function": {
+                    "type": "object",
+                    "$ref": "#/$defs/function"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "entity"
+                    ]
+                },
+                {
+                    "required": [
+                        "function"
+                    ]
+                }
             ]
         },
         "constraints": {
@@ -535,7 +625,7 @@
         },
         "quantor__existential": {
             "type": "string",
-            "pattern": "(EXIST|!EXIST|\u00acEXIST)"
+            "pattern": "(EXISTS?|[!\u00ac~]EXISTS?|NOT EXISTS?)"
         },
         "operator__unary": {
             "type": "string",
@@ -631,7 +721,7 @@
         "results_plain": {
             "properties": {
                 "context": {
-                    "type": "string",
+                    "type": "array",
                     "$ref": "#/$defs/context"
                 },
                 "entities": {
@@ -701,8 +791,11 @@
             ]
         },
         "context": {
-            "type": "string",
-            "$ref": "#/$defs/label"
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/context__"
+            },
+            "minItems": 1
         },
         "entities": {
             "type": "array",
@@ -770,11 +863,11 @@
         },
         "operator": {
             "type": "string",
-            "pattern": "(<>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!|in)"
+            "pattern": "((not |!)?contain|<(-|\\d+(\\.\\.\\d+)?)?>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!)"
         },
         "math_comparison": {
             "type": "string",
-            "pattern": "[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?)( +[*\\/+-] +[(]*([a-zA-Z][a-zA-Z0-9]*|-?([0-9]+[.])?[0-9]+[smy]?))?[)]*"
+            "pattern": "-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\\s*[*\\/+-]\\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*"
         },
         "string_comparison": {
             "type": "string",
@@ -801,6 +894,13 @@
             ],
             "type": "string"
         },
+        "function_comparison": {
+            "type": "object",
+            "$ref": "#/$defs/function",
+            "required": [
+                "function"
+            ]
+        },
         "label": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
@@ -810,6 +910,10 @@
             "pattern": "[A-Z_][a-zA-Z0-9_]*"
         },
         "part_of": {
+            "type": "string",
+            "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
+        "partition": {
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
         },
@@ -834,6 +938,10 @@
             "type": "string",
             "pattern": "[a-z][a-zA-Z0-9_]*"
         },
+        "context__": {
+            "type": "string",
+            "pattern": "[a-z][a-zA-Z0-9_]*"
+        },
         "functions__": {
             "type": "string",
             "pattern": "frequency|minimum|maximum|average|stddev"
@@ -841,6 +949,79 @@
         "attribute__": {
             "type": "string",
             "pattern": "[^\\n\\r ].*"
+        },
+        "function": {
+            "properties": {
+                "functionName": {
+                    "type": "string",
+                    "$ref": "#/$defs/function_name"
+                },
+                "arguments": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/$defs/arguments"
+                    },
+                    "minItems": 1
+                }
+            },
+            "required": [
+                "functionName",
+                "arguments"
+            ]
+        },
+        "function_name": {
+            "type": "string",
+            "pattern": "length|size|min|max|century|year|month|day"
+        },
+        "arguments": {
+            "properties": {
+                "entity": {
+                    "type": "string",
+                    "$ref": "#/$defs/entity"
+                },
+                "function": {
+                    "type": "object",
+                    "$ref": "#/$defs/function"
+                },
+                "argumentNumber": {
+                    "type": "string",
+                    "$ref": "#/$defs/argument_number"
+                },
+                "argumentString": {
+                    "type": "string",
+                    "$ref": "#/$defs/argument_string"
+                }
+            },
+            "oneOf": [
+                {
+                    "required": [
+                        "entity"
+                    ]
+                },
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "argumentNumber"
+                    ]
+                },
+                {
+                    "required": [
+                        "argumentString"
+                    ]
+                }
+            ]
+        },
+        "argument_number": {
+            "type": "string",
+            "pattern": "-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\\s*[*\\/+-]\\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*"
+        },
+        "argument_string": {
+            "type": "string",
+            "pattern": "('.+'|\".+\")"
         }
     },
     "properties": {

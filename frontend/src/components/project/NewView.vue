@@ -5,14 +5,8 @@
         <div class="col-12">
           <div class="mb-3">
             <label for="url" class="form-label">Title</label>
-            <input
-              type="text"
-              class="form-control"
-              v-model="model.title"
-              id="title"
-              aria-describedby="titleHelp"
-              maxlength="50"
-            />
+            <input type="text" class="form-control" v-model="model.title" id="title" aria-describedby="titleHelp"
+              maxlength="50" />
             <div id="titleHelp" v-if="titleState == false" class="form-text text-danger">
               Title is mandatory (min. length is seven letters).<br>
               Title will be manually checked. Try to be concise and informative.
@@ -22,11 +16,7 @@
         <div class="col-4">
           <div class="mb-3">
             <label for="content" class="form-label">Start date</label>
-            <DatePicker
-              v-model:value="model.startDate"
-              id="startDate"
-              class="d-block"
-            />
+            <DatePicker v-model:value="model.startDate" id="startDate" class="d-block" />
             <div id="urlHelp" v-if="startDateState == false" class="form-text text-danger">
               Start date is mandatory.
             </div>
@@ -35,12 +25,8 @@
         <div class="col-4">
           <div class="mb-3">
             <label for="content" class="form-label">End date</label>
-            <DatePicker
-              v-model:value="model.finishDate"
-              id="finishDate"
-              :disabled-date="disabledBeforeToday"
-              class="d-block"
-            />
+            <DatePicker v-model:value="model.finishDate" id="finishDate" :disabled-date="disabledBeforeToday"
+              class="d-block" />
             <div id="urlHelp" v-if="finishDateState == false" class="form-text text-danger">
               End date is mandatory.
             </div>
@@ -48,23 +34,38 @@
         </div>
         <div class="col-12">
           <div class="mb-3">
-            <label for="description" class="form-label">Purpose</label>
-            <textarea
-              class="form-control"
-              placeholder="Please describe the purpose of your project"
-              v-model="model.description"
-              id="description"
-              style="height: 100px"
-            ></textarea>
+            <label for="description" class="form-label">Description</label>
+            <textarea class="form-control" placeholder="Please describe the purpose of your group"
+              v-model="model.description" id="description" style="height: 100px"></textarea>
           </div>
+        </div>
+        <div class="col-12">
+          <!-- <button class="btn btn-outline-secondary" type="button" id="publicButton" @click="makeDataPublic">
+            Request to make Data Public
+          </button> -->
+          <!-- <label class="form-label me-2">Visibility:</label>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="inlineRadioOptions" id="visibility-private" value="private"
+              v-model="model.additionalData.visibility" checked>
+            <label class="form-check-label" for="visibility-private">Private</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="inlineRadioOptions" id="visibility-semipublic" value="semipublic"
+              v-model="model.additionalData.visibility">
+            <label class="form-check-label" for="visibility-semipublic">Semi-public</label>
+          </div>
+          <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="inlineRadioOptions" id="visibility-public" value="public"
+              v-model="model.additionalData.visibility">
+            <label class="form-check-label" for="visibility-public">Public</label>
+          </div> -->
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped>
-</style>
+<style scoped></style>
 
 <script>
 import { mapState } from "pinia";
@@ -82,6 +83,9 @@ export default {
         startDate: today,
         finishDate: oneYear,
         description: '',
+        additionalData: {
+          visibility: 'private',
+        }
       },
       titleState: null,
       startDateState: null,
