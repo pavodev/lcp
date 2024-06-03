@@ -34,7 +34,8 @@
               v-if="Object.keys(meta).length"
               style="margin-right: 0.5em"
               @mousemove="showMeta(resultIndex, $event)"
-              @mouseleave="closeMeta"
+              @mouseleave="!stickMeta.x && !stickMeta.y && closeMeta()"
+              @click="setStickMeta($event)"
               class="icon-info ms-2"
             >
               <FontAwesomeIcon :icon="['fas', 'circle-info']" />
@@ -148,9 +149,16 @@
     <div
       class="popover-liri"
       v-if="currentMeta"
-      :style="{top: popoverY + 'px', left: popoverX + 'px' }"
+      :style="{top: (stickMeta.y || popoverY) + 'px', left: (stickMeta.x || popoverX) + 'px' }"
     >
       <table class="table popover-table">
+        <span
+          v-if="stickMeta.x && stickMeta.y"
+          style="position:absolute; right: 0px; cursor: pointer;"
+          @click="(stickMeta = {}) && this.closeMeta()"
+        >
+          [X]
+        </span>
         <template v-for="(meta, layer) in currentMeta" :key="`th-${layer}`">
           <tr v-if="layer in allowedMetaColums">
             <td>
@@ -399,6 +407,7 @@ export default {
       currentToken: null,
       currentResultIndex: null,
       currentMeta: null,
+      stickMeta: {},
       modalVisible: false,
       modalIndex: null,
       currentPage: 1,
@@ -463,6 +472,7 @@ export default {
       this.currentResultIndex = null;
     },
     showMeta(resultIndex, event) {
+      if (this.stickMeta.x || this.stickMeta.y) return;
       this.closePopover();
       resultIndex =
         resultIndex + (this.currentPage - 1) * this.resultsPerPage;
@@ -473,6 +483,9 @@ export default {
     },
     closeMeta() {
       this.currentMeta = null;
+    },
+    setStickMeta(event) {
+      this.stickMeta = (this.stickMeta.x && this.stickMeta.y ? {} : {x: event.clientX, y: event.clientY});
     },
     showModal(index) {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
@@ -574,7 +587,7 @@ export default {
         // let endTime = meta[this.corpora.corpus.firstClass.segment].end
         if (filename) {
           // TODO: get path from config
-          this.$refs.audioplayer.src = `/media/${filename}`;
+          this.$refs.audioplayer.src = this.baseMediaUrl + filename;
           this.$refs.audioplayer.currentTime = startTime;
           this.$refs.audioplayer.ontimeupdate = () => {
             if (this.$refs.audioplayer.currentTime >= endTime) {
@@ -587,7 +600,7 @@ export default {
               container: `.audioplayer-${resultIndex}`,
               waveColor: '#4F4A85',
               progressColor: '#383351',
-              url: `/media/${filename}`,
+              url: this.baseMediaUrl + filename,
               // media: this.$refs.audioplayer, // <- this is the important part
               height: 32
             })
@@ -704,6 +717,13 @@ export default {
         columns = columns["partitions"][partitions[0]];
       }
       return columns["prepared"]["columnHeaders"];
+    },
+    baseMediaUrl() {
+      let retval = ""
+      if (this.corpora && this.corpora.corpus) {
+        retval = `${config.baseMediaUrl}/${this.corpora.corpus.schema_path}/`
+      }
+      return retval
     },
   },
 };

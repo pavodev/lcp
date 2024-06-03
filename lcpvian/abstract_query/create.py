@@ -1,8 +1,6 @@
-from __future__ import annotations
-
 from typing import Any
 
-import sqlparse # type: ignore
+import sqlparse  # type: ignore
 
 from .query import QueryMaker
 from .results import ResultsMaker
@@ -54,8 +52,8 @@ def json_to_sql(
         "results": result,
         "unions": unions_part,
     }
-    
+
     script = BASE.format(**formatters)
-    script = sqlparse.format(script, reindent=True, keyword_case="upper")
+    script = sqlparse.format(script, reindent=True, keyword_case="upper", use_space_around_operators=False)
 
     return script, result_data.meta_json, result_data.post_processes

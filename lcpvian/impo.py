@@ -81,8 +81,8 @@ class SQLstats:
                 """
             WITH mc AS (
                 INSERT
-                INTO main.corpus (name, current_version, corpus_template, schema_path, token_counts, mapping, enabled)
-                VALUES (:name, :ver, :template, :schema, :counts, :mapping, true)
+                INTO main.corpus (name, current_version, corpus_template, project_id, schema_path, token_counts, mapping, enabled)
+                VALUES (:name, :ver, :template, :project, :schema, :counts, :mapping, true)
                 RETURNING *
             )
             SELECT {selects}
@@ -125,9 +125,10 @@ class Importer:
         self.pool: AsyncEngine = pool
         self.template = cast(CorpusTemplate, data["template"])
         self.template["uploaded"] = True
-        self.name: str = cast(Meta, self.template["meta"])["name"]
-        self.version: int | str | float = cast(Meta, self.template["meta"])["version"]
-        self.schema = self.template["schema_name"]
+        meta: Meta = cast(Meta, self.template.get("meta", {}))
+        self.name: str = meta.get("name", "Untitled corpus")
+        self.version: int | str | float = meta.get("version", "1")
+        self.schema = self.template.get("schema_name", "")
         self.batches = cast(list[str], data["batchnames"])
         self.insert = cast(str, data["prep_seg_insert"])
         self.updates = cast(list[str], data["prep_seg_updates"])
@@ -150,6 +151,7 @@ class Importer:
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
+        self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
     def update_progress(self, msg: str) -> None:
@@ -362,8 +364,8 @@ class Importer:
         count inserted words/tokens in DB and return
         TODO: not working for parallel
         """
-        fc = cast(dict[str, str], self.template["firstClass"])
-        token = fc["token"]
+        fc = cast(dict[str, str], self.template.get("firstClass", {}))
+        token = fc["token"].lower()
         names: list[str] = []
         queries: list[str] = []
         for i in range(self.n_batches + 1):
@@ -434,11 +436,15 @@ class Importer:
         await self.run_script(self.create)
         msg = f"Running {len(self.batches)} insert tasks:\n{self.insert}\n"
         self.update_progress(msg)
-        inserts = [self.insert.format('{}', batch=batch) for batch in self.batches]
+        inserts = [self.insert.format("{}", batch=batch) for batch in self.batches]
         await self.process_data(inserts, self.run_script, progress=progress)
         msg = f"Running {len(self.updates)} * {len(self.batches)} prepared annotations tasks:\n{self.updates}\n"
         self.update_progress(msg)
-        updates = [u.format(LB='{', RB='}', batch=batch) for batch in self.batches for u in self.updates]
+        updates = [
+            u.format(LB="{", RB="}", batch=batch)
+            for batch in self.batches
+            for u in self.updates
+        ]
         await self.process_data(updates, self.run_script, progress=progress)
         return None
 
@@ -465,6 +471,7 @@ class Importer:
             name=self.name,
             ver=int(self.version),
             template=json.dumps(dict(self.template)),
+            project=self.template.get("project", ""),
             schema=self.schema,
             counts=json.dumps(self.token_count),
             mapping=json.dumps(dict(self.mapping)),
@@ -500,8 +507,8 @@ class Importer:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
-        if self.debug:
-            await self.drop_similar()
+        # if self.debug:
+        #     await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"
@@ -516,4 +523,10 @@ class Importer:
         await self.collocations()
         # run the config glob_attr
         main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
+        # pipeline is over: drop
+        if self.drops:
+            # msg = f"Attempting schema drop (create) * {len(drops)-1}"
+            drop_script = "\n".join(self.drops)
+            print("Dropping existing previous schemata:", drop_script)
+            await self.run_script(drop_script)
         return main_corp

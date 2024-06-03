@@ -1,3 +1,6 @@
+# need this for the forward-reference type Sequence
+from __future__ import annotations
+
 # Rethink the approach:
 #   from_obj should return a list of Members:
 #       one element when a unit
@@ -6,15 +9,21 @@
 #       units folowed by a sequence if a sequence with min of at least 1, and first member(s) is/are unit(s)
 #           followed by units if last members are units (ie. no more left/right!)
 
-from __future__ import annotations
-
-import re
 from typing import cast
 
-from .utils import _unique_label
+from .utils import _unique_label, _parse_repetition
 
 
 class Member:
+
+    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0):
+        self.obj: dict = obj
+        self.parent_sequence: Sequence | None = parent_sequence
+        self.depth: int = depth
+        self.min_length: int = 0
+        self.max_length: int = 0
+        self.need_cte: bool = False
+
     @staticmethod
     def from_obj(
         obj: dict,
@@ -55,7 +64,7 @@ class Member:
                         },
                         parent_sequence,
                         depth,
-                        sequence_references
+                        sequence_references,
                     )
                 ]
             else:
@@ -75,32 +84,9 @@ class Member:
 
             ret_members: list[Member] = list()
 
-            repetition = obj["sequence"].get("repetition", "1")
+            mini, maxi = _parse_repetition(obj["sequence"].get("repetition", "1"))
 
-            match_repetition: re.Match[str] | None = re.match(
-                r"^(\d+)(\.\.(\d+|\*))?$", repetition
-            )
-            assert match_repetition, SyntaxError(
-                f"Invalid repetition expression ({repetition})"
-            )
-
-            min: int = int(match_repetition.group(1))
-            max: int = (
-                -1
-                if match_repetition.group(3) == "*"
-                else (
-                    int(match_repetition.group(3)) if match_repetition.group(3) else min
-                )
-            )
-
-            assert min > -1, ValueError(
-                f"A sequence cannot repeat less than 0 times (encountered min repetition value of {min})"
-            )
-            assert max < 0 or max >= min, ValueError(
-                f"The maximum number of repetitions of a sequence must be greater than its minimum ({max} < {min})"
-            )
-
-            if min == 0:
+            if mini == 0:
                 return [
                     Sequence(
                         obj,
@@ -111,22 +97,30 @@ class Member:
                 ]
             else:
                 # Create an optional sequence from a new object
-                diff: int = -1 if max < 0 else max - min
+                diff: int = -1 if maxi < 0 else maxi - mini
                 str_max: str = "*" if diff < 0 else str(diff)
                 newseqobj: dict = {
                     "sequence": {
-                        "repetition": f"0..{str_max}",
+                        "repetition": {"min": "0", "max": str_max},
                         "members": obj["sequence"].get("members", []),
                         "label": obj["sequence"].get("label"),
                     }
                 }
                 optional_sequence: Sequence = Sequence(
-                    newseqobj, parent_sequence, depth + 1, sequence_references=sequence_references
+                    newseqobj,
+                    parent_sequence,
+                    depth + 1,
+                    sequence_references=sequence_references,
                 )
                 # The members must appear min: return them as individual members
-                for _ in range(min):
+                for _ in range(mini):
                     for m in obj["sequence"].get("members", []):
-                        ret_members += Member.from_obj(m, optional_sequence, depth + 1, sequence_references=sequence_references)
+                        ret_members += Member.from_obj(
+                            m,
+                            optional_sequence,
+                            depth + 1,
+                            sequence_references=sequence_references,
+                        )
                 if diff:
                     ret_members.append(optional_sequence)
 
@@ -134,14 +128,6 @@ class Member:
 
         else:
             raise TypeError(f"Unsupported type of sequence member: {obj}")
-
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0):
-        self.obj: dict = obj
-        self.parent_sequence: Sequence | None = parent_sequence
-        self.depth: int = depth
-        self.min_length: int = 0
-        self.max_length: int = 0
-        self.need_cte: bool = False
 
     def get_all_parent_sequences(self) -> list[Sequence]:
         ret: list[Sequence] = []
@@ -167,7 +153,13 @@ class Member:
 
 
 class Unit(Member):
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0, references: dict[str,list] = {}):
+    def __init__(
+        self,
+        obj: dict,
+        parent_sequence: Sequence | None,
+        depth: int = 0,
+        references: dict[str, list] = {},
+    ):
         super().__init__(obj, parent_sequence, depth)
         self.label: str = str(obj["unit"].get("label", _unique_label(references)))
         self.internal_label: str = self.label
@@ -194,7 +186,13 @@ class Unit(Member):
 
 
 class Disjunction(Member):
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0, references: dict[str,list] = {}):
+    def __init__(
+        self,
+        obj: dict,
+        parent_sequence: Sequence | None,
+        depth: int = 0,
+        references: dict[str, list] = {},
+    ):
         super().__init__(obj, parent_sequence, depth)
         args: list = obj["logicalOpNAry"].get("args", [])
         # Don't extract units from sub-sequences when those are inside a disjunction (otherwise they would become disjuncts too!)
@@ -202,7 +200,11 @@ class Disjunction(Member):
             x
             for a in args
             for x in Member.from_obj(
-                a, parent_sequence, depth + 1, flatten_sequences=False, sequence_references=references
+                a,
+                parent_sequence,
+                depth + 1,
+                flatten_sequences=False,
+                sequence_references=references,
             )
         ]
         self.min_length: int = min(sm.min_length for sm in self.members)
@@ -228,7 +230,7 @@ class Sequence(Member):
         sequence_references: dict[str, list] = dict(),
     ):
         super().__init__(obj, parent_sequence, depth)
-        
+
         if obj["sequence"].get("label"):
             self.anonymous = False
             self.label: str = obj["sequence"]["label"]
@@ -257,40 +259,21 @@ class Sequence(Member):
             for m in self.members
         )
 
-        match_repetition: re.Match[str] | None = re.match(
-            r"^(\d+)(\.\.(\d+|\*))?$", obj["sequence"].get("repetition", "1")
-        )
-        assert match_repetition, SyntaxError(
-            f"Invalid repetition expression ({obj['sequence']['repetition']})"
-        )
+        mini, maxi = _parse_repetition(obj["sequence"].get("repetition", "1"))
+        self.repetition: tuple[int, int] = (mini, maxi)
 
-        min_repetition: int = int(match_repetition.group(1))
-        max_repetition: int
-        if not match_repetition.group(3):
-            max_repetition = min_repetition
-        else:
-            max_repetition = (
-                -1
-                if match_repetition.group(3) == "*"
-                else int(match_repetition.group(3))
-            )
-
-        self.repetition: tuple[int, int] = (min_repetition, max_repetition)
-
-        if min_repetition == 0:
+        if mini == 0:
             self.min_length = 0
         else:
-            self.min_length = min_repetition * sum(sm.min_length for sm in self.members)
+            self.min_length = mini * sum(sm.min_length for sm in self.members)
 
-        if max_repetition == -1:
+        if maxi == -1:
             self.max_length = -1
         else:
             if any(sm.max_length < 0 for sm in self.members):
                 self.max_length = -1
             else:
-                self.max_length = max_repetition * sum(
-                    sm.max_length for sm in self.members
-                )
+                self.max_length = maxi * sum(sm.max_length for sm in self.members)
 
     def is_simple(self) -> bool:
         """Whether the members of this sentence are all units"""
@@ -304,7 +287,7 @@ class Sequence(Member):
         while parent_sequence and parent_sequence is not self:
             parent_sequence = parent_sequence.parent_sequence
         return parent_sequence is self
-    
+
     def labeled_unbound_child_sequences(self) -> list[Sequence]:
         """All the unbound user-labeled sub-sequences contained in this sequence"""
         # If this sequence is optional or repeats itself, all the references it contains are bound
@@ -312,8 +295,10 @@ class Sequence(Member):
             return []
         subseq: list[Sequence] = []
         for m in self.members:
-            if isinstance(m, Unit): continue
-            if isinstance(m, Disjunction): continue
+            if isinstance(m, Unit):
+                continue
+            if isinstance(m, Disjunction):
+                continue
             if isinstance(m, Sequence):
                 if not m.anonymous:
                     subseq.append(m)
@@ -359,23 +344,23 @@ class Sequence(Member):
 
         return repeated_subseq
 
-
     def __str__(self) -> str:
         """Helper string representation"""
         ret: str = " ".join([str(m) for m in self.members])
         ret = f"({ret})"
-        if self.repetition[1] == -1:
-            if self.repetition[0] == 0:
+        mini, maxi = self.repetition
+        if maxi == -1:
+            if mini == 0:
                 ret += "*"
-            elif self.repetition[0] == 1:
+            elif mini == 1:
                 ret += "+"
             else:
-                ret += "{" + str(self.repetition[0]) + ",}"
-        elif self.repetition[1] == 1:
-            if self.repetition[0] == 0:
+                ret += "{" + str(mini) + ",}"
+        elif maxi == 1:
+            if mini == 0:
                 ret += "?"
-        elif self.repetition[0] == self.repetition[1]:
-            ret += "{" + str(self.repetition[0]) + "}"
+        elif mini == maxi:
+            ret += "{" + str(mini) + "}"
         else:
-            ret += "{" + str(self.repetition[0]) + "," + str(self.repetition[1]) + "}"
+            ret += "{" + str(mini) + "," + str(maxi) + "}"
         return ret

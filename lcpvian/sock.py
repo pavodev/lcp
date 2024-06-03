@@ -128,7 +128,7 @@ async def handle_redis_response(
         logging.error(str(err), extra=extra)
 
 
-async def listen_to_redis(app: web.Application) -> None:
+async def listen_to_redis(app: web.Application, test: bool = False) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender, All the try/except logic is shutdown logic only
@@ -137,7 +137,7 @@ async def listen_to_redis(app: web.Application) -> None:
         try:
             async with app["aredis"].pubsub() as channel:
                 await channel.subscribe(PUBSUB_CHANNEL)
-                await handle_redis_response(channel, app, test=False)
+                await handle_redis_response(channel, app, test=test)
         except ConnectionError as err:
             print("Connection error in listen_to_redis", err)
         except KeyboardInterrupt:
@@ -193,7 +193,7 @@ async def _handle_message(
         "document",
         "document_ids",
         "started_export",
-        "export_link"
+        "export_link",
     )
     errors = (
         "failed",
@@ -246,14 +246,15 @@ async def _handle_message(
         # we don't await till until after we send the ws message for performance
         to_submit = query(None, manual=payload.get("submit_query"), app=app)
 
-    if action in ("sentences","meta"):
+    if action in ("sentences", "meta"):
         drops = ("can_send", "submit_query")
         for drop in drops:
             payload.pop(drop, None)
 
     if action in simples or sent_allowed:
         send_sents = not payload.get("full") and (
-            action == "sentences" and len(cast(Results, payload["result"])) > 2
+            action == "sentences"
+            and len(cast(Results, payload["result"])) > 2
             or action == "meta"
         )
         if action in simples or send_sents:
@@ -289,7 +290,15 @@ async def _handle_message(
         user_data = cast(JSONObject | None, payload["user_data"])
         conf: CorpusConfig = cast(CorpusConfig, payload["entry"])
         conf["_batches"] = _get_batches(conf)
-        app["config"][str(payload["id"])] = conf
+        ids_to_names: list[tuple[str, str]] = [
+            (sid, c.get("shortname", "")) for sid, c in app["config"].items()
+        ]
+        id_str = str(payload["id"])
+        for sid, name in ids_to_names:
+            if name != conf.get("shortname", "") or int(sid) >= int(id_str):
+                continue
+            app["config"].pop(sid, {})
+        app["config"][id_str] = conf
         if payload.get("gui"):
             filt = _filter_corpora(app["config"], app_type, user_data)
             payload["config"] = cast(JSONObject, filt)
@@ -406,7 +415,7 @@ async def _handle_query(
             "projected_results",
             "batches_done",
             "simultaneous",
-            "consoleSQL"
+            "consoleSQL",
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
         await push_msg(
@@ -421,8 +430,10 @@ async def _handle_query(
         await to_submit
 
     if to_export := the_job.meta.get("to_export"):
-        done_batches, all_batches = the_job.kwargs.get("done_batches"), the_job.kwargs.get("all_batches")
-        if (len(done_batches)+1 == len(all_batches)):
+        done_batches, all_batches = the_job.kwargs.get(
+            "done_batches"
+        ), the_job.kwargs.get("all_batches")
+        if len(done_batches) + 1 == len(all_batches):
             await export(app, to_export, the_job.kwargs.get("first_job", ""))
 
 

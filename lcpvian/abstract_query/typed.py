@@ -3,12 +3,14 @@ Nothing but typealiases for common objects
 """
 
 from typing import Any, Literal, TypeAlias
+from pydantic import JsonValue
 
 QueryType: TypeAlias = str | int | list[str | int] | dict[str, Any]
 
 Attribs: TypeAlias = list[dict[str, str]]
 
-JSON: TypeAlias = dict[str, "JSON"] | list["JSON"] | str | int | float | bool | None
+
+JSON: TypeAlias = JsonValue
 JSONObject: TypeAlias = dict[str, JSON]
 
 # modelling the input query json and its components

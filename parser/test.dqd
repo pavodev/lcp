@@ -14,6 +14,10 @@ Token@s_en to_en
 		label = "obj"
 
 
+sequence seq 2..2
+	Token@s_en t1
+	Token@s_en t2
+
 Segment:de s_de
 	s_de <-> s_en
 

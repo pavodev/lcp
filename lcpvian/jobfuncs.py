@@ -43,10 +43,10 @@ async def _upload_data(
     perms = cast(str, data["perms"])
     constraints.append(perms)
 
-    template = cast(CorpusTemplate, data["template"])
+    # template = cast(CorpusTemplate, data["template"])
 
-    if not template.get("project"):
-        template["project"] = project
+    # if not template.get("project"):
+    #     template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
     importer = Importer(upool, data, corpus, debug)
@@ -65,6 +65,8 @@ async def _upload_data(
         await importer.cleanup()
     finally:
         shutil.rmtree(corpus)  # todo: should we do this?
+    if not row:
+        raise RuntimeError(msg)
     return row
 
 
@@ -87,9 +89,10 @@ async def _create_schema(
         con = raw._connection
         async with con.transaction():
             try:
-                if drops:
-                    msg = f"Attempting schema drop (create) * {len(drops)-1}"
-                    create = "\n".join(drops) + "\n" + create
+                # Move this to the end of a successful upload pipeline instead
+                # if drops:
+                #     msg = f"Attempting schema drop (create) * {len(drops)-1}"
+                #     create = "\n".join(drops) + "\n" + create
                 print("Creating schema...\n", create)
                 await con.execute(create)
             except Exception:
@@ -103,7 +106,7 @@ async def _create_schema(
 
 async def _db_query(
     query: str,
-    params: DBQueryParams = None,
+    params: DBQueryParams = {},
     config: bool = False,
     store: bool = False,
     document: bool = False,
@@ -149,7 +152,7 @@ async def _db_query(
 
     params = params or {}
 
-    if job and job.kwargs.get("refresh_config", None):
+    if job and cast(dict, job.kwargs).get("refresh_config", None):
         await refresh_config()
 
     async with getattr(pool, method)() as conn:
@@ -213,7 +216,8 @@ async def _swissdox_export(
             elif type in ("text", "string", "vector"):
                 c = str(c)
             elif cl == "char_range" and isinstance(c, Range):
-                docs_by_range[c.lower] = (c.upper, id)
+                lower, upper = (int(c.lower or 0), int(c.upper or 0))
+                docs_by_range[lower] = (upper, id)
                 c = str(c)
             formed_row.append(c)
         formed_row.append(str(id))
@@ -228,13 +232,6 @@ async def _swissdox_export(
     if "partitions" in segment_mapping and underlang:
         segment_mapping = segment_mapping["partitions"][underlang[1:]]
     column_headers = segment_mapping.get("prepared", {}).get("columnHeaders", [])
-    # tok_columns: list[str] = ["segment_id"]
-    # if "partitions" in segment_mapping and underlang:
-    #     tok_columns += segment_mapping["partitions"][underlang[1:]]["prepared"][
-    #         "columnHeaders"
-    #     ]
-    # else:
-    #     tok_columns += segment_mapping["prepared"]["columnHeaders"]
     tok_columns = [
         "form",
         "lemma",
@@ -279,7 +276,6 @@ async def _swissdox_export(
             tok_rows.append(row)
             n_tok += 1
     tok_pandas = pandas.DataFrame(data=tok_rows, index=tok_indices, columns=tok_columns)
-    # tok_pandas.to_feather(os.path.join(path, "tokens.feather"))
 
     # Named entities to docs
     ne_to_id: dict[tuple[str, str], str] = {}  # map (form,type) to ne_id
@@ -308,7 +304,6 @@ async def _swissdox_export(
         ne_indices.append(ne_id)
         ne_rows.append([form, typ, ne_id])
     ne_pandas = pandas.DataFrame(data=ne_rows, index=ne_indices, columns=ne_columns)
-    # ne_pandas.to_feather(os.path.join(path, "namedentities.feather"))
 
     ne_doc_columns: list[str] = ["doc_id", "ne_id", "freq"]
     ne_doc_indices = []
@@ -322,7 +317,11 @@ async def _swissdox_export(
     ne_document_pandas = pandas.DataFrame(
         data=ne_doc_rows, index=ne_doc_indices, columns=ne_doc_columns
     )
-    # ne_document_pandas.to_feather(os.path.join(path, "namedentities.feather"))
+
+    assert all(
+        isinstance(x, pandas.DataFrame)
+        for x in (tok_pandas, ne_pandas, ne_document_pandas)
+    )
 
     # # Zip file
     # with zipfile.ZipFile(os.path.join(path, "swissdox.zip"), mode="w") as archive:

@@ -678,7 +678,7 @@ export default {
     baseMediaUrl() {
       let retval = ""
       if (this.selectedCorpora) {
-        retval = `${config.baseMediaUrl}/${this.selectedCorpora.corpus.corpus_id}/`
+        retval = `${config.baseMediaUrl}/${this.selectedCorpora.corpus.schema_path}/`
       }
       return retval
     },
@@ -974,19 +974,20 @@ export default {
           let dataToShow = {};
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
-          if (this.selectedCorpora.value == 59) {
+          if (this.selectedCorpora.value in {59: 1, 127: 1}) {
             let tracks = this.selectedCorpora.corpus.tracks;
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
               document_id: document_id
             };
-            for (let gb of tracks.group_by) {
+            for (let gb of (tracks.group_by||[])) {
               if (!(gb in (data.document.global_attributes||{})))
                 throw ReferenceError(`'${gb}' could not be found in global_attributes`);
               dataToShow[gb] = Object.fromEntries(data.document.global_attributes[gb].map(v=>[v[gb+'_id'],v[gb]]))
             }
             for (let layer in data.document.layers) {
+              tracks.layers[layer].split = tracks.layers[layer].split || [];
               const cols = data.document.structure[layer];
               const rows = data.document.layers[layer];
               for (let row of rows) {

@@ -157,7 +157,7 @@ def process_node(
             if range != [1, 1]:
                 s["sequence"][
                     "repetition"
-                ] = f"{range[0]}..{'*' if range[1]<0 else str(range[1])}"
+                ] = {"min": range[0], "max": '*' if range[1]<0 else str(range[1])}
             members.append(s)
             return
 
@@ -201,7 +201,7 @@ def process_node(
                 {
                     "sequence": {
                         "members": [token],
-                        "repetition": f"{str(range[0])}..{'*' if range[1] == -1 else str(range[1])}",
+                        "repetition": {"min": str(range[0]), "max": '*' if range[1] == -1 else str(range[1])}
                     }
                 }
             )
