@@ -558,7 +558,11 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(frameFromResult(result,index)[0])"
+                        v-html="frameNumberToTime(
+                          parseInt(frameFromResult(result,index)[0])
+                          -
+                          parseInt(corpusData.find(c=>c[0]==docIdFromFrame(frameFromResult(result,index)))[3][0])
+                        )"
                       ></span>
                     </div>
                     <div class="col">
@@ -708,7 +712,8 @@ export default {
       return context.join(' ')
     },
     frameNumberToTime(frameNumber) {
-      let seconds = Utils.frameNumberToSeconds(frameNumber);
+      const adjustedFrame = parseInt(frameNumber) - parseInt(this.currentDocument[3][0]);
+      let seconds = Utils.frameNumberToSeconds(adjustedFrame);
       return Utils.msToTime(seconds);
     },
     frameFromResult(result,index) {
@@ -735,7 +740,8 @@ export default {
       // console.log(result, result[4][0][1], this.currentDocument)
       const frameFromResult = this.frameFromResult(result,index);
       const doc_result_id = this.docIdFromFrame(frameFromResult);
-      let value = Utils.frameNumberToSeconds(frameFromResult[0]) / 1000;
+      const adjustedFrame = parseInt(frameFromResult[0]) - parseInt(this.currentDocument[3][0]);
+      let value = Utils.frameNumberToSeconds(adjustedFrame) / 1000;
       if (this.currentDocument[0] == doc_result_id) {
         this._playerSetTime(value);
         window.scrollTo(0, 120);
@@ -1012,23 +1018,32 @@ export default {
               }
             }
           }
-          console.log("dataToShow", dataToShow, "data.document", data.document);
 
           let timelineData = []
           for (const [key, track] of Object.entries(dataToShow.tracks)) {
             let values = []
             const keyName = dataToShow.layers[track.layer].name;
+            const isSegment = keyName.toLowerCase() == this.selectedCorpora.corpus.firstClass.segment.toLowerCase();
 
             for (const entry of track[keyName]) {
               const [startFrame, endFrame] = entry.frame_range
               let shift = this.currentDocument[3][0];
               let startTime = (parseFloat(startFrame - shift) / this.frameRate);
               let endTime = (parseFloat(endFrame - shift) / this.frameRate);
+              let n = "";
+              if (isSegment)
+                n = entry.prepared.map(row => row[0]).join(" ");
+              else {
+                let firstStringAttribute = Object.entries(
+                  this.selectedCorpora.corpus.layer[keyName].attributes || {}
+                ).find( e=> e[1].type in {text:1,categorical:1} );
+                if (firstStringAttribute)
+                  n = entry[firstStringAttribute[0]];
+              }
               values.push({
                 x1: startTime,
                 x2: endTime,
-                // TODO [HARDCODED]: This should be changed
-                n: keyName == "Segment" ? entry.prepared.map(row => row[0]).join(" ") : entry.type,
+                n: n,
                 l: key
               })
             }
@@ -1335,7 +1350,6 @@ KWIC => plain
               value: corpus[0].meta.id,
               corpus: corpus[0],
             }
-            console.log("about to set sample query");
             if (corpus[0].sample_query)
               this.queryDQD = corpus[0].sample_query;
           }
@@ -1367,7 +1381,7 @@ KWIC => plain
       )
     },
     currentDocument() {
-      this.loadDocument()
+      this.loadDocument();
     },
     volume() {
       this._setVolume();

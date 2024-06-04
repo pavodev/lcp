@@ -271,11 +271,17 @@ class QueryService:
         global_tables: dict = {}
         doc_layer = config.get("document")
         query = f"WITH doc AS (SELECT frame_range FROM {schema}.{doc_layer} WHERE {doc_layer}_id = :doc_id)"
-        for layer, props in config["tracks"].get("layers", {}).items():
+        glob_attrs = config.get("globalAttributes", {})
+        for layer in config["tracks"].get("layers", {}):
             layer_table = _get_table(
                 layer, config, "", ""
             )  # no batch and no lang for now
+            attributes = config["layer"].get(layer, {}).get("attributes", {})
+            attributes_names: dict[str, None] = {k: None for k in attributes}
             mapping = _get_mapping(layer, config, "", "")
+            mapping_attrs: dict[str, Any] = mapping.get("attributes", {})
+            for k in mapping_attrs:
+                attributes_names[k] = None
             crossjoin = ""
             whereand = ""
             lab = layer_table[0]
@@ -287,14 +293,27 @@ class QueryService:
                 crossjoin = f"\n    CROSS JOIN {schema}.{prepared_table} ps"
                 whereand = f"\n    AND {lab}.{layer}_id = ps.{layer}_id"
                 selects += ["'prepared'", "ps.content"]
-            for split in props.get("split", []):
-                split_name = split
-                split_mapping = mapping.get("attributes", {}).get(split, {})
-                if split_mapping.get("type") == "relation":
-                    split_name = f"{split_mapping.get('name',split)}_id"
-                selects += [f"'{split_name}'", f"{lab}.{split_name}"]
-            for attr_name, attr_props in mapping.get("attributes", {}).items():
-                if attr_name not in config.get("globalAttributes", {}):
+            for attr_name in attributes_names:
+                attr_type = attributes.get(attr_name, {}).get("type")
+                if attr_type in ("labels", "vector"):
+                    continue
+                mappings = mapping_attrs.get(attr_name, {})
+                mapping_type = mappings.get("type")
+                name = attr_name
+                ref = f"{lab}.{name}"
+                if mapping_type == "relation":
+                    if attributes.get(attr_name, {}).get("ref") in glob_attrs:
+                        name = f"{mappings.get('key', name)}_id"
+                        ref = f"{lab}.{name}"
+                    else:
+                        table = mappings.get("name", name)
+                        crossjoin += f"\n    CROSS JOIN {schema}.{table} {name}"
+                        key = mappings.get("key", name)
+                        whereand += f"\n    AND {lab}.{key}_id = {name}.{key}_id"
+                        ref = f"{name}.{name}"
+                selects += [f"'{name}'", ref]
+            for attr_name, attr_props in mapping_attrs.items():
+                if attr_name not in glob_attrs:
                     continue
                 global_tables[attr_name] = attr_props.get("name", attr_name)
             query += f""",
