@@ -565,7 +565,7 @@
                       <span class="text-bold" v-html="contextWithHighlightedEntities(result, index)" />
                       <span v-html="otherEntityInfo(result, index)"></span>
                     </div>
-                    <div class="col-1">
+                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result,index))]">
                       <span v-html="documentDict[docIdFromFrame(frameFromResult(result,index))]"></span>
                       <!-- <br>
                       <span v-html="result[4]"></span> -->
@@ -1121,6 +1121,7 @@ export default {
       }
     },
     setExample(num) {
+      console.log("setting example query", num);
       if (num == 1) {
         this.queryDQD = `Segment s
 
@@ -1299,7 +1300,10 @@ KWIC => plain
         this.playerFrameUp(25);
       }
     });
-    this.setExample(1);
+    if (this.selectedCorpora && this.selectedCorpora.corpus && this.selectedCorpora.corpus.sample_query)
+      this.queryDQD = this.selectedCorpora.corpus.sample_query;
+    else
+      this.setExample(1);
   },
   unmounted() {
     if (this.updateTimer) {
@@ -1331,6 +1335,9 @@ KWIC => plain
               value: corpus[0].meta.id,
               corpus: corpus[0],
             }
+            console.log("about to set sample query");
+            if (corpus[0].sample_query)
+              this.queryDQD = corpus[0].sample_query;
           }
           this.preselectedCorporaId = null
           this.loadDocuments()
@@ -1399,6 +1406,11 @@ KWIC => plain
 </script>
 
 <style scoped>
+#nav-tab {
+  height: 5em;
+  display: flex;
+  overflow: scroll;
+}
 video {
   margin-right: 3px;
   object-fit: fill;
@@ -1467,5 +1479,12 @@ div.active video {
 .list-no-bullets li:hover {
   cursor: pointer;
   opacity: 0.8;
+}
+.list-no-bullets .col-1 {
+  width: 20%;
+  max-height: 2em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 </style>
