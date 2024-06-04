@@ -974,7 +974,7 @@ export default {
           let dataToShow = {};
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
-          if (this.selectedCorpora.value in {59: 1, 127: 1}) {
+          if (!(this.selectedCorpora.value in {115: 1})) { // old tangram exception
             let tracks = this.selectedCorpora.corpus.tracks;
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
@@ -1012,6 +1012,7 @@ export default {
               }
             }
           }
+          console.log("dataToShow", dataToShow, "data.document", data.document);
 
           let timelineData = []
           for (const [key, track] of Object.entries(dataToShow.tracks)) {
