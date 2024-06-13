@@ -48,6 +48,7 @@ let zoom;
 let linearScale = null;
 let currentTime = 0;
 let playerState = false;
+let hoveringAnnotation = null;
 const padding = 180;
 const width = document.body.clientWidth - 20;
 const paddingBeforeTimeline = 40;
@@ -117,6 +118,9 @@ export default {
     }
   },
   mounted() {
+
+    const emit = (...args) => this.$emit(...args);
+
     // Example
     // const data = [
     //   {
@@ -415,12 +419,33 @@ export default {
         d3.select('.mouse-text').style('opacity', '0.5');
       })
       .on('mousemove', function () {
-        const mouseOverX = d3.pointer(event)[0];
+        const [mouseOverX, mouseOverY] = d3.pointer(event).slice(0,2);
         d3
           .select(".mouse-line")
           .attr("x1", mouseOverX)
           .attr("x2", mouseOverX)
           .style('opacity', '1');
+
+        const hovering = barAndTextGroups
+          .selectAll("rect")
+          .filter( function () {
+            const {x, y, width, height} = Object.fromEntries([...this.attributes].map(v=>[v.name,v.value]));
+            return x<=mouseOverX && Number(x)+Number(width)>=mouseOverX && y<=mouseOverY && Number(y)+Number(height)>=mouseOverY;
+          } );
+        if ([...hovering].length && [...hovering][0] != hoveringAnnotation) {
+          hoveringAnnotation = [...hovering][0];
+          const {x, y, height} = Object.fromEntries([...hoveringAnnotation.attributes].map(v=>[v.name,v.value]));
+          const event = {
+            x: Number(x),
+            y: Number(y) + Number(height),
+            entry: hovering.data()[0].entry
+          }
+          emit("annotationEnter", event);
+        }
+        else if ([...hovering].length == 0 && hoveringAnnotation) {
+          hoveringAnnotation = null;
+          emit("annotationLeave");
+        }
 
         const transform = d3.zoomTransform(svg.node());
         const clickX = transform.invertX(d3.pointer(event)[0]);

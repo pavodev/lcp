@@ -375,6 +375,20 @@
           </div>
         </div>
       </div>
+      <div
+        id="timelinePopin"
+        ref="timelinePopin"
+        v-if="timelineEntry"
+        :style="_getTimelinePopinXY()"
+      >
+        <div
+          v-for="(entry, index) in timelineEntry"
+          :key=index
+        >
+          <div class="header" v-html=entry[0]></div>
+          <div v-html=entry[1]></div>
+        </div>
+      </div>
       <TimelineView
         v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
         :data="currentDocumentData"
@@ -382,6 +396,8 @@
         :playerIsPlaying="playerIsPlaying"
         :playerCurrentTime="playerCurrentTime"
         @updateTime="_playerSetTime"
+        @annotationEnter="_annotationEnter"
+        @annotationLeave="_annotationLeave"
         :key="documentIndexKey"
       />
       <div v-else-if="loadingDocument == true">
@@ -609,6 +625,8 @@ import EditorView from "@/components/EditorView.vue";
 import TimelineView from "@/components/videoscope/TimelineView.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
 
+const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
+
 export default {
   data() {
     return {
@@ -643,6 +661,8 @@ export default {
       mainAudio: 1,
       volume: 0.5,
       frameRate: 25.0,
+
+      timelineEntry: null,
 
       setResultTime: null,
       query: "",
@@ -930,6 +950,34 @@ export default {
       }
       this.volume = _volume
     },
+    _annotationEnter({x, y, entry}) {
+      this.timelinePopinX = Number(x);
+      this.timelinePopinY = Number(y);
+      this.timelineEntry = [
+        ...Object.entries(entry).filter(kv=>!(kv[0] in {frame_range:1,char_range:1,prepared:1,meta:1})),
+        ...Object.entries(entry.meta||{})
+      ]
+      .filter(kv=>kv && kv[0] && kv[1])
+      .map(([name,value])=>[name,value.replace(urlRegex, "<a href='$1' target='_blank'>$1</a>")]);
+    },
+    _annotationLeave() {
+      this.timelineEntry = null;
+    },
+    _getTimelinePopinXY() {
+      let {x, y} = document.querySelector("#timeline-svg").getBoundingClientRect();
+      x += this.timelinePopinX + window.scrollX;
+      y += this.timelinePopinY + window.scrollY;
+      const bottom = window.scrollY + window.innerHeight, right = window.scrollX + window.innerWidth;
+      const {width, height} = (
+        this.$refs.timelinePopin
+        || {getBoundingClientRect:()=>Object({width:0,height:0})}
+      ).getBoundingClientRect();
+      if (x + width > right)
+        x = right - width;
+      if (y + height > bottom)
+        y = bottom - height;
+      return {'left': x+'px', 'top': y+'px'};
+    },
     // loadData() {
     //   if (this.currentDocument) {
     //     this.mainVideo = 1;
@@ -1030,22 +1078,19 @@ export default {
               let shift = this.currentDocument[3][0];
               let startTime = (parseFloat(startFrame - shift) / this.frameRate);
               let endTime = (parseFloat(endFrame - shift) / this.frameRate);
-              let n = "";
+              const unitData = {x1: startTime, x2: endTime, l: key, entry: entry};
               if (isSegment)
-                n = entry.prepared.map(row => row[0]).join(" ");
+                unitData.n = entry.prepared.map(row => row[0]).join(" ");
               else {
                 let firstStringAttribute = Object.entries(
                   this.selectedCorpora.corpus.layer[keyName].attributes || {}
                 ).find( e=> e[1].type in {text:1,categorical:1} );
                 if (firstStringAttribute)
-                  n = entry[firstStringAttribute[0]];
+                  unitData.n = entry[firstStringAttribute[0]];
               }
-              values.push({
-                x1: startTime,
-                x2: endTime,
-                n: n,
-                l: key
-              })
+              if (unitData.n == "Karen Cushman")
+                console.log(startFrame, endFrame, shift, this.frameRate);
+              values.push(unitData);
             }
 
             timelineData.push({
@@ -1500,5 +1545,21 @@ div.active video {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+#timelinePopin {
+  position: absolute;
+  width: 25em;
+  min-height: 2em;
+  max-height: 10em;
+  overflow: scroll;
+  left: 20vw;
+  background-color: white;
+  box-shadow: 2px 2px 20px 0px black;
+  border-radius: 0.25em;
+  z-index: 99;
+}
+#timelinePopin .header {
+  font-weight: bold;
+  background-color: lightgray;
 }
 </style>

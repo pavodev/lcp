@@ -784,8 +784,8 @@ class CTProcessor:
             has_media = self.corpus_temp["meta"].get("mediaSlots", {})
             if l_name == self.globals.base_map["document"] and has_media:
                 table_cols.append(Column("media", "jsonb"))
-            if any(x.get("mediaType") == "video" for x in has_media.values()):
-                table_cols.append(Column("name", "text"))
+                if any(x.get("mediaType") == "video" for x in has_media.values()):
+                    table_cols.append(Column("name", "text"))
             ptable = None
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)

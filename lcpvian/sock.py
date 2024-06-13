@@ -506,7 +506,7 @@ async def _handle_sock(
         print("No room: something wrong")
         return None
     session_id: str = possible_session
-    possible_user: str | None = payload["user"]
+    possible_user: str | None = payload.get("user", None)
     if possible_user is None:
         print("User not logged in! Nothing to do")
         return None
