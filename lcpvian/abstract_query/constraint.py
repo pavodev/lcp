@@ -869,14 +869,16 @@ class TimeConstraint:
         Build the constraint (populate _joins and _conditions)
         """
         is_start = "start" in self.boundary.lower()
+        is_start_compare = "start" in self.comp2.lower()
         func = "lower" if is_start else "upper"
+        func_compare = "lower" if is_start_compare else "upper"
         # sign = "-" if is_start else "+"
         sign = "-" if re.match(rf"-\s*[0-9]", self.obj) else "+"
         compare = self.obj.split(".", 1)[0]
         lte: str = ">=" if self.op not in (">", ">=", "<", "<=") else self.op
         # lte = ">=" if is_start else "<="
         lab = self._quantor_label or self.label
-        formed = f"{func}({lab}.frame_range) {lte} {func}({compare}.frame_range) {sign} {self.diff} * 25"
+        formed = f"{func}({lab}.frame_range) {lte} {func_compare}({compare}.frame_range) {sign} {self.diff} * 25"
         self._conditions.add(formed.lower())
         table: str = _get_table(
             self.layer, self.conf.config, self.conf.batch, cast(str, self.conf.lang)

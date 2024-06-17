@@ -615,7 +615,7 @@ class CTProcessor:
                     norm_table = Table(
                         attr,
                         [
-                            Column(norm_col, "int", primary_key=True),
+                            Column(norm_col, "text", primary_key=True),
                             Column(
                                 attr, TYPES_MAP.get(norm_type, norm_type), unique=True
                             ),
@@ -627,7 +627,7 @@ class CTProcessor:
                 table_cols.append(
                     Column(
                         norm_col,
-                        "int",
+                        "text",
                         foreign_key={"table": norm_table.name, "column": norm_col},
                         nullable=nullable,
                     )

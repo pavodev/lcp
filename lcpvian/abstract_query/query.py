@@ -417,7 +417,6 @@ class QueryMaker:
                 f"An entity cannot be part of itself ('{label}')"
             )
             low = layer.lower()
-            is_gesture = low == "gesture"
             is_segment = low == self.segment.lower()
             is_token = low == self.token.lower()
             is_above_segment = _layer_contains(
@@ -433,20 +432,18 @@ class QueryMaker:
                 self._base = f"{self.schema}.{layer} {label}".lower()
             if is_segment and not self._backup_table:
                 self._backup_table = (layerlang, llabel)
-            if is_gesture and not self._backup_table:
-                self._backup_table = (layerlang, llabel)
             if is_token and not self._backup_table:
                 self._backup_table = (layerlang, llabel)
 
             if is_segment:
                 # here is a little hack for certain vian constructions
-                if self.vian and self._prev_seg:
-                    formed = f"{self._prev_seg}.frame_range @> {label}.frame_range"
-                    self.conditions.add(formed.lower())
+                # if self.vian and self._prev_seg:
+                #     formed = f"{self._prev_seg}.frame_range @> {label}.frame_range"
+                #     self.conditions.add(formed.lower())
                 self._prev_seg = label
 
-            if is_segment or is_gesture or is_document or is_meta or is_above_segment:
-                self.segment_level(obj, label, layer, main_label, main_layer)
+            if is_segment or is_document or is_meta or is_above_segment:
+                self.segment_level(obj, label, layer)
                 continue
             elif contains_token:
                 self.char_range_level(obj, label, layer)
@@ -815,10 +812,8 @@ class QueryMaker:
                 f"has_char_range_{self._n}",
             )
         else:
-            rgx: str = f"{self.schema}.{segment} has_char_range_\d+"
-            lab = next(
-                (j for j in self.joins if re.match(rf"{rgx}", j, re.IGNORECASE)), ""
-            )
+            rgx: str = rf"{self.schema}.{segment} has_char_range_\d+"
+            lab = next((j for j in self.joins if re.match(rgx, j, re.IGNORECASE)), "")
         if lab:
             lab = lab.split(" ")[-1]
         else:
@@ -942,18 +937,10 @@ class QueryMaker:
 
         return None
 
-    def segment_level(
-        self,
-        obj: JSONObject,
-        label: str,
-        layer: str,
-        main_label: str,
-        main_layer: str,
-    ) -> None:
+    def segment_level(self, obj: JSONObject, label: str, layer: str) -> None:
         """
         Process an object in the query larger than token unit
         """
-        is_gesture = layer.lower() == "gesture"
         layer_info = cast(JSONObject, self.config["layer"])
         layer_info = cast(JSONObject, layer_info[layer])
         contains = cast(str, layer_info.get("contains", ""))
@@ -978,7 +965,11 @@ class QueryMaker:
         if self.has_fts:
             if part_of_layer.lower() == self.segment.lower():
                 part_of = self._seg_has_char_range()
-            elif layer.lower() == self.segment.lower():
+            elif (
+                layer.lower() == self.segment.lower()
+                and self._table  # Only use has_char_range if constraint on main segment table (could be another segment)
+                and label == self._table[1]
+            ):
                 label = self._seg_has_char_range()
         conn_obj: Constraints | None
         if constraints or part_of:
@@ -1002,15 +993,6 @@ class QueryMaker:
                 cond = conn_obj.conditions() if conn_obj else ""
                 if cond:
                     self.conditions.add(cond)
-
-        # todo: main_layer dead?
-        if is_gesture:
-            formed = f"{self.schema}.{layer} {label}"
-            self.joins[formed.lower()] = None
-            if main_layer == self.document:
-                formed = f"{main_label}.frame_range @> {label}.frame_range"
-                self.conditions.add(formed.lower())
-
         return None
 
     def handle_meta(self, label: str, layer: str, contains: str) -> None:
