@@ -76,7 +76,8 @@ mc.schema_path,
 mc.token_counts,
 mc.mapping,
 mc.enabled,
-mc.sample_query
+mc.sample_query,
+mc.project_id::text
 """
 CONFIG_JOIN = """CROSS JOIN
 (SELECT
@@ -622,6 +623,7 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     await push_msg(app["websockets"], "", payload)
     app["redis"].set("app_config", json.dumps(payload["config"]))
     app["redis"].expire("app_config", MESSAGE_TTL)
+
     return None
 
 
@@ -695,6 +697,7 @@ def _row_to_value(
         mapping,
         enabled,
         sample_query,
+        project_id,
     ) = tup
     ver = str(current_version)
     corpus_template = cast(CorpusTemplate, template)
@@ -731,6 +734,7 @@ def _row_to_value(
         "document": fc.get("document"),
         "column_names": cols,
         "sample_query": sample_query,
+        "project_id": project_id,
     }
 
     together = {**corpus_template, **rest}

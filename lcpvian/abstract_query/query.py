@@ -659,7 +659,7 @@ class QueryMaker:
                 jttable = _unique_label(entities, "t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = (
-                    f"{jttable}.{self.segment.lower()}_id = gather.s AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
+                    f"{jttable}.{self.segment.lower()}_id = gather.{sl} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
                 )
                 self.selects.add(
                     f"ARRAY(SELECT {jttable}.{tok}_id FROM {infrom} WHERE {inwhere}) AS {seqlab}"
