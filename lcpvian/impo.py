@@ -308,10 +308,21 @@ class Importer:
         # Do some checks on the layer files
         for layer, layer_attrs in self.template["layer"].items():
             lowlayer = layer.lower()
-            fpath = os.path.join(path, lowlayer + ".csv")
+            fpath = os.path.join(
+                path,
+                lowlayer
+                + (
+                    "0.csv"
+                    if layer
+                    in (self.template["firstClass"][x] for x in ("token", "segment"))
+                    else ".csv"
+                ),
+            )
             assert os.path.exists(fpath), FileNotFoundError(
                 f"Could not find a file named {lowlayer}.csv for layer '{layer}'"
             )
+            if layer_attrs.get("layerType") == "relation":
+                continue
             with open(fpath, "r") as layer_file:
                 columns = layer_file.readline().split("\t")
                 assert lowlayer + "_id" in columns, ReferenceError(

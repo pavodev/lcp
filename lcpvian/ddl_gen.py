@@ -588,7 +588,7 @@ class CTProcessor:
             nullable = vals.get("nullable", False) or False
             # TODO: make this working also for e.g. "isGlobal" & "text"
             typ = vals.get("type")
-            ref = vals.get("ref")
+            ref = vals.get("ref", "")
             if typ == "text" or ref:
                 norm_type = "text"
                 parent = entity_name.lower()
@@ -599,13 +599,15 @@ class CTProcessor:
                     norm_type = self.global_attributes[ref].get("type", "text")
                     parent = "global_attribute"
 
-                norm_col = f"{attr}_id"
+                ref_or_attr = (ref or attr).lower()
+
+                norm_col = f"{ref_or_attr}_id"
                 norm_table: Table
                 existing_table: Table | None = next(
                     (
                         t
                         for t in self.globals.tables
-                        if t.name == f"global_attribute_{attr}"
+                        if t.name == f"global_attribute_{ref}"
                     ),
                     None,
                 )
@@ -613,20 +615,22 @@ class CTProcessor:
                     norm_table = existing_table
                 else:
                     norm_table = Table(
-                        attr,
+                        ref_or_attr,
                         [
                             Column(norm_col, "text", primary_key=True),
-                            Column(
-                                attr, TYPES_MAP.get(norm_type, norm_type), unique=True
-                            ),
+                            Column(ref_or_attr, TYPES_MAP.get(norm_type, norm_type)),
                         ],
                         parent=parent,
                     )
-                map_attr[attr] = {"name": norm_table.name, "type": "relation"}
+                map_attr[attr] = {
+                    "name": norm_table.name,
+                    "type": "relation",
+                    "key": ref_or_attr,
+                }
 
                 table_cols.append(
                     Column(
-                        norm_col,
+                        attr.lower() + "_id",
                         "text",
                         foreign_key={"table": norm_table.name, "column": norm_col},
                         nullable=nullable,

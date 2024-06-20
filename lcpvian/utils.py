@@ -1106,19 +1106,23 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         nbit: int = cast(int, layer_info[layer].get("nlabels", 1))
         for attr, v in relational_attributes.items():
             # Quote attribute name (is arbitrary)
-            attr_name = f'"{attr}"'
             attr_mapping = mapping_attrs.get(attr, {})
             # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
             attr_table = attr_mapping.get("name", "")
-            on_cond = f"{alias}.{attr}_id = {attr_table}.{attr}_id"
-            sel = f"{attr_table}.{attr_name} AS {layer}_{attr}"
+            alias_attr_table = f"{layer}_{attr}_{attr_table}"
+            attr_table_key = attr_mapping.get("key", attr)
+            attr_name = f'"{attr_table_key}"'
+            on_cond = f"{alias}.{attr}_id = {alias_attr_table}.{attr_table_key}_id"
+            sel = f"{alias_attr_table}.{attr_name} AS {layer}_{attr}"
             if v.get("type") == "labels":
-                on_cond = f"get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
-                sel = f"array_agg({attr_table}.label) AS {layer}_{attr}"
+                on_cond = (
+                    f"get_bit({layer}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                )
+                sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
             else:
                 group_by.append(f"{layer}_{attr}")
             # Join the lookup table
-            joins_later[f"{schema}.{attr_table} {attr_table} ON {on_cond}"] = None
+            joins_later[f"{schema}.{attr_table} {alias_attr_table} ON {on_cond}"] = None
             # Select the attribute from the lookup table
             selects.append(sel)
 
