@@ -314,7 +314,10 @@ class Importer:
                 + (
                     "0.csv"
                     if layer
-                    in (self.template["firstClass"][x] for x in ("token", "segment"))
+                    in (
+                        self.template["firstClass"]["token"],
+                        self.template["firstClass"]["segment"],
+                    )
                     else ".csv"
                 ),
             )
