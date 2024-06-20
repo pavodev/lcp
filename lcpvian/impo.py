@@ -300,8 +300,105 @@ class Importer:
             if f.endswith(".csv")
         ]
         self.corpus_size = sum(s[1] for s in sizes)
+
+        token_anchoring = self.template["layer"][
+            self.template["firstClass"]["token"]
+        ].get("anchoring", {})
+
+        # Do some checks on the layer files
+        for layer, layer_attrs in self.template["layer"].items():
+            lowlayer = layer.lower()
+            fpath = os.path.join(path, lowlayer + ".csv")
+            assert os.path.exists(fpath), FileNotFoundError(
+                f"Could not find a file named {lowlayer}.csv for layer '{layer}'"
+            )
+            with open(fpath, "r") as layer_file:
+                columns = layer_file.readline().split("\t")
+                assert lowlayer + "_id" in columns, ReferenceError(
+                    f"Column '{lowlayer}_id' missing from file {lowlayer}.csv"
+                )
+                anchoring = layer_attrs.get("anchoring", {})
+                anchored_stream = (
+                    anchoring.get("stream")
+                    or layer in self.template["firstClass"]
+                    and token_anchoring.get("stream")
+                )
+                anchored_time = (
+                    anchoring.get("time")
+                    or layer in self.template["firstClass"]
+                    and token_anchoring.get("time")
+                )
+                assert not anchored_stream or "char_range" in columns, ReferenceError(
+                    f"Column 'char_range' missing from from file {lowlayer}.csv"
+                )
+                assert anchored_time or "frame_range" in columns, ReferenceError(
+                    f"Column 'frame_range' missing from from file {lowlayer}.csv"
+                )
+                if layer != self.template["firstClass"]["document"]:
+                    continue
+                self.partition_on_doc_range(
+                    columns,
+                    "char_range" if anchored_stream else "frame_range",
+                    layer_file,
+                )
+
         await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
         return None
+
+    def partition_on_doc_range(
+        self, columns: list[str], anchoring: str, file: Any
+    ) -> None:
+        ncol: int = next(n for n, col in enumerate(columns) if col == anchoring)
+        ranges: list[tuple[int, int]] = []
+
+        while line := file.readline():
+            range_min, range_max = [
+                int(i)
+                for i in line.split("\t")[ncol].lstrip("[ ").rstrip(") ").split(",")
+            ]
+            ranges.append((range_min, range_max))
+
+        ranges = sorted(ranges, key=lambda r: r[0])
+        num_partitions = 10
+        partition_ranges: list[tuple[int, int]] = []
+
+        for np in range(num_partitions - 1):  # split n-1 times to get n partitions
+            last_iteration = np == (num_partitions - 2)
+            if len(ranges) == 1:
+                partition_ranges.append((ranges[0][0], ranges[-1][1]))
+                ranges = []
+            if not ranges:
+                break
+            mid_r = ranges[0][0] + ((ranges[-1][1] - ranges[0][0]) / 2)
+            # include in left as long as 'mid' falls further than the range's mid-point
+            left_ranges = [
+                r for r in ranges if r[1] < mid_r or (mid_r - r[0] > r[1] - mid_r)
+            ]
+            right_ranges = [r for r in ranges if r not in left_ranges]
+            if last_iteration:
+                more_chars_in_left = (left_ranges[-1][1] - left_ranges[0][0]) > (
+                    right_ranges[-1][1] - right_ranges[0][0]
+                )
+                first_ranges = left_ranges if more_chars_in_left else right_ranges
+                second_ranges = right_ranges if more_chars_in_left else left_ranges
+                partition_ranges.append((first_ranges[0][0], first_ranges[-1][1]))
+                partition_ranges.append((second_ranges[0][0], second_ranges[-1][1]))
+                ranges = []
+            else:
+                # Keep as many documents as possible in the next range, to maximize the chances of further splitting
+                more_docs_in_left = len(left_ranges) > len(right_ranges)
+                ranges_to_add = right_ranges if more_docs_in_left else left_ranges
+                partition_ranges.append((ranges_to_add[0][0], ranges_to_add[-1][1]))
+                ranges = left_ranges if more_docs_in_left else right_ranges
+
+        for first_layer in cast(dict[str, str], self.template["firstClass"]).values():
+            for n, pr in enumerate(partition_ranges, start=1):
+                suffix = str(n)
+                if n == len(partition_ranges):
+                    suffix = "rest"
+                print(
+                    f"CREATE TABLE {first_layer.lower()}{suffix} PARTITION OF document FOR VALUES FROM ('[{pr[0]},{pr[0]+1})'::int4range) TO ('[{pr[1]-1},{pr[1]})'::int4range)"
+                )
 
     async def process_data(
         self,
