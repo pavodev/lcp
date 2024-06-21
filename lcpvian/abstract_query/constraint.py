@@ -14,6 +14,7 @@ from .utils import (
     _joinstring,
     _parse_comparison,
     _is_anchored,
+    _layer_contains,
 )
 
 from typing import Self
@@ -115,7 +116,9 @@ class Constraints:
         not_allowed = f"{self.schema}.{base}".lower()
         joins: Joins = member.joins()
         crossjoins = "\n".join(
-            f"CROSS JOIN {x}" for x in joins if not_allowed not in x.lower()
+            f"CROSS JOIN {x}"
+            for x in joins
+            if not_allowed not in x.lower() and x.split(" ")[-1] != self.label
         )
         conds = member.conditions()
         all_conds = [conds]
@@ -877,7 +880,8 @@ class TimeConstraint:
         compare = self.obj.split(".", 1)[0]
         lte: str = ">=" if self.op not in (">", ">=", "<", "<=") else self.op
         # lte = ">=" if is_start else "<="
-        lab = self._quantor_label or self.label
+        # lab = self._quantor_label or self.label
+        lab = self.label
         formed = f"{func}({lab}.frame_range) {lte} {func_compare}({compare}.frame_range) {sign} {self.diff} * 25"
         self._conditions.add(formed.lower())
         table: str = _get_table(
@@ -948,7 +952,11 @@ def _get_constraint(
                     quantor_str = "EXISTS"
             quantor = quantor_str
             constraint = obj.get("args", [{}])[0]
-            part_of = label
+            obj_layer = label_layer.get(obj.get("label", ""), [""])[0]
+            if _layer_contains(conf.config, layer, obj_layer) or all(
+                _is_anchored(conf.config, x, "stream") for x in (layer, obj_layer)
+            ):
+                part_of = label
             first_key_in_constraint = next(iter(constraint), "")
 
     unit: dict[str, Any] = cast(dict[str, Any], constraint.get("unit", {}))
@@ -961,7 +969,13 @@ def _get_constraint(
             unit_label = unit.get("label", "")
         else:
             label_layer[label] = (layer, dict())
-        part_of = unit.get("partOf", label)
+        part_of = unit.get("partOf", "")
+        # Use the parent label as part_of if they are both stream-anchored
+        if label != unit.get("label") and (
+            _layer_contains(conf.config, layer, unit_layer)
+            or all(_is_anchored(conf.config, x, "stream") for x in (layer, unit_layer))
+        ):
+            part_of = label
         args = (
             cast(JSONObject, unit["constraints"]),
             unit_layer,
@@ -1140,7 +1154,7 @@ def _get_constraints(
             layer,
             arg_label,
             conf,
-            quantor=None,  # quantor is always set directly in _get_constraint by exisentialQuantification
+            quantor=None,  # quantor is not passed down to single constraints
             n=n,
             order=order,
             prev_label=prev_label,

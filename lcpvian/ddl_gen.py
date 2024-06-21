@@ -670,9 +670,10 @@ class CTProcessor:
                     assert (
                         "values" in vals
                     ), f"List of values is needed when type is categorical ({entity_name}:{attr})"
-                    enum_type = Type(attr, vals["values"])
+                    enum_name = f"{entity_name}_{attr}".lower()
+                    enum_type = Type(enum_name, vals["values"])
                     types.append(enum_type)
-                    table_cols.append(Column(attr, attr, nullable=nullable))
+                    table_cols.append(Column(attr, enum_name, nullable=nullable))
 
             elif typ == "date":
                 table_cols.append(Column(attr, "date", nullable=nullable))

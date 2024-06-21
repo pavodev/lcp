@@ -105,6 +105,9 @@ def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
 
 
 def _layer_contains(config: dict[str, Any], parent: str, child: str) -> bool:
+    """
+    Return whether a parent layer contains a child layer
+    """
     child_layer = config["layer"].get(child)
     parent_layer = config["layer"].get(parent)
     if not child_layer or not parent_layer:
@@ -117,7 +120,7 @@ def _layer_contains(config: dict[str, Any], parent: str, child: str) -> bool:
 
 
 def _is_anchored(config: dict[str, Any], layer: str, anchor: str) -> bool:
-    layer_config = config["layer"].get(layer)
+    layer_config = config["layer"].get(layer, {})
     if layer_config.get("anchoring", {}).get(anchor):
         return True
     child: str = layer_config.get("contains", "")

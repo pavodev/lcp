@@ -364,9 +364,9 @@ class QueryMaker:
                         quantor = "EXISTS"
                     obj = next(a for a in quan_obj["args"])
                     obj["unit"]["quantor"] = quantor
-                    assert "partOf" in obj["unit"], SyntaxError(
-                        "Quantified entities require a scope (eg Token@s)"
-                    )
+                    # assert "partOf" in obj["unit"], SyntaxError(
+                    #     "Quantified entities require a scope (eg Token@s)"
+                    # )
 
             is_sequence = "sequence" in obj
             is_set = "set" in obj
@@ -456,6 +456,10 @@ class QueryMaker:
                 for q in queries:
                     if q.strip():
                         self.conditions.add(q)
+
+            else:  # E.g. time-anchored layer not containing any sublayer
+                self.segment_level(obj, label, layer)
+                continue
 
         # Discard any select on a bound label so far
         self.selects = {
@@ -945,7 +949,8 @@ class QueryMaker:
         layer_info = cast(JSONObject, layer_info[layer])
         contains = cast(str, layer_info.get("contains", ""))
         is_meta = bool(contains) and contains != self.token
-        if not is_meta:
+        is_negative = obj.get("quantor", "") == "NOT EXISTS"
+        if not is_meta and not is_negative:
             idx = "_id" if not is_meta else ""
             select = f"{label}.{layer}{idx} as {label}"
             self.selects.add(select.lower())
@@ -955,7 +960,7 @@ class QueryMaker:
             table += _get_batch_suffix(self.batch, n_batches=self.n_batches)
 
         join = f"{self.schema}.{table} {label}".lower()
-        if join != self._base:
+        if join != self._base and not is_negative:
             self.joins[join] = None
         # if is_meta:
         #     self.handle_meta(label, layer, contains)
@@ -985,7 +990,9 @@ class QueryMaker:
                 set_objects=self.r.set_objects,
                 n=self._n,
             )
-            if conn_obj:
+            if conn_obj and is_negative:
+                self.conditions.add(conn_obj._build_subquery(conn_obj))
+            elif conn_obj:
                 self._n = conn_obj._n + 1
                 joins = conn_obj.joins() if conn_obj else {}
                 for k, v in joins.items():
