@@ -185,12 +185,14 @@ export default {
     // Create the scaleLinear
     linearScale = d3.scaleLinear().domain([0, this.mediaDuration]).range([padding, width - 1]);
 
+    const data = [...this.data];//.sort((x,y)=>x.name>y.name);
+
     // Add names to the chart
     let heightStart = {}
     let totalHeight = 50; // Height before the first row
     svg
       .selectAll(".name")
-      .data(this.data)
+      .data(data)
       .enter()
       .append("text")
       .attr("class", "name")
@@ -221,7 +223,7 @@ export default {
 
     // Create individual groups for each bar and its text label
     const barAndTextGroups = barsGroup.selectAll("g")
-      .data(this.data.flatMap(d => d.values))
+      .data(data.flatMap(d => d.values))
       .enter()
       .append("g")
       .attr("clip-path", (d, i) => `url(#barClip${i})`); // Unique clip-path for each group

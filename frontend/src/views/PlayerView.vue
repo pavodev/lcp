@@ -724,7 +724,10 @@ export default {
       const n_entities = this.WSDataResults.result[0].result_sets[index].attributes.findIndex(a=>a.name == "entities");
       const context = [];
       const offset = parseInt(this.WSDataResults.result[-1][result[0]][0]);
-      const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[0]);
+      const segment_layer_name = this.selectedCorpora.corpus.firstClass.segment;
+      const column_names = this.selectedCorpora.corpus.mapping.layer[segment_layer_name].prepared.columnHeaders;
+      const form_n = column_names.indexOf("form");
+      const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[form_n]);
       for (let n in toks) {
         if (n_entities<0 || !(result[n_entities]||[]).includes(offset+parseInt(n))) context.push(toks[n]);
         else context.push("<span style='color:brown;'>"+toks[n]+"</span>");
@@ -1067,11 +1070,14 @@ export default {
             }
           }
 
+          const segment_name = this.selectedCorpora.corpus.firstClass.segment;
+          const column_names = this.selectedCorpora.corpus.mapping.layer[segment_name].prepared.columnHeaders;
+          const form_n = column_names.indexOf("form");
           let timelineData = []
           for (const [key, track] of Object.entries(dataToShow.tracks)) {
             let values = []
             const keyName = dataToShow.layers[track.layer].name;
-            const isSegment = keyName.toLowerCase() == this.selectedCorpora.corpus.firstClass.segment.toLowerCase();
+            const isSegment = keyName.toLowerCase() == segment_name.toLowerCase();
 
             for (const entry of track[keyName]) {
               const [startFrame, endFrame] = entry.frame_range
@@ -1080,7 +1086,7 @@ export default {
               let endTime = (parseFloat(endFrame - shift) / this.frameRate);
               const unitData = {x1: startTime, x2: endTime, l: key, entry: entry};
               if (isSegment)
-                unitData.n = entry.prepared.map(row => row[0]).join(" ");
+                unitData.n = entry.prepared.map(row => row[form_n]).join(" ");
               else {
                 let firstStringAttribute = Object.entries(
                   this.selectedCorpora.corpus.layer[keyName].attributes || {}
@@ -1088,8 +1094,6 @@ export default {
                 if (firstStringAttribute)
                   unitData.n = entry[firstStringAttribute[0]];
               }
-              if (unitData.n == "Karen Cushman")
-                console.log(startFrame, endFrame, shift, this.frameRate);
               values.push(unitData);
             }
 
@@ -1101,7 +1105,8 @@ export default {
           }
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-          this.currentDocumentData = timelineData;
+
+          this.currentDocumentData = timelineData;//.sort((x,y)=>x.name>y.name); // This sorting might need to change in the future to use group_by?
           this.loadingDocument = false;
           this.documentIndexKey++;
           this._setVolume();

@@ -329,14 +329,16 @@ class QueryService:
             )
             gar_table = global_tables.get(gar, gar)
             lab = gar_table[0]
-            gar_props = [f"({x}.props->'{gar}_id')::int" for x in layers_ctes]
+            gar_props = [f"({x}.props->'{gar}_id')::text" for x in layers_ctes]
             selects = [f"'{gar}'", f"{lab}.{gar}", f"'{gar}_id'", f"{lab}.{gar}_id"]
             query += f""",
 {gar} AS (
     SELECT DISTINCT 'glob', '{gar}', jsonb_build_object({','.join(selects)}) AS props
-    FROM {schema}.{gar_table} {lab}, {', '.join(layers_ctes)}
-    WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
+    FROM {schema}.{gar_table} {lab}
 )"""
+        # , {', '.join(layers_ctes)}
+        # WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
+        # Trying to remove WHEREs under the assumption that global attributes will always be small
         query += f"\nSELECT * FROM {next(x for x in config['tracks']['layers'])}"
         for n, layer in enumerate(config["tracks"]["layers"]):
             if n == 0:
