@@ -71,7 +71,7 @@
         <div class="video-box">
           <div class="video-text" v-html="subtext"></div>
           <div :class="mainVideo == 1 ? 'active' : ''">
-            <video ref="videoPlayer1" @timeupdate="timeupdate">
+            <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay">
               <source
                 :src="baseMediaUrl + currentDocument[2][0]"
                 type="video/mp4"
@@ -390,7 +390,7 @@
         </div>
       </div>
       <TimelineView
-        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
+        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false && loadingMedia == false"
         :data="currentDocumentData"
         :mediaDuration="currentMediaDuration"
         :playerIsPlaying="playerIsPlaying"
@@ -637,6 +637,7 @@ export default {
       currentMediaDuration: 0,
       documentIndexKey: 0,
       loadingDocument: false,
+      loadingMedia: false,
       isQueryValidData: null,
       loading: false,
       failedStatus: false,
@@ -904,6 +905,11 @@ export default {
       //   this.$refs.timeline.player.time = this.$refs.videoPlayer1.currentTime;
       // }
     },
+    videoPlayer1CanPlay() {
+      this.loadingMedia = false;
+      this.currentMediaDuration = this.$refs.videoPlayer1.duration;
+      console.log("video player1 can play")
+    },
     playerMainVideo(number) {
       this.mainVideo = number;
     },
@@ -1105,6 +1111,7 @@ export default {
           }
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
+          console.log("timelineData", timelineData, "currentMediaDuration", this.currentMediaDuration);
 
           this.currentDocumentData = timelineData;//.sort((x,y)=>x.name>y.name); // This sorting might need to change in the future to use group_by?
           this.loadingDocument = false;
@@ -1338,6 +1345,8 @@ KWIC => plain
       if (this.currentDocument) {
         this.currentDocumentData = {}
         this.loadingDocument = true
+        this.loadingMedia = true
+        this.timelineEntry = null
         // console.log("AA", this.currentDocument)
         useCorpusStore().fetchDocument({
           doc_id: this.currentDocument[0],

@@ -320,7 +320,7 @@ class Table(DDL):
         self.tabwidth = 8
         self.type_sizes: dict[str, int] = {}
         if anchorings:
-            for anchor in anchorings:
+            for anchor in set(anchorings):
                 self.cols.append(Column(*self.anchoring[anchor]))
         self._max_ident = (
             math.ceil((max([len(col.name) for col in cols]) + 1) / self.tabwidth)
@@ -794,6 +794,11 @@ class CTProcessor:
                 ):
                     table_cols.append(Column("name", "text"))
             ptable = None
+            # If this layer is contained in another, add an FK column
+            for parent_layer, pl_conf in self.layers.items():
+                if pl_conf.get("contains") != l_name:
+                    continue
+                table_cols.append(Column(f"{parent_layer.lower()}_id", "int"))
             table = Table(table_name, table_cols, anchorings=anchs)
             tables.append(table)
 
