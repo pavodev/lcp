@@ -736,8 +736,7 @@ export default {
       return context.join(' ')
     },
     frameNumberToTime(frameNumber) {
-      const adjustedFrame = parseInt(frameNumber) - parseInt(this.currentDocument[3][0]);
-      let seconds = Utils.frameNumberToSeconds(adjustedFrame);
+      let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
     frameFromResult(result,index) {
@@ -764,9 +763,10 @@ export default {
       // console.log(result, result[4][0][1], this.currentDocument)
       const frameFromResult = this.frameFromResult(result,index);
       const doc_result_id = this.docIdFromFrame(frameFromResult);
-      const adjustedFrame = parseInt(frameFromResult[0]) - parseInt(this.currentDocument[3][0]);
+      const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
+      const adjustedFrame = parseInt(frameFromResult[0]) - parseInt(doc_result[3][0]);
       let value = Utils.frameNumberToSeconds(adjustedFrame) / 1000;
-      if (this.currentDocument[0] == doc_result_id) {
+      if (this.currentDocument == doc_result) {
         this._playerSetTime(value);
         window.scrollTo(0, 120);
         this.playerPlay();
@@ -775,7 +775,7 @@ export default {
         // this.currentDocument = this.documentDict[result[2]];
         this.setResultTime = value;
         // TODO: should be fixed - corpusData changed
-        this.currentDocument = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0]
+        this.currentDocument = doc_result;
         //   // console.log("Change document")
         // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
@@ -908,7 +908,13 @@ export default {
     videoPlayer1CanPlay() {
       this.loadingMedia = false;
       this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-      console.log("video player1 can play")
+      if (this.setResultTime) {
+        console.log("setResultTime", this.setResultTime);
+        this._playerSetTime(this.setResultTime);
+        this.setResultTime = null;
+        window.scrollTo(0, 120);
+        this.playerPlay();
+      }
     },
     playerMainVideo(number) {
       this.mainVideo = number;
@@ -959,9 +965,11 @@ export default {
       }
       this.volume = _volume
     },
-    _annotationEnter({x, y, entry}) {
+    _annotationEnter({x, y, mouseX, mouseY, entry}) {
+      this.timelinePopinY = Number(mouseY);
       this.timelinePopinX = Number(x);
       this.timelinePopinY = Number(y);
+      this.timelinePopinX = Number(mouseX);
       this.timelineEntry = [
         ...Object.entries(entry).filter(kv=>!(kv[0] in {frame_range:1,char_range:1,prepared:1,meta:1})),
         ...Object.entries(entry.meta||{})
@@ -1111,7 +1119,6 @@ export default {
           }
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-          console.log("timelineData", timelineData, "currentMediaDuration", this.currentMediaDuration);
 
           this.currentDocumentData = timelineData;//.sort((x,y)=>x.name>y.name); // This sorting might need to change in the future to use group_by?
           this.loadingDocument = false;

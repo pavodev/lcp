@@ -429,17 +429,20 @@ export default {
           .style('opacity', '1');
 
         const hovering = barAndTextGroups
-          .selectAll("rect")
           .filter( function () {
-            const {x, y, width, height} = Object.fromEntries([...this.attributes].map(v=>[v.name,v.value]));
+            const rect = this.querySelector("rect");
+            const {x, y, width, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
             return x<=mouseOverX && Number(x)+Number(width)>=mouseOverX && y<=mouseOverY && Number(y)+Number(height)>=mouseOverY;
           } );
         if ([...hovering].length && [...hovering][0] != hoveringAnnotation) {
           hoveringAnnotation = [...hovering][0];
-          const {x, y, height} = Object.fromEntries([...hoveringAnnotation.attributes].map(v=>[v.name,v.value]));
+          const rect = hoveringAnnotation.querySelector("rect");
+          const {x, y, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
           const event = {
             x: Number(x),
             y: Number(y) + Number(height),
+            mouseX: mouseOverX,
+            mouseY: mouseOverY,
             entry: hovering.data()[0].entry
           }
           emit("annotationEnter", event);
