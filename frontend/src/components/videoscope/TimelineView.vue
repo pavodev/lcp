@@ -109,10 +109,10 @@ export default {
   watch: {
     playerIsPlaying(){
       playerState = this.playerIsPlaying;
-      console.log("playerState", playerState)
+      console.log("playerState", playerState);
     },
     playerCurrentTime(){
-      currentTime = this.playerCurrentTime
+      currentTime = this.playerCurrentTime;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
       updateVerticalLine(newXScale(currentTime));
     }

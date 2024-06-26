@@ -665,7 +665,7 @@ export default {
 
       timelineEntry: null,
 
-      setResultTime: null,
+      setResultTimes: null,
       query: "",
       queryDQD: '',
       corpusData: [],
@@ -764,34 +764,38 @@ export default {
       const frameFromResult = this.frameFromResult(result,index);
       const doc_result_id = this.docIdFromFrame(frameFromResult);
       const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
-      const adjustedFrame = parseInt(frameFromResult[0]) - parseInt(doc_result[3][0]);
-      let value = Utils.frameNumberToSeconds(adjustedFrame) / 1000;
+      const adjustedFrames = frameFromResult.map(x=>parseInt(x) - parseInt(doc_result[3][0]));
+      let [start, end] = adjustedFrames.map(x=>Utils.frameNumberToSeconds(x) / 1000);
       if (this.currentDocument == doc_result) {
-        this._playerSetTime(value);
+        this._playerSetTime(start);
         window.scrollTo(0, 120);
-        this.playerPlay();
+        this.playerPlay(end);
       } else {
         //   // this.currentDocument = this.corpusData[result[2] - 1];
         // this.currentDocument = this.documentDict[result[2]];
-        this.setResultTime = value;
+        this.setResultTimes = [start,end];
         // TODO: should be fixed - corpusData changed
         this.currentDocument = doc_result;
         //   // console.log("Change document")
         // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
     },
-    playerPlay() {
-      if (this.$refs.videoPlayer1) {
-        this.$refs.videoPlayer1.play();
-      }
-      if (this.$refs.videoPlayer2) {
-        this.$refs.videoPlayer2.play();
-      }
-      if (this.$refs.videoPlayer3) {
-        this.$refs.videoPlayer3.play();
-      }
-      if (this.$refs.videoPlayer4) {
-        this.$refs.videoPlayer4.play();
+    playerPlay(end=0) {
+      const n_players = [1,2,3,4];
+      for (let n of n_players) {
+        const player = this.$refs['videoPlayer'+n];
+        if (!player)
+          continue
+        if (end >= 0) {
+          end = Math.min(end, player.duration);
+          const handler = ()=>{
+            if (player.currentTime < end) return;
+            this.playerStop();
+          };
+          player.addEventListener("pause", ()=>player.removeEventListener("timeupdate", handler), {once: true});
+          player.addEventListener("timeupdate", handler);
+        }
+        player.play();
       }
       this.playerIsPlaying = true;
       // this.$refs.timeline.player.playing = true;
@@ -836,21 +840,13 @@ export default {
       this._playerSetTime(value);
     },
     _playerSetTime(value) {
-      if (this.$refs.videoPlayer1) {
-        this.$refs.videoPlayer1.currentTime = value;
-        this.playerCurrentTime = value;
-      }
-      if (this.$refs.videoPlayer2) {
-        this.$refs.videoPlayer2.currentTime = value;
-        this.playerCurrentTime = value;
-      }
-      if (this.$refs.videoPlayer3) {
-        this.$refs.videoPlayer3.currentTime = value;
-        this.playerCurrentTime = value;
-      }
-      if (this.$refs.videoPlayer4) {
-        this.$refs.videoPlayer4.currentTime = value;
-        this.playerCurrentTime = value;
+      const n_players = [1,2,3,4];
+      for (let n in n_players) {
+        const player = this.$refs["videoPlayer"+n];
+        if (!player) continue
+        const time = Math.min(value, player.duration-0.1);
+        player.currentTime = time;
+        this.playerCurrentTime = time;
       }
     },
     playerFrameDown(value) {
@@ -908,12 +904,13 @@ export default {
     videoPlayer1CanPlay() {
       this.loadingMedia = false;
       this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-      if (this.setResultTime) {
-        console.log("setResultTime", this.setResultTime);
-        this._playerSetTime(this.setResultTime);
-        this.setResultTime = null;
+      this.$refs.videoPlayer1.addEventListener("pause", ()=>this.playerIsPlaying=false);
+      if (this.setResultTimes) {
+        const [start, end] = this.setResultTimes;
+        this.setResultTimes = null;
+        this._playerSetTime(start);
+        this.playerPlay(end);
         window.scrollTo(0, 120);
-        this.playerPlay();
       }
     },
     playerMainVideo(number) {
