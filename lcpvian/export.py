@@ -9,7 +9,7 @@ from typing import Any, cast
 from .callbacks import _export_complete, _general_failure
 from .jobfuncs import _db_query, _swissdox_export
 from .typed import JSONObject
-from .utils import _determine_language, format_meta_lines, push_msg
+from .utils import _determine_language, format_meta_lines, push_msg, META_QUERY_REGEXP
 
 import json
 import os
@@ -82,7 +82,7 @@ async def kwic(jobs: list[Job], resp: Any, config):
 
     buffer: str = ""
     for j in query_jobs:
-        j_kwargs = cast(dict, j_kwargs)
+        j_kwargs = cast(dict, j.kwargs)
         if "current_batch" not in j_kwargs:
             continue
         segment_mapping = config["mapping"]["layer"][config["segment"]]
@@ -277,8 +277,7 @@ async def export_swissdox(
         if not j.result:
             continue
         cols_from_sql = re.match(
-            r"SELECT[\s\n]+-2::int2[\s\n]+AS[\s\n]+rstype,[\s\n]+((.+ AS .+[,\s\n]+)+?)FROM(\n|.)+",
-            cast(dict, j.kwargs).get("meta_query", ""),
+            META_QUERY_REGEXP, cast(dict, j.kwargs).get("meta_query", "")
         )
         if not cols_from_sql:
             continue

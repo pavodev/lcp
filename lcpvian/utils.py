@@ -125,6 +125,11 @@ WHERE
 GROUP BY
     {group_by_formed}
 ;"""
+slb = r"[\s\n]+"
+META_QUERY_REGEXP = rf"""SELECT
+    -2::int2 AS rstype,{slb}((.+ AS .+)+?)
+FROM(.|{slb})+
+"""
 
 
 class LCPApplication(web.Application):
@@ -829,11 +834,7 @@ def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
     # replace this with actual upstream handling of column names
-    slb = r"[\s\n]+"
-    pre_columns = re.match(
-        rf"SELECT{slb}-2::int2 AS rstype,{slb}((.+ AS .+)+?){slb}FROM(.|{slb})+",
-        query,
-    )
+    pre_columns = re.match(META_QUERY_REGEXP, query)
     if not pre_columns:
         return None
     columns: list[str] = [
