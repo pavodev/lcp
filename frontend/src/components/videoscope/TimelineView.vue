@@ -1,10 +1,17 @@
 <template>
   <div>
-    <!-- <div class="button-container">
-      <button class="zoom-button" id="zoom-in">Zoom In</button>
-      <button class="zoom-button" id="zoom-out">Zoom Out</button>
-      <input type="range" id="zoom-slider" min="1" max="20" value="0" step="1" />
+    <div class="button-container">
+      <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue <= 1" @click="zoomOut">
+        <FontAwesomeIcon :icon="['fas', 'magnifying-glass-minus']" class="me-1" />
+        Zoom Out
+      </button>
+      <input type="range" min="1" max="20" class="zoom-slider" v-model="zoomValue" step="1" />
+      <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue >= 20" @click="zoomIn">
+        <FontAwesomeIcon :icon="['fas', 'magnifying-glass-plus']" class="me-1" />
+        Zoom In
+      </button>
     </div>
+    <!--
     <div class="slider-container">
       <input type="range" id="horizontal-slider" min="0" max="156" value="0" step="0.1" />
     </div> -->
@@ -16,10 +23,13 @@
   /* #timeline-svg {
     margin: 0 10px;
   } */
-  /* .button-container {
-    margin-top: 10px;
+  .button-container {
+    margin-left: 178px;
   }
-
+  /* .zoom-slider {
+    margin-top: 5px;
+  } */
+  /*
   .zoom-button {
     margin-right: 5px;
   } */
@@ -28,7 +38,14 @@
     margin-top: 10px;
   } */
 
-  * {
+  * >>> .tooltip-rect {
+    fill: #fffffff0;
+    stroke: #e6e6e6;
+    stroke-width: 1px;
+  }
+
+  svg#timeline-svg {
+    cursor: pointer;
     color: #2c3e50;
     font-size: 12px;
   }
@@ -104,6 +121,7 @@ export default {
   data() {
     return {
       currentTime: 0,
+      zoomValue: 1,
     }
   },
   watch: {
@@ -115,7 +133,19 @@ export default {
       currentTime = this.playerCurrentTime;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
       updateVerticalLine(newXScale(currentTime));
+    },
+    zoomValue(){
+      const scale = this.zoomValue;
+      svg.transition().call(zoom.scaleTo, parseFloat(scale));
     }
+  },
+  methods: {
+    zoomIn() {
+      this.zoomValue = Math.min(parseFloat(this.zoomValue) + 1, 20);
+    },
+    zoomOut() {
+      this.zoomValue = Math.max(parseFloat(this.zoomValue) - 1, 1);
+    },
   },
   mounted() {
     // Example
