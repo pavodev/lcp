@@ -15,6 +15,7 @@ from .utils import (
     _parse_comparison,
     _is_anchored,
     _layer_contains,
+    _bound_label,
 )
 
 from typing import Self
@@ -98,6 +99,15 @@ class Constraints:
     def __str__(self) -> str:
         return f"Constraints: {len(self.members)} / {self._quantor_label}"
 
+    def _inner_labels(self) -> set[str]:
+        inner_labels: set[str] = {self.label}
+        for m in self.members:
+            if isinstance(m, Constraints):
+                inner_labels = inner_labels.union(m._inner_labels())
+            else:
+                inner_labels.add(m.label)
+        return inner_labels
+
     def _build_subquery(self, member: Self) -> str:
         """
         Helper for quantors
@@ -115,10 +125,13 @@ class Constraints:
         member.make()
         not_allowed = f"{self.schema}.{base}".lower()
         joins: Joins = member.joins()
+        label_layer = cast(LabelLayer, self.label_layer or dict())
+        inner_labels: set[str] = self._inner_labels()
+        outer_labels: set[str] = {l for l in label_layer if l not in inner_labels}
         crossjoins = "\n".join(
             f"CROSS JOIN {x}"
             for x in joins
-            if not_allowed not in x.lower() and x.split(" ")[-1] != self.label
+            if not_allowed not in x.lower() and x.split(" ")[-1] not in outer_labels
         )
         conds = member.conditions()
         all_conds = [conds]

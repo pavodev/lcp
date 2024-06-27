@@ -15,7 +15,7 @@ from .utils import (
     _joinstring,
     _layer_contains,
     _unique_label,
-    _parse_repetition,
+    _bound_label,
 )
 
 MATCH_LIST = """
@@ -465,7 +465,7 @@ class QueryMaker:
         self.selects = {
             s
             for s in self.selects
-            if not self._bound_label(self._get_label_as(s), self.query_json)
+            if not _bound_label(self._get_label_as(s), self.query_json)
         }
 
         # Multiple steps: first SELECT in the fixed_parts table
@@ -707,7 +707,7 @@ class QueryMaker:
                         for x in self.selects
                         if x != s
                     )
-                    and not self._bound_label(self._get_label_as(s), self.query_json)
+                    and not _bound_label(self._get_label_as(s), self.query_json)
                 }
             )
         )
@@ -760,43 +760,6 @@ class QueryMaker:
         if res:
             self.r.selects.add(res)
         return None
-
-    # This is messy, it can be rewritten more cleanly
-    def _bound_label(
-        self,
-        label: str = "",
-        query_json: dict[str, Any] = dict(),
-        in_scope: bool = False,
-    ) -> bool:
-        """
-        Look through the query part of the JSON and return False if the label is found in an unbound context
-        """
-        if not label:
-            return False
-
-        query = query_json.get("query", [query_json])
-        for obj in query:
-            if obj.get("label") == label:
-                return in_scope
-            if "unit" in obj:
-                if obj["unit"].get("label") == label:
-                    return in_scope
-            if "sequence" in obj:
-                if obj["sequence"].get("label") == label:
-                    return in_scope
-                reps = _parse_repetition(obj["sequence"].get("repetition", "1"))
-                tmp_in_scope = reps != (1, 1)
-                for m in obj["sequence"].get("members", []):
-                    if self._bound_label(label, m, tmp_in_scope):
-                        return True
-            if "logicalOpNAry" in obj:
-                tmp_in_scope = obj["logicalOpNAry"].get("operator") == "OR"
-                for a in obj["logicalOpNAry"].get("args", []):
-                    if self._bound_label(label, a, tmp_in_scope):
-                        return True
-
-        # Label not found
-        return False
 
     def _seg_has_char_range(self) -> str:
         """

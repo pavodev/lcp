@@ -710,7 +710,7 @@ export default {
   },
   methods: {
     setDocument(document) {
-      this.currentDocument = document
+      this.currentDocument = document;
     },
     otherEntityInfo(result, index) {
       index = 0; // hard-coded for now
@@ -1331,8 +1331,13 @@ KWIC => plain
         setTimeout(() => this.loadDocuments(), 200)
       }
     },
-    loadDocument() {
+    async loadDocument() {
       try {
+        const checkVideoPlayer = r=>{
+          if (this.$refs.videoPlayer1) r();
+          else window.requestAnimationFrame(()=>checkVideoPlayer(r));
+        }
+        await new Promise(r=>checkVideoPlayer(r));
         this.$refs.videoPlayer1.load();
         if (this.currentDocument[2].length > 1) {
           this.$refs.videoPlayer2.load();
@@ -1378,10 +1383,9 @@ KWIC => plain
         this.playerFrameUp(25);
       }
     });
+    this.setExample(1);
     if (this.selectedCorpora && this.selectedCorpora.corpus && this.selectedCorpora.corpus.sample_query)
-      this.queryDQD = this.selectedCorpora.corpus.sample_query;
-    else
-      this.setExample(1);
+      this.updateQueryDQD(this.selectedCorpora.corpus.sample_query);
   },
   unmounted() {
     if (this.updateTimer) {
