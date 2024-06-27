@@ -1047,7 +1047,8 @@ export default {
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
-              document_id: document_id
+              document_id: document_id,
+              groupBy: tracks.group_by
             };
             for (let gb of (tracks.group_by||[])) {
               if (!(gb in (data.document.global_attributes||{})))
@@ -1085,39 +1086,84 @@ export default {
           const column_names = this.selectedCorpora.corpus.mapping.layer[segment_name].prepared.columnHeaders;
           const form_n = column_names.indexOf("form");
           let timelineData = []
-          for (const [key, track] of Object.entries(dataToShow.tracks)) {
-            let values = []
-            const keyName = dataToShow.layers[track.layer].name;
-            const isSegment = keyName.toLowerCase() == segment_name.toLowerCase();
 
-            for (const entry of track[keyName]) {
-              const [startFrame, endFrame] = entry.frame_range
-              let shift = this.currentDocument[3][0];
-              let startTime = (parseFloat(startFrame - shift) / this.frameRate);
-              let endTime = (parseFloat(endFrame - shift) / this.frameRate);
-              const unitData = {x1: startTime, x2: endTime, l: key, entry: entry};
-              if (isSegment)
-                unitData.n = entry.prepared.map(row => row[form_n]).join(" ");
-              else {
-                let firstStringAttribute = Object.entries(
-                  this.selectedCorpora.corpus.layer[keyName].attributes || {}
-                ).find( e=> e[1].type in {text:1,categorical:1} );
-                if (firstStringAttribute)
-                  unitData.n = entry[firstStringAttribute[0]];
+          // Sort by name
+          let tracksNamesSorted = Object.values(dataToShow.tracks).sort((a, b) => {
+            // TODO: hardcoded - use list from BR to order groups. Segements are hardcoded to be first
+            let a_name = a.name.toLowerCase().replace(" segment", " aa_segment")
+            let b_name = b.name.toLowerCase().replace(" segment", " aa_segment")
+            if (a_name < b_name) {
+              return -1;
+            }
+            if (a_name > b_name) {
+              return 1;
+            }
+            return 0;
+          });
+
+          // Add group_by speaker
+          if (this.selectedCorpora.corpus &&
+              this.selectedCorpora.corpus.tracks &&
+              this.selectedCorpora.corpus.tracks.group_by &&
+              this.selectedCorpora.corpus.tracks.group_by[0] == "speaker"
+          ) {
+            let trackGroupCounter = {};
+            let newTracksNamesSorted = [];
+            tracksNamesSorted.forEach(track => {
+              let groupName = track.name.split(" ").slice(0, 2).join(" ");
+              if (!(groupName in trackGroupCounter)) {
+                trackGroupCounter[groupName] = 0
+                let speakerIndex = Object.keys(trackGroupCounter).length
+                newTracksNamesSorted.push(new Proxy({
+                  name: `Speaker ${speakerIndex}`,
+                  layer: -1,
+                  level: 0
+                }, {}))
               }
-              values.push(unitData);
+              trackGroupCounter[groupName]++
+              track.level = 1
+              track.name = track.name.replace(groupName, "").trim()
+              newTracksNamesSorted.push(track)
+            })
+            tracksNamesSorted = newTracksNamesSorted
+          }
+
+          // Generate timeline data
+          tracksNamesSorted.forEach((track, key) => {
+            let values = []
+            if (track.layer != -1){
+              const keyName = dataToShow.layers[track.layer].name;
+              const isSegment = keyName.toLowerCase() == segment_name.toLowerCase();
+
+              for (const entry of track[keyName]) {
+                const [startFrame, endFrame] = entry.frame_range
+                let shift = this.currentDocument[3][0];
+                let startTime = (parseFloat(startFrame - shift) / this.frameRate);
+                let endTime = (parseFloat(endFrame - shift) / this.frameRate);
+                const unitData = {x1: startTime, x2: endTime, l: key, entry: entry};
+                if (isSegment)
+                  unitData.n = entry.prepared.map(row => row[form_n]).join(" ");
+                else {
+                  let firstStringAttribute = Object.entries(
+                    this.selectedCorpora.corpus.layer[keyName].attributes || {}
+                  ).find( e=> e[1].type in {text:1,categorical:1} );
+                  if (firstStringAttribute)
+                    unitData.n = entry[firstStringAttribute[0]];
+                }
+                values.push(unitData);
+              }
             }
 
             timelineData.push({
               name: track.name,
+              level: track.level || 0,
               heightLines: 1,
               values: values
             })
-          }
+          })
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-
-          this.currentDocumentData = timelineData;//.sort((x,y)=>x.name>y.name); // This sorting might need to change in the future to use group_by?
+          this.currentDocumentData = timelineData;
           this.loadingDocument = false;
           this.documentIndexKey++;
           this._setVolume();
