@@ -1225,6 +1225,8 @@ export default {
             text: data.info,
           });
         }
+        if (["finished","satisfied"].includes(data["status"]))
+          this.loading = false;
       } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
         if (data["status"] == "failed") {
           this.loading = false;
@@ -1516,6 +1518,7 @@ KWIC => plain
         if (["finished"].includes(this.WSDataResults.status)) {
           this.percentageDone = 100;
           this.percentageTotalDone = 100;
+          this.loading = false;
         }
         if (["satisfied"].includes(this.WSDataResults.status)) {
           // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
