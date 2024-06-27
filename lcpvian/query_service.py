@@ -320,7 +320,7 @@ class QueryService:
 {layer} AS (
     SELECT 'layer', '{layer}', jsonb_build_object({','.join(selects)}) AS props
     FROM {schema}.{layer_table} {lab}, doc {crossjoin}
-    WHERE {lab}.frame_range && doc.frame_range {whereand}
+    WHERE {lab}.frame_range <@ doc.frame_range {whereand}
 )"""
         layers_ctes = [x for x in config["tracks"].get("layers", {})]
         for gar in config["tracks"].get("group_by", []):
