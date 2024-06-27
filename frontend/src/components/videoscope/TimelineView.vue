@@ -118,9 +118,6 @@ export default {
     }
   },
   mounted() {
-
-    const emit = (...args) => this.$emit(...args);
-
     // Example
     // const data = [
     //   {
@@ -185,7 +182,7 @@ export default {
     // Create the scaleLinear
     linearScale = d3.scaleLinear().domain([0, this.mediaDuration]).range([padding, width - 1]);
 
-    const data = [...this.data];//.sort((x,y)=>x.name>y.name);
+    let data = [...this.data];
 
     // Add names to the chart
     let heightStart = {}
@@ -196,7 +193,7 @@ export default {
       .enter()
       .append("text")
       .attr("class", "name")
-      .attr("x", 10)
+      .attr("x", d => 10 + 20 * (d.level ? d.level : 0))
       .attr("y", (d, i) => {
         let height = totalHeight + 10
         totalHeight += d.heightLines * 15 + 10
@@ -289,10 +286,20 @@ export default {
       .on("zoom", zoomed);
 
     // Apply zoom behavior to SVG
-    svg.call(zoom);
+    svg.call(zoom).on("wheel.zoom", null)
+    // .on("wheel.zoom", event => {
+    //   if (event.ctrlKey == true) {
+    //     zoomed(d3.event)
+    //     event.preventDefault();
+    //   }
+    //   return null
+    // });
 
     // Zoom event handler
     function zoomed(event) {
+      // if (event.sourceEvent && event.sourceEvent.type === "wheel") {
+      //   return true;
+      // }
       const { transform } = event;
       const newXScale = transform.rescaleX(linearScale);
       xAxis.scale(newXScale);
@@ -360,7 +367,6 @@ export default {
       .attr("stroke", "red")
       .attr("stroke-width", 1);
 
-
     // const mouseLine =
     svg
       .append("line")
@@ -420,8 +426,9 @@ export default {
         d3.select('.mouse-line').style('opacity', '0.5');
         d3.select('.mouse-text').style('opacity', '0.5');
       })
-      .on('mousemove', function () {
-        const [mouseOverX, mouseOverY] = d3.pointer(event).slice(0,2);
+      .on('mousemove', () => {
+        const [mouseOverX, mouseOverY] = d3.pointer(event).slice(0, 2);
+        // const mouseOverX = d3.pointer(event)[0]
         d3
           .select(".mouse-line")
           .attr("x1", mouseOverX)
@@ -445,11 +452,11 @@ export default {
             mouseY: mouseOverY,
             entry: hovering.data()[0].entry
           }
-          emit("annotationEnter", event);
+          this.$emit("annotationEnter", event);
         }
         else if ([...hovering].length == 0 && hoveringAnnotation) {
           hoveringAnnotation = null;
-          emit("annotationLeave");
+          this.$emit("annotationLeave");
         }
 
         const transform = d3.zoomTransform(svg.node());
