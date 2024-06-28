@@ -173,7 +173,7 @@ def _query(
         job.meta["percentage_done"] = 100.0
     elif status in {"partial", "satisfied", "overtime"}:
         done_batches = job_kwargs["done_batches"]
-        total_words_processed_so_far = sum([x[-1] for x in done_batches])
+        total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
         proportion_that_matches = total_found / total_words_processed_so_far
         projected_results = int(job_kwargs["word_count"] * proportion_that_matches)
         if not show_total:

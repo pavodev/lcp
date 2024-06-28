@@ -536,7 +536,7 @@ class QueryIteration:
             )
 
         # set here ensures we don't double count, even though it should not happen
-        total_words_processed_so_far = sum([x[-1] for x in set(self.done_batches)])
+        total_words_processed_so_far = sum([x[-1] for x in set(self.done_batches)]) or 1
         proportion_that_matches = so_far / total_words_processed_so_far
         first_not_done: Batch | None = None
 

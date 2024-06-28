@@ -297,7 +297,7 @@ class Importer:
         sizes = [
             (os.path.join(path, f), os.path.getsize(os.path.join(path, f)))
             for f in os.listdir(path)
-            if f.endswith(".csv")
+            if f.endswith((".csv", ".tsv"))
         ]
         self.corpus_size = sum(s[1] for s in sizes)
 
@@ -321,13 +321,15 @@ class Importer:
                     else ".csv"
                 ),
             )
+            if not os.path.exists(fpath):
+                fpath = fpath.replace(".csv", ".tsv")
             assert os.path.exists(fpath), FileNotFoundError(
                 f"Could not find a file named {lowlayer}.csv for layer '{layer}'"
             )
             if layer_attrs.get("layerType") == "relation":
                 continue
             with open(fpath, "r") as layer_file:
-                columns = layer_file.readline().split("\t")
+                columns = layer_file.readline().rstrip().split("\t")
                 assert lowlayer + "_id" in columns, ReferenceError(
                     f"Column '{lowlayer}_id' missing from file {lowlayer}.csv"
                 )
@@ -343,10 +345,10 @@ class Importer:
                     and token_anchoring.get("time")
                 )
                 assert not anchored_stream or "char_range" in columns, ReferenceError(
-                    f"Column 'char_range' missing from from file {lowlayer}.csv"
+                    f"Column 'char_range' missing from file {lowlayer}.csv"
                 )
                 assert anchored_time or "frame_range" in columns, ReferenceError(
-                    f"Column 'frame_range' missing from from file {lowlayer}.csv"
+                    f"Column 'frame_range' missing from file {lowlayer}.csv"
                 )
                 if layer != self.template["firstClass"]["document"]:
                     continue

@@ -15,7 +15,6 @@ from .utils import (
     _parse_comparison,
     _is_anchored,
     _layer_contains,
-    _bound_label,
 )
 
 from typing import Self

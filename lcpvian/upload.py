@@ -30,7 +30,7 @@ from .utils import (
 )
 
 
-VALID_EXTENSIONS = ("vrt", "csv")
+VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
 
@@ -143,13 +143,15 @@ def _ensure_partitioned0(path: str) -> None:
     with open(template, "r") as fo:
         data = json.load(fo)
         data = data["template"]
-    srcs = [os.path.join(path, "fts_vector.csv")]
+    srcs = [os.path.join(path, "fts_vector.csv"), os.path.join(path, "fts_vector.tsv")]
     for layer in ("token", "segment"):
         lay = data["firstClass"][layer]
         srcs.append(os.path.join(path, lay.lower() + ".csv"))
+        srcs.append(os.path.join(path, lay.lower() + ".tsv"))
     for src in srcs:
         if os.path.isfile(src):
             dest = src.replace(".csv", "0.csv")
+            dest = dest.replace(".tsv", "0.tsv")
             os.rename(src, dest)
             print(f"Moved: {src}->{dest}")
 
@@ -165,6 +167,8 @@ def _correct_doc(path: str) -> None:
         data = data["template"]
     doc = data["firstClass"]["document"]
     docpath = os.path.join(path, f"{doc}.csv".lower())
+    if not os.path.exists(docpath):
+        docpath = os.path.join(path, f"{doc}.tsv".lower())
     with open(docpath, "r") as fo:
         data = fo.read()
     data = data.replace("\t'{", "\t{").replace("}'\n", "}\n")
