@@ -16,13 +16,13 @@ WITH RECURSIVE fixed_parts AS
    CROSS JOIN bnc1.lemma t3_lemma
    CROSS JOIN bnc1.tokenrest t3
    CROSS JOIN bnc1.lemma t2_lemma
-   WHERE (d.meta ->> 'classCode')::text ~ '^S'
+   WHERE (d.meta->>'classCode') ~ '^S'
      AND d.char_range && has_char_range_3.char_range
      AND s.segment_id = has_char_range_3.segment_id
      AND s.segment_id = t1.segment_id
      AND t1.xpos2 = 'ART'
      AND s.segment_id = t2.segment_id
-     AND ((t2_lemma.lemma)::text = 'true'
+     AND (t2_lemma.lemma = 'true'
           AND t2.xpos2 = 'ADJ')
      AND s.segment_id = t3.segment_id
      AND t3.xpos2 = 'SUBST'

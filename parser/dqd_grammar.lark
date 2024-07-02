@@ -103,7 +103,7 @@ OPERATOR_BINARY.4     : /(NAND|!AND|¬AND|NOR|!OR|¬OR|XOR|IMPLY|NIMPLY|!IMPLY|�
 OPERATOR_N_ARY.4      : /(AND|OR)/
 RESULTS_ARROW.4       : /=>/
 ENUM_FUNCTIONS.4      : /frequency|minimum|maximum|average|stddev/
-FUNCTION.4            : /length|size|min|max|century|year|month|day/
+FUNCTION.4            : /length|size|range|position|min|max|century|year|month|day/
 
 DOTENTITY.3      : /[a-zA-Z_][a-zA-Z0-9_]*\.[a-zA-Z0-9_]+/
 NUMBER_EXPRESSION.3 : /-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\s*[*\/+-]\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*/
