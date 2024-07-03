@@ -368,12 +368,12 @@ async def export_swissdox(
             formed_join_condition = f"ne.{lookup_key}_id = {new_label}.{lookup_key}_id"
             ne_joins.append(join_table)
             ne_wheres.append(formed_join_condition)
-            ne_selects.append(f"{new_label}.{lookup_key} AS {attr_name}")
+            ne_selects.append(f"{new_label}.{attr_name} AS {attr_name}")
         else:
             ne_selects.append(f"ne.{attr_name} AS {attr_name}")
 
     ne_selects_str = ", ".join(ne_selects)
-    ne_joins_str = "\n".join(ne_joins)
+    ne_joins_str = "\n        CROSS JOIN ".join(ne_joins)
     if ne_joins_str:
         ne_joins_str = f"\n        CROSS JOIN {ne_joins_str}"
     ne_wheres_str = "\n        AND ".join(ne_wheres)
