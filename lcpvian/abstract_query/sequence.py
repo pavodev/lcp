@@ -494,6 +494,16 @@ class SQLSequence:
         label_layer: LabelLayer = {},
     ):
         self.sequence: Sequence = sequence
+        self.part_of: str = ""
+        if "partOf" in sequence.obj.get("sequence", {}):
+            self.part_of = sequence.obj["sequence"]["partOf"]
+        else:
+            for tok in sequence.obj.get("sequence", {}).get("members", []):
+                part_of = tok.get("unit", {}).get("partOf")
+                if not part_of:
+                    continue
+                self.part_of = part_of
+                break
         self.fixed_tokens: list[tuple[Unit, int, int, int]] = (
             []
         )  # A list of (fixed_token,min_separation,max_separation,modulo)
@@ -770,11 +780,7 @@ class SQLSequence:
         self.entities: dict[str, list] = entities
 
     def where_fixed_members(
-        self,
-        entities: set[str] = set(),
-        tok: str = "token",
-        seg: str = "segment",
-        seg_table_alias: str = "s",
+        self, entities: set[str] = set(), tok: str = "token"
     ) -> tuple[list[str], list[str]]:
         """Go through the sequence's fixed tokens and return a list of conditions + left joins as needed"""
 
@@ -794,7 +800,6 @@ class SQLSequence:
             )
             if token_left_joins:
                 left_joins += token_left_joins
-            #  conds: list[str] = [ f"{l}.{seg}_id = {seg_table_alias}.{seg}_id", *token_conds ]
             conds: list[str] = [*token_conds]
             if n > 0:
                 pl: str = self.fixed_tokens[n - 1][0].internal_label
