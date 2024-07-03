@@ -352,17 +352,23 @@ async def export_swissdox(
     ne_selects = ["ne.char_range AS char_range"]
     ne_joins = []
     ne_wheres = [f"{doc_multi_range} @> ne.char_range"]
-    for attr_name, attr_values in config["layer"]["NamedEntity"]["attributes"].items():
+    ne_attributes = config["layer"]["NamedEntity"].get("attributes", {})
+    # for attr_name, attr_values in ne_attributes.items():
+    for attr_name in ne_attributes:
         if attr_name not in SWISSDOX_NE_SELECTS:
             continue
         ne_cols.append(attr_name)
-        if attr_values.get("type", "") == "text":
-            ne_selects.append(f"ne_{attr_name}.{attr_name} AS {attr_name}")
-            ne_joins.append(
-                f"{schema}.{ne_mapping['attributes'][attr_name]['name']} AS ne_{attr_name}"
-            )
-            ne_wheres.append(f"ne.{attr_name}_id = ne_{attr_name}.{attr_name}_id")
-            pass
+        # if attr_values.get("type", "") == "text":
+        mapping = ne_mapping.get("attributes", {}).get(attr_name, {})
+        if mapping.get("type") == "relation":
+            lookup_key = mapping.get("key", attr_name)
+            lookup_table = mapping.get("name", attr_name)
+            new_label = f"ne_{attr_name}".lower()
+            join_table: str = f"{schema}.{lookup_table} {new_label}"
+            formed_join_condition = f"ne.{lookup_key}_id = {new_label}.{lookup_key}_id"
+            ne_joins.append(join_table)
+            ne_wheres.append(formed_join_condition)
+            ne_selects.append(f"{new_label}.{lookup_key} AS {attr_name}")
         else:
             ne_selects.append(f"ne.{attr_name} AS {attr_name}")
 

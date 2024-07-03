@@ -796,57 +796,6 @@ class Constraint:
             fn_info = {"type": "number"}
         return (fn_str, fn_info)
 
-    def parse_entity(self, field_type, relational_field) -> dict[str, Any]:
-        """
-        Constraint is of type entity: check structure of entity references
-        Return (True,False) if the entity is relational bt
-        Add a condition if both self's field and entity's field point to relational tables
-        """
-        entity_label, *entity_field_split = cast(str, self._query).strip().split(".")
-        entity_field = ".".join(entity_field_split)
-        entity_layer = cast(dict, self.label_layer).get(entity_label, [""])[0]
-        assert entity_layer in self.config["layer"], RuntimeError(
-            f"Couldn't determine which layer to associate the label '{entity_label}' with"
-        )
-        entity_field_info = (
-            self.config["layer"][entity_layer].get("attributes", {}).get(entity_field)
-        )
-        assert entity_field_info, ReferenceError(
-            f"{entity_layer} {entity_label} has no attribute named '{entity_field}'"
-        )
-        entity_field_type = entity_field_info.get("type", "")
-        if entity_field_ref := entity_field_info.get("ref"):
-            entity_global_attribute = self.config.get("globalAttributes", {}).get(
-                entity_field_ref
-            )
-            assert entity_global_attribute, ReferenceError(
-                f"Could not find a global attribute for '{entity_label}' named '{entity_field}'"
-            )
-            entity_field_info = entity_global_attribute
-            entity_field_type = entity_field_info.get("type", "")
-        # assert field_type == entity_field_type, TypeError(
-        #     f"Cannot compare {self.label}.{self.field} to {self._query}: incompatible types"
-        # )
-        entity_field_mapping = (
-            _get_mapping(entity_layer, self.config, self.batch, cast(str, self.lang))
-            .get("attributes", {})
-            .get(entity_field, {})
-        )
-        relational_entity_field = entity_field_mapping.get("type", "") == "relation"
-        if relational_entity_field and field_type == "dict":
-            # Both self's field and the entity's field are relational: directly test their FK values
-            assert relational_field, TypeError(
-                f"Cannot compare {self.label}.{self.field} to {self._query}: incompatible types"
-            )
-        return {
-            "label": entity_label,
-            "field": entity_field,
-            "layer": entity_layer,
-            "field_info": entity_field_info,
-            "field_mapping": entity_field_mapping,
-            "relational": relational_entity_field,
-        }
-
     def id_field(self):
         """
         Handle querying on segment_id, token_id etc
