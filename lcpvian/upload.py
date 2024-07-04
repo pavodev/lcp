@@ -401,11 +401,11 @@ async def make_schema(request: web.Request) -> web.Response:
         }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        uacc: dict[str, Any] = cast(dict[str, Any], user_acc["account"])
-        uname: str = cast(str, uacc["displayName"])
+        uacc: dict[str, Any] = cast(dict[str, Any], user_acc.get("account", {}))
+        uname: str = cast(str, uacc.get("displayName", ""))
         profile: dict[str, str] = {
             "title": f"{uname}: private group",
-            "unit": uacc["homeOrganization"],
+            "unit": uacc.get("homeOrganization", ""),
             "startDate": start,
             "finishDate": finish,
         }
