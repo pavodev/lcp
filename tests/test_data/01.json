@@ -55,19 +55,19 @@
                 {
                   "comparison": {
                     "left": {
-                      "entity": "lemma"
+                      "entity": "xpos2"
                     },
                     "operator": "=",
-                    "stringComparison": "\"true\""
+                    "stringComparison": "\"ADJ\""
                   }
                 },
                 {
                   "comparison": {
                     "left": {
-                      "entity": "xpos2"
+                      "entity": "lemma"
                     },
                     "operator": "=",
-                    "stringComparison": "\"ADJ\""
+                    "stringComparison": "\"true\""
                   }
                 }
               ]
