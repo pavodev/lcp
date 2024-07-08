@@ -504,6 +504,13 @@ class SQLSequence:
                     continue
                 self.part_of = part_of
                 break
+        if not self.part_of:
+            n = 1
+            while f"anonymous_segment_{n}" in label_layer:
+                n += 1
+            part_of = f"anonymous_segment_{n}"
+            self.part_of = part_of
+            label_layer[part_of] = (config.config["firstClass"]["segment"], {})
         self.fixed_tokens: list[tuple[Unit, int, int, int]] = (
             []
         )  # A list of (fixed_token,min_separation,max_separation,modulo)

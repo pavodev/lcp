@@ -593,7 +593,10 @@ class Constraint:
         else:
             right_ref = (f"'{str(right_member)}'", {"type": "text"})
 
-        formed_condition: str = f"{left_ref[0]} {self.op} {right_ref[0]}"
+        cast: str = ""
+        if self.type == "regex":
+            cast = "::text"
+        formed_condition: str = f"{left_ref[0]}{cast} {self.op} {right_ref[0]}"
 
         # Special case: labels
         left_ref_info = left_ref[1]
@@ -666,103 +669,6 @@ class Constraint:
         self._conditions.add(formed_condition)
         self.made = True
         return None
-
-        # if field_type == "labels" or self.op.lower().endswith("contain"):
-        #     assert field_type == "labels" and self.op.lower().endswith(
-        #         "contain"
-        #     ), TypeError(
-        #         f"Use the operator 'contain' if and only if testing an attribute of type 'labels' (attempted to use operator '{self.op}' on attribute of type {field_type})"
-        #     )
-        #     assert self.type in ("string", "regex"), TypeError(
-        #         "Contained labels can only be tested against strings or regexes"
-        #     )
-        #     assert "nlabels" in self._layer_info, KeyError(
-        #         f"Missing 'nlabels' for layer '{self.layer}' in config"
-        #     )
-        #     lookup_table = field_mapping.get("name", "")
-        #     inner_op = "~" if self.type == "regex" else "="
-        #     nbit = self._layer_info["nlabels"]
-        #     inner_condition = f"(SELECT sum(1<<bit)::bit({nbit}) AS m FROM {self.schema}.{lookup_table} WHERE label {inner_op} {formatted})"
-        #     # Use label_layer to store the inner conditions query-wide and give them unique labels
-        #     if self.label_layer is None:
-        #         self.label_layer = {}
-        #     if label not in self.label_layer:
-        #         self.label_layer[label] = (self.layer, {})
-        #     meta: dict = self.label_layer[label][1]
-        #     meta["labels inner conditions"] = meta.get("labels inner conditions", {})
-        #     comp_str: str = f"{self.op} {self.type} {formatted}"
-        #     n = meta["labels inner conditions"].get(
-        #         comp_str, len(meta["labels inner conditions"])
-        #     )
-        #     meta["labels inner conditions"][comp_str] = n
-        #     mask_label = f"{label}_mask_{n}"
-        #     formed_join_table = f"{inner_condition} {mask_label}"
-        #     self._add_join_on(formed_join_table, "")
-        #     op = "=" if self.op.lower().startswith(("not", "!")) else ">"
-        #     formed_condition = f"{field_ref} & {mask_label}.m {op} 0::bit({nbit})"
-        #     self._conditions.add(formed_condition.lower())
-        #     return None
-
-        # if (
-        #     alignment := self.config["mapping"]["layer"]
-        #     .get(self.layer, {})
-        #     .get("alignment", {})
-        #     .get("relation", {})
-        # ):
-        #     label = f"{self.label}_alignment"
-        #     formed_join_table = f"{self.schema}.{alignment} {label}"
-        #     formed_join_condition = f"{self.label}.alignment_id = {label}.alignment_id"
-        #     self._add_join_on(formed_join_table.lower(), formed_join_condition.lower())
-
-        # if self.field_function:
-        #     field_ref = self.parse_function(
-        #         attributes_mapping=attributes_mapping, field_type=field_type
-        #     )
-        #     self._cast = ""
-        # else:
-        #     if self._is_meta:
-        #         meta_op: str = "->"
-        #         if self._cast in ("::text", "::int"):
-        #             meta_op += ">"
-        #         field_ref = f"({label}.meta {meta_op} '{self.field}')"
-
-        #     # Join any necessary table for the field
-        #     if relational_field:
-        #         field_table = field_mapping.get("name", field)
-        #         field_key = field_mapping.get("key", field)
-        #         field_label: str = f"{label}_{field_key}".lower()
-        #         join_table: str = f"{self.schema}.{field_table} {field_label}"
-        #         formed_join_condition = (
-        #             f"{label}.{field_key}_id = {field_label}.{field_key}_id"
-        #         )
-        #         self._add_join_on(join_table.lower(), formed_join_condition.lower())
-        #         formed_field = re.sub(r"^([^.]+)\.(.+)$", "\\1->>'\\2'", self.field)
-        #         field_ref = f"({field_label}.{formed_field})"
-
-        # # Use a join if testing a relational entity (form = x.form  or  agent = x.agent)
-        # if entity_dict.get("relational"):
-        #     entity_field = cast(str, entity_dict.get("field"))
-        #     assert entity_field, NotImplementedError(
-        #         f"Cannot process comparison '{self.field} {self.op} {self._query}'"
-        #     )
-        #     entity_label = cast(str, entity_dict.get("label"))
-        #     entity_layer = cast(str, entity_dict.get("layer"))
-        #     relation_label: str = f"{entity_label}_{entity_field}".lower()
-        #     formatted = f"{relation_label}.{entity_field}::{self._cast}"
-        #     formed_comparison = f"{field_ref}{self._cast} {self.op} {formatted}"
-        #     entity_table = _get_table(
-        #         entity_layer, self.config, self.batch, cast(str, self.lang)
-        #     )
-        #     join_table = f"{self.schema}.{entity_table} {relation_label}"
-        #     self._add_join_on(join_table.lower(), formed_comparison)
-        # elif field_type == "date":
-        #     # Handle date exceptionally for now, but later just use functions (year(date), month(date), etc.)
-        #     self.date()
-        # else:
-        #     if field_type == "categorical" and self.type != "regex":
-        #         self._cast = ""
-        #     formed_comparison = f"{field_ref}{self._cast} {self.op} {formatted}"
-        #     self._conditions.add(formed_comparison)
 
     def parse_function(
         self,

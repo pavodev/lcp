@@ -347,16 +347,16 @@ class Importer:
                 assert not anchored_stream or "char_range" in columns, ReferenceError(
                     f"Column 'char_range' missing from file {lowlayer}.csv"
                 )
-                assert anchored_time or "frame_range" in columns, ReferenceError(
+                assert not anchored_time or "frame_range" in columns, ReferenceError(
                     f"Column 'frame_range' missing from file {lowlayer}.csv"
                 )
                 if layer != self.template["firstClass"]["document"]:
                     continue
-                self.partition_on_doc_range(
-                    columns,
-                    "char_range" if anchored_stream else "frame_range",
-                    layer_file,
-                )
+                # self.partition_on_doc_range(
+                #     columns,
+                #     "char_range" if anchored_stream else "frame_range",
+                #     layer_file,
+                # )
 
         await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
         return None

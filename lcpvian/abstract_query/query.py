@@ -444,7 +444,7 @@ class QueryMaker:
         last_table: str = "fixed_parts"
 
         # Add any fixed token needed for sequences
-        sequence_ranges: dict[str, tuple[str, str]] = dict()
+        sequence_ranges: dict[str, tuple[str, str, str]] = dict()
         entities: dict[str, list] = {
             self._get_label_as(s).split(".")[-1]: [] for s in self.selects
         }
@@ -494,7 +494,7 @@ class QueryMaker:
                     entities, f"{max} as max_{s.sequence.label}"
                 )
 
-                sequence_ranges[s.sequence.label] = (min_label, max_label)
+                sequence_ranges[s.sequence.label] = (min_label, max_label, s.part_of)
 
         # Go through all the segments and pick the most constrained one
         n_constraints_main_table = 0
@@ -615,7 +615,7 @@ class QueryMaker:
             gather_selects: str = ",\n".join(
                 sorted({s.replace("___lasttable___", last_table) for s in self.selects})
             )
-            for seqlab, (min_seq, max_seq) in sequence_ranges.items():
+            for seqlab, (min_seq, max_seq, seg_lab) in sequence_ranges.items():
                 if self.r.entities and seqlab not in self.r.entities:
                     continue
                 gather_selects += f",\n{min_seq.replace('___lasttable___', last_table)}"
@@ -625,7 +625,7 @@ class QueryMaker:
                 jttable = _unique_label(entities, "t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = (
-                    f"{jttable}.{self.segment.lower()}_id = gather.{label} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
+                    f"{jttable}.{self.segment.lower()}_id = gather.{seg_lab} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"
                 )
                 self.selects.add(
                     f"ARRAY(SELECT {jttable}.{tok}_id FROM {infrom} WHERE {inwhere}) AS {seqlab}"
