@@ -300,7 +300,8 @@ async def _handle_message(
             app["config"].pop(sid, {})
         app["config"][id_str] = conf
         if payload.get("gui"):
-            filt = _filter_corpora(app["config"], app_type, user_data)
+            authenticator = app["auth_class"](app)
+            filt = _filter_corpora(authenticator, app["config"], app_type, user_data)
             payload["config"] = cast(JSONObject, filt)
             await push_msg(app["websockets"], "", payload)
 

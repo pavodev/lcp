@@ -46,6 +46,7 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.job import Job
 
+from .authenticate import Authentication
 from .configure import CorpusConfig, CorpusTemplate
 from .typed import (
     Batch,
@@ -636,6 +637,7 @@ subtype: TypeAlias = list[dict[str, str]]
 
 
 def _filter_corpora(
+    authenticator: Authentication,
     config: Config,
     app_type: str,
     user_data: JSONObject | None,
@@ -644,42 +646,11 @@ def _filter_corpora(
     """
     Filter corpora based on app type and user projects
     """
-
-    ids: set[str] = set()
-    if isinstance(user_data, dict):
-        subs = cast(dict[str, subtype], user_data.get("subscription", {}))
-        sub = subs.get("subscriptions", [])
-        for s in sub:
-            ids.add(s["id"])
-        for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
-            ids.add(proj["id"])
-
-    ids.add("all")
-    corpora: dict[str, CorpusConfig] = {}
-    for corpus_id, conf in config.items():
-        if get_all is False and not [
-            project_id for project_id in conf.get("projects", {}) if project_id in ids
-        ]:
-            continue
-        idx = str(corpus_id)
-        if idx == "-1":
-            corpora[idx] = conf
-            continue
-        # data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
-        data_type: str = ""
-        for slot in cast(dict, conf).get("meta", {}).get("mediaSlots", {}).values():
-            if data_type == "video":
-                continue
-            data_type = slot.get("mediaType", "")
-        if get_all or app_type in ("lcp", "catchphrase"):
-            corpora[idx] = conf
-            continue
-        if app_type == "videoscope" and data_type in ["video"]:
-            corpora[idx] = conf
-            continue
-        if app_type == "soundscript" and data_type in ["audio", "video"]:
-            corpora[idx] = conf
-            continue
+    corpora: dict[str, CorpusConfig] = {
+        idx: corpus
+        for idx, corpus in config.items()
+        if authenticator.check_corpus_allowed(idx, corpus, user_data, app_type, get_all)
+    }
     return corpora
 
 

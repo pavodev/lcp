@@ -34,7 +34,8 @@ from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
-from .lama_user_data import lama_user_data
+
+from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
 from .project import project_create, project_update
@@ -71,7 +72,9 @@ DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 AUTH_CLASS: type | None = None
 try:
     need = cast(str, os.getenv("AUTHENTICATION_CLASS"))
-    if need and need.strip() and "." in need and need.lower() not in FALSES:
+    if not need:
+        need = "lcpvian.authenticate.Authentication"
+    if need.strip() and "." in need and need.lower() not in FALSES:
         path, name = need.rsplit(".", 1)
         if path and name:
             modu = importlib.import_module(path)
@@ -226,7 +229,7 @@ async def create_app(test: bool = False) -> web.Application:
             project_users_invitation_remove,
         ),
         ("/query", "POST", query),
-        ("/settings", "GET", lama_user_data),
+        ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
         ("/upload", "POST", upload),
         ("/video", "GET", video),
