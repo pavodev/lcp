@@ -1,4 +1,3 @@
-
 WITH RECURSIVE fixed_parts AS
   (SELECT s.segment_id AS s,
           t1.token_id AS t1,
@@ -17,7 +16,7 @@ WITH RECURSIVE fixed_parts AS
    CROSS JOIN bnc1.lemma t3_lemma
    CROSS JOIN bnc1.tokenrest t3
    CROSS JOIN bnc1.lemma t2_lemma
-   WHERE (d.meta->>'classCode') ~ '^S'
+   WHERE (d.meta->>'classCode')::text ~ '^S'
      AND d.char_range && s.char_range
      AND fts_vector_s.segment_id = s.segment_id
      AND s.segment_id = t1.segment_id
