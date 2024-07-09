@@ -1,0 +1,98 @@
+services:
+  redis:
+    image: "redis:latest"
+    container_name: lcp-redis
+    networks:
+      - lcp-network
+
+  db:
+    build: ./database
+    container_name: lcp-postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: VSQT1LThIV
+      POSTGRES_DB: lcp
+    volumes:
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - lcp-network
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: lcp-worker
+    depends_on:
+      - db
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      SQL_DATABASE: lcp
+      SQL_PORT: "5432"
+      SQL_HOST: postgres
+      SQL_WEB_USERNAME: postgres
+      SQL_WEB_PASSWORD: VSQT1LThIV
+      SQL_UPLOAD_USERNAME: postgres
+      SQL_UPLOAD_PASSWORD: VSQT1LThIV
+      SQL_QUERY_USERNAME: postgres
+      SQL_QUERY_PASSWORD: VSQT1LThIV
+    networks:
+      - lcp-network
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    container_name: lcp-backend
+    ports:
+      - "9090:9090"
+    depends_on:
+      - db
+      - redis
+    environment:
+      REDIS_URL: redis://redis-server:6379/0
+      SQL_DATABASE: lcp
+      SQL_PORT: "5432"
+      SQL_HOST: postgres
+      SQL_WEB_USERNAME: postgres
+      SQL_WEB_PASSWORD: VSQT1LThIV
+      SQL_UPLOAD_USERNAME: postgres
+      SQL_UPLOAD_PASSWORD: VSQT1LThIV
+      SQL_QUERY_USERNAME: postgres
+      SQL_QUERY_PASSWORD: VSQT1LThIV
+    networks:
+      - lcp-network
+
+  frontend:
+    build: ./frontend
+    profiles: ["run", ""]
+    container_name: lcp-web
+    depends_on:
+      - worker
+      - backend
+    volumes:
+      - ./media/:/opt/media/
+    ports:
+      - "8080:80"
+    networks:
+      - lcp-network
+
+  frontend2:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    profiles: ["dev"]
+    container_name: lcp-frontend-dev
+    depends_on:
+      - worker
+      - backend
+    volumes:
+      - ./frontend:/app
+    ports:
+      - "8080:8080"
+    networks:
+      - lcp-network
+
+networks:
+  lcp-network:
+    driver: bridge
