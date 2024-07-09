@@ -4,7 +4,17 @@ from yarl import URL
 
 from .authenticate import Authentication
 from .configure import CorpusConfig
-from .utils import _lama_user_details
+from .lama import (
+    _lama_user_details,
+    _lama_project_user_update,
+    _lama_invitation_remove,
+    _lama_invitation_add,
+    _lama_project_users,
+    _lama_project_create,
+    _lama_project_update,
+    _lama_api_create,
+    _lama_api_revoke,
+)
 from .typed import JSONObject, TypeAlias
 
 subtype: TypeAlias = list[dict[str, str]]
@@ -15,6 +25,40 @@ class Lama(Authentication):
 
     def __init__(self, app: web.Application) -> None:
         super().__init__(app)
+
+    ## Check methods
+
+    async def check_file_permissions(self, request: web.Request) -> tuple[str, int]:
+        msg, status = ("Error", 460)
+        profiles_id: set[str] = set()
+        uri: str = request.headers.get("X-Request-Uri", "")
+
+        user_details_lama = await _lama_user_details(request.headers)
+        sub = cast(dict[str, Any], user_details_lama["subscription"])
+        subs = cast(list[dict[str, Any]], sub["subscriptions"])
+        for subscription in subs:
+            for profile in subscription["profiles"]:
+                profiles_id.add(profile["id"])
+
+        profiles = cast(
+            list[dict[str, Any]], user_details_lama.get("publicProfiles", [])
+        )
+        for public_profile in profiles:
+            profiles_id.add(public_profile["id"])
+
+        profile_id: str = ""
+        if uri and user_details_lama:
+            profile_id = URL(uri).parts[-2]
+            if profile_id in profiles_id:
+                msg, status = ("OK", 200)
+            elif not profile_id:
+                msg, status = ("Invalid query", 464)
+            elif profile_id not in profiles_id:
+                msg, status = ("No permission", 465)
+        elif not user_details_lama:
+            msg, status = ("Invalid user", 461)
+
+        return (msg, status)
 
     def check_corpus_allowed(
         self,
@@ -57,38 +101,69 @@ class Lama(Authentication):
 
         return False
 
-    async def check_file_permissions(self, request: web.Request) -> tuple[str, int]:
-        msg, status = ("Error", 460)
-        profiles_id: set[str] = set()
-        uri: str = request.headers.get("X-Request-Uri", "")
-
-        user_details_lama = await _lama_user_details(request.headers)
-        sub = cast(dict[str, Any], user_details_lama["subscription"])
-        subs = cast(list[dict[str, Any]], sub["subscriptions"])
-        for subscription in subs:
-            for profile in subscription["profiles"]:
-                profiles_id.add(profile["id"])
-
-        profiles = cast(
-            list[dict[str, Any]], user_details_lama.get("publicProfiles", [])
-        )
-        for public_profile in profiles:
-            profiles_id.add(public_profile["id"])
-
-        profile_id: str = ""
-        if uri and user_details_lama:
-            profile_id = URL(uri).parts[-2]
-            if profile_id in profiles_id:
-                msg, status = ("OK", 200)
-            elif not profile_id:
-                msg, status = ("Invalid query", 464)
-            elif profile_id not in profiles_id:
-                msg, status = ("No permission", 465)
-        elif not user_details_lama:
-            msg, status = ("Invalid user", 461)
-
-        return (msg, status)
+    ## JSON responses to GET requests
 
     async def user_details(self, request: web.Request) -> JSONObject:
         user_details_lama = await _lama_user_details(request.headers)
         return user_details_lama
+
+    async def project_users(self, request: web.Request, project_id: str) -> JSONObject:
+        res = await _lama_project_users(request.headers, project_id)
+        return res
+
+    ## Handle creation, update and removal of projects and users
+
+    async def project_create(
+        self, request: web.Request, project_data: dict[str, str]
+    ) -> JSONObject:
+        res = await _lama_project_create(request.headers, project_data)
+        return res
+
+    async def project_update(
+        self,
+        request: web.Request,
+        request_data: dict[str, str],
+        project_data: dict[str, str],
+    ) -> web.Response:
+        res = await _lama_project_update(
+            request.headers, request_data["id"], project_data
+        )
+        return web.json_response(res)
+
+    async def project_user_update(
+        self,
+        request: web.Request,
+        project_id: str,
+        user_id: str,
+        user_data: dict[str, str],
+    ) -> web.Response:
+        res = await _lama_project_user_update(
+            request.headers, project_id, user_id, user_data
+        )
+        return web.json_response(res)
+
+    async def project_api_create(
+        self, request: web.Request, project_id: str
+    ) -> web.Response:
+        res = await _lama_api_create(request.headers, project_id)
+        return web.json_response(res)
+
+    async def project_api_revoke(
+        self, request: web.Request, project_id: str, apikey_id: str
+    ) -> web.Response:
+        res = await _lama_api_revoke(request.headers, project_id, apikey_id)
+        return web.json_response(res)
+
+    async def project_users_invite(
+        self, request: web.Request, project_id: str, emails: Any
+    ) -> web.Response:
+        res = await _lama_invitation_add(
+            request.headers, project_id, {"emails": emails}
+        )
+        return web.json_response(res)
+
+    async def project_users_invitation_remove(
+        self, request: web.Request, invitation_id: str
+    ) -> web.Response:
+        res = await _lama_invitation_remove(request.headers, invitation_id)
+        return web.json_response(res)

@@ -51,10 +51,10 @@ from .utils import (
     TRUES,
     FALSES,
     LCPApplication,
-    handle_lama_error,
     handle_timeout,
     load_env,
 )
+from .lama import handle_lama_error
 from .video import video
 
 

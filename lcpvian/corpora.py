@@ -10,7 +10,7 @@ import logging
 
 from json.decoder import JSONDecodeError
 
-from .utils import _filter_corpora, _lama_user_details, ensure_authorised
+from .utils import _filter_corpora, ensure_authorised
 from .typed import JSONObject
 
 from aiohttp import web
