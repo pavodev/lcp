@@ -1060,8 +1060,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         if alignment:
             prefix_id = "alignment"
         # Select the ID
-        selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
-        group_by.append(f"{layer}_id")
+        iddotref = f"{alias}.{prefix_id}_id"
+        selects.append(f"{iddotref} AS {layer}_id")
+        group_by.append(iddotref)
         joins_later: dict[str, Any] = {}
         attributes: dict[str, Any] = layer_info[layer].get("attributes", {})
         relational_attributes = {
@@ -1085,14 +1086,15 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             attr_table_key = attr_mapping.get("key", attr)
             attr_name = f'"{attr_table_key}"'
             on_cond = f"{alias}.{attr}_id = {alias_attr_table}.{attr_table_key}_id"
-            sel = f"{alias_attr_table}.{attr_name} AS {layer}_{attr}"
+            dotref = f"{alias_attr_table}.{attr_name}"
+            sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
                 on_cond = (
                     f"get_bit({layer}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
                 )
                 sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
             else:
-                group_by.append(f"{layer}_{attr}")
+                group_by.append(dotref)
             # Join the lookup table
             joins_later[f"{schema}.{attr_table} {alias_attr_table} ON {on_cond}"] = None
             # Select the attribute from the lookup table
@@ -1127,8 +1129,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         for k in joins_later:
             joins[k] = None
         # Get char_range from the main table
-        selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
-        group_by.append(f"{layer}_char_range")
+        chardotref = char_range_table + '."char_range"'
+        selects.append(f"{chardotref} AS {layer}_char_range")
+        group_by.append(chardotref)
         # And frame_range if applicable
         if _is_time_anchored(current_batch, config, layer):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
