@@ -79,7 +79,7 @@ class Authentication:
         request: web.Request,
         request_data: dict[str, str],
         project_data: dict[str, str],
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     async def project_user_update(
@@ -88,27 +88,27 @@ class Authentication:
         project_id: str,
         user_id: str,
         user_data: dict[str, str],
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     async def project_api_create(
         self, request: web.Request, project_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     async def project_api_revoke(
         self, request: web.Request, project_id: str, apikey_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     async def project_users_invite(
         self, request: web.Request, project_id: str, emails
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     async def project_users_invitation_remove(
         self, request: web.Request, invitation_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         return {}
 
     def query(self, corpora):

@@ -8,7 +8,7 @@ from .authenticate import Authentication
 
 
 async def project_create(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     request_data: dict[str, str] = await request.json()
     keys = ["title", "startDate", "finishDate", "description", "additionalData"]
     project_data = {k: request_data[k] for k in keys}
@@ -18,7 +18,7 @@ async def project_create(request: web.Request) -> web.Response:
 
 
 async def project_update(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     request_data: dict[str, str] = await request.json()
     keys = ["title", "startDate", "finishDate", "description", "additionalData"]
     project_data = {k: request_data[k] for k in keys}
@@ -28,7 +28,7 @@ async def project_update(request: web.Request) -> web.Response:
 
 
 async def project_user_update(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     request_data: dict[str, str] = await request.json()
     project_id: str = request.match_info["project"]
     user_id: str = request.match_info["user"]
@@ -41,14 +41,14 @@ async def project_user_update(request: web.Request) -> web.Response:
 
 
 async def project_api_create(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     project_id: str = request.match_info["project"]
     res = await authenticator.project_api_create(request, project_id)
     return web.json_response(res)
 
 
 async def project_api_revoke(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     apikey_id: str = request.match_info["key"]
     project_id: str = request.match_info["project"]
     res = await authenticator.project_api_revoke(request, project_id, apikey_id)
@@ -56,14 +56,14 @@ async def project_api_revoke(request: web.Request) -> web.Response:
 
 
 async def project_users(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     project_id: str = request.match_info["project"]
     res = await authenticator.project_users(request, project_id)
     return web.json_response(res)
 
 
 async def project_users_invite(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     request_data: dict[str, str] = await request.json()
     project_id: str = request.match_info["project"]
     res = await authenticator.project_users_invite(
@@ -73,7 +73,7 @@ async def project_users_invite(request: web.Request) -> web.Response:
 
 
 async def project_users_invitation_remove(request: web.Request) -> web.Response:
-    authenticator: Authentication = web.app["auth_class"](web.app)
+    authenticator: Authentication = request.app["auth_class"](request.app)
     invitation_id: str = request.match_info["invitation"]
     res = await authenticator.project_users_invitation_remove(request, invitation_id)
     return web.json_response(res)
