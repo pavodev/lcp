@@ -22,12 +22,12 @@ from rq.job import Job
 
 from .ddl_gen import generate_ddl
 from .typed import Headers, JSON
-from .utils import (
+from .lama import (
     _lama_check_api_key,
     _lama_project_create,
     _lama_user_details,
-    _sanitize_corpus_name,
 )
+from .utils import _sanitize_corpus_name
 
 
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
