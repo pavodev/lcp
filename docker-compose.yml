@@ -8,10 +8,7 @@ services:
   db:
     build: ./database
     container_name: lcp-postgres
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: VSQT1LThIV
-      POSTGRES_DB: lcp
+    env_file: ".env.docker"
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
@@ -30,17 +27,6 @@ services:
     volumes:
       - ./media/:/opt/media/
       - ./uploads:/app/uploads
-    environment:
-      REDIS_URL: redis://redis:6379/0
-      SQL_DATABASE: lcp
-      SQL_PORT: "5432"
-      SQL_HOST: postgres
-      SQL_WEB_USERNAME: postgres
-      SQL_WEB_PASSWORD: VSQT1LThIV
-      SQL_UPLOAD_USERNAME: postgres
-      SQL_UPLOAD_PASSWORD: VSQT1LThIV
-      SQL_QUERY_USERNAME: postgres
-      SQL_QUERY_PASSWORD: VSQT1LThIV
     networks:
       - lcp-network
 
@@ -57,17 +43,6 @@ services:
     volumes:
       - ./media/:/opt/media/
       - ./uploads:/app/uploads
-    environment:
-      REDIS_URL: redis://redis-server:6379/0
-      SQL_DATABASE: lcp
-      SQL_PORT: "5432"
-      SQL_HOST: postgres
-      SQL_WEB_USERNAME: postgres
-      SQL_WEB_PASSWORD: VSQT1LThIV
-      SQL_UPLOAD_USERNAME: postgres
-      SQL_UPLOAD_PASSWORD: VSQT1LThIV
-      SQL_QUERY_USERNAME: postgres
-      SQL_QUERY_PASSWORD: VSQT1LThIV
     networks:
       - lcp-network
 
