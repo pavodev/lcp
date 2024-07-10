@@ -20,13 +20,9 @@ from aiohttp import web, BodyPartReader
 from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
+from .authenticate import Authentication
 from .ddl_gen import generate_ddl
 from .typed import Headers, JSON
-from .lama import (
-    _lama_check_api_key,
-    _lama_project_create,
-    _lama_user_details,
-)
 from .utils import _sanitize_corpus_name
 
 
@@ -180,13 +176,15 @@ async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
     """
+    authenticator: Authentication = request.app["auth_class"](request.app)
+
     url = request.url
     job_id = request.rel_url.query["job"]
     checking = request.rel_url.query.get("check")
     if checking:
         return await _status_check(request, job_id)
 
-    user_data = await _lama_user_details(request.headers)
+    user_data = await authenticator.user_details(request)
 
     gui_mode = request.rel_url.query.get("gui", False)
     is_vian = request.rel_url.query.get("vian", False)
@@ -356,6 +354,8 @@ async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTs JSON
     """
+    authenticator: Authentication = request.app["auth_class"](request.app)
+
     exists = request.rel_url.query.get("job")
     if exists:
         return await _create_status_check(request, exists)
@@ -376,7 +376,7 @@ async def make_schema(request: web.Request) -> web.Response:
         assert isinstance(key, str), "Missing API key"
         secret = request.headers.get("X-API-Secret")
         assert isinstance(secret, str), "Missing API key secret"
-        status = await _lama_check_api_key(request.headers)
+        status = await authenticator.check_api_key(request)
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Could not verify user: bad crendentials?"
@@ -411,7 +411,7 @@ async def make_schema(request: web.Request) -> web.Response:
         }
 
         try:
-            existing_project = await _lama_project_create(headers, profile)
+            existing_project = await authenticator.project_create(request, profile)
             if existing_project.get("status", True) is not False:
                 proj = json.dumps(existing_project, indent=4)
                 msg = f"New project created:\n{proj}"
@@ -497,6 +497,8 @@ async def make_schema(request: web.Request) -> web.Response:
     corpus_path = os.path.join(proj_id, schema_name)
 
     directory = os.path.join("uploads", corpus_path)
+    if os.path.exists(directory):
+        os.rmdir(directory)
     os.makedirs(directory)
 
     pieces["drops"] = drops

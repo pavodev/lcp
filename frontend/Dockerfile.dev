@@ -17,4 +17,4 @@ RUN yarn
 # COPY . ./
 
 # Build the Vue.js application
-CMD ["yarn", "serve:lcp"]
+CMD ["yarn", "serve:catchphrase"]

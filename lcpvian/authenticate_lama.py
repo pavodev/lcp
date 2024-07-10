@@ -14,6 +14,7 @@ from .lama import (
     _lama_project_update,
     _lama_api_create,
     _lama_api_revoke,
+    _lama_check_api_key,
 )
 from .typed import JSONObject, TypeAlias
 
@@ -110,6 +111,10 @@ class Lama(Authentication):
     async def project_users(self, request: web.Request, project_id: str) -> JSONObject:
         res = await _lama_project_users(request.headers, project_id)
         return res
+
+    async def check_api_key(self, request) -> JSONObject:
+        ret = await _lama_check_api_key(request.headers)
+        return ret
 
     ## Handle creation, update and removal of projects and users
 

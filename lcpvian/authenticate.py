@@ -7,24 +7,24 @@ from .typed import JSONObject, TypeAlias
 subtype: TypeAlias = list[dict[str, str]]
 
 # This is just a placeholder -- a proper authentication system needs to take care of this
+USER = {
+    "id": "00000000-0000-0000-0000-000000000000",
+    "displayName": "Foo Bar",
+    "name": "Foo Bar",
+    "email": "foo@bar.xyz",
+    "homeOrganization": "FooBar",
+}
+PROFILE = {
+    "id": "848c1f0f-a1e3-4f6b-93da-4a7b26c6c6d9",
+    "project_id": "9d925a5b-f198-49c4-a577-4cddc1cbb78b",
+    "title": "Public",
+    "institution": "uzh.ch",
+    "additionalData": {"public": True},
+}
 USERS_AND_PROFILES = {
-    "user": {
-        "id": "00000000-0000-0000-0000-000000000000",
-        "displayName": "Foo Bar",
-        "name": "Foo Bar",
-        "email": "foo@bar.xyz",
-        "homeOrganization": "FooBar",
-    },
+    "user": USER,
     "subscription": {"subscriptions": []},
-    "publicProfiles": [
-        {
-            "id": "848c1f0f-a1e3-4f6b-93da-4a7b26c6c6d9",
-            "project_id": "9d925a5b-f198-49c4-a577-4cddc1cbb78b",
-            "title": "Public",
-            "institution": "uzh.ch",
-            "additionalData": {"public": True},
-        }
-    ],
+    "publicProfiles": [PROFILE],
 }
 
 
@@ -67,12 +67,22 @@ class Authentication:
     async def project_users(self, request: web.Request, project_id: str) -> JSONObject:
         return {"registered": [], "invited": []}
 
+    async def check_api_key(self, request) -> JSONObject:
+        ret = cast(
+            JSONObject,
+            {
+                "account": USER,
+                "profile": PROFILE,
+            },
+        )
+        return ret
+
     ## Handle creation, update and removal of projects and users
 
     async def project_create(
         self, request: web.Request, project_data: dict[str, str]
     ) -> JSONObject:
-        return {}
+        return {"status": True, "id": PROFILE["id"], "title": PROFILE["title"]}
 
     async def project_update(
         self,
