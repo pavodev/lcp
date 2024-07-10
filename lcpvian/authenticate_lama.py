@@ -129,11 +129,11 @@ class Lama(Authentication):
         request: web.Request,
         request_data: dict[str, str],
         project_data: dict[str, str],
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_project_update(
             request.headers, request_data["id"], project_data
         )
-        return web.json_response(res)
+        return res
 
     async def project_user_update(
         self,
@@ -141,34 +141,34 @@ class Lama(Authentication):
         project_id: str,
         user_id: str,
         user_data: dict[str, str],
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_project_user_update(
             request.headers, project_id, user_id, user_data
         )
-        return web.json_response(res)
+        return res
 
     async def project_api_create(
         self, request: web.Request, project_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_api_create(request.headers, project_id)
-        return web.json_response(res)
+        return res
 
     async def project_api_revoke(
         self, request: web.Request, project_id: str, apikey_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_api_revoke(request.headers, project_id, apikey_id)
-        return web.json_response(res)
+        return res
 
     async def project_users_invite(
         self, request: web.Request, project_id: str, emails: Any
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_invitation_add(
             request.headers, project_id, {"emails": emails}
         )
-        return web.json_response(res)
+        return res
 
     async def project_users_invitation_remove(
         self, request: web.Request, invitation_id: str
-    ) -> web.Response:
+    ) -> JSONObject:
         res = await _lama_invitation_remove(request.headers, invitation_id)
-        return web.json_response(res)
+        return res

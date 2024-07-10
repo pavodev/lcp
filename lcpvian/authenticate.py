@@ -82,7 +82,10 @@ class Authentication:
     async def project_create(
         self, request: web.Request, project_data: dict[str, str]
     ) -> JSONObject:
-        return {"status": True, "id": PROFILE["id"], "title": PROFILE["title"]}
+        ret: JSONObject = cast(
+            JSONObject, {"status": True, "id": PROFILE["id"], "title": PROFILE["title"]}
+        )
+        return ret
 
     async def project_update(
         self,
