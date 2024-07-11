@@ -10,6 +10,7 @@ services:
     container_name: lcp-postgres
     env_file: .env.docker
     volumes:
+      - ./database/docker-data:/var/lib/postgresql/data
       - ./database/init-db:/docker-entrypoint-initdb.d
     networks:
       - lcp-network
