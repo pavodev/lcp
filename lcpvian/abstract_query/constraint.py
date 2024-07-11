@@ -568,6 +568,7 @@ class Constraint:
         left_ref: tuple[str, dict]
         right_ref: tuple[str, dict]
         both_lookups: bool = False
+        both_layers: bool = False
         if isinstance(right_member, dict):
             # First pass without joins, just to get the types of the references
             left_ref, right_ref = [
@@ -575,6 +576,9 @@ class Constraint:
                 for x in (self.left, right_member)
             ]
             both_lookups = all(x[1].get("ref") for x in (left_ref, right_ref))
+            both_layers = all(
+                x[1].get("type") == "layer" for x in (left_ref, right_ref)
+            )
 
         # Left reference
         left_ref = self.get_reference(
@@ -600,7 +604,16 @@ class Constraint:
         cast: str = ""
         if self.type == "regex":
             cast = "::text"
-        formed_condition: str = f"{left_ref[0]}{cast} {self.op} {right_ref[0]}"
+        left_str: str = left_ref[0] + cast
+        right_str: str = right_ref[0]
+
+        if both_layers:
+            layer_left = left_ref[1].get("layer", "")
+            layer_right = right_ref[1].get("layer", "")
+            left_str = f"{left_ref[0]}.{layer_left}_id".lower()
+            right_str = f"{right_ref[0]}.{layer_right}_id".lower()
+
+        formed_condition: str = f"{left_str} {self.op} {right_str}"
 
         # Special case: labels
         left_ref_info = left_ref[1]
