@@ -8,13 +8,10 @@ RUN apk update && apk add --no-cache git
 WORKDIR /app
 
 # Copy package*.json
-# COPY package*.json /app/
+COPY package*.json .
 
 # Install dependencies
 RUN yarn
-
-# Copy the rest of the application code
-# COPY . ./
 
 # Build the Vue.js application
 CMD ["yarn", "serve:lcp"]

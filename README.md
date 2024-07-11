@@ -369,15 +369,16 @@ docker compose up --build
 ```
 
 **For development:**
+In development mode the folders are mounted into the containers. Changes made locally will reflect in the running application.
 ```bash
-docker compose --profile dev up --build
+docker compose -f docker-compose.dev.yml up --build
 ```
 
 ## Accessing the application
 Once the application is running, it will be available at:
 
 - Application URL: http://localhost:8080
-- Database: The PostgreSQL database will be available on port 15432.
+- Database: The PostgreSQL database will be available on port 15432. Only available with `docker-compose.dev.yml`.
 
 ## Docker Compose Services
 The docker-compose.yml file defines several services:
