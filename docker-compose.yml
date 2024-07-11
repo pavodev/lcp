@@ -16,10 +16,10 @@ services:
     networks:
       - lcp-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "pg_isready -U postgres && [ -f /tmp/db.ready ]"]
+      interval: 15s
+      timeout: 180s
+      retries: 10
 
   worker:
     build:
