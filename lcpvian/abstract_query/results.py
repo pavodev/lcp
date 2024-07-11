@@ -517,26 +517,10 @@ WHERE {entity}.char_range && contained_token.char_range
         extras: list[str] = []
         extra_meta: list[str] = []
         frame_ranges: list[dict[str, Any]] = []
-        any_frame_range: str = ""
 
         if _is_anchored(self.config, context_layer, "time"):
-            lab = context  # TODO: accommodate corpora using FTS
-            out_name = f"{lab}_frame_range"
-            if not any_frame_range:
-                any_frame_range = out_name
-            if self.conf.config["mapping"].get("hasFTS", False) and _sequence_in_query(
-                self.query_json["query"]
-            ):
-                frame_lab = "has_frame_range"
-                cond_formed = f"{lab}.{self.segment.lower()}_id = {frame_lab}.{self.segment.lower()}_id"
-                self.r.conditions.add(cond_formed.lower())
-                seg_tab = _get_table(
-                    self.segment, self.conf.config, self.batch, self.lang
-                )
-                join_formed = f"{self.schema}.{seg_tab} {frame_lab}"
-                self.r.joins[join_formed] = True
-                lab = frame_lab
-            formed = f"{lab}.frame_range AS {out_name}"
+            out_name = f"{context}_frame_range"
+            formed = f"{context}.frame_range AS {out_name}"
             self.r.selects.add(formed.lower())
             self.r.entities.add(out_name.lower())
             fr = frame_range_base.format(fr=out_name)
