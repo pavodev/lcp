@@ -57,7 +57,7 @@ services:
 
   frontend_prod:
     build: ./frontend
-    profiles: ["run", ""]
+    profiles: [""]
     container_name: lcp-web
     depends_on:
       - worker
