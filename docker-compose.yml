@@ -8,13 +8,16 @@ services:
   db:
     build: ./database
     container_name: lcp-postgres
-    env_file: ".env.docker"
+    env_file: .env.docker
     volumes:
-      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5431:5432"
+      - ./database/init-db:/docker-entrypoint-initdb.d
     networks:
       - lcp-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres && [ -f /var/lib/postgresql/data/db.ready ]"]
+      interval: 15s
+      timeout: 180s
+      retries: 10
 
   worker:
     build:
@@ -22,8 +25,10 @@ services:
       dockerfile: Dockerfile.worker
     container_name: lcp-worker
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
     volumes:
       - ./media/:/opt/media/
       - ./uploads:/app/uploads
@@ -38,8 +43,12 @@ services:
     ports:
       - "9090:9090"
     depends_on:
-      - db
-      - redis
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+      worker:
+        condition: service_started
     volumes:
       - ./media/:/opt/media/
       - ./uploads:/app/uploads
@@ -48,7 +57,6 @@ services:
 
   frontend:
     build: ./frontend
-    profiles: ["run", ""]
     container_name: lcp-web
     depends_on:
       - worker
@@ -57,22 +65,6 @@ services:
       - ./media/:/opt/media/
     ports:
       - "8080:80"
-    networks:
-      - lcp-network
-
-  frontend2:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile.dev
-    profiles: ["dev"]
-    container_name: lcp-frontend-dev
-    depends_on:
-      - worker
-      - backend
-    volumes:
-      - ./frontend:/app
-    ports:
-      - "8080:8080"
     networks:
       - lcp-network
 

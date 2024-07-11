@@ -186,6 +186,7 @@ def load_env() -> None:
     """
     Load .env from ~/lcp/.env if present, otherwise from current dir/dotenv defaults
     """
+    ENVFILE = ".env.docker" if os.getenv("IS_DOCKER") else ".env"
     current = os.path.join(os.getcwd(), ".env")
     installed_path = os.path.expanduser("~/lcp/.env")
     loaded = False
@@ -197,7 +198,7 @@ def load_env() -> None:
         except:
             print(f"Could not load {installed_path}...")
     if not loaded:
-        load_dotenv(override=True)
+        load_dotenv(ENVFILE, override=True)
         print(f"Loaded .env from {current}")
     return None
 
