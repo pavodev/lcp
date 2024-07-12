@@ -9,6 +9,7 @@ services:
     build: ./database
     container_name: lcp-postgres
     env_file: .env.docker
+    shm_size: 10g # increase this if queries pull too much data
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./database/init-db:/docker-entrypoint-initdb.d

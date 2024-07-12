@@ -3,9 +3,8 @@ import re
 from typing import Any, cast
 
 from .constraint import Constraints, _get_constraints, process_set
-from .prefilter import Prefilter
 from .sequence import Cte, SQLSequence
-from .typed import JSON, JSONObject, Joins, LabelLayer, QueryJSON, QueryPart
+from .typed import JSONObject, Joins, LabelLayer, QueryJSON, QueryPart
 from .utils import (
     Config,
     QueryData,
@@ -344,9 +343,10 @@ class QueryMaker:
                         quantor = "EXISTS"
                     obj = next(a for a in quan_obj["args"])
                     obj["unit"]["quantor"] = quantor
-                    # assert "partOf" in obj["unit"], SyntaxError(
-                    #     "Quantified entities require a scope (eg Token@s)"
-                    # )
+
+            # Turn any logical expression into a main constraint
+            if any(x.startswith("logicalOp") for x in obj):
+                obj = {"args": [obj]}
 
             is_sequence = "sequence" in obj
             is_set = "set" in obj

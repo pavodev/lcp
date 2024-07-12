@@ -389,7 +389,7 @@ class Cte:
     ) -> str:
         n: str = str(self.n)
         join_first_token: str = (
-            f"{schema}.{tok}{batch_suffix} token ON token.{seg}_id = prev_cte.s"
+            f"{schema}.{tok}{batch_suffix} token ON token.{seg}_id = prev_cte.{self.sequence.part_of}"
         )
         if self.prev_fixed_token:
             pl: str = self.prev_fixed_token.internal_label
@@ -450,7 +450,7 @@ class Cte:
             where_union = f"WHERE {where_union}" if where_union else ""
 
         retval: str = f"""traversal{n} AS (
-        SELECT  prev_cte.s,
+        SELECT  prev_cte.{self.sequence.part_of},
                 {', '.join(['prev_cte.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
                 {start_id}           start_id,
                 token.{tok}_id           id,
@@ -464,7 +464,7 @@ class Cte:
         if where_union:
             retval += f"""
         UNION ALL
-        SELECT  traversal{n}.s,
+        SELECT  traversal{n}.{self.sequence.part_of},
                 {', '.join(['traversal'+str(n)+'.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
                 traversal{n}.start_id,
                 token.token_id   id,
@@ -472,7 +472,7 @@ class Cte:
                 traversal{n}.token_list || jsonb_build_array(jsonb_build_array(token.{tok}_id, transition{n}.label, transition{n}.sequence))
         FROM traversal{n} traversal{n}
         JOIN transition{n} ON transition{n}.source_state = traversal{n}.state
-        JOIN {schema}.{tok}{batch_suffix} token ON token.{tok}_id = traversal{n}.id + 1 AND token.{seg}_id = traversal{n}.s
+        JOIN {schema}.{tok}{batch_suffix} token ON token.{tok}_id = traversal{n}.id + 1 AND token.{seg}_id = traversal{n}.{self.sequence.part_of}
         {where_union}
     )
     SEARCH DEPTH FIRST BY id SET ordercol"""
@@ -900,7 +900,7 @@ class SQLSequence:
                                 if i > 0
                                 else ""
                             ),
-                            f"s{n}_t{i}.{seg}_id = {from_table}.s",
+                            f"s{n}_t{i}.{seg}_id = {from_table}.{self.part_of}",
                             (
                                 f"s{n}_t{i}.{tok}_id <= t{np} AND ({from_table}.t{np} - s{n}_t{i}.{tok}_id) % {mod} = 0"
                                 if nxt is None and i + 1 == len(s.members)

@@ -272,13 +272,11 @@ class Constraint:
         self._is_meta = self.field in cast(
             dict[str, Any], self._layer_info.get("meta", self._attribs.get("meta", {}))
         )  # and self.layer == self.config["document"]
-        self._is_dependency = self._layer_info[
-            "layerType"
-        ] == "relation" and self.field in {
-            cast(dict[str, str], x).get("name", "")
+        field_in_dep = self.field in {
+            x.get("name", "")
             for n, x in {
                 "label": {"name": "label"},
-                **cast(dict[str, Any], self._layer_info.get("attributes", {})),
+                **cast(dict[str, dict], self._layer_info.get("attributes", {})),
             }.items()
             if n
             in (
@@ -287,6 +285,9 @@ class Constraint:
                 "label",
             )  # Revise special treatment of "label" here?
         }
+        self._is_dependency = (
+            self._layer_info.get("layerType") == "relation" and field_in_dep
+        )
         self.schema = conf.schema.lower()
         self.lang = conf.lang
         self.batch = conf.batch.lower()
@@ -345,10 +346,11 @@ class Constraint:
         """
         info: dict
 
-        assert layer in conf.config["layer"], ReferenceError(
-            f"No entity type named {layer} in this corpus"
-        )
-        info = cast(dict, conf.config["layer"][layer])
+        # assert layer in conf.config["layer"], ReferenceError(
+        #     f"No entity type named {layer} in this corpus"
+        # )
+        # info = cast(dict, conf.config["layer"][layer])
+        info = cast(dict, conf.config["layer"].get(layer, {}))
 
         if conf.lang:
             lginfo: dict = cast(
@@ -445,6 +447,8 @@ class Constraint:
             # Retrieve the layer from the label (either provided as force_prefix, or before the dot)
             label_layer = self.label_layer or {}
             ref_layer = label_layer.get(ref_label, [self.layer])[0]
+            if ref_label not in label_layer and ref_field in label_layer:
+                ref_layer = label_layer[ref_field][0]
             ref_layer_attrs = force_attributes or self.config["layer"][ref_layer].get(
                 "attributes", {}
             )
@@ -966,6 +970,7 @@ def _get_constraint(
     is_set: bool = False,
     set_objects: set[str] | None = None,
     allow_any: bool = True,  # False,
+    top_level: bool = False,
 ) -> Constraint | Constraints | TimeConstraint | None:
     """
     Handle a single constraint, or nested constraints
@@ -1024,6 +1029,7 @@ def _get_constraint(
             is_set,
             set_objects,
             allow_any,
+            top_level,
         )
         return _get_constraints(*args)
 
@@ -1049,6 +1055,7 @@ def _get_constraint(
             is_set,
             set_objects,
             allow_any,
+            top_level,
         )
 
     if not len(constraint):
@@ -1195,6 +1202,7 @@ def _get_constraints(
             is_set=is_set,
             set_objects=set_objects,
             allow_any=allow_any,
+            top_level=top_level,
         )
         if not isinstance(tup, TimeConstraint):
             n += 1
