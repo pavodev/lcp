@@ -497,26 +497,25 @@ class QueryMaker:
                 sequence_ranges[s.sequence.label] = (min_label, max_label, s.part_of)
 
         # Go through all the segments and pick the most constrained one
-        n_constraints_main_table = 0
+        n_segment_constraints_max = 0
+        n_sequence_length_max = 0
         for lb, (lay, info) in self.r.label_layer.items():
             if lay != self.segment:
                 continue
-            seg_n_constraints = len(info.get("constraints", {}))
-            seg_has_sequence = any(s.part_of == lb for s in self.sqlsequences)
-            if (
-                self._table
-                and not seg_has_sequence
-                and seg_n_constraints < n_constraints_main_table
-            ):
+            n_segment_constraints = len(info.get("constraints", {}))
+            n_sequence_length: int = next(
+                (s.sequence.min_length for s in self.sqlsequences if s.part_of == lb), 0
+            )
+            if self._table and n_sequence_length < n_sequence_length_max:
+                continue
+            elif self._table and n_segment_constraints < n_segment_constraints_max:
                 continue
             self._table = (
                 _get_table(lay, self.config, self.batch, self.lang or ""),
                 lb,
             )
-            # If a segment has a sequence, immediately pick it as the main table
-            if seg_has_sequence:
-                break
-            n_constraints_main_table = seg_n_constraints
+            n_segment_constraints_max = n_segment_constraints
+            n_sequence_length_max = n_sequence_length
 
         table, label = self.remove_and_get_base()
         from_table = table
