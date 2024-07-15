@@ -8,7 +8,7 @@ import json
 import os
 import re
 
-# import shutil
+import shutil
 import traceback
 
 from datetime import datetime, timedelta
@@ -498,7 +498,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     directory = os.path.join("uploads", corpus_path)
     if os.path.exists(directory):
-        os.rmdir(directory)
+        shutil.rmtree(directory, ignore_errors=True)
     os.makedirs(directory)
 
     pieces["drops"] = drops
