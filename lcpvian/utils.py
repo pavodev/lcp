@@ -51,7 +51,6 @@ from .configure import CorpusConfig, CorpusTemplate
 from .typed import (
     Batch,
     Config,
-    Headers,
     JSON,
     JSONObject,
     MainCorpus,
@@ -230,34 +229,6 @@ def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
     auth decorator, still wip
     """
     return func
-
-    # todo:
-    # @wraps(func)
-    # async def deco(request: web.Request, *args, **kwargs):
-    #    headers = await _lama_user_details(getattr(request, "headers", request))
-
-    #    if "X-Access-Token" in headers:
-    #        token = headers.get("X-Access-Token")
-    #        try:
-    #            decoded = jwt.decode(
-    #                token, os.getenv("JWT_SECRET_KEY"), algorithms=["HS256"]
-    #            )
-    #            request.jwt = decoded
-    #        except Exception as err:
-    #            raise err
-    #    if "X-Display-Name" in headers:
-    #        username = headers.get("X-Display-Name")
-    #        request.username = username
-    #    if "X-Mail" in headers:
-    #        username = headers.get("X-Mail")
-    #        request.username = username
-
-    #    if not request.username:
-    #        raise ValueError("401? No username")
-
-    #    return func(request, *args, **kwargs)
-
-    # return deco
 
 
 def _check_email(email: str) -> bool:
