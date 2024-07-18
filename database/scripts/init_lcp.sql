@@ -2,6 +2,11 @@
 
 BEGIN;
 
+CREATE TYPE main.upload_status AS ENUM (
+   'failed'
+ , 'succeeded'
+ , 'ongoing'
+);
 
 CREATE TABLE main.corpus (
    project_id        uuid
@@ -22,12 +27,12 @@ CREATE TABLE main.corpus (
 
 
 CREATE TABLE main.inprogress_corpus (
-   schema_path       uuid           PRIMARY KEY
+   schema_path       uuid                 PRIMARY KEY
  , project_id        uuid
- , created_at        timestamptz    NOT NULL DEFAULT now()
- , corpus_id         int            REFERENCES main.corpus
- , is_finished       bool           NOT NULL DEFAULT FALSE
- , corpus_template   jsonb          NOT NULL
+ , created_at        timestamptz          NOT NULL DEFAULT now()
+ , corpus_id         int                  REFERENCES main.corpus
+ , status            main.upload_status   NOT NULL
+ , corpus_template   jsonb                NOT NULL
 );
 
 
