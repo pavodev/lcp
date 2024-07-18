@@ -13,9 +13,13 @@ GRANT CONNECT ON DATABASE lcp_production TO lcp_production_ro;
 -- ATTENTION: this does only work through psql (i.e. the backslash command)
 \c lcp_production
 CREATE SCHEMA main AUTHORIZATION lcp_production_owner;
-GRANT USAGE ON SCHEMA main TO lcp_production_maintenance;
-GRANT USAGE ON SCHEMA main TO lcp_production_monitoring;
-GRANT USAGE ON SCHEMA main TO lcp_production_importer;
+GRANT USAGE
+   ON SCHEMA main
+   TO lcp_production_maintenance
+    , lcp_production_monitoring
+    , lcp_production_importer
+    , lcp_production_web_user
+    ;
 
 
 -- default privileges only apply to objects created *after* granting

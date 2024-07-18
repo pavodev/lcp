@@ -5,14 +5,20 @@ REVOKE CREATE ON SCHEMA public FROM public;
 
 CREATE OR REPLACE PROCEDURE main.open_import(
    temp_schema_hash  uuid
- , name              text
  , project_id        uuid
  , corpus_template   jsonb
 )
 AS $$
    DECLARE
       previous_version  int;
+      corpus_name       text;
    BEGIN
+      SELECT template -> 'meta' ->> 'name'
+        INTO corpus_name
+           ;
+
+      ASSERT corpus_name IS NOT NULL AND corpus_name <> ''
+           ;
 
      EXECUTE format('CREATE SCHEMA %I AUTHORIZATION lcp_production_owner;', $1)
            ;
@@ -22,15 +28,15 @@ AS $$
       SELECT corpus_id
         INTO previous_version
         FROM main.corpus
-       WHERE corpus.name       = $2
-         AND corpus.project_id = $3
+       WHERE corpus.name       = corpus_name
+         AND corpus.project_id = $2
     ORDER BY current_version DESC
        LIMIT 1
            ;
 
       INSERT
         INTO main.inprogress_corpus (schema_path, corpus_id, project_id, corpus_template)
-      SELECT $1, previous_version, $3, $4
+      SELECT $1, previous_version, $2, $3
            ;
 
    END;
@@ -46,6 +52,7 @@ GRANT EXECUTE ON PROCEDURE main.open_import TO lcp_production_importer;
 
 CREATE OR REPLACE FUNCTION main.finish_import(
    temp_schema_hash  uuid
+ , project_id        uuid
  , schema_name       text
  , mapping           jsonb
  , token_counts      jsonb
@@ -57,7 +64,7 @@ AS $$
       next_version      int;
       new_schema_name   text;
       corpus_name       text;
-      template   jsonb;
+      template          jsonb;
    BEGIN
 
       SELECT max(current_version) + 1
@@ -74,7 +81,7 @@ AS $$
            , curr_version
            ;
 
-      SELECT format('%s_%s', $2, next_version)
+      SELECT format('%s_%s', $3, next_version)
         INTO new_schema_name
            ;
 
@@ -101,13 +108,14 @@ AS $$
            ;
 
       INSERT
-        INTO main.corpus (name, current_version, corpus_template, schema_path, mapping, token_counts)
+        INTO main.corpus (name, project_id, current_version, corpus_template, schema_path, mapping, token_counts)
       SELECT corpus_name
+           , $2
            , next_version
            , template
            , new_schema_name
-           , $3
            , $4
+           , $5
    RETURNING *
         INTO new_entry
            ;

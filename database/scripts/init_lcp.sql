@@ -31,5 +31,15 @@ CREATE TABLE main.inprogress_corpus (
 );
 
 
+GRANT SELECT
+   ON main.corpus
+    , main.inprogress_corpus
+   TO lcp_production_maintenance
+    , lcp_production_monitoring
+    , lcp_production_importer
+    , lcp_production_web_user
+    ;
+
+
 COMMIT;
 
