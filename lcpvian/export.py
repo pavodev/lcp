@@ -19,13 +19,13 @@ EXPORT_TTL = 5000
 CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
 SWISSDOX_PREPARED_QUERY = """SELECT ps.content, sg.char_range
-FROM {schema}.prepared_{seg_table}{underlang} ps
-CROSS JOIN {schema}.{seg_table}{underlang}0 sg
+FROM "{schema}".prepared_{seg_table}{underlang} ps
+CROSS JOIN "{schema}".{seg_table}{underlang}0 sg
 WHERE ps.{seg_table}_id = sg.{seg_table}_id
 AND {doc_multi_range} @> sg.char_range;"""
 
 SWISSDOX_NE_QUERY = """SELECT {ne_selects_str}
-FROM {schema}.{ne_table} ne {ne_joins_str}
+FROM "{schema}".{ne_table} ne {ne_joins_str}
 WHERE {ne_wheres_str};"""
 SWISSDOX_NE_SELECTS = ["form", "type"]
 

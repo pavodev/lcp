@@ -642,7 +642,6 @@ class QueryService:
         queue: str = "background",
         gui: bool = False,
         user_data: JSONObject | None = None,
-        is_vian: bool = False,
     ) -> Job:
         """
         Upload a new corpus to the system
@@ -650,7 +649,6 @@ class QueryService:
         kwargs = {
             "gui": gui,
             "user_data": user_data,
-            "is_vian": is_vian,
         }
         job: Job = self.app[queue].enqueue(
             _upload_data,
@@ -673,7 +671,7 @@ class QueryService:
         room: str | None,
         project_name: str,
         queue: str = "background",
-        drops: list[str] | None = None,
+        # drops: list[str] | None = None,
         gui: bool = False,
     ) -> Job:
         kwargs = {
@@ -691,7 +689,8 @@ class QueryService:
             job_timeout=self.timeout,
             on_success=Callback(_schema, self.callback_timeout),
             on_failure=Callback(_upload_failure, self.callback_timeout),
-            args=(create, schema_name, drops),
+            # args=(create, schema_name, drops),
+            args=(create, schema_name),
             kwargs=kwargs,
         )
         return job

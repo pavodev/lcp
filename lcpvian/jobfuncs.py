@@ -39,9 +39,9 @@ async def _upload_data(
     with open(data_path, "r") as fo:
         data: JSONObject = json.load(fo)
 
-    constraints = cast(list[str], data["constraints"])
-    perms = cast(str, data["perms"])
-    constraints.append(perms)
+    # constraints = cast(list[str], data["constraints"])
+    # perms = cast(str, data["perms"])
+    # constraints.append(perms)
 
     # template = cast(CorpusTemplate, data["template"])
 
@@ -73,7 +73,7 @@ async def _upload_data(
 async def _create_schema(
     create: str,
     schema_name: str,
-    drops: list[str] | None,
+    # drops: list[str] | None,
     user: str = "",
     room: str | None = None,
     **kwargs: str | None,
@@ -81,7 +81,8 @@ async def _create_schema(
     """
     To be run by rq worker, create schema in DB for a new corpus
     """
-    extra = {"user": user, "room": room, "drops": drops, "schema": schema_name}
+    # extra = {"user": user, "room": room, "drops": drops, "schema": schema_name}
+    extra = {"user": user, "room": room, "schema": schema_name}
 
     # todo: figure out how to make this block a little nicer :P
     async with get_current_job()._upool.begin() as conn:  # type: ignore
@@ -96,8 +97,8 @@ async def _create_schema(
                 print("Creating schema...\n", create)
                 await con.execute(create)
             except Exception:
-                script = f"DROP SCHEMA IF EXISTS {schema_name} CASCADE;"
-                extra.pop("drops")
+                script = f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
+                # extra.pop("drops")
                 msg = f"Attempting schema drop (create): {schema_name}"
                 logging.info(msg, extra=extra)
                 await con.execute(script)
