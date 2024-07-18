@@ -40,6 +40,7 @@ Look at upload._get_progress to understand how the pgoress info is parsed
 import importlib
 import json
 import os
+import re
 
 from collections.abc import Callable, Coroutine, Sequence
 from io import BytesIO
@@ -76,15 +77,24 @@ class SQLstats:
             WITH CSV QUOTE E'\b' DELIMITER E'\t';"""
         )
 
+        # self.main_corp: str = _format_config_query(
+        #     dedent(
+        #         """
+        #     WITH mc AS (
+        #         INSERT
+        #         INTO main.corpus (name, current_version, corpus_template, project_id, schema_path, token_counts, mapping, enabled)
+        #         VALUES (:name, :ver, :template, :project, :schema, :counts, :mapping, true)
+        #         RETURNING *
+        #     )
+        #     SELECT {selects}
+        #     FROM mc
+        #     {join} WHERE mc.enabled = true;"""
+        #     )
+        # )
         self.main_corp: str = _format_config_query(
             dedent(
                 """
-            WITH mc AS (
-                INSERT
-                INTO main.corpus (name, current_version, corpus_template, project_id, schema_path, token_counts, mapping, enabled)
-                VALUES (:name, :ver, :template, :project, :schema, :counts, :mapping, true)
-                RETURNING *
-            )
+            WITH mc AS (SELECT main.finish_import(:tmp_schema ::uuid, :new_schema ::text, :mapping ::jsonb, :counts ::jsonb))
             SELECT {selects}
             FROM mc
             {join} WHERE mc.enabled = true;"""
@@ -94,7 +104,7 @@ class SQLstats:
         self.token_count: Callable[[str, str], str] = lambda x, y: dedent(
             f"""
             SELECT count(*)
-              FROM {x}.{y};"""
+              FROM "{x}".{y};"""
         )
 
 
@@ -151,7 +161,7 @@ class Importer:
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
-        self.drops: list[str] = cast(list[str], data.get("drops", []))
+        # self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
     def update_progress(self, msg: str) -> None:
@@ -169,9 +179,9 @@ class Importer:
         """
         Drop all the data we just tried to import -- used as exception handling
         """
-        script = f"DROP SCHEMA IF EXISTS {self.schema} CASCADE;"
-        self.update_progress(f"Running cleanup:\n{script}")
-        await self.run_script(script)
+        # script = f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE;'
+        # self.update_progress(f"Running cleanup:\n{script}")
+        # await self.run_script(script)
         return None
 
     async def _get_positions(
@@ -580,14 +590,23 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
+        new_name: str = self.name.lower()
+        new_name = re.sub(r"\W", "_", new_name)
+        new_name = re.sub(r"_+", "_", new_name)
+        new_name += "_" + re.sub(
+            "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
+        )
         params: dict[str, str | int] = dict(
-            name=self.name,
-            ver=int(self.version),
-            template=json.dumps(dict(self.template)),
-            project=self.template.get("project", ""),
-            schema=self.schema,
-            counts=json.dumps(self.token_count),
+            # name=self.name,
+            # ver=int(self.version),
+            tmp_schema=self.schema,
+            new_schema=new_name,
+            # project_id=self.template.get("project", ""),
+            # template=json.dumps(dict(self.template)),
+            # project=self.template.get("project", ""),
+            # schema=self.schema,
             mapping=json.dumps(dict(self.mapping)),
+            counts=json.dumps(self.token_count),
         )
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)
@@ -610,7 +629,7 @@ class Importer:
         )
         if not results:
             return None
-        base = "DROP SCHEMA {schema} CASCADE;"
+        base = 'DROP SCHEMA "{schema}" CASCADE;'
         scripts = [base.format(schema=s[0]) for s in results if s[0] != self.schema]
         # actually do the drops (in parallel):
         await self.process_data(scripts, self.run_script)
@@ -637,9 +656,9 @@ class Importer:
         # run the config glob_attr
         main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
         # pipeline is over: drop
-        if self.drops:
-            # msg = f"Attempting schema drop (create) * {len(drops)-1}"
-            drop_script = "\n".join(self.drops)
-            print("Dropping existing previous schemata:", drop_script)
-            await self.run_script(drop_script)
+        # if self.drops:
+        #     # msg = f"Attempting schema drop (create) * {len(drops)-1}"
+        #     drop_script = "\n".join(self.drops)
+        #     print("Dropping existing previous schemata:", drop_script)
+        #     await self.run_script(drop_script)
         return main_corp

@@ -14,6 +14,7 @@ import traceback
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
 from typing import cast, Any
+from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
 from aiohttp import web, BodyPartReader
@@ -187,9 +188,9 @@ async def upload(request: web.Request) -> web.Response:
     user_data = await authenticator.user_details(request)
 
     gui_mode = request.rel_url.query.get("gui", False)
-    is_vian = request.rel_url.query.get("vian", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
+    schema_name: str = cast(str, job.args[1])
     kwargs: dict = cast(dict, job.kwargs)
     project_id = kwargs["project"]
     username = kwargs["user"]
@@ -262,7 +263,7 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(gui=gui_mode, user_data=user_data, is_vian=is_vian)
+    kwa = dict(gui=gui_mode, user_data=user_data)
     path = os.path.join("uploads", cpath)
     print(f"Uploading data to database: {cpath}")
     job = qs.upload(username, cpath, room, **kwa)
@@ -395,10 +396,10 @@ async def make_schema(request: web.Request) -> web.Response:
     ids = (existing_project.get("id"), existing_project.get("title"))
 
     if project and project not in ids:
-        headers: Headers = {
-            "X-API-Key": os.environ["LAMA_API_KEY"],
-            "X-User-API-Key": key,
-        }
+        # headers: Headers = {
+        #     "X-API-Key": os.environ["LAMA_API_KEY"],
+        #     "X-User-API-Key": key,
+        # }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
         uacc: dict[str, Any] = cast(dict[str, Any], user_acc.get("account", {}))
@@ -445,7 +446,7 @@ async def make_schema(request: web.Request) -> web.Response:
     # but the schema name gets noticeably uglier, so ...
 
     #  suffix = corpus_folder.split("-", 2)[1]
-    suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
+    # suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
     # version_n = re.sub(r"[^0-9]", "", str(corpus_version))
 
     # schema_name = f"{corpus_name}__{suffix}_{version_n}"
@@ -458,13 +459,13 @@ async def make_schema(request: web.Request) -> web.Response:
         and proj_id in i.get("projects", [])  # only corpora from the same project
         # and str(i["meta"]["version"]) == str(corpus_version)
     ]
-    drops = [
-        f"DROP SCHEMA IF EXISTS {i} CASCADE;"
-        for i in set(x["schema_name"] for x in sames if "schema_name" in x)
-    ]
+    # drops = [
+    #     f"DROP SCHEMA IF EXISTS {i} CASCADE;"
+    #     for i in set(x["schema_name"] for x in sames if "schema_name" in x)
+    # ]
 
     corpus_version = (max(int(x["current_version"]) for x in sames) if sames else 0) + 1
-    schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
+    # schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
     template["meta"] = template.get("meta", {})
     template["meta"]["version"] = corpus_version
 
@@ -472,18 +473,21 @@ async def make_schema(request: web.Request) -> web.Response:
     # cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
     # delete = f"DELETE FROM main.corpus WHERE name = '{template['meta']['name']}' AND current_version < {cv};"
     # drops.append(delete)
-    deletes = [
-        f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
-        for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
-    ]
-    drops += deletes
+    # deletes = [
+    #     f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
+    #     for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
+    # ]
+    # drops += deletes
+
+    # Temporary schema name
+    schema_name = str(uuid4())
 
     template["projects"] = [proj_id]
     template["project"] = proj_id
     template["schema_name"] = schema_name
 
     try:
-        pieces = generate_ddl(template, corpus_version)
+        pieces = generate_ddl(template, proj_id, corpus_version)
         pieces["template"] = template
     except Exception as err:
         tb = traceback.format_exc()
@@ -501,7 +505,7 @@ async def make_schema(request: web.Request) -> web.Response:
         shutil.rmtree(directory, ignore_errors=True)
     os.makedirs(directory)
 
-    pieces["drops"] = drops
+    # pieces["drops"] = drops
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 
@@ -513,7 +517,7 @@ async def make_schema(request: web.Request) -> web.Response:
         schema_name=schema_name,
         user=user_id,
         room=room,
-        drops=drops,
+        # drops=drops,
         project_name=existing_project["title"],
     )
     whole_url = f"{short_url}?job={job.id}"
@@ -522,6 +526,7 @@ async def make_schema(request: web.Request) -> web.Response:
             "status": "started",
             "job": job.id,
             "project": proj_id,
+            "schema": schema_name,
             "path": corpus_path,
             "target": whole_url,
             "user_id": user_id,
