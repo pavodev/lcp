@@ -20,11 +20,7 @@ from datetime import date, datetime
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 
-try:
-    from aiohttp import web, ClientSession
-except ImportError:
-    from aiohttp import web
-    from aiohttp.client import ClientSession
+from aiohttp import web
 
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis import Redis as RedisConnection
