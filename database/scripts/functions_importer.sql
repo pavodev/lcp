@@ -35,8 +35,12 @@ AS $$
            ;
 
       INSERT
-        INTO main.inprogress_corpus (schema_path, corpus_id, project_id, corpus_template)
-      SELECT $1, previous_version, $2, $3
+        INTO main.inprogress_corpus (schema_path, corpus_id, project_id, corpus_template, status)
+      SELECT $1
+           , previous_version
+           , $2
+           , $3
+           , 'ongoing'
            ;
 
    END;
@@ -130,7 +134,7 @@ AS $$
            ;
 
       UPDATE main.inprogress_corpus
-         SET is_finished = TRUE
+         SET status = 'succeeded'
        WHERE schema_path = $1
            ;
 
@@ -144,6 +148,29 @@ ALTER FUNCTION main.finish_import
 REVOKE EXECUTE ON FUNCTION main.finish_import FROM public;
 GRANT EXECUTE ON FUNCTION main.finish_import TO lcp_production_importer;
 
+
+CREATE OR REPLACE PROCEDURE main.cleanup(
+   temp_schema_hash  uuid
+)
+AS $$
+
+        DROP SCHEMA $1 CASCADE
+           ;
+
+      UPDATE main.inprogress_corpus
+         SET status = 'failed'
+       WHERE schema_path = $1
+           ;
+
+   END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
+ALTER PROCEDURE main.cleanup
+   SET search_path = pg_catalog,pg_temp;
+
+REVOKE EXECUTE ON PROCEDURE main.cleanup FROM public;
+GRANT EXECUTE ON PROCEDURE main.cleanup TO lcp_production_importer;
 
 
 -- TODO
