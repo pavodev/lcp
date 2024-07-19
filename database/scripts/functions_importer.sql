@@ -1,6 +1,9 @@
--- create functions as ROLE lcp_production_owner
--- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
-REVOKE CREATE ON SCHEMA public FROM public;
+    -- create functions as ROLE lcp_production_owner
+    -- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
+    REVOKE CREATE ON SCHEMA public
+FROM public
+   ;
+
 
 
 CREATE OR REPLACE PROCEDURE main.open_import(
@@ -13,6 +16,7 @@ AS $$
       previous_version  int;
       corpus_name       text;
    BEGIN
+
       SELECT template -> 'meta' ->> 'name'
         INTO corpus_name
            ;
@@ -46,9 +50,8 @@ AS $$
    END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
 ALTER PROCEDURE main.open_import
-   SET search_path = pg_catalog,pg_temp;
+  SET search_path = pg_catalog,pg_temp;
 
 REVOKE EXECUTE ON PROCEDURE main.open_import FROM public;
 GRANT EXECUTE ON PROCEDURE main.open_import TO lcp_production_importer;
@@ -143,7 +146,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 ALTER FUNCTION main.finish_import
-   SET search_path = pg_catalog,pg_temp;
+  SET search_path = pg_catalog,pg_temp;
 
 REVOKE EXECUTE ON FUNCTION main.finish_import FROM public;
 GRANT EXECUTE ON FUNCTION main.finish_import TO lcp_production_importer;
@@ -153,8 +156,9 @@ CREATE OR REPLACE PROCEDURE main.cleanup(
    temp_schema_hash  uuid
 )
 AS $$
+   BEGIN
 
-        DROP SCHEMA $1 CASCADE
+        DROP SCHEMA temp_schema_hash CASCADE
            ;
 
       UPDATE main.inprogress_corpus
@@ -165,9 +169,8 @@ AS $$
    END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
 ALTER PROCEDURE main.cleanup
-   SET search_path = pg_catalog,pg_temp;
+  SET search_path = pg_catalog,pg_temp;
 
 REVOKE EXECUTE ON PROCEDURE main.cleanup FROM public;
 GRANT EXECUTE ON PROCEDURE main.cleanup TO lcp_production_importer;
