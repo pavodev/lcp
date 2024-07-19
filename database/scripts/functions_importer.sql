@@ -17,7 +17,7 @@ AS $$
       corpus_name       text;
    BEGIN
 
-      SELECT template -> 'meta' ->> 'name'
+      SELECT $3 -> 'meta' ->> 'name'
         INTO corpus_name
            ;
 
@@ -158,7 +158,7 @@ CREATE OR REPLACE PROCEDURE main.cleanup(
 AS $$
    BEGIN
 
-        DROP SCHEMA temp_schema_hash CASCADE
+     EXECUTE format('DROP SCHEMA %I;', $1)
            ;
 
       UPDATE main.inprogress_corpus
