@@ -364,7 +364,7 @@ async def make_schema(request: web.Request) -> web.Response:
     template = request_data["template"]
     room = request_data.get("room", None)
     projects = request_data.get("projects")
-    special = {"lcp", "vian", "all"}
+    special = {"lcp", "all"}
     project = next(i for i in projects if i not in special)
 
     today = datetime.today()
