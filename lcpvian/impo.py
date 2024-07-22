@@ -94,7 +94,7 @@ class SQLstats:
         self.main_corp: str = _format_config_query(
             dedent(
                 """
-            WITH mc AS (SELECT * FROM main.finish_import(:tmp_schema ::uuid, :new_schema ::text, :mapping ::jsonb, :counts ::jsonb))
+            WITH mc AS (SELECT main.finish_import(:tmp_schema ::uuid, :new_schema ::text, :mapping ::jsonb, :counts ::jsonb))
             SELECT {selects}
             FROM mc
             {join} WHERE mc.enabled = true;"""
