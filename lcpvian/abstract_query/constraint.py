@@ -867,7 +867,7 @@ class Constraint:
 
 class TimeConstraint:
     """
-    Handle a constraint based on time in VIAN
+    Handle a constraint based on time
     """
 
     def __init__(

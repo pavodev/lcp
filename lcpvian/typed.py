@@ -131,11 +131,6 @@ Endpoint: TypeAlias = Callable[
     [web.Request], Awaitable[web.Response | web.WebSocketResponse | web.FileResponse]
 ]
 
-# a kwic line for vian, with seg, toks, doc, gesture, agent and frame ranges
-VianKWIC: TypeAlias = tuple[
-    int | str, list[int], int | str, str | None, str | None, list[list[int]]
-]
-
 
 class BaseArgs(TypedDict, total=False):
     user: str

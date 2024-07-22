@@ -44,7 +44,6 @@ from .typed import (
     ResultSents,
     ResultsValue,
     Results,
-    VianKWIC,
 )
 from .utils import _get_associated_query_job
 
@@ -213,8 +212,6 @@ def _format_kwics(
 
     {0: meta_json, -1: {sent_id: [sent_offset, sent_data]}, 1: [token_ids, ...]}
 
-    For VIAN, the token_ids also include document_id, gesture info, etc.
-
     Often we don't want all the sentences, we use `offset` and `total` to get
     only a certain subset of them...
     """
@@ -225,7 +222,6 @@ def _format_kwics(
     counts: defaultdict[int, int] = defaultdict(int)
     stops: set[int] = set()
     skipped: defaultdict[int, int] = defaultdict(int)
-    vian_in_lcp: bool | None = None
 
     if sents is None:
         print("Sentences is None: expired?")
@@ -261,10 +257,6 @@ def _format_kwics(
             out[key] = []
         if key == "frame_range":
             rest = rest[:2]
-            # if vian_in_lcp is None:
-            #     vian_in_lcp = len(rest) > 2
-            # if vian_in_lcp:
-            #     rest = rest[:2]
         if str(rest[0]) not in out[-1]:
             continue
         bit = cast(list, out[key])
@@ -275,24 +267,6 @@ def _format_kwics(
         out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
     return out
-
-
-def _vian_inside_lcp(rest: Sequence) -> bool:
-    """
-    Detect whether this is a vian corpus accessed in lcp app
-    """
-    for i in rest[1:]:
-        if not isinstance(i, list):
-            continue
-        if not i:
-            continue
-        if len(i) < 6:
-            continue
-        if any(
-            isinstance(x, list) for x in i
-        ):  # and len(x) == 2 and isinstance(x[0], int)
-            return True
-    return False
 
 
 def _get_all_sents(
@@ -343,21 +317,6 @@ def _get_all_sents(
     if max_kwic > 0:
         out = _limit_kwic_to_max(out, current_lines, max_kwic)
 
-    return out
-
-
-def _format_vian(rest: Sequence) -> VianKWIC:
-    """
-    Little helper to build VIAN kwic sentence data, which has time,
-    document and gesture information added to the KWIC data
-    """
-    seg_id = cast(str | int, rest[0])
-    tok_ids = cast(list[int], rest[1])
-    doc_id = cast(int | str, rest[2])
-    gesture = cast(str | None, rest[3])
-    agent_name = cast(str | None, rest[4])
-    frame_ranges = cast(list[list[int]], rest[5:])
-    out = (seg_id, tok_ids, doc_id, gesture, agent_name, frame_ranges)
     return out
 
 

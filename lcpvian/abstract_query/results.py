@@ -621,7 +621,7 @@ WHERE {entity}.char_range && contained_token.char_range
         frame_ranges: list[dict],
     ) -> list[dict]:
         """
-        Format kwic metadata for vian/non vian queries
+        Format kwic metadata for queries
         """
 
         out: list[dict]
