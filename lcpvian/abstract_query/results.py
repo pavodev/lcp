@@ -47,8 +47,6 @@ class ResultsMaker:
         self.schema: str = conf.schema
         self.lang: str = conf.lang or ""
         self.batch: str = conf.batch
-        # self.vian: bool = conf.vian
-        self.vian: bool = False
         self.segment = cast(str, self.config["segment"])
         self.token = cast(str, self.config["token"])
         self.document = cast(str, self.config["document"])

@@ -60,7 +60,9 @@ OPS = {
 }
 
 
-def _prepare_existing(res: Results, kwics: set[int], colls: set[int]) -> dict[int, dict[str, tuple[int, float]]]:
+def _prepare_existing(
+    res: Results, kwics: set[int], colls: set[int]
+) -> dict[int, dict[str, tuple[int, float]]]:
     out: dict[int, Any] = {}
     for k, v in res.items():
         k = int(k)
@@ -123,7 +125,9 @@ def _aggregate_results(
     rs = meta_json["result_sets"]
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     freqs = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "analysis"])
-    colls = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "collocation"])
+    colls = set(
+        [i for i, r in enumerate(rs, start=1) if r.get("type") == "collocation"]
+    )
     counts: defaultdict[int, int] = defaultdict(int)
 
     minus_one: ResultsValue = existing.get(-1, cast(ResultsValue, {}))
@@ -196,7 +200,6 @@ def _format_kwics(
     meta_json: QueryMeta,
     sents: list[RawSent] | None,
     total: int,
-    is_vian: bool,
     is_first: bool,
     offset: int,
     max_kwic: int,
@@ -256,9 +259,6 @@ def _format_kwics(
             continue
         if key not in out:
             out[key] = []
-        # if is_vian and key in kwics:
-        #     rest = list(_format_vian(rest))
-        # elif key in kwics:
         if key == "frame_range":
             rest = rest[:2]
             # if vian_in_lcp is None:
@@ -288,7 +288,9 @@ def _vian_inside_lcp(rest: Sequence) -> bool:
             continue
         if len(i) < 6:
             continue
-        if any(isinstance(x, list) for x in i):  # and len(x) == 2 and isinstance(x[0], int)
+        if any(
+            isinstance(x, list) for x in i
+        ):  # and len(x) == 2 and isinstance(x[0], int)
             return True
     return False
 
@@ -296,7 +298,6 @@ def _vian_inside_lcp(rest: Sequence) -> bool:
 def _get_all_sents(
     job: Job,
     base: Job,
-    is_vian: bool,
     meta_json: QueryMeta,
     max_kwic: int,
     current_lines: int,
@@ -312,16 +313,16 @@ def _get_all_sents(
     got: Results
     for jid in base.meta["_sent_jobs"]:
         j = job if job.id == jid else Job.fetch(jid, connection=connection)
-        dep = _get_associated_query_job(j.kwargs["depends_on"], connection)
-        resume = j.kwargs.get("resume", False)
-        offset = j.kwargs.get("offset", 0) if resume else -1
-        needed = j.kwargs.get("needed", -1)
+        jk = cast(dict, j.kwargs)
+        dep = _get_associated_query_job(jk["depends_on"], connection)
+        resume = jk.get("resume", False)
+        offset = jk.get("offset", 0) if resume else -1
+        needed = jk.get("needed", -1)
         got = _format_kwics(
             dep.result,
             meta_json,
             j.result,
             needed,
-            is_vian,
             is_first,
             offset,
             0,
@@ -383,7 +384,9 @@ def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> R
     return to_send
 
 
-def _make_filters(post: dict[int, list[dict[str, Any]]]) -> dict[int, list[tuple[str, str, str | int | float]]]:
+def _make_filters(
+    post: dict[int, list[dict[str, Any]]]
+) -> dict[int, list[tuple[str, str, str | int | float]]]:
     """
     Because we iterate over them a lot, turn the filters object into something
     as performant as possible
@@ -400,7 +403,9 @@ def _make_filters(post: dict[int, list[dict[str, Any]]]) -> dict[int, list[tuple
 
             entity = comp["entity"]
             operator = comp["operator"]
-            value = next(c[1] for c in comp.items() if c[0] not in ("entity", "operator"))
+            value = next(
+                c[1] for c in comp.items() if c[0] not in ("entity", "operator")
+            )
             if value.isnumeric():
                 value = int(value)
             elif value.replace(".", "").isnumeric():

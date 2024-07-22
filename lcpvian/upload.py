@@ -332,9 +332,7 @@ def _extract_file(
 
 def _move_media_files(cpath: str, corpus_dir: str) -> None:
     print("Moving media files")
-    media_path = os.environ.get(
-        "UPLOAD_MEDIA_PATH", os.path.join("frontend", "public", "media")
-    )
+    media_path = os.environ.get("UPLOAD_MEDIA_PATH", os.path.join("media"))
     if not os.path.exists(media_path):
         os.mkdir(media_path)
     dest_path = os.path.join(media_path, corpus_dir)

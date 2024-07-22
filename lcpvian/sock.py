@@ -286,7 +286,7 @@ async def _handle_message(
     #   to all users with the latest config so the FE can show it
     if action == "uploaded":
         # TODO: Should be chnaged to accept all app types (catchphrase, soundscript, videoscope)
-        app_type = "videoscope" if cast(bool, payload["is_vian"]) else "lcp"
+        app_type = "lcp"
         user_data = cast(JSONObject | None, payload["user_data"])
         conf: CorpusConfig = cast(CorpusConfig, payload["entry"])
         conf["_batches"] = _get_batches(conf)
@@ -399,7 +399,6 @@ async def _handle_query(
             "word_count",
             "full",
             "first_job",
-            "is_vian",
             "table",
             "total_duration",
             "jso",

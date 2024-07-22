@@ -45,7 +45,6 @@ class Token:
         order: int | None,
         prev_label: str | None,
         conf: Config,
-        vian: bool,
         quantor: str | None,
         label_layer: LabelLayer,
         set_objects: set[str],
@@ -73,7 +72,6 @@ class Token:
         self.token = self.config["token"]
         self.segment = self.config["segment"]
         self.document = self.config["document"]
-        self.vian = vian
         self.label_layer = label_layer
         self.quantor = quantor
         self._n: int = n or 1
@@ -158,7 +156,6 @@ class QueryMaker:
         self.batch: str = conf.batch
         self.config: JSONObject = conf.config
         self.lang: str | None = conf.lang
-        self.vian: bool = conf.vian
         self._one_done: bool = False
         self._n = 1
         self.selects: set[str] = set()
@@ -226,7 +223,6 @@ class QueryMaker:
             j,
             prev_label,
             self.conf,
-            self.vian,
             cast(str | None, obj.get("quantor", None)),
             self.r.label_layer,
             self.r.set_objects,

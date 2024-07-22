@@ -47,7 +47,6 @@ class Config:
     batch: str
     config: dict[str, Any]
     lang: str | None
-    vian: bool
 
 
 def _strip_batch(batch: str) -> str:

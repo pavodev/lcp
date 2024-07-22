@@ -72,7 +72,6 @@ class QueryIteration:
     languages: set[str]
     simultaneous: str
     sentences: bool
-    is_vian: bool
     app: Application
     resume: bool = False
     previous: str = ""
@@ -116,7 +115,6 @@ class QueryIteration:
             batch=self.current_batch[2],
             config=self.app["config"][str(self.current_batch[0])],
             lang=self._determine_language(self.current_batch[2]),
-            vian=self.is_vian or "tangram" in self.current_batch[1].lower(),
         )
         if self.jso:
             json_query = self.jso
@@ -148,7 +146,6 @@ class QueryIteration:
         corpora: list[int],
         config: dict[str, CorpusConfig],
         languages: set[str],
-        is_vian: bool,
     ) -> list[Batch]:
         """
         Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -201,10 +198,9 @@ class QueryIteration:
             total_duration = prev_kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
-        is_vian = request_data.get("appType") == "vian"
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(
-            corpora_to_use, request.app["config"], languages, is_vian
+            corpora_to_use, request.app["config"], languages
         )
 
         details = {
@@ -228,8 +224,6 @@ class QueryIteration:
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
-            # "is_vian": is_vian,
-            "is_vian": False,
         }
         if request_data.get("to_export", False):
             details["to_export"] = {
@@ -304,7 +298,6 @@ class QueryIteration:
             simultaneous=self.simultaneous,
             full=self.full,
             total_duration=self.total_duration,
-            is_vian=self.is_vian,
             current_kwic_lines=self.current_kwic_lines,
             dqd=self.dqd,
             first_job=self.first_job,
@@ -490,7 +483,6 @@ class QueryIteration:
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
-            "is_vian": manual.get("is_vian", False),
             "to_export": manual.get("to_export", kwargs.get("to_export", "")),
         }
         return cls(**details)
@@ -523,10 +515,6 @@ class QueryIteration:
         buffer = 0.1  # set to zero for picking smaller batches
 
         so_far = self.total_results_so_far
-        if self.is_vian:
-            if self.done_batches:
-                raise ValueError("VIAN corpora have only one batch!?")
-            return self.all_batches[0]
 
         if not len(self.done_batches):
             # return the "rest" batch or the next smallest

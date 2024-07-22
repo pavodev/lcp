@@ -396,7 +396,6 @@ def _sentences(
     depended_kwargs: dict = cast(dict, depended.kwargs)
     full = cast(bool, kwargs.get("full", job_kwargs.get("full", False)))
     meta_json = depended_kwargs["meta_json"]
-    is_vian = depended_kwargs.get("is_vian", False)
     resume = cast(bool, job_kwargs.get("resume", False))
     offset = cast(int, job_kwargs.get("offset", 0) if resume else -1)
     prev_offset = cast(int, depended.meta.get("latest_offset", -1))
@@ -426,7 +425,7 @@ def _sentences(
 
     if get_all_sents:
         to_send = _get_all_sents(
-            job, base, is_vian, meta_json, max_kwic, current_lines, full, connection
+            job, base, meta_json, max_kwic, current_lines, full, connection
         )
     else:
         to_send = _format_kwics(
@@ -434,7 +433,6 @@ def _sentences(
             meta_json,
             result,
             total_to_get,
-            is_vian,
             True,
             offset,
             max_kwic,
@@ -673,7 +671,6 @@ def _upload(
     room: str | None = job.args[2]
     job_kwargs: dict = cast(dict, job.kwargs)
     user_data: JSONObject = job_kwargs["user_data"]
-    is_vian: bool = job_kwargs["is_vian"]
     gui: bool = job_kwargs["gui"]
     msg_id = str(uuid4())
     action = "uploaded"
@@ -685,7 +682,6 @@ def _upload(
         "room": room,
         "id": result[0],
         "user_data": user_data,
-        "is_vian": is_vian,
         "entry": _row_to_value(result, project=project),
         "status": "success" if not result else "error",
         "project": project,
