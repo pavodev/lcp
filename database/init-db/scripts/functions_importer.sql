@@ -1,3 +1,5 @@
+\c lcp_production
+
 -- create functions as ROLE lcp_production_owner
 -- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
 REVOKE CREATE ON SCHEMA public FROM public;
@@ -18,7 +20,7 @@ AS $$
         INTO corpus_name
            ;
 
-      ASSERT corpus_name IS NOT NULL AND corpus_name <> ''
+      ASSERT corpus_name IS NOT NULL AND corpus_name <> '', 'Could not find a name for the corpus in meta'
            ;
 
      EXECUTE format('CREATE SCHEMA %I AUTHORIZATION lcp_production_owner;', $1)
@@ -61,15 +63,15 @@ CREATE OR REPLACE FUNCTION main.finish_import(
  , token_counts_in   jsonb
 )
 RETURNS table (
-   corpus_id         main.corpus.corpus_id%TYPE
- , corpus_template   main.corpus.corpus_template%TYPE
+   project_id        main.corpus.project_id%TYPE
  , created_at        main.corpus.created_at%TYPE
+ , corpus_id         main.corpus.corpus_id%TYPE
  , current_version   main.corpus.current_version%TYPE
- , description       main.corpus.description%TYPE
  , enabled           main.corpus.enabled%TYPE
+ , corpus_template   main.corpus.corpus_template%TYPE
+ , description       main.corpus.description%TYPE
  , mapping           main.corpus.mapping%TYPE
  , name              main.corpus.name%TYPE
- , project_id        main.corpus.project_id%TYPE
  , sample_query      main.corpus.sample_query%TYPE
  , schema_path       main.corpus.schema_path%TYPE
  , token_counts      main.corpus.token_counts%TYPE
@@ -117,6 +119,13 @@ AS $$
 
      EXECUTE format('ALTER SCHEMA %I RENAME TO %I;', $1, new_schema_name)
            ;
+
+     EXECUTE format('GRANT USAGE ON SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
+           ;
+
+     EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
+           ;
+
      EXECUTE format('REVOKE ALL ON SCHEMA %I FROM lcp_production_importer;', new_schema_name)
            ;
 

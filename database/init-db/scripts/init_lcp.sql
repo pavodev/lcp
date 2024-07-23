@@ -2,6 +2,11 @@
 
 BEGIN;
 
+\c lcp_production
+
+CREATE EXTENSION IF NOT EXISTS rum WITH SCHEMA public;
+COMMENT ON EXTENSION rum IS 'RUM index access method';
+
 CREATE TYPE main.upload_status AS ENUM (
    'failed'
  , 'succeeded'
@@ -34,6 +39,7 @@ CREATE TABLE main.inprogress_corpus (
  , status            main.upload_status   NOT NULL
  , corpus_template   jsonb                NOT NULL
 );
+
 
 
 -- global ENUM types
@@ -420,7 +426,6 @@ CREATE TYPE main.upos AS ENUM (
  , 'VERB'
  , 'X'
 );
-
 
 GRANT SELECT
    ON main.corpus

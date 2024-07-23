@@ -94,12 +94,10 @@ class DDL:
         #     DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
         #     SET search_path TO {x};"""
         # )
-        self.create_scm: Callable[[str, str, str, str], str] = (
-            lambda x, n, y, z: dedent(
-                f"""
-            CALL main.open_import('{x}'::uuid, '{n}', '{y}'::uuid, '{z}');
+        self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
+            f"""
+            CALL main.open_import('{x}'::uuid, '{y}'::uuid, '{z}');
             SET search_path TO "{x}";"""
-            )
         )
 
         self.create_prepared_segs: Callable[[str, str], str] = lambda x, y: dedent(
@@ -953,9 +951,7 @@ class CTProcessor:
         corpus_template: str = json.dumps(self.corpus_temp)
 
         # scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
-        scm: str = self.ddl.create_scm(
-            schema_name, original_name, project_id, corpus_template
-        )
+        scm: str = self.ddl.create_scm(schema_name, project_id, corpus_template)
         self.globals.schema.append(scm)
         # query_user = os.getenv("SQL_QUERY_USERNAME", "lcp_dev_webuser")
         # perms: str = self.ddl.perms(schema_name, query_user)

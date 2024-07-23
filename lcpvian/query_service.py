@@ -95,8 +95,8 @@ class QueryService:
         if jso is None:
             return False
         payload: JSONObject = json.loads(jso)
-        payload["user"] = kwargs["user"]
-        payload["room"] = kwargs["room"]
+        payload["user"] = kwargs.get("user", "")
+        payload["room"] = kwargs.get("room", "")
         # we may have to apply the latest post-processes...
         pps = cast(
             dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
@@ -129,8 +129,8 @@ class QueryService:
                 failed = True
                 continue
             payload = json.loads(jso)
-            payload["user"] = kwargs["user"]
-            payload["room"] = kwargs["room"]
+            payload["user"] = kwargs.get("user", "")
+            payload["room"] = kwargs.get("room", "")
             payload["no_update_progress"] = True
             payload["no_restart"] = True
             self.app["redis"].expire(msg, self.query_ttl)
@@ -199,8 +199,8 @@ class QueryService:
                         job,
                         self.app["redis"],
                         job.result,
-                        user=kwargs["user"],
-                        room=kwargs["room"],
+                        user=kwargs.get("user", ""),
+                        room=kwargs.get("room", ""),
                         full=kwargs["full"],
                         post_processes=kwargs["post_processes"],
                         current_kwic_lines=kwargs["current_kwic_lines"],
@@ -388,15 +388,14 @@ class QueryService:
         queue: str = "query",
         **kwargs: Unpack[SentJob],
     ) -> list[str]:
-        depends_on = kwargs["depends_on"]
+        depends_on = kwargs.get("depends_on", "")
         hash_dep = tuple(depends_on) if isinstance(depends_on, list) else depends_on
-        hashed = str(
-            hash((query, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
-        )
+        offset = kwargs.get("offset", 0)
+        needed = kwargs.get("needed", 0)
+        full = kwargs.get("full", False)
+        hashed = str(hash((query, hash_dep, offset, needed, full)))
         kwargs["sentences_query"] = query
-        hashed_meta = str(
-            hash((meta, hash_dep, kwargs["offset"], kwargs["needed"], kwargs["full"]))
-        )
+        hashed_meta = str(hash((meta, hash_dep, offset, needed, full)))
         job_sent: Job
 
         if self.use_cache:
@@ -454,11 +453,11 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Meta found in redis memory. Retrieving...")
                 kwa = {
-                    "full": kwargs["full"],
-                    "user": kwargs["user"],
-                    "room": kwargs["room"],
+                    "full": kwargs.get("full", False),
+                    "user": kwargs.get("user", ""),
+                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": kwargs["total_results_requested"],
+                    "total_results_requested": kwargs.get("total_results_requested", 0),
                 }
                 _meta(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
@@ -481,11 +480,11 @@ class QueryService:
             if job.get_status() == "finished":
                 print("Sentences found in redis memory. Retrieving...")
                 kwa = {
-                    "full": kwargs["full"],
-                    "user": kwargs["user"],
-                    "room": kwargs["room"],
+                    "full": kwargs.get("full", False),
+                    "user": kwargs.get("user", ""),
+                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": kwargs["total_results_requested"],
+                    "total_results_requested": kwargs.get("total_results_requested", 0),
                 }
                 _sentences(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
@@ -733,15 +732,16 @@ class QueryService:
 
         for job in jobs:
             maybe = Job.fetch(job, connection=self.app["redis"])
-            if base and maybe.kwargs.get("simultaneous") != base:
+            mk = cast(dict, maybe.kwargs)
+            if base and mk.get("simultaneous", "") != base:
                 continue
-            if base and maybe.kwargs.get("is_sentences"):
+            if base and mk.get("is_sentences", False):
                 continue
             if job in self.app["canceled"]:
                 continue
-            if room and maybe.kwargs.get("room") != room:
+            if room and mk.get("room") != room:
                 continue
-            if user and maybe.kwargs.get("user") != user:
+            if user and mk.get("user") != user:
                 continue
             try:
                 self.cancel(maybe)

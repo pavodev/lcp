@@ -29,12 +29,8 @@ ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO lcp_production_ro;
 
 -- does that make sense or too broad?
 GRANT lcp_production_ro
-   TO lcp_production_importer
-    , lcp_production_maintenance
+   TO lcp_production_maintenance
     , lcp_production_monitoring
-    , lcp_production_owner
-    , lcp_production_query_engine
-    , lcp_production_web_user
  WITH INHERIT TRUE
     , SET FALSE
     ;
