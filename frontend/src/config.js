@@ -130,7 +130,7 @@ else if (process.env.APP_TYPE == "lcphome") {
   }
 }
 else {
-  // LCP HOME
+  // LCP
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "LCP",
