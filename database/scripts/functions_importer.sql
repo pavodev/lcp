@@ -1,9 +1,6 @@
-    -- create functions as ROLE lcp_production_owner
-    -- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
-    REVOKE CREATE ON SCHEMA public
-FROM public
-   ;
-
+-- create functions as ROLE lcp_production_owner
+-- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
+REVOKE CREATE ON SCHEMA public FROM public;
 
 
 CREATE OR REPLACE PROCEDURE main.open_import(
@@ -59,11 +56,24 @@ GRANT EXECUTE ON PROCEDURE main.open_import TO lcp_production_importer;
 
 CREATE OR REPLACE FUNCTION main.finish_import(
    temp_schema_hash  uuid
- , project_id        uuid
  , schema_name       text
- , mapping           jsonb
- , token_counts      jsonb
- , OUT new_entry     record
+ , mapping_in        jsonb
+ , token_counts_in   jsonb
+)
+RETURNS table (
+   corpus_id         main.corpus.corpus_id%TYPE
+ , corpus_template   main.corpus.corpus_template%TYPE
+ , created_at        main.corpus.created_at%TYPE
+ , current_version   main.corpus.current_version%TYPE
+ , description       main.corpus.description%TYPE
+ , enabled           main.corpus.enabled%TYPE
+ , mapping           main.corpus.mapping%TYPE
+ , name              main.corpus.name%TYPE
+ , project_id        main.corpus.project_id%TYPE
+ , sample_query      main.corpus.sample_query%TYPE
+ , schema_path       main.corpus.schema_path%TYPE
+ , token_counts      main.corpus.token_counts%TYPE
+ , version_history   main.corpus.version_history%TYPE
 )
 AS $$
    DECLARE
@@ -71,13 +81,14 @@ AS $$
       next_version      int;
       new_schema_name   text;
       corpus_name       text;
+      project_id_in     uuid;
       template          jsonb;
    BEGIN
 
-      SELECT max(current_version) + 1
-           , max(current_version)
+      SELECT max(cv) + 1
+           , max(cv)
         FROM (
-                SELECT current_version
+                SELECT c.current_version AS cv
                   FROM main.corpus            AS c
                   JOIN main.inprogress_corpus AS t USING (corpus_id)
                  WHERE t.schema_path = $1
@@ -88,14 +99,16 @@ AS $$
            , curr_version
            ;
 
-      SELECT format('%s_%s', $3, next_version)
+      SELECT format('%s_%s', $2, next_version)
         INTO new_schema_name
            ;
 
-      SELECT corpus_template
+      SELECT ipc.corpus_template
+           , ipc.project_id
         INTO template
-        FROM main.inprogress_corpus
-       WHERE schema_path = $1
+           , project_id_in
+        FROM main.inprogress_corpus AS ipc
+       WHERE ipc.schema_path = $1
            ;
 
       SELECT template -> 'meta' ->> 'name'
@@ -107,38 +120,34 @@ AS $$
 
      EXECUTE format('ALTER SCHEMA %I RENAME TO %I;', $1, new_schema_name)
            ;
-     EXECUTE format('GRANT USAGE ON SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
-           ;
-     EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
-           ;
      EXECUTE format('REVOKE ALL ON SCHEMA %I FROM lcp_production_importer;', new_schema_name)
            ;
 
-      INSERT
-        INTO main.corpus (name, project_id, current_version, corpus_template, schema_path, mapping, token_counts)
-      SELECT corpus_name
-           , $2
-           , next_version
-           , template
-           , new_schema_name
-           , $4
-           , $5
-   RETURNING *
-        INTO new_entry
-           ;
-
-      UPDATE main.corpus
+      UPDATE main.corpus AS mc
          SET enabled = FALSE
-       WHERE corpus_id = (
-             SELECT corpus_id
-               FROM main.inprogress_corpus
-              WHERE schema_path = $1
+       WHERE mc.corpus_id = (
+             SELECT ipc.corpus_id
+               FROM main.inprogress_corpus AS ipc
+              WHERE ipc.schema_path = $1
              )
            ;
 
-      UPDATE main.inprogress_corpus
+      UPDATE main.inprogress_corpus AS ipc
          SET status = 'succeeded'
-       WHERE schema_path = $1
+       WHERE ipc.schema_path = $1
+           ;
+
+      RETURN QUERY
+      INSERT
+        INTO main.corpus (name, current_version, project_id, corpus_template, schema_path, mapping, token_counts)
+      SELECT corpus_name
+           , next_version
+           , project_id_in
+           , template
+           , new_schema_name
+           , $3
+           , $4
+   RETURNING *
            ;
 
    END;
