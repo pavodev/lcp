@@ -77,7 +77,6 @@ RETURNS table (
 )
 AS $$
    DECLARE
-      curr_version      int;
       next_version      int;
       new_schema_name   text;
       corpus_name       text;
@@ -86,7 +85,6 @@ AS $$
    BEGIN
 
       SELECT max(cv) + 1
-           , max(cv)
         FROM (
                 SELECT c.current_version AS cv
                   FROM main.corpus            AS c
@@ -96,7 +94,6 @@ AS $$
                 SELECT 0
              ) AS x
         INTO next_version
-           , curr_version
            ;
 
       SELECT format('%s_%s', $2, next_version)
