@@ -669,6 +669,7 @@ class QueryService:
         user: str | None,
         room: str | None,
         project_name: str,
+        corpus_name: str,
         queue: str = "background",
         # drops: list[str] | None = None,
         gui: bool = False,
@@ -679,6 +680,7 @@ class QueryService:
             "room": room,
             "path": path,
             "project_name": project_name,
+            "corpus_name": corpus_name,
             "gui": gui,
         }
         job: Job = self.app[queue].enqueue(

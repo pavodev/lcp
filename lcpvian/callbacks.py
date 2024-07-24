@@ -440,17 +440,6 @@ def _sentences(
             full,
         )
 
-    for sent in result or []:
-        if len(sent) < 4:
-            continue
-        if not sent[3]:
-            continue
-        sent_id = str(sent[0])
-        if sent_id not in to_send.get(-1, {}):
-            continue
-        res = cast(dict, to_send[-1])
-        res[sent_id].append(sent[3])
-
     more_data = not job_kwargs["no_more_data"]
     submit_query = job_kwargs["start_query_from_sents"]
     if submit_query and more_data:
@@ -644,6 +633,7 @@ def _schema(
         "status": "success" if not result else "error",
         "project": job_kwargs["project"],
         "project_name": job_kwargs["project_name"],
+        "corpus_name": job_kwargs["corpus_name"],
         "action": action,
         "gui": job_kwargs.get("gui", False),
         "room": room,
@@ -689,8 +679,6 @@ def _upload(
         "gui": gui,
         "msg_id": msg_id,
     }
-    if result:
-        jso["error"] = result
 
     return _publish_msg(connection, cast(JSONObject, jso), msg_id)
 

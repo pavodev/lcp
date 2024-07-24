@@ -6,7 +6,6 @@ status information about the current task
 
 import json
 import os
-import re
 
 import shutil
 import traceback
@@ -23,8 +22,8 @@ from rq.job import Job
 
 from .authenticate import Authentication
 from .ddl_gen import generate_ddl
-from .typed import Headers, JSON
-from .utils import _sanitize_corpus_name
+from .typed import JSON
+from .utils import _sanitize_corpus_name, _row_to_value
 
 
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
@@ -60,6 +59,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         "info": msg,
         "project": kwargs["project"],
         "project_name": kwargs["project_name"],
+        "corpus_name": kwargs["corpus_name"],
         "target": whole_url,
     }
     return web.json_response(ret)
@@ -190,12 +190,13 @@ async def upload(request: web.Request) -> web.Response:
     gui_mode = request.rel_url.query.get("gui", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
-    schema_name: str = cast(str, job.args[1])
+    # schema_name: str = cast(str, job.args[1])
     kwargs: dict = cast(dict, job.kwargs)
     project_id = kwargs["project"]
     username = kwargs["user"]
     room = kwargs["room"]
     project_name = kwargs["project_name"]
+    corpus_name = kwargs["corpus_name"]
     cpath = kwargs["path"]
 
     ziptar = [
@@ -243,10 +244,21 @@ async def upload(request: web.Request) -> web.Response:
             "job": job.id,
             "project": str(project_id),
             "project_name": project_name,
+            "corpus_name": corpus_name,
         }
         try:
-            corpus_dir = os.path.split(cpath)[-1]
-            _move_media_files(cpath, corpus_dir)
+            # corpus_dir = os.path.split(cpath)[-1]
+            # new_name: str = self.name.lower()
+            # new_name = re.sub(r"\W", "_", new_name)
+            # new_name = re.sub(r"_+", "_", new_name)
+            # new_name += "_" + re.sub(
+            #     "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
+            # )
+            upload_job = Job.fetch(
+                job.meta["upload_job"], connection=request.app["redis"]
+            )
+            corpus_entry = _row_to_value(upload_job.result)
+            _move_media_files(cpath, corpus_entry.get("schema_path", ""))
             # shutil.rmtree(cpath)  # todo: should we do this?
         except Exception as err:
             ret["status"] = "failed"
@@ -266,16 +278,18 @@ async def upload(request: web.Request) -> web.Response:
     kwa = dict(gui=gui_mode, user_data=user_data)
     path = os.path.join("uploads", cpath)
     print(f"Uploading data to database: {cpath}")
-    job = qs.upload(username, cpath, room, **kwa)
+    upload_job = qs.upload(username, cpath, room, **kwa)
+    job.meta["upload_job"] = upload_job.id
+    job.save()
     short_url = str(url).split("?", 1)[0]
-    suggest_url = f"{short_url}?job={job.id}"
+    suggest_url = f"{short_url}?job={upload_job.id}"
     info = f"""Data upload has begun. If you want to check the status, POST to:
         {suggest_url}
     """
     return_data.update(
         {
             "status": "started",
-            "job": job.id,
+            "job": upload_job.id,
             "project": str(project_id),
             "project_name": project_name,
             "info": info,
@@ -344,9 +358,12 @@ def _move_media_files(cpath: str, corpus_dir: str) -> None:
         if not str(f).endswith(MEDIA_EXTENSIONS):
             continue
         basename = os.path.basename(f)
-        os.rename(
+        shutil.move(
             os.path.join(source_path, basename), os.path.join(dest_path, basename)
         )
+        # os.rename(
+        #     os.path.join(source_path, basename), os.path.join(dest_path, basename)
+        # )
 
 
 async def make_schema(request: web.Request) -> web.Response:
@@ -457,10 +474,6 @@ async def make_schema(request: web.Request) -> web.Response:
         and proj_id in i.get("projects", [])  # only corpora from the same project
         # and str(i["meta"]["version"]) == str(corpus_version)
     ]
-    # drops = [
-    #     f"DROP SCHEMA IF EXISTS {i} CASCADE;"
-    #     for i in set(x["schema_name"] for x in sames if "schema_name" in x)
-    # ]
 
     corpus_version = (max(int(x["current_version"]) for x in sames) if sames else 0) + 1
     # schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
@@ -517,6 +530,7 @@ async def make_schema(request: web.Request) -> web.Response:
         room=room,
         # drops=drops,
         project_name=existing_project["title"],
+        corpus_name=corpus_name,
     )
     whole_url = f"{short_url}?job={job.id}"
     return web.json_response(

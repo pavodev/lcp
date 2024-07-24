@@ -65,6 +65,18 @@ services:
     networks:
       - lcp-network
 
+  mediasrv:
+    build:
+      context: ./media
+      dockerfile: Dockerfile.dev
+    container_name: lcp-mediasrv
+    volumes:
+      - ./media:/media
+    ports:
+      - "8090:8090"
+    networks:
+      - lcp-network
+
   frontend:
     build:
       context: ./frontend
@@ -76,7 +88,6 @@ services:
       - backend
     volumes:
       - ./frontend:/app
-      - ./media:/app/public/media
     ports:
       - "8080:8080"
     networks:

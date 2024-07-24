@@ -173,7 +173,7 @@ CREATE OR REPLACE PROCEDURE main.cleanup(
 AS $$
    BEGIN
 
-     EXECUTE format('DROP SCHEMA %I;', $1)
+     EXECUTE format('DROP SCHEMA IF EXISTS %I CASCADE;', $1)
            ;
 
       UPDATE main.inprogress_corpus

@@ -592,7 +592,12 @@ def _get_associated_query_job(
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
-    return cn
+    return cn.lower()
+
+
+def _schema_from_corpus_name(corpus_name: str, project_id: str) -> str:
+    tmp_name = _sanitize_corpus_name(corpus_name)
+    return tmp_name + "_" + re.sub("-", "", re.sub(r"_+", "_", project_id))
 
 
 def format_query_params(

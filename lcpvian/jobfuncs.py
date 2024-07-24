@@ -97,11 +97,12 @@ async def _create_schema(
                 print("Creating schema...\n", create)
                 await con.execute(create)
             except Exception:
-                script = f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
+                pass  # All is handled as one transaction now in open_import
+                # script = f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
                 # extra.pop("drops")
-                msg = f"Attempting schema drop (create): {schema_name}"
-                logging.info(msg, extra=extra)
-                await con.execute(script)
+                # msg = f"Attempting schema drop (create): {schema_name}"
+                # logging.info(msg, extra=extra)
+                # await con.execute(script)
     return None
 
 

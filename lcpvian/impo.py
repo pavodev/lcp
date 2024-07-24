@@ -56,7 +56,12 @@ from sqlalchemy.sql import text
 
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
-from .utils import _format_config_query, format_query_params, gather
+from .utils import (
+    _format_config_query,
+    format_query_params,
+    gather,
+    _schema_from_corpus_name,
+)
 
 
 class SQLstats:
@@ -179,9 +184,9 @@ class Importer:
         """
         Drop all the data we just tried to import -- used as exception handling
         """
-        # script = f'DROP SCHEMA IF EXISTS "{self.schema}" CASCADE;'
-        # self.update_progress(f"Running cleanup:\n{script}")
-        # await self.run_script(script)
+        script = f"CALL main.cleanup('{self.schema}'::uuid);"
+        self.update_progress(f"Running cleanup:\n{script}")
+        await self.run_script(script)
         return None
 
     async def _get_positions(
@@ -590,11 +595,8 @@ class Importer:
         Add a row to main.corpus with metadata about the imported corpus
         """
         self.update_progress("Adding to corpus list...")
-        new_name: str = self.name.lower()
-        new_name = re.sub(r"\W", "_", new_name)
-        new_name = re.sub(r"_+", "_", new_name)
-        new_name += "_" + re.sub(
-            "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
+        new_name: str = _schema_from_corpus_name(
+            self.name.lower(), self.template.get("project", "")
         )
         params: dict[str, str | int] = dict(
             # name=self.name,
@@ -614,33 +616,10 @@ class Importer:
         # The row is now in main.corpus, time to update the app's config?
         return rows[0]
 
-    async def drop_similar(self) -> None:
-        """
-        Drop schemas from DB if they are the same as this one, minus the uuid
-
-        This is dangerous and needs to be updated with logic checkin
-        """
-        start = self.schema[:-4]
-        regex = f"^{start}"
-        query = f"SELECT schema_name FROM information_schema.schemata WHERE schema_name ~ :regex ;"
-        results = cast(
-            list[tuple[str]],
-            await self.run_script(query, give=True, params={"regex": regex}),
-        )
-        if not results:
-            return None
-        base = 'DROP SCHEMA "{schema}" CASCADE;'
-        scripts = [base.format(schema=s[0]) for s in results if s[0] != self.schema]
-        # actually do the drops (in parallel):
-        await self.process_data(scripts, self.run_script)
-        return None
-
     async def pipeline(self) -> MainCorpus:
         """
         Run the entire import pipeline: add data, set indices, grant rights
         """
-        # if self.debug:
-        #     await self.drop_similar()
         await self.import_corpus()
         self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"

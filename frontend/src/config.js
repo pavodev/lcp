@@ -155,7 +155,7 @@ else {
       wsUrl: "ws://localhost:9090/ws",
       apiHeaders: testUserHeaders,
       sentryDSN: null,
-      baseMediaUrl: "/media/",
+      baseMediaUrl: "http://localhost:8090/",
     };
   }
 }
