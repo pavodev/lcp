@@ -13,7 +13,6 @@ from .utils import (
     _get_underlang,
     _joinstring,
     _layer_contains,
-    _unique_label,
     _bound_label,
 )
 
@@ -483,14 +482,14 @@ class QueryMaker:
                     if not s.ctes[-1].next_fixed_token:
                         max = f"___lasttable___.id"
 
-                min_label: str = _unique_label(
-                    entities, f"{min} as min_{s.sequence.label}"
-                )
-                max_label: str = _unique_label(
-                    entities, f"{max} as max_{s.sequence.label}"
-                )
+                min_label: str = self.r.unique_label(f"min_{s.sequence.label}")
+                max_label: str = self.r.unique_label(f"max_{s.sequence.label}")
 
-                sequence_ranges[s.sequence.label] = (min_label, max_label, s.part_of)
+                sequence_ranges[s.sequence.label] = (
+                    f"{min} as {min_label}",
+                    f"{max} as {max_label}",
+                    s.part_of,
+                )
 
         # Go through all the segments and pick the most constrained one
         n_segment_constraints_max = 0
@@ -607,8 +606,15 @@ class QueryMaker:
         # If any sequence has a label and needs its range to be returned
         if sequence_ranges:
 
+            selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
             gather_selects: str = ",\n".join(
-                sorted({s.replace("___lasttable___", last_table) for s in self.selects})
+                # sorted({s.replace("___lasttable___", last_table) for s in self.selects})
+                sorted(
+                    {
+                        s.replace("___lasttable___", last_table)
+                        for s in selects_intermediate
+                    }
+                )
             )
             for seqlab, (min_seq, max_seq, seg_lab) in sequence_ranges.items():
                 if self.r.entities and seqlab not in self.r.entities:
@@ -617,7 +623,7 @@ class QueryMaker:
                 gather_selects += f",\n{max_seq.replace('___lasttable___', last_table)}"
                 min_label = min_seq.split(" as ")[-1]
                 max_label = max_seq.split(" as ")[-1]
-                jttable = _unique_label(entities, "t")
+                jttable = self.r.unique_label("t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = (
                     f"{jttable}.{self.segment.lower()}_id = gather.{seg_lab} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"

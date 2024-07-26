@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 from typing import cast, Any, Self
+from uuid import uuid4
 
 from automathon import NFA  # type: ignore
 
@@ -11,7 +12,7 @@ from .constraint import _get_constraints
 from .prefilter import Prefilter
 from .sequence_members import Member, Disjunction, Sequence, Unit
 from .typed import JSONObject, LabelLayer
-from .utils import Config, _unique_label
+from .utils import Config
 
 
 # Helper function to retrieve a string of coordinated conditions for a token
@@ -355,8 +356,8 @@ class Cte:
         for source, destinations in automaton.delta.items():
             for state_n, destination in destinations.items():
                 state: State = states[state_n]
-                references: dict[str, list] = {
-                    y: []
+                references: dict[str, tuple[str, dict]] = {
+                    y: ("", {})
                     for y in {
                         *{x for x in self.sequence._reserved_labels},
                         *{x for x in self.sequence._sequence_references},
@@ -367,7 +368,9 @@ class Cte:
                 name_seq: str = (
                     state.unit.parent_sequence.label
                     if state.unit and state.unit.parent_sequence
-                    else _unique_label(references)
+                    else self.sequence.sequence.query_data.unique_label(
+                        references=references
+                    )
                 )
                 for d in destination:
                     dict_table[f"({source}, {d}, '{state.label}', '{name_seq}')"] = None
@@ -486,14 +489,11 @@ class Cte:
 
 
 class SQLSequence:
-    def __init__(
-        self,
-        sequence: Sequence,
-        config: Config,
-        entities: set[str] = set(),
-        label_layer: LabelLayer = {},
-    ):
+    def __init__(self, sequence: Sequence):
         self.sequence: Sequence = sequence
+        label_layer = self.sequence.query_data.label_layer
+        config = self.sequence.conf
+        entities = label_layer.keys()
         self.part_of: str = ""
         if "partOf" in sequence.obj.get("sequence", {}):
             self.part_of = sequence.obj["sequence"]["partOf"]
@@ -549,7 +549,6 @@ class SQLSequence:
                     self._members += Member.from_obj(
                         m.obj,
                         parent_sequence,
-                        sequence_references=self._sequence_references,
                     )
         return self._members
 
@@ -688,7 +687,9 @@ class SQLSequence:
                     prefilters.append([])
                 else:
                     for _ in range(e):
-                        prefilters[-1].append(Unit({"unit": {}}, None))
+                        prefilters[-1].append(
+                            Unit({"unit": {"label": uuid4()}}, self.sequence)
+                        )
         all_prefilters: set[str] = {_prefilter(self.config, p) for p in prefilters}
         return {
             p
@@ -718,8 +719,8 @@ class SQLSequence:
 
             if isinstance(m, Unit):
                 # Do not use a label that's already used
-                references: dict[str, list] = {
-                    y: []
+                references: dict[str, tuple[str, dict]] = {
+                    y: ("", {})
                     for y in {
                         *{x for x in entities},
                         *{x for x in self._reserved_labels},
@@ -728,7 +729,9 @@ class SQLSequence:
                         *{x for x in self._internal_references.values()},
                     }
                 }
-                m.internal_label = _unique_label(references, m.label)
+                m.internal_label = self.sequence.query_data.unique_label(
+                    m.label, references
+                )
                 self._internal_references[m.label] = (
                     m.internal_label
                 )  # f"t{len(self.fixed_tokens)}"
