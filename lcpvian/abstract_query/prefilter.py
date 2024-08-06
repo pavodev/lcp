@@ -51,12 +51,22 @@ class SingleNode:
         for piece in search:
             pref = ""
             for pattern in sorted(SUFFIXES, key=len, reverse=True):
+                centerpiece = self.query.lstrip("^").rstrip("$")
+                if (
+                    centerpiece.isalnum()
+                    and self.query.startswith("^")
+                    and self.query.endswith("$")
+                ):
+                    # special case: anchored regular expression with no funny suffix
+                    piece = centerpiece
+                    break
                 if piece.strip().startswith("^") and piece.lstrip("^").isalnum():
                     pref = ":*"
                     piece = piece.lstrip("^")
                     break
-                if piece.rstrip().endswith(pattern):
+                if piece.rstrip().rstrip("$").endswith(pattern):
                     pref = ":*"
+                    piece = piece.rstrip().rstrip("$")
                     piece = piece[: -len(pattern)]
                     piece = piece.lstrip().lstrip("^")
                     break
@@ -373,15 +383,17 @@ def _is_prefix(query: str, op: str = "=", typ: str = "string") -> bool:
         return False
     if typ == "stringComparison":
         return True
-    if query.startswith("^") and query.lstrip("^").isalnum():
+    if query.startswith("^") and query.lstrip("^").rstrip("$").isalnum():
         return True
     for pattern in sorted(SUFFIXES, key=len, reverse=True):
-        if query.rstrip().endswith(pattern):
-            query = query[: -len(pattern)]
-            query = query.lstrip().lstrip("^")
-            if not query or any(
-                i in query for i in ".^$*+-?[]{}\\/()|"
-            ):  # there remain regex characters in the rest of the pattern
-                continue
-            return True
+        if not query.rstrip().rstrip("$").endswith(pattern):
+            continue
+        query = query.rstrip().rstrip("$")
+        query = query[: -len(pattern)]
+        query = query.lstrip().lstrip("^")
+        if not query or any(
+            i in query for i in ".^$*+-?[]{}\\/()|"
+        ):  # there remain regex characters in the rest of the pattern
+            continue
+        return True
     return False
