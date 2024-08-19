@@ -222,6 +222,7 @@ class DDL:
     @staticmethod
     def fmt(string: str, quote: bool = True, comma: bool = False) -> str:
         if quote:
+            string = re.sub(r"'", "''", string)
             string = "'" + string + "'"
         if comma:
             return string + ","
