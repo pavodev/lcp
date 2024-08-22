@@ -43,7 +43,7 @@
             <span
               v-for="(token) in item"
               :key="`form-${token.index}`"
-              @mousemove="showPopover(token.token, resultIndex, $event)"
+              @mousemove="showPopover(token, resultIndex, $event)"
               @mouseleave="closePopover"
             >
               <span class="token" :class="[
@@ -123,14 +123,14 @@
       <table class="table popover-table">
         <thead>
           <tr>
-            <th v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`th-${index}`">
+            <th v-for="(item, index) in currentToken.columnHeaders" :key="`th-${index}`">
               {{ item }}
             </th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td v-for="(item, index) in columnHeaders.filter(ch=>ch!= 'spaceAfter')" :key="`tr-${index}`">
+            <td v-for="(item, index) in currentToken.columnHeaders" :key="`tr-${index}`">
               <span v-if="item == 'head'" v-html="headToken"> </span>
               <span
                 v-else
@@ -139,7 +139,7 @@
                     ? 'badge rounded-pill bg-secondary'
                     : ''
                 "
-                v-html="strPopover(currentToken[index])"
+                v-html="strPopover(currentToken.token[index])"
               ></span>
             </td>
           </tr>
@@ -359,7 +359,7 @@ import WaveSurfer from 'wavesurfer.js'
 import RegionsPlugin from 'wavesurfer.js/dist/plugins/regions.esm.js'
 
 class TokenToDisplay {
-  constructor(tokenArray, index, groups, columnHeaders) {
+  constructor(tokenArray, index, groups, columnHeaders, annotations) {
     if (!(tokenArray instanceof Array) || tokenArray.length < 2)
       throw Error(`Invalid format for token ${JSON.stringify(tokenArray)}`);
     if (isNaN(Number(index)) || index<=0)
@@ -370,6 +370,21 @@ class TokenToDisplay {
     this.token = tokenArray;
     this.index = index;
     this.group = groups.findIndex( g => g.find(id=>id==index) );
+    this.columnHeaders = columnHeaders.filter(ch=>ch!= 'spaceAfter');
+    for (let [annotation_name, annotation_occurences] of Object.entries(annotations||{})) {
+      for (let [ann_start_idx, ann_num_toks, annotation] of annotation_occurences) {
+        if (index < ann_start_idx || index > (ann_start_idx+(ann_num_toks-1)))
+          continue;
+        this.columnHeaders.push(annotation_name);
+        tokenArray.push(annotation);
+        // tokenArray.push(
+        //   Object.entries(annotation)
+        //     .filter(a=>a[1])
+        //     .map((([attr_name,attr_value])=>`<abbr title="${attr_name}">${attr_value}</abbr>`))
+        //     .join(", ")
+        // );
+      }
+    }
   }
 }
 
@@ -629,11 +644,11 @@ export default {
         }
       }
     },
-    strPopover(token) {
-      if (token && token.constructor.name == 'Object')
-        return Utils.dictToStr(token);
+    strPopover(attribute) {
+      if (attribute && attribute.constructor.name == 'Object')
+        return Utils.dictToStr(attribute);
       else
-        return token;
+        return attribute;
     }
   },
   computed: {
@@ -664,11 +679,12 @@ export default {
           let sentenceId = row[0];
           let startIndex = this.sentences[sentenceId][0];
           let tokens = this.sentences[sentenceId][1];
+          let annotations = this.sentences[sentenceId][2];
 
           let tokenData = JSON.parse(JSON.stringify(row[1])); // tokens are already gouped in sets/sequences
           tokenData = tokenData.map( tokenIdOrSet => tokenIdOrSet instanceof Array ? tokenIdOrSet : [tokenIdOrSet] );
           // Return a list of TokenToDisplay instances
-          tokens = tokens.map( (token,idx) => new TokenToDisplay(token, startIndex + idx, tokenData, this.columnHeaders) );
+          tokens = tokens.map( (token,idx) => new TokenToDisplay(token, startIndex + idx, tokenData, this.columnHeaders, annotations) );
 
           return tokens;
           // let range = tokenData.map( (tokensArr) =>

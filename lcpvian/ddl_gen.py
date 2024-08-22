@@ -4,7 +4,6 @@ ddl_gen.py: create SQL code for corpus creation based on uploaded metadata JSON
 
 import json
 import math
-import os
 import re
 import sys
 
