@@ -544,23 +544,20 @@ class QueryMaker:
         }
 
         # TODO: report tokens' part_of in their label_layer, then replace token<batch> accordingly
-        seg_full_table = (
-            self.schema
-            + "."
-            + _get_table(self.segment.lower(), self.config, self.batch, self.lang or "")
-        )
-        seg_table_no_schema = (
-            _get_mapping(self.segment, self.config, self.batch, self.lang or "")
-            .get("relation", self.segment)
-            .lower()
-        )
-        seg_table = f"{self.schema}.{seg_table_no_schema}"
         formed_joins = _joinstring(self.joins)
-        formed_joins = re.sub(
-            rf"CROSS JOIN {seg_full_table} (\S+)",
-            lambda x: f"CROSS JOIN {seg_table.replace('<batch>', seg_suffixes.get(x[1], current_batch_suffix))} {x[1]}",
-            formed_joins,
-        )
+        if seg_suffixes:
+            seg_full_table = f"{self.schema}.{_get_table(self.segment.lower(), self.config, self.batch, self.lang or '')}"
+            seg_table_no_schema = (
+                _get_mapping(self.segment, self.config, self.batch, self.lang or "")
+                .get("relation", self.segment)
+                .lower()
+            )
+            seg_table = f"{self.schema}.{seg_table_no_schema}"
+            formed_joins = re.sub(
+                rf"CROSS JOIN {seg_full_table} (\S+)",
+                lambda x: f"CROSS JOIN {seg_table.removesuffix('<batch>')}{seg_suffixes.get(x[1], current_batch_suffix)} {x[1]}",
+                formed_joins,
+            )
         formed_selects = ",\n".join(sorted(selects_in_fixed))
         join_conditions: set[str] = set()
         for v in self.joins.values():

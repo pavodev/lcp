@@ -615,7 +615,7 @@ res => plain
     entities
         {token_label}"""
         if "meta" in self.template and "sample_query" in self.template["meta"]:
-            sample_query = self.template["meta"]["sample_query"]
+            sample_query = self.template["meta"].get("sample_query", "")
         params: dict[str, str | int] = dict(
             # name=self.name,
             # ver=int(self.version),
