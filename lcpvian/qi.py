@@ -414,7 +414,6 @@ class QueryIteration:
             seg_name = f"prepared_{name}{underlang}"
         annotations: str = ""
         for layer, properties in config["layer"].items():
-            print("layer", layer, "properties", properties, "token", config["token"])
             if (
                 layer == seg
                 or properties.get("contains", "").lower() != config["token"].lower()
@@ -422,7 +421,6 @@ class QueryIteration:
                 continue
             annotations = ", annotations"
             break
-        print("annotations", annotations)
         script = f"SELECT {name}_id, id_offset, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id = ANY(:ids);"
         return script
 

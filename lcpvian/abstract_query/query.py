@@ -9,6 +9,7 @@ from .utils import (
     Config,
     QueryData,
     _get_table,
+    _get_mapping,
     _get_batch_suffix,
     _get_underlang,
     _joinstring,
@@ -492,11 +493,15 @@ class QueryMaker:
                 )
 
         # Go through all the segments and pick the most constrained one
+        # and set the suffixes for the segment tables
+        seg_suffixes: dict[str, str] = {}
         n_segment_constraints_max = 0
         n_sequence_length_max = 0
         for lb, (lay, info) in self.r.label_layer.items():
             if lay != self.segment:
                 continue
+            # Use the full segment table by default, see below for restrictions to current batch
+            seg_suffixes[lb] = "0"
             n_segment_constraints = len(info.get("constraints", {}))
             n_sequence_length: int = next(
                 (s.sequence.min_length for s in self.sqlsequences if s.part_of == lb), 0
@@ -511,6 +516,15 @@ class QueryMaker:
             )
             n_segment_constraints_max = n_segment_constraints
             n_sequence_length_max = n_sequence_length
+        # Use the current batch suffix for the main / first segment table
+        current_batch_suffix: str = _get_batch_suffix(self.batch, self.n_batches)
+        if (
+            self._table
+            and self.r.label_layer[self._table[1]][0].lower() == self.segment.lower()
+        ):
+            seg_suffixes[self._table[1]] = current_batch_suffix
+        elif seg_suffixes:
+            seg_suffixes[next(k for k in seg_suffixes.keys())] = current_batch_suffix
 
         table, label = self.remove_and_get_base()
         from_table = table
@@ -529,7 +543,24 @@ class QueryMaker:
             or not self.r.entities
         }
 
+        # TODO: report tokens' part_of in their label_layer, then replace token<batch> accordingly
+        seg_full_table = (
+            self.schema
+            + "."
+            + _get_table(self.segment.lower(), self.config, self.batch, self.lang or "")
+        )
+        seg_table_no_schema = (
+            _get_mapping(self.segment, self.config, self.batch, self.lang or "")
+            .get("relation", self.segment)
+            .lower()
+        )
+        seg_table = f"{self.schema}.{seg_table_no_schema}"
         formed_joins = _joinstring(self.joins)
+        formed_joins = re.sub(
+            rf"CROSS JOIN {seg_full_table} (\S+)",
+            lambda x: f"CROSS JOIN {seg_table.replace('<batch>', seg_suffixes.get(x[1], current_batch_suffix))} {x[1]}",
+            formed_joins,
+        )
         formed_selects = ",\n".join(sorted(selects_in_fixed))
         join_conditions: set[str] = set()
         for v in self.joins.values():
