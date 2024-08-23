@@ -414,7 +414,10 @@ class QueryIteration:
             seg_name = f"prepared_{name}{underlang}"
         annotations: str = ""
         for layer, properties in config["layer"].items():
-            if layer == seg or properties.get("contains", "") != config["token"]:
+            if (
+                layer == seg
+                or properties.get("contains", "").lower() != config["token"].lower()
+            ):
                 continue
             annotations = ", annotations"
             break

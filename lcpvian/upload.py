@@ -22,6 +22,7 @@ from rq.job import Job
 
 from .authenticate import Authentication
 from .ddl_gen import generate_ddl
+from .dqd_parser import convert
 from .typed import JSON
 from .utils import _sanitize_corpus_name, _row_to_value
 
@@ -130,6 +131,21 @@ def _get_progress(progfile: str) -> tuple[int, int, str, str] | None:
     total = int(bits[-1][2])
     done_bytes = min(done_bytes, total)
     return (done_bytes, total, msg, unit)
+
+
+def _check_dqd(template: dict) -> bool:
+    print("check_dqd", template)
+    if "meta" not in template or "sample_query" not in template["meta"]:
+        return True
+    success: bool
+    try:
+        print("before convering")
+        json_q = convert(template["meta"]["sample_query"], template)
+        print("after convering", json_q)
+        success = True
+    except:
+        success = False
+    return success
 
 
 def _ensure_partitioned0(path: str) -> None:
@@ -379,6 +395,10 @@ async def make_schema(request: web.Request) -> web.Response:
     request_data = await request.json()
 
     template = request_data["template"]
+    if not _check_dqd(template):
+        error = {"status": "failed", "message": "Invalid sample query"}
+        return web.json_response(error)
+
     room = request_data.get("room", None)
     projects = request_data.get("projects")
     special = {"lcp", "all"}

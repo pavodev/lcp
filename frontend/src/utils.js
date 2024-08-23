@@ -80,13 +80,17 @@ const Utils = {
     formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
       return date ? moment(date).format(format) : '';
     },
-    dictToStr: (dict,replaceYesNo=true) => {
+    dictToStr: (dict,replaceYesNo=true,addTitles=false) => {
       const vals = [];
       for (let k of Object.keys(dict).sort()) {
-        if (replaceYesNo && dict[k].match(/^(yes|no)$/i))
-          vals.push(dict[k].replace(/yes/i,"+").replace(/no/i,"-") + k);
-        else
-          vals.push(dict[k]);
+        let val = dict[k]
+        if (!val)
+          continue;
+        if (replaceYesNo && typeof(dict[k])=="string" && dict[k].match(/^(yes|no)$/i))
+          val = dict[k].replace(/yes/i,"+").replace(/no/i,"-") + k;
+        if (addTitles)
+          val = `<abbr title="${k}">${val}</abbr>`;
+        vals.push(val);
       }
       return vals.join(" ")
     },

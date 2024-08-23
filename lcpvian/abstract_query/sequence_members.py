@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import cast
 
-from .utils import _unique_label, _parse_repetition
+from .utils import Config, QueryData, _parse_repetition
 
 
 class Member:
@@ -27,13 +27,12 @@ class Member:
     @staticmethod
     def from_obj(
         obj: dict,
-        parent_sequence: Sequence | None,
+        parent_sequence: Sequence,
         depth: int = 0,
         flatten_sequences: bool = True,
-        sequence_references: dict[str, list] = dict(),
     ) -> list[Member]:
         if "unit" in obj:
-            return [Unit(obj, parent_sequence, depth, sequence_references)]
+            return [Unit(obj, parent_sequence, depth)]
 
         elif "logicalOpNAry" in obj:
             # Convert disjunctions of single tokens as a single token with a disjunction of constraints
@@ -64,21 +63,21 @@ class Member:
                         },
                         parent_sequence,
                         depth,
-                        sequence_references,
                     )
                 ]
             else:
-                return [Disjunction(obj, parent_sequence, depth, sequence_references)]
+                return [Disjunction(obj, parent_sequence, depth)]
 
         elif "sequence" in obj:
             if not flatten_sequences:
                 return [
                     Sequence(
+                        parent_sequence.query_data,
+                        parent_sequence.conf,
                         obj,
                         parent_sequence,
                         depth,
                         flatten=False,
-                        sequence_references=sequence_references,
                     )
                 ]
 
@@ -89,10 +88,11 @@ class Member:
             if mini == 0:
                 return [
                     Sequence(
+                        parent_sequence.query_data,
+                        parent_sequence.conf,
                         obj,
                         parent_sequence,
                         depth,
-                        sequence_references=sequence_references,
                     )
                 ]
             else:
@@ -107,10 +107,11 @@ class Member:
                     }
                 }
                 optional_sequence: Sequence = Sequence(
+                    parent_sequence.query_data,
+                    parent_sequence.conf,
                     newseqobj,
                     parent_sequence,
                     depth + 1,
-                    sequence_references=sequence_references,
                 )
                 # The members must appear min: return them as individual members
                 for _ in range(mini):
@@ -119,7 +120,6 @@ class Member:
                             m,
                             optional_sequence,
                             depth + 1,
-                            sequence_references=sequence_references,
                         )
                 if diff:
                     ret_members.append(optional_sequence)
@@ -156,12 +156,12 @@ class Unit(Member):
     def __init__(
         self,
         obj: dict,
-        parent_sequence: Sequence | None,
+        parent_sequence: Sequence,
         depth: int = 0,
-        references: dict[str, list] = {},
     ):
         super().__init__(obj, parent_sequence, depth)
-        self.label: str = str(obj["unit"].get("label", _unique_label(references)))
+        query_data: QueryData = parent_sequence.query_data
+        self.label: str = str(obj["unit"].get("label", query_data.unique_label()))
         self.internal_label: str = self.label
         self.depth: int = depth
         self.min_length: int = 1
@@ -189,7 +189,7 @@ class Disjunction(Member):
     def __init__(
         self,
         obj: dict,
-        parent_sequence: Sequence | None,
+        parent_sequence: Sequence,
         depth: int = 0,
         references: dict[str, list] = {},
     ):
@@ -204,7 +204,6 @@ class Disjunction(Member):
                 parent_sequence,
                 depth + 1,
                 flatten_sequences=False,
-                sequence_references=references,
             )
         ]
         self.min_length: int = min(sm.min_length for sm in self.members)
@@ -223,13 +222,18 @@ class Disjunction(Member):
 class Sequence(Member):
     def __init__(
         self,
+        query_data: QueryData,
+        conf: Config,
         obj: dict,
         parent_sequence: Sequence | None = None,
         depth: int = 0,
         flatten: bool = False,
-        sequence_references: dict[str, list] = dict(),
+        # sequence_references: dict[str, list] = dict(),
     ):
         super().__init__(obj, parent_sequence, depth)
+
+        self.query_data: QueryData = query_data
+        self.conf: Config = conf
 
         if obj["sequence"].get("label"):
             self.anonymous = False
@@ -237,7 +241,7 @@ class Sequence(Member):
         else:
             self.anonymous = True
             self.label = str(
-                obj["sequence"].get("label", _unique_label(sequence_references))
+                obj["sequence"].get("label", self.query_data.unique_label())
             )
 
         self.members: list[Member] = [
@@ -248,7 +252,6 @@ class Sequence(Member):
                 self,
                 depth + 1,
                 flatten_sequences=flatten,
-                sequence_references=sequence_references,
             )
         ]
 

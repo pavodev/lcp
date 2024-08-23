@@ -5,7 +5,7 @@ from typing import Any, cast
 
 from .typed import Joins, LabelLayer, QueryType
 
-SUFFIXES = {".*", ".+", ".*?", ".?", ".+?"}
+SUFFIXES = {".*", ".+", ".*?", ".?", ".+?", "."}
 
 
 @dataclass
@@ -35,6 +35,20 @@ class QueryData:
     set_objects: set[str] = field(default_factory=set)
     # the main sequences in the query; note that these aren't hashable, so QueryData cannot be shared across threads
     sqlsequences: list[Any] = field(default_factory=list)
+
+    def unique_label(
+        self, label: str = "anonymous", references: LabelLayer | None = None
+    ) -> str:
+        if references is None:
+            references = self.label_layer
+        label = label or "anonymous"
+        new_label: str = label
+        n: int = 1
+        while new_label in references:
+            n += 1
+            new_label = f"{label}{str(n)}"
+        references[new_label] = ("__internal", dict({}))
+        return new_label
 
 
 @dataclass
@@ -300,18 +314,6 @@ def arg_sort_key(d: dict[str, Any] | Any) -> str:
             assert isinstance(v, dict)
             out.append(arg_sort_key(v))
     return "".join(out)
-
-
-def _unique_label(references: dict[str, list], label: str = "anonymous") -> str:
-    """Return a string starting with 'anonymous' that's not a key in the pass dict"""
-    label = label or "anonymous"
-    new_label: str = label
-    n: int = 1
-    while new_label in references:
-        n += 1
-        new_label = f"{label}{str(n)}"
-    references[new_label] = []
-    return new_label
 
 
 def _parse_repetition(repetition: str | dict[str, str]) -> tuple[int, int]:

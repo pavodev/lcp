@@ -24,13 +24,12 @@ from .utils import (
     _get_underlang,
     _is_anchored,
     _parse_repetition,
-    _sequence_in_query,
 )
 
 COUNTER = f"""
     res0 AS (SELECT 0::int2 AS rstype,
       jsonb_build_array(count(*))
-       FROM match_list) 
+       FROM match_list)
 
 """
 
@@ -67,16 +66,9 @@ class ResultsMaker:
         labels_so_far: set[str] = {e for e in self.r.entities}
         for obj in query:
             if "sequence" in obj:
-                dict_entities: dict[str, list] = {e: [] for e in labels_so_far}
-                set_entities: set[str] = set(e for e in labels_so_far)
-                seq: Sequence = Sequence(obj, sequence_references=dict_entities)
-                sqlseq: SQLSequence = SQLSequence(
-                    seq,
-                    self.conf,
-                    entities=set_entities,
-                    label_layer=self.r.label_layer,
-                )
-                sqlseq.categorize_members(entities=dict_entities)
+                seq: Sequence = Sequence(self.r, self.conf, obj)
+                sqlseq: SQLSequence = SQLSequence(seq)
+                sqlseq.categorize_members()
                 for t, _, _, _ in sqlseq.fixed_tokens:
                     original_label: str = cast(str, t.obj["unit"].get("label", ""))
                     if original_label:
@@ -440,7 +432,6 @@ class ResultsMaker:
         entout: list[str] = []
         select_extra = ""
 
-        gest = "Gesture" in self.conf_layer or "gesture" in self.conf_layer
         doc_join = ""
         gesture_type = "null"
 
@@ -474,7 +465,12 @@ class ResultsMaker:
                 continue
 
             if lay == self.token:
-                if e not in self.r.set_objects:
+                is_fixed_token_in_sequence: bool = any(
+                    m.label == e
+                    for seq in self.r.sqlsequences
+                    for m in seq.get_members()
+                )
+                if not is_fixed_token_in_sequence and e not in self.r.set_objects:
                     select = f"{e}.{self.token}_id as {e}"
                     self.r.selects.add(select.lower())
                     self.r.entities.add(e.lower())

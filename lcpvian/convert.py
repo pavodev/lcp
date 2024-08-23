@@ -44,6 +44,7 @@ from .typed import (
     ResultSents,
     ResultsValue,
     Results,
+    Sentence,
 )
 from .utils import _get_associated_query_job
 
@@ -233,7 +234,7 @@ def _format_kwics(
 
     for sent in sents:
         add_to = cast(ResultSents, out[-1])
-        add_to[str(sent[0])] = [sent[1], sent[2]]
+        add_to[str(sent[0])] = cast(Sentence, [*sent[1:]])
 
     for a, line in enumerate(result):
         key = int(line[0])

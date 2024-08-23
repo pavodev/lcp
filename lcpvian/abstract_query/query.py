@@ -9,11 +9,11 @@ from .utils import (
     Config,
     QueryData,
     _get_table,
+    _get_mapping,
     _get_batch_suffix,
     _get_underlang,
     _joinstring,
     _layer_contains,
-    _unique_label,
     _bound_label,
 )
 
@@ -483,21 +483,25 @@ class QueryMaker:
                     if not s.ctes[-1].next_fixed_token:
                         max = f"___lasttable___.id"
 
-                min_label: str = _unique_label(
-                    entities, f"{min} as min_{s.sequence.label}"
-                )
-                max_label: str = _unique_label(
-                    entities, f"{max} as max_{s.sequence.label}"
-                )
+                min_label: str = self.r.unique_label(f"min_{s.sequence.label}")
+                max_label: str = self.r.unique_label(f"max_{s.sequence.label}")
 
-                sequence_ranges[s.sequence.label] = (min_label, max_label, s.part_of)
+                sequence_ranges[s.sequence.label] = (
+                    f"{min} as {min_label}",
+                    f"{max} as {max_label}",
+                    s.part_of,
+                )
 
         # Go through all the segments and pick the most constrained one
+        # and set the suffixes for the segment tables
+        seg_suffixes: dict[str, str] = {}
         n_segment_constraints_max = 0
         n_sequence_length_max = 0
         for lb, (lay, info) in self.r.label_layer.items():
             if lay != self.segment:
                 continue
+            # Use the full segment table by default, see below for restrictions to current batch
+            seg_suffixes[lb] = "0"
             n_segment_constraints = len(info.get("constraints", {}))
             n_sequence_length: int = next(
                 (s.sequence.min_length for s in self.sqlsequences if s.part_of == lb), 0
@@ -512,6 +516,15 @@ class QueryMaker:
             )
             n_segment_constraints_max = n_segment_constraints
             n_sequence_length_max = n_sequence_length
+        # Use the current batch suffix for the main / first segment table
+        current_batch_suffix: str = _get_batch_suffix(self.batch, self.n_batches)
+        if (
+            self._table
+            and self.r.label_layer[self._table[1]][0].lower() == self.segment.lower()
+        ):
+            seg_suffixes[self._table[1]] = current_batch_suffix
+        elif seg_suffixes:
+            seg_suffixes[next(k for k in seg_suffixes.keys())] = current_batch_suffix
 
         table, label = self.remove_and_get_base()
         from_table = table
@@ -530,7 +543,21 @@ class QueryMaker:
             or not self.r.entities
         }
 
+        # TODO: report tokens' part_of in their label_layer, then replace token<batch> accordingly
         formed_joins = _joinstring(self.joins)
+        if seg_suffixes:
+            seg_full_table = f"{self.schema}.{_get_table(self.segment.lower(), self.config, self.batch, self.lang or '')}"
+            seg_table_no_schema = (
+                _get_mapping(self.segment, self.config, self.batch, self.lang or "")
+                .get("relation", self.segment)
+                .lower()
+            )
+            seg_table = f"{self.schema}.{seg_table_no_schema}"
+            formed_joins = re.sub(
+                rf"CROSS JOIN {seg_full_table} (\S+)",
+                lambda x: f"CROSS JOIN {seg_table.removesuffix('<batch>')}{seg_suffixes.get(x[1], current_batch_suffix)} {x[1]}",
+                formed_joins,
+            )
         formed_selects = ",\n".join(sorted(selects_in_fixed))
         join_conditions: set[str] = set()
         for v in self.joins.values():
@@ -607,8 +634,15 @@ class QueryMaker:
         # If any sequence has a label and needs its range to be returned
         if sequence_ranges:
 
+            selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
             gather_selects: str = ",\n".join(
-                sorted({s.replace("___lasttable___", last_table) for s in self.selects})
+                # sorted({s.replace("___lasttable___", last_table) for s in self.selects})
+                sorted(
+                    {
+                        s.replace("___lasttable___", last_table)
+                        for s in selects_intermediate
+                    }
+                )
             )
             for seqlab, (min_seq, max_seq, seg_lab) in sequence_ranges.items():
                 if self.r.entities and seqlab not in self.r.entities:
@@ -617,7 +651,7 @@ class QueryMaker:
                 gather_selects += f",\n{max_seq.replace('___lasttable___', last_table)}"
                 min_label = min_seq.split(" as ")[-1]
                 max_label = max_seq.split(" as ")[-1]
-                jttable = _unique_label(entities, "t")
+                jttable = self.r.unique_label("t")
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = (
                     f"{jttable}.{self.segment.lower()}_id = gather.{seg_lab} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"

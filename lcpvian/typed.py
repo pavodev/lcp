@@ -43,11 +43,18 @@ SentKey: TypeAlias = str | UUID | int
 # a single token within a sentence
 Token: TypeAlias = list[int | str | float]
 
-# an offset, plus list of tokens. either as tuple or list
+# an offset, plus list of tokens and possibly annotations. either as tuple or list
 # todo: figure out which of these alternatives is needed?
-Sentence: TypeAlias = tuple[int, list[Token]] | list[int | list[Token]]
+Sentence: TypeAlias = (
+    tuple[int, list[Token]]
+    | list[int | list[Token] | dict]
+    | tuple[int, list[Token], dict]
+)
 
-RawSent: TypeAlias = tuple[SentKey, int, list[Token]]
+# int = offset, list[Token] = prepared tokens, dict (optional) = annotations
+RawSent: TypeAlias = (
+    tuple[SentKey, int, list[Token]] | tuple[SentKey, int, list[Token], dict]
+)
 
 # the different kinds of sql results in the importer
 TableExists: TypeAlias = list[tuple[bool]]

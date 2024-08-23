@@ -99,7 +99,7 @@ class SQLstats:
         self.main_corp: str = _format_config_query(
             dedent(
                 """
-            WITH mc AS (SELECT * FROM main.finish_import(:tmp_schema ::uuid, :new_schema ::text, :mapping ::jsonb, :counts ::jsonb))
+            WITH mc AS (SELECT * FROM main.finish_import(:tmp_schema ::uuid, :new_schema ::text, :mapping ::jsonb, :counts ::jsonb, :sample_query ::text))
             SELECT {selects}
             FROM mc
             {join} WHERE mc.enabled = true;"""
@@ -598,6 +598,24 @@ class Importer:
         new_name: str = _schema_from_corpus_name(
             self.name.lower(), self.template.get("project", "")
         )
+        # Default sample query
+        segment_name: str = self.template["firstClass"]["segment"]
+        token_name: str = self.template["firstClass"]["token"]
+        segment_label: str = segment_name[0].lower()
+        token_label: str = token_name[0].lower()
+        if token_label == segment_label:
+            token_label = token_name[0:1].lower()
+        sample_query: str = f"""{segment_name} {segment_label}
+
+{token_name}@{segment_label} {token_name}
+
+res => plain
+    context
+        {segment_label}
+    entities
+        {token_label}"""
+        if "meta" in self.template and "sample_query" in self.template["meta"]:
+            sample_query = self.template["meta"].get("sample_query", "")
         params: dict[str, str | int] = dict(
             # name=self.name,
             # ver=int(self.version),
@@ -609,6 +627,7 @@ class Importer:
             # schema=self.schema,
             mapping=json.dumps(dict(self.mapping)),
             counts=json.dumps(self.token_count),
+            sample_query=sample_query,
         )
         mc: str = self.sql.main_corp
         task = self.run_script(mc, give=True, params=params)

@@ -205,7 +205,7 @@ class Constraints:
                         and isinstance(out[k], set)
                         and isinstance(v, set)
                     ):
-                        cast(set, out[k]).add(v)
+                        out[k] = cast(set, out[k]).union(v)
                     else:
                         out[k] = v
             elif isinstance(member, (TimeConstraint, Constraint)):

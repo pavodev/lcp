@@ -66,14 +66,12 @@ services:
       - lcp-network
 
   mediasrv:
-    build:
-      context: ./media
-      dockerfile: Dockerfile.dev
+    image: "nginx:alpine"
     container_name: lcp-mediasrv
     volumes:
-      - ./media:/media
+      - ./media:/usr/share/nginx/html
     ports:
-      - "8090:8090"
+      - "8090:80"
     networks:
       - lcp-network
 

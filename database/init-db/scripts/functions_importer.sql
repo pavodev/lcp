@@ -61,6 +61,7 @@ CREATE OR REPLACE FUNCTION main.finish_import(
  , schema_name       text
  , mapping_in        jsonb
  , token_counts_in   jsonb
+ , sample_query_in   text
 )
 RETURNS table (
    project_id        main.corpus.project_id%TYPE
@@ -145,7 +146,7 @@ AS $$
 
       RETURN QUERY
       INSERT
-        INTO main.corpus (name, current_version, project_id, corpus_template, schema_path, mapping, token_counts)
+        INTO main.corpus (name, current_version, project_id, corpus_template, schema_path, mapping, token_counts, sample_query)
       SELECT corpus_name
            , next_version
            , project_id_in
@@ -153,6 +154,7 @@ AS $$
            , new_schema_name
            , $3
            , $4
+           , $5
    RETURNING *
            ;
 
@@ -195,4 +197,3 @@ GRANT EXECUTE ON PROCEDURE main.cleanup TO lcp_production_importer;
 -- CREATE OR REPLACE PROCEDURE main.grant_permissions(db_user text, schema_path, text)
 -- AS $$
 -- $$
-

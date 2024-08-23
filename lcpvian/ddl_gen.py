@@ -4,7 +4,6 @@ ddl_gen.py: create SQL code for corpus creation based on uploaded metadata JSON
 
 import json
 import math
-import os
 import re
 import sys
 
@@ -222,6 +221,7 @@ class DDL:
     @staticmethod
     def fmt(string: str, quote: bool = True, comma: bool = False) -> str:
         if quote:
+            string = re.sub(r"'", "''", string)
             string = "'" + string + "'"
         if comma:
             return string + ","
