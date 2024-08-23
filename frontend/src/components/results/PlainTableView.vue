@@ -660,7 +660,7 @@ export default {
     meta_render(meta_value) {
       let ret = "";
       try {
-        ret = Utils.dictToStr(JSON.parse(meta_value),/*replaceYesNo:*/true,/*addTitles:*/true);
+        ret = Utils.dictToStr(JSON.parse(meta_value), {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
       }
       catch {
         ret = meta_value;
