@@ -88,8 +88,9 @@ PORT = int(os.getenv("SQL_PORT", 25432))
 
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+redis_url: str = f"{REDIS_URL}/{REDIS_DB_INDEX}" if REDIS_DB_INDEX > -1 else REDIS_URL
 
-redis_conn = Redis.from_url(f"{REDIS_URL}/{REDIS_DB_INDEX}", health_check_interval=10)
+redis_conn = Redis.from_url(redis_url, health_check_interval=10)
 
 
 tunnel: SSHTunnelForwarder
@@ -112,9 +113,7 @@ upload_connstr = (
 query_connstr = (
     f"postgresql+asyncpg://{QUERY_USER}:{QUERY_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 )
-web_connstr = (
-    f"postgresql+asyncpg://{WEB_USER}:{WEB_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
-)
+web_connstr = f"postgresql+asyncpg://{WEB_USER}:{WEB_PASSWORD}@{HOST}:{PORT}/{DBNAME}"
 
 
 query_kwargs = dict(

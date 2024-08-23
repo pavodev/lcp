@@ -25,6 +25,8 @@ import {
   faLink,
   faMagnifyingGlass,
   faMagnifyingGlassChart,
+  faMagnifyingGlassMinus,
+  faMagnifyingGlassPlus,
   faMusic,
   faPause,
   faPlay,
@@ -69,6 +71,8 @@ library.add(faHouse);
 library.add(faLink);
 library.add(faMagnifyingGlass);
 library.add(faMagnifyingGlassChart);
+library.add(faMagnifyingGlassMinus);
+library.add(faMagnifyingGlassPlus);
 library.add(faMusic);
 library.add(faPause);
 library.add(faPlay);

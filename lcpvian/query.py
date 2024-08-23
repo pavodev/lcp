@@ -190,6 +190,7 @@ async def _query_iteration(
 
     return qi
 
+
 @ensure_authorised
 @logged
 async def query(
@@ -239,9 +240,8 @@ async def query(
             if not isinstance(qi, QueryIteration):
                 return qi
             elif qi.to_export:
-                ready_to_export = (
-                    len(qi.done_batches) == len(qi.all_batches)
-                    or (qi.to_export.get("preview") and qi.total_results_so_far >= 200)
+                ready_to_export = len(qi.done_batches) == len(qi.all_batches) or (
+                    qi.to_export.get("preview") and qi.total_results_so_far >= 200
                 )
                 if ready_to_export:
                     await export(qi.app, qi.to_export, qi.first_job)

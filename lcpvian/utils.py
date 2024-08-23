@@ -20,11 +20,7 @@ from datetime import date, datetime
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 
-try:
-    from aiohttp import web, ClientSession
-except ImportError:
-    from aiohttp import web
-    from aiohttp.client import ClientSession
+from aiohttp import web
 
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis import Redis as RedisConnection
@@ -46,11 +42,11 @@ from rq.command import PUBSUB_CHANNEL_TEMPLATE
 from rq.connections import get_current_connection
 from rq.job import Job
 
+from .authenticate import Authentication
 from .configure import CorpusConfig, CorpusTemplate
 from .typed import (
     Batch,
     Config,
-    Headers,
     JSON,
     JSONObject,
     MainCorpus,
@@ -76,7 +72,8 @@ mc.schema_path,
 mc.token_counts,
 mc.mapping,
 mc.enabled,
-mc.sample_query
+mc.sample_query,
+mc.project_id::text
 """
 CONFIG_JOIN = """CROSS JOIN
 (SELECT
@@ -124,20 +121,27 @@ WHERE
 GROUP BY
     {group_by_formed}
 ;"""
+slb = r"[\s\n]+"
+META_QUERY_REGEXP = rf"""SELECT
+    -2::int2 AS rstype,{slb}((.+ AS .+)+?)
+FROM(.|{slb})+
+"""
 
 
 class LCPApplication(web.Application):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._keys: dict[str, web.AppKey] = {}
+        return None
 
-    def addkey(self, name: str, kind: Any, value: Any):
+    def addkey(self, name: str, kind: Any, value: Any) -> None:
         key: web.AppKey = web.AppKey(name, kind)
         self[key] = value
         self._keys[name] = key
+        return None
 
-    def __getitem__(self, a: str | web.AppKey):
+    def __getitem__(self, a: str | web.AppKey) -> Any:
         if a in self._keys:
             assert isinstance(a, str)
             return self[self._keys[a]]
@@ -177,6 +181,7 @@ def load_env() -> None:
     """
     Load .env from ~/lcp/.env if present, otherwise from current dir/dotenv defaults
     """
+    ENVFILE = ".env.docker" if os.getenv("IS_DOCKER") else ".env"
     current = os.path.join(os.getcwd(), ".env")
     installed_path = os.path.expanduser("~/lcp/.env")
     loaded = False
@@ -188,7 +193,7 @@ def load_env() -> None:
         except:
             print(f"Could not load {installed_path}...")
     if not loaded:
-        load_dotenv(override=True)
+        load_dotenv(ENVFILE, override=True)
         print(f"Loaded .env from {current}")
     return None
 
@@ -221,57 +226,6 @@ def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     return func
 
-    # todo:
-    # @wraps(func)
-    # async def deco(request: web.Request, *args, **kwargs):
-    #    headers = await _lama_user_details(getattr(request, "headers", request))
-
-    #    if "X-Access-Token" in headers:
-    #        token = headers.get("X-Access-Token")
-    #        try:
-    #            decoded = jwt.decode(
-    #                token, os.getenv("JWT_SECRET_KEY"), algorithms=["HS256"]
-    #            )
-    #            request.jwt = decoded
-    #        except Exception as err:
-    #            raise err
-    #    if "X-Display-Name" in headers:
-    #        username = headers.get("X-Display-Name")
-    #        request.username = username
-    #    if "X-Mail" in headers:
-    #        username = headers.get("X-Mail")
-    #        request.username = username
-
-    #    if not request.username:
-    #        raise ValueError("401? No username")
-
-    #    return func(request, *args, **kwargs)
-
-    # return deco
-
-
-def _extract_lama_headers(headers: Mapping[str, Any]) -> dict[str, str]:
-    """
-    Create needed headers from existing headers
-    """
-    retval = {
-        "X-API-Key": os.environ["LAMA_API_KEY"],
-        "X-Remote-User": headers.get("X-Remote-User"),
-        "X-Display-Name": (
-            headers["X-Display-Name"] if headers.get("X-Display-Name") else ""
-        ),
-        "X-Edu-Person-Unique-Id": headers.get("X-Edu-Person-Unique-Id"),
-        "X-Home-Organization": headers.get("X-Home-Organization"),
-        "X-Schac-Home-Organization": headers.get("X-Schac-Home-Organization"),
-        "X-Persistent-Id": headers.get("X-Persistent-Id"),
-        "X-Given-Name": headers["X-Given-Name"] if headers.get("X-Given-Name") else "",
-        "X-Surname": headers["X-Surname"] if headers.get("X-Surname") else "",
-        "X-Principal-Name": headers.get("X-Principal-Name"),
-        "X-Mail": headers.get("X-Mail"),
-        "X-Shib-Identity-Provider": headers.get("X-Shib-Identity-Provider"),
-    }
-    return {k: v for k, v in retval.items() if v}
-
 
 def _check_email(email: str) -> bool:
     """
@@ -279,129 +233,6 @@ def _check_email(email: str) -> bool:
     """
     regex = r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
     return bool(re.fullmatch(regex, email))
-
-
-async def _lama_user_details(headers: Headers) -> JSONObject:
-    """
-    todo: not tested yet, but the syntax is something like this
-    """
-    url = f"{os.environ['LAMA_API_URL']}/user/details/v2"
-    async with ClientSession() as session:
-        async with session.post(url, data=_extract_lama_headers(headers)) as resp:
-            jso: JSONObject = await resp.json()
-            jso["max_kwic"] = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
-            return jso
-
-
-async def _lama_project_user_update(
-    headers: Headers, project_id: str, user_id: str, data: dict
-) -> JSONObject:
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/account/{user_id}/modify"
-    async with ClientSession() as session:
-        async with session.post(
-            url, json=data, headers=_extract_lama_headers(headers)
-        ) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
-
-
-async def _lama_invitation_remove(headers: Headers, invitation_id: str) -> JSONObject:
-    url = f"{os.environ['LAMA_API_URL']}/invitation/{invitation_id}/remove"
-    async with ClientSession() as session:
-        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
-
-
-async def _lama_invitation_add(
-    headers: Headers, project_id: str, invitation_data: dict
-) -> JSONObject:
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/invitation/add"
-    async with ClientSession() as session:
-        async with session.post(
-            url, json=invitation_data, headers=_extract_lama_headers(headers)
-        ) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
-
-
-async def _lama_project_users(headers: Headers, project_id: str) -> JSONObject:
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/accounts"
-    async with ClientSession() as session:
-        async with session.get(url, headers=_extract_lama_headers(headers)) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
-
-
-async def _lama_project_create(
-    headers: Headers, project_data: dict[str, str]
-) -> JSONObject:
-    """
-    todo: not tested yet, but the syntax is something like this
-    """
-    url = f"{os.environ['LAMA_API_URL']}/profile"
-    async with ClientSession() as session:
-        async with session.post(
-            url, json=project_data, headers=_extract_lama_headers(headers)
-        ) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
-
-
-async def _lama_project_update(
-    headers: Headers, project_id: str, project_data: dict[str, str]
-) -> JSONObject:
-    """
-    todo: not tested yet, but the syntax is something like this
-    """
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}"
-    async with ClientSession() as session:
-        async with session.post(
-            url, headers=_extract_lama_headers(headers), json=project_data
-        ) as resp:
-            jso: JSONObject = await resp.json(content_type=None)
-            return jso
-
-
-async def _lama_api_create(headers: Headers, project_id: str) -> JSONObject:
-    """
-    todo: not tested yet, but the syntax is something like this
-    """
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/create"
-    async with ClientSession() as session:
-        async with session.post(url, headers=_extract_lama_headers(headers)) as resp:
-            jso: JSONObject = await resp.json(content_type=None)
-            return jso
-
-
-async def _lama_api_revoke(
-    headers: Headers, project_id: str, apikey_id: str
-) -> JSONObject:
-    """
-    todo: not tested yet, but the syntax is something like this
-    """
-    url = f"{os.environ['LAMA_API_URL']}/profile/{project_id}/api/{apikey_id}/revoke"
-    data = {"comment": "Revoked by user"}
-    async with ClientSession() as session:
-        async with session.post(
-            url, headers=_extract_lama_headers(headers), json=data
-        ) as resp:
-            jso: JSONObject = await resp.json(content_type=None)
-            return jso
-
-
-async def _lama_check_api_key(headers: Headers) -> JSONObject:
-    """
-    Get details about a user via their API key
-    """
-    url = f"{os.environ['LAMA_API_URL']}/profile/api/check"
-    key = headers["X-API-Key"]
-    secret = headers["X-API-Secret"]
-    api_headers = {"X-API-Key": key, "X-API-Secret": secret}
-    async with ClientSession() as session:
-        async with session.post(url, headers=api_headers) as resp:
-            jso: JSONObject = await resp.json()
-            return jso
 
 
 async def _general_error_handler(
@@ -444,13 +275,6 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     If a job dies due to TTL, we send this...
     """
     await _general_error_handler("timeout", exc, request)
-
-
-async def handle_lama_error(exc: Exception, request: web.Request) -> None:
-    """
-    If we get a connectionerror when trying to reach lama...
-    """
-    await _general_error_handler("unregistered", exc, request)
 
 
 def _get_status(
@@ -620,6 +444,7 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     await push_msg(app["websockets"], "", payload)
     app["redis"].set("app_config", json.dumps(payload["config"]))
     app["redis"].expire("app_config", MESSAGE_TTL)
+
     return None
 
 
@@ -627,6 +452,7 @@ subtype: TypeAlias = list[dict[str, str]]
 
 
 def _filter_corpora(
+    authenticator: Authentication,
     config: Config,
     app_type: str,
     user_data: JSONObject | None,
@@ -635,42 +461,11 @@ def _filter_corpora(
     """
     Filter corpora based on app type and user projects
     """
-
-    ids: set[str] = set()
-    if isinstance(user_data, dict):
-        subs = cast(dict[str, subtype], user_data.get("subscription", {}))
-        sub = subs.get("subscriptions", [])
-        for s in sub:
-            ids.add(s["id"])
-        for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
-            ids.add(proj["id"])
-
-    ids.add("all")
-    corpora: dict[str, CorpusConfig] = {}
-    for corpus_id, conf in config.items():
-        if get_all is False and not [
-            project_id for project_id in conf.get("projects", {}) if project_id in ids
-        ]:
-            continue
-        idx = str(corpus_id)
-        if idx == "-1":
-            corpora[idx] = conf
-            continue
-        # data_type: str | None = str(conf["meta"].get("dataType")) if conf and conf.get("meta") else None
-        data_type: str = ""
-        for slot in cast(dict, conf).get("meta", {}).get("mediaSlots", {}).values():
-            if data_type == "video":
-                continue
-            data_type = slot.get("mediaType", "")
-        if get_all or app_type in ("lcp", "catchphrase"):
-            corpora[idx] = conf
-            continue
-        if app_type == "videoscope" and data_type in ["video"]:
-            corpora[idx] = conf
-            continue
-        if app_type == "soundscript" and data_type in ["audio", "video"]:
-            corpora[idx] = conf
-            continue
+    corpora: dict[str, CorpusConfig] = {
+        idx: corpus
+        for idx, corpus in config.items()
+        if authenticator.check_corpus_allowed(idx, corpus, user_data, app_type, get_all)
+    }
     return corpora
 
 
@@ -693,6 +488,7 @@ def _row_to_value(
         mapping,
         enabled,
         sample_query,
+        project_id,
     ) = tup
     ver = str(current_version)
     corpus_template = cast(CorpusTemplate, template)
@@ -729,6 +525,7 @@ def _row_to_value(
         "document": fc.get("document"),
         "column_names": cols,
         "sample_query": sample_query,
+        "project_id": project_id,
     }
 
     together = {**corpus_template, **rest}
@@ -795,7 +592,12 @@ def _get_associated_query_job(
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
-    return cn
+    return cn.lower()
+
+
+def _schema_from_corpus_name(corpus_name: str, project_id: str) -> str:
+    tmp_name = _sanitize_corpus_name(corpus_name)
+    return tmp_name + "_" + re.sub("-", "", re.sub(r"_+", "_", project_id))
 
 
 def format_query_params(
@@ -823,11 +625,7 @@ def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
     # replace this with actual upstream handling of column names
-    slb = r"[\s\n]+"
-    pre_columns = re.match(
-        rf"SELECT{slb}-2::int2 AS rstype,{slb}((.+ AS .+)+?){slb}FROM(.|{slb})+",
-        query,
-    )
+    pre_columns = re.match(META_QUERY_REGEXP, query)
     if not pre_columns:
         return None
     columns: list[str] = [
@@ -1082,12 +880,15 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         if alignment:
             prefix_id = "alignment"
         # Select the ID
-        selects.append(f"{alias}.{prefix_id}_id AS {layer}_id")
-        group_by.append(f"{layer}_id")
+        iddotref = f"{alias}.{prefix_id}_id"
+        selects.append(f"{iddotref} AS {layer}_id")
+        group_by.append(iddotref)
         joins_later: dict[str, Any] = {}
         attributes: dict[str, Any] = layer_info[layer].get("attributes", {})
         relational_attributes = {
-            k: v for k, v in attributes.items() if v.get("type") == "relation"
+            k: v
+            for k, v in attributes.items()
+            if mapping_attrs.get(k, {}).get("type") == "relation"
         }
         # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
         selects += [
@@ -1098,19 +899,24 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         nbit: int = cast(int, layer_info[layer].get("nlabels", 1))
         for attr, v in relational_attributes.items():
             # Quote attribute name (is arbitrary)
-            attr_name = f'"{attr}"'
             attr_mapping = mapping_attrs.get(attr, {})
             # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
             attr_table = attr_mapping.get("name", "")
-            on_cond = f"{alias}.{attr}_id = {attr_table}.{attr}_id"
-            sel = f"{attr_table}.{attr_name} AS {layer}_{attr}"
+            alias_attr_table = f"{layer}_{attr}_{attr_table}"
+            attr_table_key = attr_mapping.get("key", attr)
+            attr_name = f'"{attr_table_key}"'
+            on_cond = f"{alias}.{attr}_id = {alias_attr_table}.{attr_table_key}_id"
+            dotref = f"{alias_attr_table}.{attr_name}"
+            sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
-                on_cond = f"get_bit({layer}.{attr}, {nbit-1}-{attr_table}.bit) > 0"
-                sel = f"array_agg({attr_table}.label) AS {layer}_{attr}"
+                on_cond = (
+                    f"get_bit({layer}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                )
+                sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
             else:
-                group_by.append(f"{layer}_{attr}")
+                group_by.append(dotref)
             # Join the lookup table
-            joins_later[f"{schema}.{attr_table} {attr_table} ON {on_cond}"] = None
+            joins_later[f"{schema}.{attr_table} {alias_attr_table} ON {on_cond}"] = None
             # Select the attribute from the lookup table
             selects.append(sel)
 
@@ -1143,8 +949,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         for k in joins_later:
             joins[k] = None
         # Get char_range from the main table
-        selects.append(f'{char_range_table}."char_range" AS {layer}_char_range')
-        group_by.append(f"{layer}_char_range")
+        chardotref = char_range_table + '."char_range"'
+        selects.append(f"{chardotref} AS {layer}_char_range")
+        group_by.append(chardotref)
         # And frame_range if applicable
         if _is_time_anchored(current_batch, config, layer):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')

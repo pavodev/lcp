@@ -617,7 +617,7 @@
               Launch export
             </button>
           </div>
-          <!-- <div class="modal-body text-start">
+          <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
             <label class="form-label">SwissDox</label>
             <button
               type="button"
@@ -626,7 +626,7 @@
             >
               Launch export
             </button>
-          </div> -->
+          </div>
           <div class="modal-footer">
             <button
               type="button"

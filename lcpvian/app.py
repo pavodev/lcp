@@ -13,7 +13,7 @@ import asyncio
 import uvloop
 
 from collections import defaultdict, deque
-from typing import cast, Type, Any, TypeAlias
+from typing import cast, Type
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
@@ -34,7 +34,8 @@ from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
-from .lama_user_data import lama_user_data
+
+from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
 from .project import project_create, project_update
@@ -50,10 +51,10 @@ from .utils import (
     TRUES,
     FALSES,
     LCPApplication,
-    handle_lama_error,
     handle_timeout,
     load_env,
 )
+from .lama import handle_lama_error
 from .video import video
 
 
@@ -71,7 +72,9 @@ DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 AUTH_CLASS: type | None = None
 try:
     need = cast(str, os.getenv("AUTHENTICATION_CLASS"))
-    if need and need.strip() and "." in need and need.lower() not in FALSES:
+    if not need:
+        need = "lcpvian.authenticate.Authentication"
+    if need.strip() and "." in need and need.lower() not in FALSES:
         path, name = need.rsplit(".", 1)
         if path and name:
             modu = importlib.import_module(path)
@@ -127,8 +130,10 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that periodically removes stale websocket connections
     """
     lapp = cast(LCPApplication, app)
-    lapp.addkey("redis_listener", Task, asyncio.create_task(listen_to_redis(app)))
-    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
+    lapp.addkey("redis_listener", Task[None], asyncio.create_task(listen_to_redis(app)))
+    lapp.addkey(
+        "ws_cleanup", Task[None], asyncio.create_task(ws_cleanup(app["websockets"]))
+    )
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -168,7 +173,7 @@ async def create_app(test: bool = False) -> web.Application:
     #     .with_status_code(403)
     #     .and_stringify()
     #     .with_additional_fields(
-    #         {"message": "Authentical..."}
+    #         {"message": "Authentication issue..."}
     #     )
     #     .and_call(handle_lama_error)
     # )
@@ -224,7 +229,7 @@ async def create_app(test: bool = False) -> web.Application:
             project_users_invitation_remove,
         ),
         ("/query", "POST", query),
-        ("/settings", "GET", lama_user_data),
+        ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
         ("/upload", "POST", upload),
         ("/video", "GET", video),

@@ -3,6 +3,7 @@ Module that stores custom types used around the backend
 
 TypedDicts for CorpusConfig and CorpusTemplate are in configure.py
 """
+
 import asyncio
 
 from collections import defaultdict
@@ -65,7 +66,8 @@ MainCorpus: TypeAlias = tuple[
     dict[str, int] | None,  # token counts -- todo: remove none when tangram fixed
     dict[str, JSON] | None,  # mapping -- todo: remove none when tangram fixed
     bool,
-    str,
+    str,  # sample_query
+    str,  # project_id
 ]
 
 # what Importer.run_script can return
@@ -127,11 +129,6 @@ Iteration: TypeAlias = tuple[
 # one of the main endpoint functions like query(), upload()
 Endpoint: TypeAlias = Callable[
     [web.Request], Awaitable[web.Response | web.WebSocketResponse | web.FileResponse]
-]
-
-# a kwic line for vian, with seg, toks, doc, gesture, agent and frame ranges
-VianKWIC: TypeAlias = tuple[
-    int | str, list[int], int | str, str | None, str | None, list[list[int]]
 ]
 
 

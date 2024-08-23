@@ -990,7 +990,7 @@
         },
         "function_name": {
             "type": "string",
-            "pattern": "length|size|min|max|century|year|month|day"
+            "pattern": "length|size|range|position|min|max|century|year|month|day"
         },
         "arguments": {
             "properties": {
