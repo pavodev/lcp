@@ -6,31 +6,27 @@ status information about the current task
 
 import json
 import os
-import re
 
-# import shutil
+import shutil
 import traceback
 
 from datetime import datetime, timedelta
 from tarfile import TarFile, is_tarfile
 from typing import cast, Any
+from uuid import uuid4
 from zipfile import ZipFile, is_zipfile
 
 from aiohttp import web, BodyPartReader
 from py7zr import SevenZipFile, is_7zfile
 from rq.job import Job
 
+from .authenticate import Authentication
 from .ddl_gen import generate_ddl
-from .typed import Headers, JSON
-from .utils import (
-    _lama_check_api_key,
-    _lama_project_create,
-    _lama_user_details,
-    _sanitize_corpus_name,
-)
+from .typed import JSON
+from .utils import _sanitize_corpus_name, _row_to_value
 
 
-VALID_EXTENSIONS = ("vrt", "csv")
+VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
 
@@ -63,6 +59,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         "info": msg,
         "project": kwargs["project"],
         "project_name": kwargs["project_name"],
+        "corpus_name": kwargs["corpus_name"],
         "target": whole_url,
     }
     return web.json_response(ret)
@@ -143,13 +140,15 @@ def _ensure_partitioned0(path: str) -> None:
     with open(template, "r") as fo:
         data = json.load(fo)
         data = data["template"]
-    srcs = [os.path.join(path, "fts_vector.csv")]
+    srcs = [os.path.join(path, "fts_vector.csv"), os.path.join(path, "fts_vector.tsv")]
     for layer in ("token", "segment"):
         lay = data["firstClass"][layer]
         srcs.append(os.path.join(path, lay.lower() + ".csv"))
+        srcs.append(os.path.join(path, lay.lower() + ".tsv"))
     for src in srcs:
         if os.path.isfile(src):
             dest = src.replace(".csv", "0.csv")
+            dest = dest.replace(".tsv", "0.tsv")
             os.rename(src, dest)
             print(f"Moved: {src}->{dest}")
 
@@ -165,6 +164,8 @@ def _correct_doc(path: str) -> None:
         data = data["template"]
     doc = data["firstClass"]["document"]
     docpath = os.path.join(path, f"{doc}.csv".lower())
+    if not os.path.exists(docpath):
+        docpath = os.path.join(path, f"{doc}.tsv".lower())
     with open(docpath, "r") as fo:
         data = fo.read()
     data = data.replace("\t'{", "\t{").replace("}'\n", "}\n")
@@ -176,23 +177,26 @@ async def upload(request: web.Request) -> web.Response:
     """
     Handle upload of data (save files, insert into db)
     """
+    authenticator: Authentication = request.app["auth_class"](request.app)
+
     url = request.url
     job_id = request.rel_url.query["job"]
     checking = request.rel_url.query.get("check")
     if checking:
         return await _status_check(request, job_id)
 
-    user_data = await _lama_user_details(request.headers)
+    user_data = await authenticator.user_details(request)
 
     gui_mode = request.rel_url.query.get("gui", False)
-    is_vian = request.rel_url.query.get("vian", False)
 
     job = Job.fetch(job_id, connection=request.app["redis"])
+    # schema_name: str = cast(str, job.args[1])
     kwargs: dict = cast(dict, job.kwargs)
     project_id = kwargs["project"]
     username = kwargs["user"]
     room = kwargs["room"]
     project_name = kwargs["project_name"]
+    corpus_name = kwargs["corpus_name"]
     cpath = kwargs["path"]
 
     ziptar = [
@@ -240,10 +244,21 @@ async def upload(request: web.Request) -> web.Response:
             "job": job.id,
             "project": str(project_id),
             "project_name": project_name,
+            "corpus_name": corpus_name,
         }
         try:
-            corpus_dir = os.path.split(cpath)[-1]
-            _move_media_files(cpath, corpus_dir)
+            # corpus_dir = os.path.split(cpath)[-1]
+            # new_name: str = self.name.lower()
+            # new_name = re.sub(r"\W", "_", new_name)
+            # new_name = re.sub(r"_+", "_", new_name)
+            # new_name += "_" + re.sub(
+            #     "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
+            # )
+            upload_job = Job.fetch(
+                job.meta["upload_job"], connection=request.app["redis"]
+            )
+            corpus_entry = _row_to_value(upload_job.result)
+            _move_media_files(cpath, corpus_entry.get("schema_path", ""))
             # shutil.rmtree(cpath)  # todo: should we do this?
         except Exception as err:
             ret["status"] = "failed"
@@ -260,19 +275,21 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(gui=gui_mode, user_data=user_data, is_vian=is_vian)
+    kwa = dict(gui=gui_mode, user_data=user_data)
     path = os.path.join("uploads", cpath)
     print(f"Uploading data to database: {cpath}")
-    job = qs.upload(username, cpath, room, **kwa)
+    upload_job = qs.upload(username, cpath, room, **kwa)
+    job.meta["upload_job"] = upload_job.id
+    job.save()
     short_url = str(url).split("?", 1)[0]
-    suggest_url = f"{short_url}?job={job.id}"
+    suggest_url = f"{short_url}?job={upload_job.id}"
     info = f"""Data upload has begun. If you want to check the status, POST to:
         {suggest_url}
     """
     return_data.update(
         {
             "status": "started",
-            "job": job.id,
+            "job": upload_job.id,
             "project": str(project_id),
             "project_name": project_name,
             "info": info,
@@ -329,9 +346,7 @@ def _extract_file(
 
 def _move_media_files(cpath: str, corpus_dir: str) -> None:
     print("Moving media files")
-    media_path = os.environ.get(
-        "UPLOAD_MEDIA_PATH", os.path.join("frontend", "public", "media")
-    )
+    media_path = os.environ.get("UPLOAD_MEDIA_PATH", os.path.join("media"))
     if not os.path.exists(media_path):
         os.mkdir(media_path)
     dest_path = os.path.join(media_path, corpus_dir)
@@ -343,15 +358,20 @@ def _move_media_files(cpath: str, corpus_dir: str) -> None:
         if not str(f).endswith(MEDIA_EXTENSIONS):
             continue
         basename = os.path.basename(f)
-        os.rename(
+        shutil.move(
             os.path.join(source_path, basename), os.path.join(dest_path, basename)
         )
+        # os.rename(
+        #     os.path.join(source_path, basename), os.path.join(dest_path, basename)
+        # )
 
 
 async def make_schema(request: web.Request) -> web.Response:
     """
     What happens when a user goes to /create and POSTs JSON
     """
+    authenticator: Authentication = request.app["auth_class"](request.app)
+
     exists = request.rel_url.query.get("job")
     if exists:
         return await _create_status_check(request, exists)
@@ -361,7 +381,7 @@ async def make_schema(request: web.Request) -> web.Response:
     template = request_data["template"]
     room = request_data.get("room", None)
     projects = request_data.get("projects")
-    special = {"lcp", "vian", "all"}
+    special = {"lcp", "all"}
     project = next(i for i in projects if i not in special)
 
     today = datetime.today()
@@ -372,7 +392,7 @@ async def make_schema(request: web.Request) -> web.Response:
         assert isinstance(key, str), "Missing API key"
         secret = request.headers.get("X-API-Secret")
         assert isinstance(secret, str), "Missing API key secret"
-        status = await _lama_check_api_key(request.headers)
+        status = await authenticator.check_api_key(request)
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Could not verify user: bad crendentials?"
@@ -391,23 +411,23 @@ async def make_schema(request: web.Request) -> web.Response:
     ids = (existing_project.get("id"), existing_project.get("title"))
 
     if project and project not in ids:
-        headers: Headers = {
-            "X-API-Key": os.environ["LAMA_API_KEY"],
-            "X-User-API-Key": key,
-        }
+        # headers: Headers = {
+        #     "X-API-Key": os.environ["LAMA_API_KEY"],
+        #     "X-User-API-Key": key,
+        # }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
-        uacc: dict[str, Any] = cast(dict[str, Any], user_acc["account"])
-        uname: str = cast(str, uacc["displayName"])
+        uacc: dict[str, Any] = cast(dict[str, Any], user_acc.get("account", {}))
+        uname: str = cast(str, uacc.get("displayName", ""))
         profile: dict[str, str] = {
             "title": f"{uname}: private group",
-            "unit": uacc["homeOrganization"],
+            "unit": uacc.get("homeOrganization", ""),
             "startDate": start,
             "finishDate": finish,
         }
 
         try:
-            existing_project = await _lama_project_create(headers, profile)
+            existing_project = await authenticator.project_create(request, profile)
             if existing_project.get("status", True) is not False:
                 proj = json.dumps(existing_project, indent=4)
                 msg = f"New project created:\n{proj}"
@@ -441,7 +461,7 @@ async def make_schema(request: web.Request) -> web.Response:
     # but the schema name gets noticeably uglier, so ...
 
     #  suffix = corpus_folder.split("-", 2)[1]
-    suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
+    # suffix = re.sub(r"[^a-zA-Z0-9]", "", proj_id)
     # version_n = re.sub(r"[^0-9]", "", str(corpus_version))
 
     # schema_name = f"{corpus_name}__{suffix}_{version_n}"
@@ -454,13 +474,9 @@ async def make_schema(request: web.Request) -> web.Response:
         and proj_id in i.get("projects", [])  # only corpora from the same project
         # and str(i["meta"]["version"]) == str(corpus_version)
     ]
-    drops = [
-        f"DROP SCHEMA IF EXISTS {i} CASCADE;"
-        for i in set(x["schema_name"] for x in sames if "schema_name" in x)
-    ]
 
     corpus_version = (max(int(x["current_version"]) for x in sames) if sames else 0) + 1
-    schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
+    # schema_name = f"{corpus_name.lower()}__{suffix}_{corpus_version}"
     template["meta"] = template.get("meta", {})
     template["meta"]["version"] = corpus_version
 
@@ -468,18 +484,21 @@ async def make_schema(request: web.Request) -> web.Response:
     # cv = f"'{corpus_version}'" if isinstance(corpus_version, str) else corpus_version
     # delete = f"DELETE FROM main.corpus WHERE name = '{template['meta']['name']}' AND current_version < {cv};"
     # drops.append(delete)
-    deletes = [
-        f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
-        for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
-    ]
-    drops += deletes
+    # deletes = [
+    #     f"DELETE FROM main.corpus WHERE corpus_id = {int(i)};"
+    #     for i in set(x["corpus_id"] for x in sames if "corpus_id" in x)
+    # ]
+    # drops += deletes
+
+    # Temporary schema name
+    schema_name = str(uuid4())
 
     template["projects"] = [proj_id]
     template["project"] = proj_id
     template["schema_name"] = schema_name
 
     try:
-        pieces = generate_ddl(template, corpus_version)
+        pieces = generate_ddl(template, proj_id, corpus_version)
         pieces["template"] = template
     except Exception as err:
         tb = traceback.format_exc()
@@ -493,9 +512,11 @@ async def make_schema(request: web.Request) -> web.Response:
     corpus_path = os.path.join(proj_id, schema_name)
 
     directory = os.path.join("uploads", corpus_path)
+    if os.path.exists(directory):
+        shutil.rmtree(directory, ignore_errors=True)
     os.makedirs(directory)
 
-    pieces["drops"] = drops
+    # pieces["drops"] = drops
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 
@@ -507,8 +528,9 @@ async def make_schema(request: web.Request) -> web.Response:
         schema_name=schema_name,
         user=user_id,
         room=room,
-        drops=drops,
+        # drops=drops,
         project_name=existing_project["title"],
+        corpus_name=corpus_name,
     )
     whole_url = f"{short_url}?job={job.id}"
     return web.json_response(
@@ -516,6 +538,7 @@ async def make_schema(request: web.Request) -> web.Response:
             "status": "started",
             "job": job.id,
             "project": proj_id,
+            "schema": schema_name,
             "path": corpus_path,
             "target": whole_url,
             "user_id": user_id,

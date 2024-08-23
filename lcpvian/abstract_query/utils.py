@@ -47,7 +47,6 @@ class Config:
     batch: str
     config: dict[str, Any]
     lang: str | None
-    vian: bool
 
 
 def _strip_batch(batch: str) -> str:
@@ -105,6 +104,9 @@ def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
 
 
 def _layer_contains(config: dict[str, Any], parent: str, child: str) -> bool:
+    """
+    Return whether a parent layer contains a child layer
+    """
     child_layer = config["layer"].get(child)
     parent_layer = config["layer"].get(parent)
     if not child_layer or not parent_layer:
@@ -117,7 +119,7 @@ def _layer_contains(config: dict[str, Any], parent: str, child: str) -> bool:
 
 
 def _is_anchored(config: dict[str, Any], layer: str, anchor: str) -> bool:
-    layer_config = config["layer"].get(layer)
+    layer_config = config["layer"].get(layer, {})
     if layer_config.get("anchoring", {}).get(anchor):
         return True
     child: str = layer_config.get("contains", "")
@@ -130,6 +132,58 @@ def _has_frame_range(config: dict[str, Any]) -> bool:
     for layer in config.get("layer", {}).values:
         if layer.get("anchoring", {}).get("time"):
             return True
+    return False
+
+
+def _sequence_in_query(query: list[dict[str, Any]]) -> bool:
+    for obj in query:
+        if "sequence" in obj:
+            return True
+        for vals in obj.values():
+            if isinstance(vals, dict) and _sequence_in_query([vals]):
+                return True
+            if isinstance(vals, list) and _sequence_in_query(vals):
+                return True
+    return False
+
+
+def _bound_label(
+    label: str = "",
+    query_json: dict[str, Any] = dict(),
+    in_scope: bool = False,
+) -> bool:
+    """
+    Look through the query part of the JSON and return False if the label is found in an unbound context
+    """
+    if not label:
+        return False
+
+    query = query_json.get("query", [query_json])
+    for obj in query:
+        if obj.get("label") == label:
+            return in_scope
+        if "unit" in obj:
+            if obj["unit"].get("label") == label:
+                return in_scope
+        if "sequence" in obj:
+            if obj["sequence"].get("label") == label:
+                return in_scope
+            reps = _parse_repetition(obj["sequence"].get("repetition", "1"))
+            tmp_in_scope = reps != (1, 1)
+            for m in obj["sequence"].get("members", []):
+                if _bound_label(label, m, tmp_in_scope):
+                    return True
+        if "logicalOpNAry" in obj:
+            tmp_in_scope = obj["logicalOpNAry"].get("operator") == "OR"
+            for a in obj["logicalOpNAry"].get("args", []):
+                if _bound_label(label, a, tmp_in_scope):
+                    return True
+        if obj.get("existentialQuantification", {}).get("quantor", "") == "NOT EXISTS":
+            for a in obj["existentialQuantification"].get("args", []):
+                if _bound_label(label, a, in_scope=True):
+                    return True
+
+    # Label not found
     return False
 
 

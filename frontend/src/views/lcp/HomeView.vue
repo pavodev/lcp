@@ -8,6 +8,18 @@
             The LiRI Corpus Platform (LCP) is a software system for handling and querying corpora of different kinds. Users can query corpora directly from their browser, and upload their own corpora using a command-line interface.
           </p>
         </div>
+        <div class="col mt-1 text-end" v-if="userData && userData.user && userData.user.displayName">
+          <button
+            type="button"
+            class="btn btn-secondary btn-sm"
+            data-bs-toggle="modal"
+            data-bs-target="#newProjectModal"
+            @click="modalIndexKey++"
+          >
+            <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
+            Add new group
+          </button>
+        </div>
       </div>
       <div class="row mt-3">
         <div class="col">

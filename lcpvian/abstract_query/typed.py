@@ -17,7 +17,7 @@ JSONObject: TypeAlias = dict[str, JSON]
 QueryPart: TypeAlias = list[dict[str, JSON]]
 QueryJSON: TypeAlias = dict[str, QueryPart]
 
-# the LabelLayer object maps label names to their associated label and metadata
+# the LabelLayer object maps label names to their associated layer and metadata
 LabelLayer: TypeAlias = dict[str, tuple[str, dict[str, JSONObject]]]
 
 # model corpus config data

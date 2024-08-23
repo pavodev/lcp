@@ -16,7 +16,7 @@ if (process.env.APP_TYPE == "videoscope") {
       wsUrl: "wss://videoscope.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
-      baseMediaUrl: "https://videoscope.linguistik.uzh.ch/video",
+      baseMediaUrl: "https://videoscope.linguistik.uzh.ch/media",
     };
   } else if (process.env.NODE_ENV == "staging") {
     config = {
@@ -125,12 +125,12 @@ else if (process.env.APP_TYPE == "lcphome") {
       wsUrl: "ws://localhost:9090/ws",
       apiHeaders: testUserHeaders,
       sentryDSN: null,
-      baseMediaUrl: "http://localhost:8000",
+      baseMediaUrl: "http://localhost:9090/media/",
     };
   }
 }
 else {
-  // LCP HOME
+  // LCP
   if (process.env.NODE_ENV === "production") {
     config = {
       appName: "LCP",
@@ -155,7 +155,7 @@ else {
       wsUrl: "ws://localhost:9090/ws",
       apiHeaders: testUserHeaders,
       sentryDSN: null,
-      baseMediaUrl: "http://localhost:8000",
+      baseMediaUrl: "http://localhost:8090/",
     };
   }
 }
@@ -179,8 +179,7 @@ else {
   config['appLinks'] = {
     "catchphrase": "http://localhost:8081",
     "soundscript": "http://localhost:8082",
-    "videoscope": "http://localhost:8083",
-
+    "videoscope": "http://localhost:8083"
   }
 }
 
