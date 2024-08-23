@@ -167,7 +167,7 @@
                 <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
                   <tr v-if="allowedMetaColums[layer].includes(meta_key)">
                     <td>{{ meta_key }}</td>
-                    <td>{{ meta_value }}</td>
+                    <td v-html="meta_render(meta_value)"></td>
                   </tr>
                 </template>
               </table>
@@ -330,6 +330,13 @@ span.action-button:hover {
 .highlight {
   background-color: #1e999967 !important;
   color: #000 !important;
+}
+.popover-liri .popover-table td {
+  max-width: 50vw;
+}
+.popover-liri .popover-table td:nth-child(2) {
+  width: 100%;
+  padding-left: 0.5em;
 }
 *[class^="color-group-"] {
   border-radius: 2px;
@@ -649,6 +656,16 @@ export default {
         return Utils.dictToStr(attribute);
       else
         return attribute;
+    },
+    meta_render(meta_value) {
+      let ret = "";
+      try {
+        ret = Utils.dictToStr(JSON.parse(meta_value),/*replaceYesNo:*/true,/*addTitles:*/true);
+      }
+      catch {
+        ret = meta_value;
+      }
+      return ret;
     }
   },
   computed: {
