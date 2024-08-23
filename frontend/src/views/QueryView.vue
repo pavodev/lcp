@@ -31,7 +31,9 @@
               track-by="value"
             ></multiselect>
           </div>
-          <div class="mb-3">
+          <div class="mb-3"
+            v-if="selectedCorpora && availableLanguages.length > 1"
+          >
             <label class="form-label">Languages</label>
             <multiselect
               v-model="selectedLanguages"

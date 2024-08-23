@@ -95,7 +95,7 @@ class DDL:
         # )
         self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
-            CALL main.open_import('{x}'::uuid, '{y}'::uuid, '{z}');
+            CALL main.open_import('{x}'::uuid, '{y}'::uuid, '{z.replace("'","''")}');
             SET search_path TO "{x}";"""
         )
 
