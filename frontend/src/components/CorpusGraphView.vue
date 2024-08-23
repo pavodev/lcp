@@ -63,14 +63,19 @@ function computeAttributes(corpus_layer) {
     let corpus_layer_attributes = {};
     for (let [a_name, a_value] of Object.entries(layer_props.attributes)) {
       if (a_name == "meta")
-        for (let [sub_a_name, sub_a_value] of Object.entries(a_value))
-          corpus_layer_attributes[sub_a_name] = sub_a_value;
+        for (let [sub_a_name, sub_a_value] of Object.entries(a_value)){
+          let name = sub_a_name;
+          if (name == "end") continue; // weirdest bug...
+          corpus_layer_attributes[name] = sub_a_value;
+          console.log("sub_a_name", sub_a_name, "sub_a_value", {...sub_a_value});
+        }
       else
         corpus_layer_attributes[a_name] = a_value;
     };
-    if (!unfoldedIndices.includes(index) && Object.keys(corpus_layer_attributes).length > 4)
-      corpus_layers_attributes[layer_name] = {'5+attributes': new UnfoldAttribute()};
-    else
+    // Disable until we find a fix
+    // if (!unfoldedIndices.includes(index) && Object.keys(corpus_layer_attributes).length > 4)
+    //   corpus_layers_attributes[layer_name] = {'5+attributes': new UnfoldAttribute()};
+    // else
       corpus_layers_attributes[layer_name] = corpus_layer_attributes;
   }
   return corpus_layers_attributes;
@@ -131,8 +136,9 @@ export default {
         if (layer in this.corpusLayersAttributes) {
           let layer_type = corpus.layer[layer].layerType;
           for (let [attribute_name, attribute_props] of Object.entries(this.corpusLayersAttributes[layer])) {
-            let attributeId = `a-${index}-${attribute_name.toLowerCase()}`;
+            let attributeId = `a-${index}-${attribute_name.replace("_","").toLowerCase()}`;
             let text = attribute_name.replace(/@/gi, "_");
+            console.log("attribute_name", attribute_name, "layer", layer);
             if (layer_type == "relation" && "name" in attribute_props)
               text = attribute_props.name;
             let attributeData = {
@@ -223,6 +229,7 @@ export default {
           parentLayer.link.push("---|part of|");
         }
       }
+      console.log("data", data);
       return data;
     },
   },
