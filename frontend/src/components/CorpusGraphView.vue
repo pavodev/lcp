@@ -65,9 +65,8 @@ function computeAttributes(corpus_layer) {
       if (a_name == "meta")
         for (let [sub_a_name, sub_a_value] of Object.entries(a_value)){
           let name = sub_a_name;
-          if (name == "end") continue; // weirdest bug...
-          corpus_layer_attributes[name] = sub_a_value;
-          console.log("sub_a_name", sub_a_name, "sub_a_value", {...sub_a_value});
+          if (name == "end") sub_a_name = "eոd"; // use a lookalike character
+          corpus_layer_attributes[sub_a_name] = sub_a_value;
         }
       else
         corpus_layer_attributes[a_name] = a_value;
@@ -152,21 +151,18 @@ export default {
               attributeData.next = [`l-${attribute_props.entity.toLowerCase().replace(/@/gi, "_")}`];
               attributeData.link = ["-.->|refers to|"];
             }
-            // else if (attributes.type!=="text") {
             else if (attribute_props.type=="categorical") {
               let warnings = [];
               let possibleValues = Object.keys(attribute_props);
-              // if (attributes.type=="categorical"){
-                if (attribute_props.values instanceof Array && attribute_props.values.length>0) {
-                  possibleValues = attribute_props.values.filter(v=>v.match(/^[^'"()]+$/));
-                  if (possibleValues.length != attribute_props.values.length)
-                    warnings.push("values with special characters not listed");
-                }
-                else if (attribute_props.isGlobal && attribute_name in corpus.glob_attr)
-                  possibleValues = corpus.glob_attr[attribute_name];
-                else
-                  possibleValues = ["List of values missing from specs"];
-              // }
+              if (attribute_props.values instanceof Array && attribute_props.values.length>0) {
+                possibleValues = attribute_props.values.filter(v=>v.match(/^[^'"()]+$/));
+                if (possibleValues.length != attribute_props.values.length)
+                  warnings.push("values with special characters not listed");
+              }
+              else if (attribute_props.isGlobal && attribute_name in corpus.glob_attr)
+                possibleValues = corpus.glob_attr[attribute_name];
+              else
+                possibleValues = ["List of values missing from specs"];
               let stringPossibleValues = possibleValues.reduce( (stringSoFar,newWord) => (newWord+" "+stringSoFar).length < 200 ? stringSoFar + " " + newWord : stringSoFar , "" );
               if (stringPossibleValues.length < possibleValues.join(" ").length) {
                 stringPossibleValues += " ..."
