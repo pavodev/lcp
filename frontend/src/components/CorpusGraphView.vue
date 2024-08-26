@@ -118,10 +118,11 @@ export default {
   computed: {
     graphData() {
       let corpus = this.corpus;
+      const corpusName = corpus.meta.name.replace(/[}{)(]+/gi, "").replace(/@/gi, "-at-");
       let data = [
         {
           id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, "").replace(/@/gi, "-at-"),
+          text: corpusName,
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
