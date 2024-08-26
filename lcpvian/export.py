@@ -33,13 +33,18 @@ SWISSDOX_NE_SELECTS = ["form", "type"]
 def _format_kwic(
     args: list, columns: list, sentences: dict[str, tuple], result_meta: dict
 ) -> tuple[str, str, dict, list, list]:
+    """
+    Return (kwic_name, sid, matches, tokens, annotations) for (sid,[tokens])+
+    """
     kwic_name: str = result_meta.get("name", "")
     attributes: list = result_meta.get("attributes", [])
     entities_attributes: dict = next(
         (x for x in attributes if x.get("name", "") == "entities"), dict({})
     )
     entities: list = entities_attributes.get("data", [])
-    sid, matches = args
+    sid, matches, *frame_range = (
+        args  # TODO: pass doc info to compute timestamp from frame_range
+    )
     first_token_id, prep_seg, annotations = sentences[sid]
     matching_entities: dict[str, int | list[int]] = {}
     for n in entities:
@@ -136,6 +141,7 @@ async def kwic(jobs: list[Job], resp: Any, config):
                     "annotations": annotations,
                 }
                 if sid in formatted_meta:
+                    # TODO: check frame_range in meta here + return frame_range from _format_kwic to compute time?
                     data["meta"] = formatted_meta[sid]
                 line: str = "\t".join(
                     [str(n_type), "plain", kwic_name, json.dumps(data)]
