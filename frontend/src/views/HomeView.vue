@@ -279,25 +279,17 @@
                 <p class="description mt-3">
                   {{ corpusModal.meta.corpusDescription }}
                 </p>
-                <p class="word-count mb-0">
-                  Word count:
-                  <b>{{
-                    calculateSum(
-                      Object.values(corpusModal.token_counts)
-                    ).toLocaleString("de-DE")
-                  }}</b>
+                <p class="word-count mb-0" v-if="'author' in corpusModal.meta">
+                  Author(s): {{ corpusModal.meta.author }}
                 </p>
-                <p class="word-count mb-0">
+                <!-- <p class="word-count mb-0">
+                  Description: {{ corpusModal.description || corpusModal.meta.corpusDescription }}
+                </p> -->
+                <p class="word-count mb-0" v-if="'revision' in corpusModal.meta">
                   Revision: {{ corpusModal.meta.revision }}
                 </p>
-                <p class="word-count mb-0">
-                  URL:
-                  <a :href="corpusModal.meta.url" target="_blank">{{
-                    corpusModal.meta.url
-                  }}</a>
-                </p>
-                <p class="word-count mb-0">
-                  Description: {{ corpusModal.description }}
+                <p class="word-count mb-0" v-if="'date' in corpusModal.meta">
+                  Date: {{ corpusModal.meta.date }}
                 </p>
                 <span v-if="corpusModal.partitions">
                   <p class="word-count" v-if="corpusModal.partitions">
@@ -319,6 +311,20 @@
                     </p> -->
                   </div>
                 </span>
+                <p class="word-count mb-0" v-if="'url' in corpusModal.meta">
+                  URL:
+                  <a :href="corpusModal.meta.url" target="_blank">{{
+                    corpusModal.meta.url
+                  }}</a>
+                </p>
+                <p class="word-count mb-0">
+                  Word count:
+                  <b>{{
+                    calculateSum(
+                      Object.values(corpusModal.token_counts)
+                    ).toLocaleString("de-DE")
+                  }}</b>
+                </p>
               </div>
               <div class="col-7">
                 <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
