@@ -1,13 +1,14 @@
-CREATE ROLE lcp_production_importer     WITH PASSWORD '<password1>' LOGIN;
+CREATE ROLE lcp_production_owner        WITH CREATEDB PASSWORD '<password4>' LOGIN;
+CREATE ROLE lcp_production_importer     WITH CREATEDB PASSWORD '<password1>' LOGIN;
 CREATE ROLE lcp_production_maintenance  WITH PASSWORD '<password2>' LOGIN;
 CREATE ROLE lcp_production_monitoring   WITH PASSWORD '<password3>' LOGIN;
-CREATE ROLE lcp_production_owner        WITH PASSWORD '<password4>' LOGIN;
 CREATE ROLE lcp_production_query_engine WITH PASSWORD '<password5>' LOGIN;
 CREATE ROLE lcp_production_web_user     WITH PASSWORD '<password6>' LOGIN;
 CREATE ROLE lcp_production_ro           WITH PASSWORD '<password7>' NOINHERIT;
 
 
 CREATE DATABASE lcp_production OWNER lcp_production_owner;
+ALTER DATABASE lcp_production OWNER TO lcp_production_owner;
 GRANT CONNECT ON DATABASE lcp_production TO lcp_production_ro;
 
 -- ATTENTION: this does only work through psql (i.e. the backslash command)

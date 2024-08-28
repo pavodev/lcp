@@ -104,6 +104,7 @@ class Member:
                         "repetition": {"min": "0", "max": str_max},
                         "members": obj["sequence"].get("members", []),
                         "label": obj["sequence"].get("label"),
+                        "partOf": obj["sequence"].get("partOf", ""),
                     }
                 }
                 optional_sequence: Sequence = Sequence(
@@ -186,13 +187,7 @@ class Unit(Member):
 
 
 class Disjunction(Member):
-    def __init__(
-        self,
-        obj: dict,
-        parent_sequence: Sequence,
-        depth: int = 0,
-        references: dict[str, list] = {},
-    ):
+    def __init__(self, obj: dict, parent_sequence: Sequence, depth: int = 0):
         super().__init__(obj, parent_sequence, depth)
         args: list = obj["logicalOpNAry"].get("args", [])
         # Don't extract units from sub-sequences when those are inside a disjunction (otherwise they would become disjuncts too!)

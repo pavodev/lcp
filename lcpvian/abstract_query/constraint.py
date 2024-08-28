@@ -56,6 +56,7 @@ class Constraints:
         is_set: bool = False,
         set_objects: set[str] | None = None,
         allow_any: bool = True,  # False,
+        references: dict[str, list[str]] = {},  # dict of labels + attributes
     ) -> None:
         """
         Model constraints recursively as cross joins and WHERE clauses
@@ -76,6 +77,9 @@ class Constraints:
         self.quantor_template = QUANTOR_TEMPLATE
         self._quantor_label: str | None = None
         self._allow_any: bool = allow_any
+        self.references: dict[str, list[str]] = (
+            references  # dict of labels + attributes
+        )
 
     def make(self):
         """
@@ -311,6 +315,7 @@ class Constraint:
         self._is_set = is_set
         self._underlang = _get_underlang(self.lang, self.config)
         self._allow_any: bool = allow_any
+        self.references: dict[str, list[str]] = {}  # dict of labels + attributes
 
     @staticmethod
     def _parse_date(date: str | int, filler_month="01", filler_day="01") -> str:
@@ -1185,6 +1190,8 @@ def _get_constraints(
 
     lab = label or f"constraint_{n}"
 
+    references: dict[str, list[str]] = {}
+
     if part_of:
         part_of_layer: str = label_layer.get(part_of, ("", None))[0]
         segname = conf.config["segment"].lower()
@@ -1196,6 +1203,8 @@ def _get_constraints(
         ):  # Use id for token in segment
             part_of = f"{part_of}.{segname}_id = {label}.{segname}_id"
         else:
+            references[part_of] = references.get(part_of, []) + ["char_range"]
+            references[label] = references.get(label, []) + ["char_range"]
             part_of = f"{part_of}.char_range && {label}.char_range"
 
     args = cast(list[JSONObject], constraints)
@@ -1236,6 +1245,7 @@ def _get_constraints(
         is_set=is_set,
         set_objects=set_objects,
         allow_any=allow_any,
+        references=references,
     )
 
 

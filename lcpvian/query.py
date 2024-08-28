@@ -172,7 +172,7 @@ async def _query_iteration(
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
 
     # prepare and submit sentences query
-    if do_sents is not None and (qi.sentences or qi.resume):
+    if do_sents and (qi.sentences or qi.resume):
         sents_jobs = qi.submit_sents(do_sents)
 
     jobs = {

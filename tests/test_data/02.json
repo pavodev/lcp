@@ -1,0 +1,124 @@
+{
+  "query": [
+    {
+      "unit": {
+        "layer": "Turn",
+        "label": "t",
+        "constraints": [
+          {
+            "comparison": {
+              "left": {
+                "entity": "Surname"
+              },
+              "operator": "=",
+              "stringComparison": "\"Schulz\""
+            }
+          }
+        ]
+      }
+    },
+    {
+      "unit": {
+        "layer": "Segment",
+        "partOf": "t",
+        "label": "s"
+      }
+    },
+    {
+      "sequence": {
+        "label": "np",
+        "members": [
+          {
+            "unit": {
+              "layer": "Token",
+              "partOf": "s",
+              "label": "t1",
+              "constraints": [
+                {
+                  "comparison": {
+                    "left": {
+                      "entity": "upos"
+                    },
+                    "operator": "=",
+                    "stringComparison": "\"VERB\""
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "unit": {
+              "layer": "Token",
+              "partOf": "s",
+              "label": "t2",
+              "constraints": [
+                {
+                  "comparison": {
+                    "left": {
+                      "entity": "upos"
+                    },
+                    "operator": "=",
+                    "stringComparison": "\"DET\""
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "unit": {
+              "layer": "Token",
+              "partOf": "s",
+              "label": "t3",
+              "constraints": [
+                {
+                  "comparison": {
+                    "left": {
+                      "entity": "upos"
+                    },
+                    "operator": "=",
+                    "stringComparison": "\"NOUN\""
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "results": [
+    {
+      "label": "myKWIC1",
+      "resultsPlain": {
+        "context": [
+          "s"
+        ],
+        "entities": [
+          "t1",
+          "t2",
+          "t3"
+        ]
+      }
+    },
+    {
+      "label": "Stat1",
+      "resultsAnalysis": {
+        "attributes": [
+          "t1.lemma"
+        ],
+        "functions": [
+          "frequency"
+        ],
+        "filter": {
+          "comparison": {
+            "left": {
+              "entity": "frequency"
+            },
+            "operator": ">",
+            "mathComparison": "1"
+          }
+        }
+      }
+    }
+  ]
+}

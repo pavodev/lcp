@@ -5,6 +5,7 @@
       type="graph TD"
       :config="mermaidConfig"
       :key="graphIndex"
+      @nodeClick="clickOnLayer"
     ></vue3-mermaid>
   </div>
 </template>
@@ -43,9 +44,47 @@ function reverseIns(graph) {
   return true;
 }
 
+let unfoldedIndices = [];
+class UnfoldAttribute {
+  constructor() {
+    this.name = "5+ attributes";
+    this.type = "categorical";
+    this.values = ["Click to unfold"];
+  }
+}
+
+function computeAttributes(corpus_layer) {
+  const corpus_layers_attributes = {};
+  for (let index = 0; index < Object.keys(corpus_layer).length; index++){
+    let layer_name = Object.keys(corpus_layer)[index];
+    let layer_props = corpus_layer[layer_name];
+    if (!("attributes" in layer_props))
+      continue;
+    let corpus_layer_attributes = {};
+    for (let [a_name, a_value] of Object.entries(layer_props.attributes)) {
+      if (a_name == "meta")
+        for (let [sub_a_name, sub_a_value] of Object.entries(a_value)){
+          let name = sub_a_name;
+          if (name == "end") sub_a_name = "eոd"; // use a lookalike character
+          corpus_layer_attributes[sub_a_name] = sub_a_value;
+        }
+      else
+        corpus_layer_attributes[a_name] = a_value;
+    };
+    // Disable until we find a fix
+    // if (!unfoldedIndices.includes(index) && Object.keys(corpus_layer_attributes).length > 4)
+    //   corpus_layers_attributes[layer_name] = {'5+attributes': new UnfoldAttribute()};
+    // else
+      corpus_layers_attributes[layer_name] = corpus_layer_attributes;
+  }
+  return corpus_layers_attributes;
+}
+
+
 export default {
   name: "CorpusGraphView",
   data() {
+    const corpus_layers_attributes = computeAttributes(this.corpus.layer);
     return {
       graphIndex: 0,
       mermaidConfig: {
@@ -58,17 +97,32 @@ export default {
         //   'secondaryColor': '#006100',
         //   'tertiaryColor': '#fff'
         // }
-      }
+      },
+      corpusLayersAttributes: corpus_layers_attributes
     };
   },
   props: ["corpus"],
+  methods: {
+    clickOnLayer(nodeId) {
+      const layerId = Number(nodeId.replace(/^a-(\d+)-.+$/, "$1"));
+      console.log("clicked on", nodeId, layerId);
+      if (unfoldedIndices.includes(layerId))
+        unfoldedIndices = unfoldedIndices.filter( id => id != layerId );
+      else
+        unfoldedIndices = [...unfoldedIndices, layerId];
+      const cla = computeAttributes(this.corpus.layer);
+      this.corpusLayersAttributes = cla;
+      setTimeout(()=>this.$emit("graphReady", this.$refs.mermaidcontainer), 1000);
+    }
+  },
   computed: {
     graphData() {
       let corpus = this.corpus;
+      const corpusName = corpus.meta.name.replace(/[}{)(]+/gi, "").replace(/@/gi, "-at-");
       let data = [
         {
           id: "1",
-          text: corpus.meta.name.replace(/\(/gi, "").replace(/\)/gi, "").replace(/@/gi, "-at-"),
+          text: corpusName,
           next: Object.keys(corpus.layer).filter( (layer) => !("partOf" in corpus.layer[layer]) ).map(
             (layer) => `l-${layer.toLowerCase().replace(/@/gi, "_")}`
           ),
@@ -79,38 +133,37 @@ export default {
       let partOfs = {};
       Object.keys(corpus.layer).forEach((layer, index) => {
         let next = [], link = [];
-        if ("attributes" in corpus.layer[layer]) {
+        if (layer in this.corpusLayersAttributes) {
           let layer_type = corpus.layer[layer].layerType;
-          Object.keys(corpus.layer[layer].attributes).forEach((attribute) => {
-            let attributeId = `a-${index}-${attribute.toLowerCase()}`;
-            let text = attribute.replace(/@/gi, "_");
-            let attributes = corpus.layer[layer].attributes[attribute];
-            if (layer_type == "relation" && "name" in attributes)
-              text = attributes.name;
+          for (let [attribute_name, attribute_props] of Object.entries(this.corpusLayersAttributes[layer])) {
+            let attributeId = `a-${index}-${attribute_name.replace("_","").toLowerCase()}`;
+            let text = attribute_name.replace(/@/gi, "_");
+            console.log("attribute_name", attribute_name, "layer", layer);
+            if (layer_type == "relation" && "name" in attribute_props)
+              text = attribute_props.name;
             let attributeData = {
               id: attributeId,
               text: text,
               edgeType: "round",
               style: "fill:#FBD573,stroke:#333,stroke-width:2px",
+              editable: attribute_props instanceof UnfoldAttribute
             };
-            if ("entity" in attributes && attributes.entity in corpus.layer) {
-              attributeData.next = [`l-${attributes.entity.toLowerCase().replace(/@/gi, "_")}`];
+            if ("entity" in attribute_props && attribute_props.entity in corpus.layer) {
+              attributeData.next = [`l-${attribute_props.entity.toLowerCase().replace(/@/gi, "_")}`];
               attributeData.link = ["-.->|refers to|"];
             }
-            else if (attributes.type!=="text") {
+            else if (attribute_props.type=="categorical") {
               let warnings = [];
-              let possibleValues = Object.keys(attributes);
-              if (attributes.type=="categorical"){
-                if (attributes.values instanceof Array && attributes.values.length>0) {
-                  possibleValues = attributes.values.filter(v=>v.match(/^[^'"()]+$/));
-                  if (possibleValues.length != attributes.values.length)
-                    warnings.push("values with special characters not listed");
-                }
-                else if (attributes.isGlobal && attribute in corpus.glob_attr)
-                  possibleValues = corpus.glob_attr[attribute];
-                else
-                  possibleValues = ["List of values missing from specs"];
+              let possibleValues = Object.keys(attribute_props);
+              if (attribute_props.values instanceof Array && attribute_props.values.length>0) {
+                possibleValues = attribute_props.values.filter(v=>v.match(/^[^'"()]+$/));
+                if (possibleValues.length != attribute_props.values.length)
+                  warnings.push("values with special characters not listed");
               }
+              else if (attribute_props.isGlobal && attribute_name in corpus.glob_attr)
+                possibleValues = corpus.glob_attr[attribute_name];
+              else
+                possibleValues = ["List of values missing from specs"];
               let stringPossibleValues = possibleValues.reduce( (stringSoFar,newWord) => (newWord+" "+stringSoFar).length < 200 ? stringSoFar + " " + newWord : stringSoFar , "" );
               if (stringPossibleValues.length < possibleValues.join(" ").length) {
                 stringPossibleValues += " ..."
@@ -121,7 +174,7 @@ export default {
             data.push(attributeData);
             next.push(attributeId);
             link.push("---")
-          });
+          };
         }
         // Is this necessary? Meta is an attribute itself
         if ("meta" in corpus.layer[layer]) {
@@ -173,6 +226,7 @@ export default {
           parentLayer.link.push("---|part of|");
         }
       }
+      console.log("data", data);
       return data;
     },
   },

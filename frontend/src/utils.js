@@ -80,9 +80,13 @@ const Utils = {
     formatDate: (date, format = 'DD.MM.YYYY HH:mm') => {
       return date ? moment(date).format(format) : '';
     },
-    dictToStr: (dict,replaceYesNo=true,addTitles=false) => {
+    dictToStr: (dict,{replaceYesNo, addTitles, reorder} = {}) => {
+      // default values
+      replaceYesNo = replaceYesNo === undefined ? true : replaceYesNo;
+      addTitles = addTitles === undefined ? false : addTitles;
+      reorder = reorder && reorder instanceof Function ? reorder : ()=>0;
       const vals = [];
-      for (let k of Object.keys(dict).sort()) {
+      for (let k of Object.keys(dict).sort(reorder)) {
         let val = dict[k]
         if (!val)
           continue;
