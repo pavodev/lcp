@@ -194,4 +194,3 @@ GRANT EXECUTE ON PROCEDURE main.cleanup TO lcp_production_importer;
 -- CREATE OR REPLACE PROCEDURE main.grant_permissions(db_user text, schema_path, text)
 -- AS $$
 -- $$
-

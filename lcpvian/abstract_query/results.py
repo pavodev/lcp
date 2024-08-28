@@ -29,7 +29,7 @@ from .utils import (
 COUNTER = f"""
     res0 AS (SELECT 0::int2 AS rstype,
       jsonb_build_array(count(*))
-       FROM match_list) 
+       FROM match_list)
 
 """
 
