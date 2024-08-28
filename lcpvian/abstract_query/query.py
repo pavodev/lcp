@@ -558,7 +558,6 @@ class QueryMaker:
                 lambda x: f"CROSS JOIN {seg_table.removesuffix('<batch>')}{seg_suffixes.get(x[1], current_batch_suffix)} {x[1]}",
                 formed_joins,
             )
-        formed_selects = ",\n".join(sorted(selects_in_fixed))
         join_conditions: set[str] = set()
         for v in self.joins.values():
             if not v:
@@ -581,7 +580,7 @@ class QueryMaker:
 
         # Simple subsequences: create subseq tables that check the series of tokens between two fixed tokens
         for n, s in enumerate(self.sqlsequences):
-            simple_seq: str = s.simple_sequences_table(
+            simple_seq, new_labels = s.simple_sequences_table(
                 fixed_part_ts=",\n".join(
                     [
                         f"{last_table}.{self._get_label_as(s)} AS {self._get_label_as(s)}"
@@ -594,6 +593,8 @@ class QueryMaker:
                 seg=seg_str,
                 schema=self.schema.lower(),
             )
+            for new_label in new_labels:
+                selects_in_fixed.add(new_label)
             if simple_seq:
                 # Update last_table
                 last_table = f"subseq{n}"
@@ -702,6 +703,8 @@ class QueryMaker:
                 }
             )
         )
+
+        formed_selects = ",\n".join(sorted(selects_in_fixed))
 
         out = self.template.format(
             schema=self.conf.schema,
@@ -834,6 +837,10 @@ class QueryMaker:
         part_of_layer: str = self.r.label_layer.get(part_of_label, ("", None))[0]
         if not part_of_layer:
             return None
+        is_negative = obj.get("quantor", "") == "NOT EXISTS"
+        if not is_negative:
+            select = f"{label}.{layer}_id as {label}"
+            self.selects.add(select.lower())
         lab: str = part_of_label
         # if part_of_layer.lower() == self.segment.lower() and self.has_fts:
         #     lab = self._seg_has_char_range()

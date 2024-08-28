@@ -23,9 +23,10 @@ def _where_conditions_from_constraints(
     entities: set[str] = set(),
     part_of: str = "",
     label_layer: LabelLayer = {},
-) -> tuple[list[str], list[str]]:
+) -> tuple[list[str], list[str], dict[str, list[str]]]:
     """
     Return a list of WHEREs to be conjoined and a list of LEFT JOINs to be conjoined
+    plus a dict of required references
     """
     for e in entities:
         if e in label_layer:
@@ -43,7 +44,7 @@ def _where_conditions_from_constraints(
     )
     if cons is None:
         # return ([f"{label}.{conf.config['token'].lower()}_id > 0"], [])
-        return (["1 = 1"], [])
+        return (["1 = 1"], [], {})
     all_conditions: list[str] = []
     inner_conditions = cons.conditions()
     if inner_conditions:
@@ -64,7 +65,7 @@ def _where_conditions_from_constraints(
             continue
         left_joins.append(f"{table} ON {' AND '.join(real_conds)}")
 
-    return (all_conditions, left_joins)
+    return (all_conditions, left_joins, cons.references)
 
 
 def _prefilter(conf: Config, subseq: list[Unit]) -> str:
@@ -302,7 +303,7 @@ class Cte:
                 for k, v in self.sequence._internal_references.items():
                     override_references[k] = f"{from_table}.{v}"
                 override_references[state.label] = "token"
-                where_conditions, ljs = self.sequence.get_constraints(
+                where_conditions, ljs, _ = self.sequence.get_constraints(
                     label="token",
                     constraints=[c for c in state.constraints if isinstance(c, dict)],
                     entities={"token"},
@@ -630,16 +631,17 @@ class SQLSequence:
         entities: set[str] = set(),
         override: dict[str, str] = dict(),
         part_of: str = "",
-    ) -> tuple[list[str], list[str]]:
+    ) -> tuple[list[str], list[str], dict[str, list[str]]]:
         """
         SQL-friendly constraints on a token using the provided label and entity references
+        Returns (wheres, joins, references)
 
         Provide an override dict to bypass the entity references (useful for bound references in subsequence tables and CTEs)
         """
         shifted_constraints: list[dict] = self.shifted_references_constraints(
             constraints=constraints, override=override
         )
-        wheres_joins = _where_conditions_from_constraints(
+        wheres, joins, refs = _where_conditions_from_constraints(
             self.config,
             label,
             shifted_constraints,
@@ -670,12 +672,11 @@ class SQLSequence:
         replacer = lambda m: m[1].split(".")[0]
         ret: list[list[str]] = [
             [re.sub(rf"\b({refs_to_replace})\b", replacer, x) for x in conds]
-            for conds in wheres_joins
+            for conds in [wheres, joins]
         ]
-        return (ret[0], ret[1])
+        return (ret[0], ret[1], refs)
 
     def prefilters(self) -> set[str]:
-
         prefilters: list[list[Unit]] = [[]]
         for e in self.sequence.fixed_subsequences():
             if isinstance(e, Unit):
@@ -729,8 +730,8 @@ class SQLSequence:
                         *{x for x in self._internal_references.values()},
                     }
                 }
-                m.internal_label = self.sequence.query_data.unique_label(
-                    m.label, references
+                m.internal_label = m.label or self.sequence.query_data.unique_label(
+                    references=references
                 )
                 self._internal_references[m.label] = (
                     m.internal_label
@@ -798,11 +799,14 @@ class SQLSequence:
         left_joins: list[str] = []
         for n, (token, min_sep, max_sep, modulo) in enumerate(self.fixed_tokens):
             l: str = token.internal_label
-            part_of: str = token.obj["unit"].get(
-                "partOf", self.sequence.obj["sequence"].get("partOf", "")
-            )
-            token_conds, token_left_joins = self.get_constraints(
-                # label = f"t{n}",
+            part_of: str = token.obj["unit"].get("partOf")
+            if not part_of:
+                tok_par_seq = token.parent_sequence
+                if tok_par_seq:
+                    part_of = tok_par_seq.obj["sequence"].get("partOf")
+                if not part_of:
+                    part_of = self.sequence.obj["sequence"].get("partOf", "")
+            token_conds, token_left_joins, _ = self.get_constraints(
                 label=l,
                 constraints=token.obj["unit"].get("constraints", []),
                 entities=entities,
@@ -835,11 +839,13 @@ class SQLSequence:
         batch_suffix: str = "_enrest",
         seg: str = "segment",
         schema: str = "sparcling1",
-    ) -> str:
+    ) -> tuple[str, set[str]]:
         """Go through the sequence's simple subsequences and return an SQL string for a CTE named subseq"""
 
         if not self.simple_sequences:
-            return ""
+            return ("", set())
+
+        add_to_fixed_selects: set[str] = set()
 
         simple_seq_conds: list[tuple[int, str]] = []
         # Go through the subsequences (will add an ALL for each)
@@ -849,7 +855,7 @@ class SQLSequence:
             np: int = len(self.fixed_tokens)
             # n+1 of the last fixed token, used only if next_n<0:
             n_tokens: int = len(s.members)
-            # lenght of the subsequence, used as modulo only if next_n<0:
+            # length of the subsequence, used as modulo only if next_n<0:
             mod: int = len(s.members)
             sselect: str = ""
             wheres: str = ""
@@ -874,13 +880,43 @@ class SQLSequence:
 
             # Add conditions for each member in the subsequence
             for i, m in enumerate(s.members):
-                token_conds, ljs = self.get_constraints(
+                sub_member_part_of: str = m.obj["unit"].get("partOf")
+                if not sub_member_part_of:
+                    sub_member_sequence = m.parent_sequence
+                    if sub_member_sequence:
+                        sub_member_part_of = sub_member_sequence.obj["sequence"].get(
+                            "partOf"
+                        )
+                    if not sub_member_part_of:
+                        sub_member_part_of = self.part_of
+                token_conds, ljs, refs = self.get_constraints(
                     f"s{n}_t{i}",
                     m.obj["unit"].get("constraints", []),
                     entities=entities,
                     override=override_internal_references,
-                    part_of=m.obj["unit"].get("partOf", ""),
+                    part_of=(sub_member_part_of or ""),
                 )
+                # Replace dotted references to attributes of entities from fixed table
+                # with underscored labels + add those labels to the fixed table's selects
+                select_labels_from_fixed = [
+                    x.lower().split(" as ")[1] for x in self.sequence.query_data.selects
+                ]
+                for lbl, attrs in refs.items():
+                    if lbl not in select_labels_from_fixed:
+                        continue
+                    for attr in attrs:
+                        new_lbl_attr = self.sequence.query_data.unique_label(
+                            f"{lbl}_{attr}"
+                        )
+                        token_conds = [
+                            x.replace(f"{lbl}.{attr}", new_lbl_attr)
+                            for x in token_conds
+                        ]
+                        ljs = [x.replace(f"{lbl}.{attr}", new_lbl_attr) for x in ljs]
+                        add_to_fixed_selects.add(f"{lbl}.{attr} as {new_lbl_attr}")
+                        fixed_part_ts += (
+                            f",\n{from_table}.{new_lbl_attr} AS {new_lbl_attr}"
+                        )
                 if ljs:
                     from_cross += f"\n                LEFT JOIN "
                     from_cross += f"\n                LEFT JOIN ".join(ljs)
@@ -931,6 +967,9 @@ class SQLSequence:
                 for n, a in simple_seq_conds
             ]
         )
-        return f"""SELECT {fixed_part_ts}
+        return (
+            f"""SELECT {fixed_part_ts}
             FROM {from_table}
-            WHERE {simple_seq}"""
+            WHERE {simple_seq}""",
+            add_to_fixed_selects,
+        )

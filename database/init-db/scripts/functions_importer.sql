@@ -1,4 +1,4 @@
-\c lcp_production
+\c lcp_production lcp_production_owner
 
 -- create functions as ROLE lcp_production_owner
 -- security issues covered here: https://www.cybertec-postgresql.com/en/abusing-security-definer-functions/
@@ -118,13 +118,10 @@ AS $$
       ASSERT corpus_name IS NOT NULL AND corpus_name <> ''
            ;
 
+     EXECUTE format('GRANT USAGE ON SCHEMA %I TO lcp_production_query_engine;', $1)
+           ;
+
      EXECUTE format('ALTER SCHEMA %I RENAME TO %I;', $1, new_schema_name)
-           ;
-
-     EXECUTE format('GRANT USAGE ON SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
-           ;
-
-     EXECUTE format('GRANT SELECT ON ALL TABLES IN SCHEMA %I TO lcp_production_query_engine;', new_schema_name)
            ;
 
      EXECUTE format('REVOKE ALL ON SCHEMA %I FROM lcp_production_importer;', new_schema_name)

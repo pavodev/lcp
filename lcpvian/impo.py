@@ -153,6 +153,7 @@ class Importer:
         self.m_token_n = cast(str, data["m_token_n"])
         self.m_lemma_freqs = cast(str, data["m_lemma_freqs"])
         self.refs = cast(list[str], data["refs"])
+        self.grant_query_select = cast(str, data["grant_query_select"])
         self.n_batches = len(self.batches)
         self.num_extras = self.n_batches + len(self.constraints)
         self.token_count: dict[str, int] = {}
@@ -607,7 +608,7 @@ class Importer:
             token_label = token_name[0:1].lower()
         sample_query: str = f"""{segment_name} {segment_label}
 
-{token_name}@{segment_label} {token_name}
+{token_name}@{segment_label} {token_label}
 
 res => plain
     context
@@ -651,12 +652,9 @@ res => plain
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
         await self.collocations()
+        self.update_progress(f"Granting select privileges for querying...")
+        await self.run_script(self.grant_query_select)
+        self.update_progress(f"Privileges granted!")
         # run the config glob_attr
         main_corp = cast(MainCorpus, await self.create_entry_maincorpus())
-        # pipeline is over: drop
-        # if self.drops:
-        #     # msg = f"Attempting schema drop (create) * {len(drops)-1}"
-        #     drop_script = "\n".join(self.drops)
-        #     print("Dropping existing previous schemata:", drop_script)
-        #     await self.run_script(drop_script)
         return main_corp

@@ -7,6 +7,8 @@ BEGIN;
 CREATE EXTENSION IF NOT EXISTS rum WITH SCHEMA public;
 COMMENT ON EXTENSION rum IS 'RUM index access method';
 
+\c lcp_production lcp_production_owner
+
 CREATE TYPE main.upload_status AS ENUM (
    'failed'
  , 'succeeded'

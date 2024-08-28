@@ -4,6 +4,7 @@ ddl_gen.py: create SQL code for corpus creation based on uploaded metadata JSON
 
 import json
 import math
+import os
 import re
 import sys
 
@@ -42,6 +43,7 @@ class DataNeededLater:
     mapping: dict[str, JSONObject] = field(default_factory=dict)
     # perms: str = ""
     refs: list[str] = field(default_factory=list)
+    grant_query_select: str = ""
 
     def asdict(
         self,
@@ -79,20 +81,6 @@ class DDL:
     """
 
     def __init__(self) -> None:
-        # self.perms: Callable[[str, str], str] = lambda x, y: dedent(
-        #     f"""
-        #     GRANT USAGE ON SCHEMA {x} TO {y};
-        #     GRANT SELECT ON ALL TABLES IN SCHEMA {x} TO {y};
-        #     ALTER DEFAULT PRIVILEGES IN SCHEMA {x} GRANT SELECT ON TABLES TO {y};\n\n"""
-        # )
-
-        # self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
-        #     f"""
-        #     BEGIN;
-        #     CREATE SCHEMA {x};
-        #     DELETE FROM main.corpus WHERE name = '{y}' AND current_version = {z};
-        #     SET search_path TO {x};"""
-        # )
         self.create_scm: Callable[[str, str, str], str] = lambda x, y, z: dedent(
             f"""
             CALL main.open_import('{x}'::uuid, '{y}'::uuid, '{z.replace("'","''")}');
@@ -1152,6 +1140,7 @@ def generate_ddl(
 
     # todo: i don't think this defaultdict trick is needed, all the tables
     # must have unique names right?
+    QUERY_USER: str = os.getenv("SQL_QUERY_USERNAME", "lcp_dev_webuser")
     constraints: defaultdict[str, list[str]] = defaultdict(list)
     refs: list[str] = []
     for table in sorted(globs.tables):
@@ -1162,6 +1151,9 @@ def generate_ddl(
                 refs.append(c)
             else:
                 constraints[table.name].append(c)
+    grant_query_select = (
+        f'GRANT SELECT ON ALL TABLES IN SCHEMA "{schema_name}" TO {QUERY_USER}'
+    )
     formed_constraints = ["\n".join(i) for i in constraints.values()]
 
     return DataNeededLater(
@@ -1177,6 +1169,7 @@ def generate_ddl(
         globs.mapping,
         # globs.perms,
         refs,
+        grant_query_select,
     ).asdict()
 
 
@@ -1200,6 +1193,7 @@ def main(corpus_template_path: str) -> None:
     print(data["m_token_freq"])
     print(data["m_lemma_freqs"])
     # print(data["perms"])
+    print(data["grant_query_select"])
 
     print("Mapping:", data["mapping"])
 
