@@ -203,6 +203,9 @@ class QueryIteration:
             corpora_to_use, request.app["config"], languages
         )
 
+        to_export: dict = request_data.get("to_export", {})
+        preview = to_export.get("preview", False)
+
         details = {
             "corpora": corpora_to_use,
             "user": request_data["user"],
@@ -215,7 +218,7 @@ class QueryIteration:
             "languages": set(langs),
             "full": request_data.get("full", False),
             "query": request_data["query"],
-            "resume": request_data.get("resume", False),
+            "resume": request_data.get("resume", False) and not preview,
             "total_results_requested": total_requested,
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
@@ -225,11 +228,11 @@ class QueryIteration:
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
         }
-        if request_data.get("to_export", False):
+        if to_export:
             details["to_export"] = {
-                "format": str(request_data["to_export"].get("format", "")),
-                "preview": request_data["to_export"].get("preview", False),
-                "download": request_data["to_export"].get("download", False),
+                "format": str(to_export.get("format", "")),
+                "preview": to_export.get("preview", False),
+                "download": to_export.get("download", False),
                 "config": request.app["config"][str(corpora_to_use[0])],
                 "user": request_data.get("user", ""),
                 "room": request_data.get("room", ""),
@@ -268,10 +271,15 @@ class QueryIteration:
         Helper to submit a query job to the Query Service
         """
         job: Job
-        if self.offset > 0:
+        # if self.offset > 0 and not self.full and not self.resume:
+        preview: bool = self.to_export.get("preview", False)
+        load_more_from_cache: bool = self.resume and self.offset > 0
+        if preview or load_more_from_cache:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
+            if load_more_from_cache:
+                self.submit_sents(query_started=True)
             return job, False
 
         parent: str | None = None
@@ -303,6 +311,7 @@ class QueryIteration:
             first_job=self.first_job,
             jso=self.jso,
             sql=self.sql,
+            offset=self.offset,
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
@@ -486,7 +495,7 @@ class QueryIteration:
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
-            "to_export": manual.get("to_export", kwargs.get("to_export", "")),
+            "to_export": manual.get("to_export", kwargs.get("to_export", {})),
         }
         return cls(**details)
 

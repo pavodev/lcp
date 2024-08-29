@@ -404,7 +404,7 @@ def _sentences(
         int, kwargs.get("current_kwic_lines", job_kwargs["current_kwic_lines"])
     )
 
-    if prev_offset > offset and not kwargs.get("from_memory"):
+    if prev_offset > offset:  # and not kwargs.get("from_memory"):
         offset = prev_offset if resume else -1
     total_to_get = job_kwargs.get("needed", total_requested)
 
@@ -414,6 +414,10 @@ def _sentences(
     status = depended.meta["_status"]
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
+    # base.save_meta, which is called later, overwrites depended.save_meta when pointing to the same job
+    if base.id == depended.id:
+        base.meta["latest_offset"] = latest_offset
+
     depended.save_meta()  # type: ignore
 
     # in full mode, we need to combine all the sentences into one message when finished
@@ -470,7 +474,7 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
-    submit_payload["to_export"] = depended.meta.get("to_export", "")
+    submit_payload["to_export"] = depended.meta.get("to_export", {})
 
     # Do not send if this is an "export" query
     can_send = not base.meta.get("to_export", False) and (

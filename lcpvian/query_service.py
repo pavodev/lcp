@@ -121,6 +121,7 @@ class QueryService:
             **job.meta.get("sent_job_ws_messages", {}),
             **job.meta.get("meta_job_ws_messages", {}),
         }
+
         for msg in sent_and_meta_msgs:
             # print(f"Retrieving sentences message: {msg}")
             print(f"Retrieving sentences or metadata message: {msg}")
@@ -138,6 +139,7 @@ class QueryService:
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
             )
             tasks.append(task)
+
         if not failed:
             for task in tasks:
                 await task

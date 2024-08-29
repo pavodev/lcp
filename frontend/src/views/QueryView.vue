@@ -1016,7 +1016,7 @@ export default {
       ) {
         console.log("Submit");
         this.nResults = newNResults;
-        this.submit(null, true);
+        this.submit(null, /*resumeQuery=*/true, /*cleanResults=*/false);
       }
     },
     updateQueryDQD(queryDQD) {

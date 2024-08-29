@@ -429,7 +429,7 @@ async def _handle_query(
     if to_submit is not None:
         await to_submit
 
-    if to_export := the_job.meta.get("to_export"):
+    if to_export := the_job.meta.get("to_export", {}):
         tjk = cast(dict, the_job.kwargs)
         done_batches = cast(list, tjk.get("done_batches", []))
         all_batches = cast(list, tjk.get("all_batches", []))
