@@ -149,18 +149,6 @@ def _has_frame_range(config: dict[str, Any]) -> bool:
     return False
 
 
-def _sequence_in_query(query: list[dict[str, Any]]) -> bool:
-    for obj in query:
-        if "sequence" in obj:
-            return True
-        for vals in obj.values():
-            if isinstance(vals, dict) and _sequence_in_query([vals]):
-                return True
-            if isinstance(vals, list) and _sequence_in_query(vals):
-                return True
-    return False
-
-
 def _bound_label(
     label: str = "",
     query_json: dict[str, Any] = dict(),
@@ -222,7 +210,9 @@ def _parse_comparison(
     return (key, cast(str, op), cast(str, typ), cast(str, right))
 
 
-def _label_layer(query_json: list | dict[str, Any]) -> LabelLayer:
+def _label_layer(
+    query_json: list | dict[str, Any], depth: int = 0, parent_label: str = ""
+) -> LabelLayer:
     """
     Map label to its correct layer, as well as other data:
 
@@ -233,41 +223,65 @@ def _label_layer(query_json: list | dict[str, Any]) -> LabelLayer:
         return {}
     if isinstance(query_json, list):
         for i in query_json:
-            out.update(_label_layer(i))
+            out.update(_label_layer(i, depth=depth + 1, parent_label=parent_label))
     elif isinstance(query_json, dict):
         # todo maybe: does set have members?
         if "set" in query_json:
             if "label" in query_json:
+                query_json["_depth"] = depth
+                if parent_label and "partOf" not in query_json:
+                    query_json["partOf"] = parent_label
                 out[query_json["label"]] = (query_json.get("layer", ""), query_json)
             if "label" in query_json["set"]:
                 meta = query_json["set"].copy()
                 meta["_is_set"] = True
+                meta["_depth"] = depth
+                if parent_label and "partOf" not in meta:
+                    meta["partOf"] = parent_label
                 sset = (query_json["set"].get("layer", ""), meta)
                 out[query_json["set"]["label"]] = sset
-            # if "layer" not in query_json["set"]:
-            #    query_json["set"]["layer"] = query_json["set"]["constraints"]["layer"]
-            out.update(_label_layer(query_json["set"]))
+            new_parent_label = query_json.get(
+                "partOf", query_json.get("set", {}).get("partOf", parent_label)
+            )
+            out.update(
+                _label_layer(
+                    query_json["set"], depth=depth + 1, parent_label=new_parent_label
+                )
+            )
         elif "group" in query_json:
             gro = query_json["group"]
             if "label" in gro and gro.get("members", []):
                 meta = gro.copy()
                 meta["_is_group"] = True
+                meta["_depth"] = depth
+                if parent_label and "partOf" not in meta:
+                    meta["partOf"] = parent_label
                 sgroup = ("", meta)
                 out[gro["label"]] = sgroup
 
         for i in ["sequence", "members"]:
             if i in query_json:
                 part = query_json[i]
+                new_parent_label = parent_label
                 if isinstance(part, dict) and part.get("label"):
+                    part["_depth"] = depth
+                    if parent_label and "partOf" not in part:
+                        part["partOf"] = parent_label
                     out[part["label"]] = (cast(str, part.get("layer", "")), part)
-                out.update(_label_layer(part))
+                    new_parent_label = part.get("partOf", parent_label)
+                out.update(
+                    _label_layer(part, depth=depth + 1, parent_label=new_parent_label)
+                )
         if "label" in query_json and "layer" in query_json:
+            query_json["_depth"] = depth
+            if parent_label and "partOf" not in query_json:
+                query_json["partOf"] = parent_label
             out[query_json["label"]] = (query_json["layer"], query_json)
         for k, v in query_json.items():
             if isinstance(k, (list, dict)):
-                out.update(_label_layer(k))
+                out.update(_label_layer(k, depth=depth + 1, parent_label=parent_label))
             if isinstance(v, (list, dict)):
-                out.update(_label_layer(v))
+                out.update(_label_layer(v, depth=depth + 1, parent_label=parent_label))
     return out
 
 

@@ -806,6 +806,10 @@ class SQLSequence:
                     part_of = tok_par_seq.obj["sequence"].get("partOf")
                 if not part_of:
                     part_of = self.sequence.obj["sequence"].get("partOf", "")
+            if token.label and token.label in self.label_layer:
+                # Update label_layer with the computed partOf
+                token_dict = cast(dict, self.label_layer[token.label][1])
+                token_dict["partOf"] = part_of
             token_conds, token_left_joins, _ = self.get_constraints(
                 label=l,
                 constraints=token.obj["unit"].get("constraints", []),

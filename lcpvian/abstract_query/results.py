@@ -860,13 +860,12 @@ WHERE {entity}.char_range && contained_token.char_range
             return f"BETWEEN {center} {a} AND {center} {b}"
 
     @staticmethod
-    def _within_sent(segment_id, **kwargs) -> str:
+    def _within_sent(segment_id, seg_name: str = "__seglabel__", **kwargs) -> str:
         """
         If we are limiting the collocation to the sentence, make that condition here
 
         Right now it is not controllable. Could fail if query doesn't involve segment data maybe?
         """
-        seg_name = "__seglabel__"
         return f"AND tx.{segment_id} = match_list.{seg_name}"
 
     def collocation(
@@ -893,6 +892,8 @@ WHERE {entity}.char_range && contained_token.char_range
         att_feat = cast(JSONObject, cast(JSONObject, attribs)[feat])
         is_text = cast(str, att_feat.get("type", "")) == "text"
 
+        seg_lab: str = ""  # the segment label of center's parent
+
         need_id = feat in attribs and is_text
         feat_maybe_id = f"{feat}_id" if need_id and not feat.endswith("_id") else feat
         space_feat, lany, rbrack = "", "", ""
@@ -901,6 +902,28 @@ WHERE {entity}.char_range && contained_token.char_range
             if space[0] in self.r.set_objects:
                 lany = " ANY ( "
                 rbrack = " ) "
+        elif center and (token_meta := self.r.label_layer.get(center)):
+            seg_depth = 999  # start with a ridiculously deep value
+            # Use the label of the first segment layer found in label_layer as a fallback
+            seg_lab = next(
+                (
+                    l
+                    for l, p in self.r.label_layer.items()
+                    if p[0].lower() == self.segment.lower()
+                ),
+                "",
+            )
+            # Now go through the chain of center's "partOf"s and choose the highest parent segment
+            part_of: str = cast(str, token_meta[1].get("partOf", ""))
+            while part_of and part_of in self.r.label_layer:
+                parent_meta = self.r.label_layer[part_of]
+                if parent_meta[0].lower() == self.segment.lower():
+                    depth = cast(int, parent_meta[1].get("_depth", 999))
+                    if depth < seg_depth:
+                        seg_lab = part_of
+                        seg_depth = depth
+                part_of = cast(str, parent_meta[1].get("partOf", ""))
+
         token_id = f"{self.token}_id"
         segment_id = f"{self.segment}_id"
 
@@ -914,7 +937,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 attributes = partitions.get(self.lang, {}).get("attributes", {})
             feat_tab = attributes.get(feat, {}).get("name", feat)
         # feat_tab = f"{feat}{self._underlang}"
-        within_sent = self._within_sent(segment_id)
+        within_sent = self._within_sent(segment_id, seg_lab)
 
         if is_text:
             join_for_text_field = f"JOIN {self.schema}.{feat_tab} ON {feat_tab}.{feat_maybe_id} = x.{feat_maybe_id}"
