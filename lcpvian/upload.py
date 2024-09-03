@@ -203,6 +203,7 @@ async def upload(request: web.Request) -> web.Response:
         return await _status_check(request, job_id)
 
     user_data = await authenticator.user_details(request)
+    assert user_data, PermissionError("Could not authenticate the user")
 
     gui_mode = request.rel_url.query.get("gui", False)
 
@@ -264,17 +265,19 @@ async def upload(request: web.Request) -> web.Response:
             "corpus_name": corpus_name,
         }
         try:
-            # corpus_dir = os.path.split(cpath)[-1]
-            # new_name: str = self.name.lower()
-            # new_name = re.sub(r"\W", "_", new_name)
-            # new_name = re.sub(r"_+", "_", new_name)
-            # new_name += "_" + re.sub(
-            #     "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
-            # )
             upload_job = Job.fetch(
                 job.meta["upload_job"], connection=request.app["redis"]
             )
             corpus_entry = _row_to_value(upload_job.result)
+            # Need a better method than that - move to authenticate
+            # ud = cast(dict, user_data)
+            # user_projects: set = {p.get("id") for p in ud["publicProfiles"]}
+            # user_projects.update(
+            #     {p.get("id") for sb in ud["subscription"] for sbs in sb for p in sbs}
+            # )
+            # assert corpus_entry.get("project") in user_projects, PermissionError(
+            #     "User is not authorized to upload files to this project"
+            # )
             _move_media_files(cpath, corpus_entry.get("schema_path", ""))
             # shutil.rmtree(cpath)  # todo: should we do this?
         except Exception as err:
@@ -414,6 +417,7 @@ async def make_schema(request: web.Request) -> web.Response:
         secret = request.headers.get("X-API-Secret")
         assert isinstance(secret, str), "Missing API key secret"
         status = await authenticator.check_api_key(request)
+        assert "account" in status, "No account in status"
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Could not verify user: bad crendentials?"
@@ -423,19 +427,13 @@ async def make_schema(request: web.Request) -> web.Response:
         error["message"] = f"{msg} -- {err}"
         return web.json_response(error)
 
-    # user_id = status["account"]["eduPersonId"]
     user_acc = cast(dict[str, dict[Any, Any] | str], status["account"])
     user_id: str = cast(str, user_acc["email"])
-    # home_org = status["account"]["homeOrganization"]
     existing_project = cast(dict[str, JSON], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
 
     if project and project not in ids:
-        # headers: Headers = {
-        #     "X-API-Key": os.environ["LAMA_API_KEY"],
-        #     "X-User-API-Key": key,
-        # }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
         uacc: dict[str, Any] = cast(dict[str, Any], user_acc.get("account", {}))
