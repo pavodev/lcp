@@ -715,7 +715,8 @@ def _upload_failure(
         user = job.args[1]
         room = job.args[2]
 
-    path = os.path.join("uploads", project)
+    uploads_path = os.getenv("TEMP_UPLOADS_PATH", "uploads")
+    path = os.path.join(uploads_path, project)
     if os.path.isdir(path):
         shutil.rmtree(path)
         print(f"Deleted: {path}")

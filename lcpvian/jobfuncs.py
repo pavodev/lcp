@@ -33,7 +33,8 @@ async def _upload_data(
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    corpus = os.path.join("uploads", project)
+    uploads_path = os.getenv("TEMP_UPLOADS_PATH", "uploads")
+    corpus = os.path.join(uploads_path, project)
     data_path = os.path.join(corpus, "_data.json")
 
     with open(data_path, "r") as fo:

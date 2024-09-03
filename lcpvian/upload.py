@@ -30,6 +30,7 @@ from .utils import _sanitize_corpus_name, _row_to_value
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
+UPLOADS_PATH = os.getenv("TEMP_UPLOADS_PATH", "uploads")
 
 
 async def _create_status_check(request: web.Request, job_id: str) -> web.Response:
@@ -73,7 +74,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     qs = request.app["query_service"]
     job = qs.get(job_id)
     project = job.args[0]
-    progfile = os.path.join("uploads", project, ".progress.txt")
+    progfile = os.path.join(UPLOADS_PATH, project, ".progress.txt")
     progress = _get_progress(progfile)
 
     if not job:
@@ -240,7 +241,7 @@ async def upload(request: web.Request) -> web.Response:
         ):
             continue
         ext = os.path.splitext(bit.filename)[-1]
-        path = os.path.join("uploads", cpath, bit.filename)
+        path = os.path.join(UPLOADS_PATH, cpath, bit.filename)
 
         has_file = await _save_file(path, bit, has_file)
 
@@ -281,8 +282,8 @@ async def upload(request: web.Request) -> web.Response:
             ret["error"] = f"Something went wrong with uploading the media files: {err}"
         return web.json_response(ret)
 
-    _ensure_partitioned0(os.path.join("uploads", cpath))
-    _correct_doc(os.path.join("uploads", cpath))
+    _ensure_partitioned0(os.path.join(UPLOADS_PATH, cpath))
+    _correct_doc(os.path.join(UPLOADS_PATH, cpath))
 
     return_data: dict[str, str | int] = {}
     if not has_file:
@@ -292,7 +293,7 @@ async def upload(request: web.Request) -> web.Response:
 
     qs = request.app["query_service"]
     kwa = dict(gui=gui_mode, user_data=user_data)
-    path = os.path.join("uploads", cpath)
+    path = os.path.join(UPLOADS_PATH, cpath)
     print(f"Uploading data to database: {cpath}")
     upload_job = qs.upload(username, cpath, room, **kwa)
     job.meta["upload_job"] = upload_job.id
@@ -342,8 +343,8 @@ def _extract_file(
             basef = os.path.basename(str(f))
             if not str(f).endswith(VALID_EXTENSIONS):
                 continue
-            just_f = os.path.join("uploads", cpath, basef)
-            dest = os.path.join("uploads", cpath)
+            just_f = os.path.join(UPLOADS_PATH, cpath, basef)
+            dest = os.path.join(UPLOADS_PATH, cpath)
             print(f"Uncompressing {basef}")
             if ext != ".7z":
                 compressed.extract(f, dest)
@@ -368,7 +369,7 @@ def _move_media_files(cpath: str, corpus_dir: str) -> None:
     dest_path = os.path.join(media_path, corpus_dir)
     if not os.path.exists(dest_path):
         os.mkdir(dest_path)
-    source_path = os.path.join("uploads", cpath)
+    source_path = os.path.join(UPLOADS_PATH, cpath)
     for f in os.listdir(source_path):
         print("File in cpath", f)
         if not str(f).endswith(MEDIA_EXTENSIONS):
@@ -531,7 +532,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     corpus_path = os.path.join(proj_id, schema_name)
 
-    directory = os.path.join("uploads", corpus_path)
+    directory = os.path.join(UPLOADS_PATH, corpus_path)
     if os.path.exists(directory):
         shutil.rmtree(directory, ignore_errors=True)
     os.makedirs(directory)
