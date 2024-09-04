@@ -53,6 +53,7 @@ export const useCorpusStore = defineStore("corpusData", {
     async fetchExport(fn) {
       let url = `${httpApi.getUri()}/download_export/${fn}`;
       const a = document.createElement("A");
+      a.target = "_blank";
       a.href = url;
       a.download = "results";
       document.body.append(a);

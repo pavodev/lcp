@@ -124,9 +124,10 @@ async def kwic(jobs: list[Job], resp: Any, config):
                 continue
             if not meta_job:
                 continue
+            result = meta_job.result or []
             incoming_meta: dict[str, Any] = cast(
                 dict[str, Any],
-                format_meta_lines(meta_job.kwargs.get("meta_query"), meta_job.result),
+                format_meta_lines(meta_job.kwargs.get("meta_query"), result),
             )
             formatted_meta.update(incoming_meta)
 
@@ -167,7 +168,9 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
-async def export_dump(filepath: str, job_id: str, config: dict, download=False) -> None:
+async def export_dump(
+    filepath: str, job_id: str, config: dict, download=False, **kwargs
+) -> None:
     """
     Read the results from all the query, sentence and meta jobs and write them in dump.tsv
     """
@@ -260,6 +263,7 @@ async def export_swissdox(
     underlang: str,
     config,
     download=False,
+    **kwargs,
 ) -> Job:
     """
     Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
@@ -432,6 +436,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     Called in sock.py after the last batch was queried
     """
     export_format = payload.get("format", "")
+    room = payload.get("room", "")
+    user = payload.get("user", "")
     print("All batches done! Ready to start exporting")
     corpus_conf = payload.get("config", {})
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
@@ -452,7 +458,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
             args=(f"./results/dump_{first_job_id}.tsv", first_job_id, corpus_conf),
-            kwargs={"download": payload.get("download", False)},
+            kwargs={
+                "download": payload.get("download", False),
+                "room": room,
+                "user": user,
+            },
         )
     elif export_format == "swissdox":
         batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
@@ -466,7 +476,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
             args=(first_job_id, underlang, corpus_conf),
-            kwargs={"download": payload.get("download", False)},
+            kwargs={
+                "download": payload.get("download", False),
+                "room": room,
+                "user": user,
+            },
         )
 
     room = cast(str, payload.get("room", ""))

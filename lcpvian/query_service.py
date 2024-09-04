@@ -188,7 +188,7 @@ class QueryService:
         job: Job | None
         try:
             job = Job.fetch(hashed, connection=self.app["redis"])
-            first_job_id = kwargs.get("first_job")
+            first_job_id: str = cast(str, kwargs.get("first_job", ""))
             # Use an if here because .get() can return an empty string
             if not first_job_id:
                 first_job_id = str(job.id)

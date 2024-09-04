@@ -834,9 +834,10 @@ def _export_complete(
         and isinstance(job.args[0], str)
         and os.path.exists(job.args[0])
     ):
+        j_kwargs: dict = cast(dict, job.kwargs)
         dep_kwargs: dict = cast(dict, job.dependency.kwargs)
-        user = dep_kwargs.get("user")
-        room = dep_kwargs.get("room")
+        user = j_kwargs.get("user", dep_kwargs.get("user", ""))
+        room = j_kwargs.get("room", dep_kwargs.get("room", ""))
         if user and room and cast(dict, job.kwargs).get("download", False):
             msg_id = str(uuid4())
             jso: dict[str, Any] = {
