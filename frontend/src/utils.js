@@ -96,6 +96,8 @@ const Utils = {
           val = `<abbr title="${k}">${val}</abbr>`;
         vals.push(val);
       }
+      if (["number","string"].includes(typeof(dict)))
+        vals.push(String(dict));
       return vals.join(" ")
     },
     slugify(str) {

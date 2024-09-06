@@ -404,7 +404,7 @@ def _sentences(
         int, kwargs.get("current_kwic_lines", job_kwargs["current_kwic_lines"])
     )
 
-    if prev_offset > offset and not kwargs.get("from_memory"):
+    if prev_offset > offset:  # and not kwargs.get("from_memory"):
         offset = prev_offset if resume else -1
     total_to_get = job_kwargs.get("needed", total_requested)
 
@@ -414,6 +414,10 @@ def _sentences(
     status = depended.meta["_status"]
     latest_offset = max(offset, 0) + total_to_get
     depended.meta["latest_offset"] = latest_offset
+    # base.save_meta, which is called later, overwrites depended.save_meta when pointing to the same job
+    if base.id == depended.id:
+        base.meta["latest_offset"] = latest_offset
+
     depended.save_meta()  # type: ignore
 
     # in full mode, we need to combine all the sentences into one message when finished
@@ -470,7 +474,7 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
-    submit_payload["to_export"] = depended.meta.get("to_export", "")
+    submit_payload["to_export"] = depended.meta.get("to_export", {})
 
     # Do not send if this is an "export" query
     can_send = not base.meta.get("to_export", False) and (
@@ -711,7 +715,8 @@ def _upload_failure(
         user = job.args[1]
         room = job.args[2]
 
-    path = os.path.join("uploads", project)
+    uploads_path = os.getenv("TEMP_UPLOADS_PATH", "uploads")
+    path = os.path.join(uploads_path, project)
     if os.path.isdir(path):
         shutil.rmtree(path)
         print(f"Deleted: {path}")
@@ -829,9 +834,10 @@ def _export_complete(
         and isinstance(job.args[0], str)
         and os.path.exists(job.args[0])
     ):
+        j_kwargs: dict = cast(dict, job.kwargs)
         dep_kwargs: dict = cast(dict, job.dependency.kwargs)
-        user = dep_kwargs.get("user")
-        room = dep_kwargs.get("room")
+        user = j_kwargs.get("user", dep_kwargs.get("user", ""))
+        room = j_kwargs.get("room", dep_kwargs.get("room", ""))
         if user and room and cast(dict, job.kwargs).get("download", False):
             msg_id = str(uuid4())
             jso: dict[str, Any] = {

@@ -31,7 +31,7 @@ SWISSDOX_NE_SELECTS = ["form", "type"]
 
 
 def _format_kwic(
-    args: list, columns: list, sentences: dict[str, tuple], result_meta: dict
+    args: list, columns: list, sentences: dict[str, tuple], result_meta: dict, config={}
 ) -> tuple[str, str, dict, list, list]:
     """
     Return (kwic_name, sid, matches, tokens, annotations) for (sid,[tokens])+
@@ -48,7 +48,12 @@ def _format_kwic(
     first_token_id, prep_seg, annotations = sentences[sid]
     matching_entities: dict[str, int | list[int]] = {}
     for n in entities:
-        if n.get("type") in ("sequence", "set"):
+        n_type = n.get("type", "")
+        is_span = n_type in ("sequence", "set") or (
+            config.get("layer", {}).get(n_type, {}).get("contains", "").lower()
+            == config["token"].lower()
+        )
+        if is_span:
             matching_entities[n["name"]] = []
         else:
             matching_entities[n["name"]] = 0
@@ -98,30 +103,33 @@ async def kwic(jobs: list[Job], resp: Any, config):
         else:
             columns = segment_mapping["prepared"]["columnHeaders"]
 
-        sentence_job: Job | None = next(
-            (sj for sj in sentence_jobs if sj.kwargs.get("depends_on") == j.id), None
-        )
         sentences: dict[str, tuple] = {}
-        if not sentence_job or not sentence_job.result:
-            continue
-        for row in sentence_job.result:
-            uuid: str = str(row[0])
-            first_token_id = row[1]
-            tokens = row[2]
-            annotations = []
-            if len(row) > 3:
-                annotations = row[3]
-            sentences[uuid] = (first_token_id, tokens, annotations)
+        for sentence_job in sentence_jobs:
+            if sentence_job.kwargs.get("depends_on") != j.id:
+                continue
+            if not sentence_job or not sentence_job.result:
+                continue
+            for row in sentence_job.result:
+                uuid: str = str(row[0])
+                first_token_id = row[1]
+                tokens = row[2]
+                annotations = []
+                if len(row) > 3:
+                    annotations = row[3]
+                sentences[uuid] = (first_token_id, tokens, annotations)
 
-        meta_job: Job | None = next(
-            (mj for mj in meta_jobs if mj.kwargs.get("depends_on") == j.id), None
-        )
-        if not meta_job:
-            continue
-        formatted_meta: dict[str, Any] = cast(
-            dict[str, Any],
-            format_meta_lines(meta_job.kwargs.get("meta_query"), meta_job.result),
-        )
+        formatted_meta: dict[str, Any] = {}
+        for meta_job in meta_jobs:
+            if meta_job.kwargs.get("depends_on") == j.id:
+                continue
+            if not meta_job:
+                continue
+            result = meta_job.result or []
+            incoming_meta: dict[str, Any] = cast(
+                dict[str, Any],
+                format_meta_lines(meta_job.kwargs.get("meta_query"), result),
+            )
+            formatted_meta.update(incoming_meta)
 
         meta = j_kwargs.get("meta_json", {}).get("result_sets", [])
         kwic_indices = [n + 1 for n, o in enumerate(meta) if o.get("type") == "plain"]
@@ -132,7 +140,7 @@ async def kwic(jobs: list[Job], resp: Any, config):
                 continue
             try:
                 kwic_name, sid, matching_entities, tokens, annotations = _format_kwic(
-                    args, columns, sentences, meta[n_type - 1]
+                    args, columns, sentences, meta[n_type - 1], config=config
                 )
                 data = {
                     "sid": sid,
@@ -146,7 +154,8 @@ async def kwic(jobs: list[Job], resp: Any, config):
                 line: str = "\t".join(
                     [str(n_type), "plain", kwic_name, json.dumps(data)]
                 )
-            except:
+            except Exception as err:
+                print("Issue with _format_kwic when exporting", err)
                 # Because queries for prepared segments only fetch what's needed for previewing purposes,
                 # queries with lots of matches can only output a small subset of lines
                 continue
@@ -159,7 +168,9 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
-async def export_dump(filepath: str, job_id: str, config: dict, download=False) -> None:
+async def export_dump(
+    filepath: str, job_id: str, config: dict, download=False, **kwargs
+) -> None:
     """
     Read the results from all the query, sentence and meta jobs and write them in dump.tsv
     """
@@ -252,6 +263,7 @@ async def export_swissdox(
     underlang: str,
     config,
     download=False,
+    **kwargs,
 ) -> Job:
     """
     Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
@@ -424,6 +436,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     Called in sock.py after the last batch was queried
     """
     export_format = payload.get("format", "")
+    room = payload.get("room", "")
+    user = payload.get("user", "")
     print("All batches done! Ready to start exporting")
     corpus_conf = payload.get("config", {})
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
@@ -444,7 +458,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
             args=(f"./results/dump_{first_job_id}.tsv", first_job_id, corpus_conf),
-            kwargs={"download": payload.get("download", False)},
+            kwargs={
+                "download": payload.get("download", False),
+                "room": room,
+                "user": user,
+            },
         )
     elif export_format == "swissdox":
         batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
@@ -458,7 +476,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
             args=(first_job_id, underlang, corpus_conf),
-            kwargs={"download": payload.get("download", False)},
+            kwargs={
+                "download": payload.get("download", False),
+                "room": room,
+                "user": user,
+            },
         )
 
     room = cast(str, payload.get("room", ""))

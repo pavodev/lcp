@@ -141,6 +141,7 @@ upload_kwargs = dict(
     pool_recycle=3600,
     pool_timeout=3600,
     pool_pre_ping=True,
+    isolation_level="READ COMMITTED",
 )
 if not UPLOAD_POOL:
     upload_kwargs["pool_class"] = NullPool

@@ -30,6 +30,7 @@ from .utils import _sanitize_corpus_name, _row_to_value
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
 MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
+UPLOADS_PATH = os.getenv("TEMP_UPLOADS_PATH", "uploads")
 
 
 async def _create_status_check(request: web.Request, job_id: str) -> web.Response:
@@ -73,7 +74,7 @@ async def _status_check(request: web.Request, job_id: str) -> web.Response:
     qs = request.app["query_service"]
     job = qs.get(job_id)
     project = job.args[0]
-    progfile = os.path.join("uploads", project, ".progress.txt")
+    progfile = os.path.join(UPLOADS_PATH, project, ".progress.txt")
     progress = _get_progress(progfile)
 
     if not job:
@@ -202,6 +203,7 @@ async def upload(request: web.Request) -> web.Response:
         return await _status_check(request, job_id)
 
     user_data = await authenticator.user_details(request)
+    assert user_data, PermissionError("Could not authenticate the user")
 
     gui_mode = request.rel_url.query.get("gui", False)
 
@@ -240,7 +242,7 @@ async def upload(request: web.Request) -> web.Response:
         ):
             continue
         ext = os.path.splitext(bit.filename)[-1]
-        path = os.path.join("uploads", cpath, bit.filename)
+        path = os.path.join(UPLOADS_PATH, cpath, bit.filename)
 
         has_file = await _save_file(path, bit, has_file)
 
@@ -263,17 +265,19 @@ async def upload(request: web.Request) -> web.Response:
             "corpus_name": corpus_name,
         }
         try:
-            # corpus_dir = os.path.split(cpath)[-1]
-            # new_name: str = self.name.lower()
-            # new_name = re.sub(r"\W", "_", new_name)
-            # new_name = re.sub(r"_+", "_", new_name)
-            # new_name += "_" + re.sub(
-            #     "-", "", re.sub(r"_+", "_", self.template.get("project", ""))
-            # )
             upload_job = Job.fetch(
                 job.meta["upload_job"], connection=request.app["redis"]
             )
             corpus_entry = _row_to_value(upload_job.result)
+            # Need a better method than that - move to authenticate
+            # ud = cast(dict, user_data)
+            # user_projects: set = {p.get("id") for p in ud["publicProfiles"]}
+            # user_projects.update(
+            #     {p.get("id") for sb in ud["subscription"] for sbs in sb for p in sbs}
+            # )
+            # assert corpus_entry.get("project") in user_projects, PermissionError(
+            #     "User is not authorized to upload files to this project"
+            # )
             _move_media_files(cpath, corpus_entry.get("schema_path", ""))
             # shutil.rmtree(cpath)  # todo: should we do this?
         except Exception as err:
@@ -281,8 +285,8 @@ async def upload(request: web.Request) -> web.Response:
             ret["error"] = f"Something went wrong with uploading the media files: {err}"
         return web.json_response(ret)
 
-    _ensure_partitioned0(os.path.join("uploads", cpath))
-    _correct_doc(os.path.join("uploads", cpath))
+    _ensure_partitioned0(os.path.join(UPLOADS_PATH, cpath))
+    _correct_doc(os.path.join(UPLOADS_PATH, cpath))
 
     return_data: dict[str, str | int] = {}
     if not has_file:
@@ -292,7 +296,7 @@ async def upload(request: web.Request) -> web.Response:
 
     qs = request.app["query_service"]
     kwa = dict(gui=gui_mode, user_data=user_data)
-    path = os.path.join("uploads", cpath)
+    path = os.path.join(UPLOADS_PATH, cpath)
     print(f"Uploading data to database: {cpath}")
     upload_job = qs.upload(username, cpath, room, **kwa)
     job.meta["upload_job"] = upload_job.id
@@ -342,8 +346,8 @@ def _extract_file(
             basef = os.path.basename(str(f))
             if not str(f).endswith(VALID_EXTENSIONS):
                 continue
-            just_f = os.path.join("uploads", cpath, basef)
-            dest = os.path.join("uploads", cpath)
+            just_f = os.path.join(UPLOADS_PATH, cpath, basef)
+            dest = os.path.join(UPLOADS_PATH, cpath)
             print(f"Uncompressing {basef}")
             if ext != ".7z":
                 compressed.extract(f, dest)
@@ -368,7 +372,7 @@ def _move_media_files(cpath: str, corpus_dir: str) -> None:
     dest_path = os.path.join(media_path, corpus_dir)
     if not os.path.exists(dest_path):
         os.mkdir(dest_path)
-    source_path = os.path.join("uploads", cpath)
+    source_path = os.path.join(UPLOADS_PATH, cpath)
     for f in os.listdir(source_path):
         print("File in cpath", f)
         if not str(f).endswith(MEDIA_EXTENSIONS):
@@ -413,6 +417,7 @@ async def make_schema(request: web.Request) -> web.Response:
         secret = request.headers.get("X-API-Secret")
         assert isinstance(secret, str), "Missing API key secret"
         status = await authenticator.check_api_key(request)
+        assert "account" in status, "No account in status"
     except Exception as err:
         tb = traceback.format_exc()
         msg = f"Could not verify user: bad crendentials?"
@@ -422,19 +427,13 @@ async def make_schema(request: web.Request) -> web.Response:
         error["message"] = f"{msg} -- {err}"
         return web.json_response(error)
 
-    # user_id = status["account"]["eduPersonId"]
     user_acc = cast(dict[str, dict[Any, Any] | str], status["account"])
     user_id: str = cast(str, user_acc["email"])
-    # home_org = status["account"]["homeOrganization"]
     existing_project = cast(dict[str, JSON], status.get("profile", {}))
 
     ids = (existing_project.get("id"), existing_project.get("title"))
 
     if project and project not in ids:
-        # headers: Headers = {
-        #     "X-API-Key": os.environ["LAMA_API_KEY"],
-        #     "X-User-API-Key": key,
-        # }
         start = template["meta"].get("startDate", today.strftime("%Y-%m-%d"))
         finish = template["meta"].get("finishDate", later.strftime("%Y-%m-%d"))
         uacc: dict[str, Any] = cast(dict[str, Any], user_acc.get("account", {}))
@@ -531,7 +530,7 @@ async def make_schema(request: web.Request) -> web.Response:
 
     corpus_path = os.path.join(proj_id, schema_name)
 
-    directory = os.path.join("uploads", corpus_path)
+    directory = os.path.join(UPLOADS_PATH, corpus_path)
     if os.path.exists(directory):
         shutil.rmtree(directory, ignore_errors=True)
     os.makedirs(directory)

@@ -1016,7 +1016,7 @@ export default {
       ) {
         console.log("Submit");
         this.nResults = newNResults;
-        this.submit(null, true);
+        this.submit(null, /*resumeQuery=*/true, /*cleanResults=*/false);
       }
     },
     updateQueryDQD(queryDQD) {
@@ -1138,6 +1138,8 @@ export default {
           console.log("query stored", data);
           return;
         } else if (data["action"] == "export_link") {
+          this.loading = false;
+          this.percentageDone = this.WSDataResults.percentage_done;
           useCorpusStore().fetchExport(data.fn);
           useNotificationStore().add({
             type: "success",

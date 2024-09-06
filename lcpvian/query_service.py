@@ -52,6 +52,7 @@ from .typed import (
     DocIDArgs,
     JSONObject,
     QueryArgs,
+    RawSent,
     Results,
     ResultsValue,
     SentJob,
@@ -121,6 +122,7 @@ class QueryService:
             **job.meta.get("sent_job_ws_messages", {}),
             **job.meta.get("meta_job_ws_messages", {}),
         }
+
         for msg in sent_and_meta_msgs:
             # print(f"Retrieving sentences message: {msg}")
             print(f"Retrieving sentences or metadata message: {msg}")
@@ -138,6 +140,7 @@ class QueryService:
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
             )
             tasks.append(task)
+
         if not failed:
             for task in tasks:
                 await task
@@ -185,7 +188,10 @@ class QueryService:
         job: Job | None
         try:
             job = Job.fetch(hashed, connection=self.app["redis"])
-            first_job_id = cast(str, kwargs.get("first_job", str(job.id)))
+            first_job_id: str = cast(str, kwargs.get("first_job", ""))
+            # Use an if here because .get() can return an empty string
+            if not first_job_id:
+                first_job_id = str(job.id)
             first_job = Job.fetch(first_job_id, connection=self.app["redis"])
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
@@ -194,6 +200,8 @@ class QueryService:
                     success = await self.send_all_data(job, **kwargs)
                     if success:
                         return job, None
+                if not kwargs["full"]:
+                    success = await self.send_all_data(first_job, **kwargs)
                 if not kwargs["full"]:
                     _query(
                         job,
@@ -479,14 +487,24 @@ class QueryService:
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
                 print("Sentences found in redis memory. Retrieving...")
+                trr = kwargs.get("total_results_requested", 0)
                 kwa = {
                     "full": kwargs.get("full", False),
                     "user": kwargs.get("user", ""),
                     "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": kwargs.get("total_results_requested", 0),
+                    "total_results_requested": trr,
                 }
-                _sentences(job, self.app["redis"], job.result, **kwa)
+                first_job_id = cast(dict, job.kwargs)["first_job"]
+                first_job = Job.fetch(first_job_id, connection=self.app["redis"])
+                all_sent_ids = first_job.meta.get("_sent_jobs", [])
+                results: list[RawSent] = []
+                for sj in all_sent_ids:
+                    sent_job = Job.fetch(sj, connection=self.app["redis"])
+                    results += sent_job.result
+                    if len(results) >= trr:
+                        break
+                _sentences(job, self.app["redis"], results, **kwa)
                 return [job.id]
         except NoSuchJobError:
             pass

@@ -33,7 +33,8 @@ async def _upload_data(
     """
     Script to be run by rq worker, convert data and upload to postgres
     """
-    corpus = os.path.join("uploads", project)
+    uploads_path = os.getenv("TEMP_UPLOADS_PATH", "uploads")
+    corpus = os.path.join(uploads_path, project)
     data_path = os.path.join(corpus, "_data.json")
 
     with open(data_path, "r") as fo:
@@ -96,7 +97,8 @@ async def _create_schema(
                 #     create = "\n".join(drops) + "\n" + create
                 print("Creating schema...\n", create)
                 await con.execute(create)
-            except Exception:
+            except Exception as err:
+                print("Error when creating the schema", err)
                 pass  # All is handled as one transaction now in open_import
                 # script = f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
                 # extra.pop("drops")

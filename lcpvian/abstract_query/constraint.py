@@ -640,7 +640,7 @@ class Constraint:
             lookup_table = ref_mapping.get("name", "")
             inner_op = "~" if self.type == "regex" else "="
             inner_condition = (
-                "(SELECT bit_or(0::bit(113)<<0)::bit(113) AS m UNION "  # In case no label matches the condition
+                f"(SELECT bit_or(0::bit({nbit})<<0)::bit({nbit}) AS m UNION "  # In case no label matches the condition
                 + f"SELECT bit_or(1::bit({nbit})<<bit)::bit({nbit}) AS m "
                 + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
             )
