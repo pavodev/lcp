@@ -67,6 +67,7 @@ SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
 REDIS_SHARED_DB_INDEX = int(os.getenv("REDIS_SHARED_DB_INDEX", -1))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_SHARED_URL = os.getenv("REDIS_SHARED_URL", REDIS_URL)
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 
@@ -281,7 +282,7 @@ async def create_app(test: bool = False) -> web.Application:
     )
 
     if REDIS_SHARED_DB_INDEX > -1:
-        shared_redis_url: str = f"{REDIS_URL}/{REDIS_SHARED_DB_INDEX}"
+        shared_redis_url: str = f"{REDIS_SHARED_URL}/{REDIS_SHARED_DB_INDEX}"
         app.addkey(
             "shared_redis",
             Redis,
@@ -293,10 +294,10 @@ async def create_app(test: bool = False) -> web.Application:
             ),
         )
         app.addkey(
-            "shared_aredis",
+            "ashared_aredis",
             aioredis.Redis,
             aioredis.Redis.from_url(
-                redis_url,
+                shared_redis_url,
                 health_check_interval=10,
                 retry_on_error=[ConnectionError],
                 retry=async_retry_policy,

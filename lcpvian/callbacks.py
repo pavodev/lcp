@@ -686,7 +686,7 @@ def _upload(
     }
 
     # We want to notify *all* the instances of the new corpus
-    return _sharepublish_msg(connection, cast(JSONObject, jso), msg_id)
+    return _sharepublish_msg(cast(JSONObject, jso), msg_id)
     # return _publish_msg(connection, cast(JSONObject, jso), msg_id)
 
 

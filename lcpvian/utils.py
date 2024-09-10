@@ -798,19 +798,19 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _sharepublish_msg(
-    connection: "RedisConnection[bytes]", message: JSONObject | str | bytes, msg_id: str
-) -> None:
+def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     """
     Connect to the shared redis instance (if it exists) and call _publish_msg on it
     """
     redis_shared_db_index = int(os.getenv("REDIS_SHARED_DB_INDEX", -1))
+    redis_shared_url = os.getenv(
+        "REDIS_SHARED_URL", os.getenv("REDIS_URL", "redis://localhost:6379")
+    )
     if redis_shared_db_index < 0:
         return
-    ckwargs = {**cast(dict, connection.connection_pool.connection_kwargs)}
-    host, port = (ckwargs[v] for v in ("host", "port"))
-    # kwargs = (ckwargs[v] for v in ckwargs if v not in ("host", "port"))
-    shared_connection = RedisConnection(host=host, port=port, db=redis_shared_db_index)
+
+    full_url = f"{redis_shared_url}/{redis_shared_db_index}"
+    shared_connection = RedisConnection.from_url(full_url)
     _publish_msg(shared_connection, message, msg_id)
 
 
