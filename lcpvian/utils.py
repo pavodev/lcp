@@ -798,6 +798,22 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
+def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
+    """
+    Connect to the shared redis instance (if it exists) and call _publish_msg on it
+    """
+    redis_shared_db_index = int(os.getenv("REDIS_SHARED_DB_INDEX", -1))
+    redis_shared_url = os.getenv(
+        "REDIS_SHARED_URL", os.getenv("REDIS_URL", "redis://localhost:6379")
+    )
+    if redis_shared_db_index < 0:
+        return
+
+    full_url = f"{redis_shared_url}/{redis_shared_db_index}"
+    shared_connection = RedisConnection.from_url(full_url)
+    _publish_msg(shared_connection, message, msg_id)
+
+
 def _publish_msg(
     connection: "RedisConnection[bytes]", message: JSONObject | str | bytes, msg_id: str
 ) -> None:

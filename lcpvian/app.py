@@ -65,7 +65,9 @@ _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
 C_COMPILED = "SourceFileLoader" not in str(_LOADER)
 SENTRY_DSN: str = os.getenv("SENTRY_DSN", "")
 REDIS_DB_INDEX = int(os.getenv("REDIS_DB_INDEX", 0))
+REDIS_SHARED_DB_INDEX = int(os.getenv("REDIS_SHARED_DB_INDEX", -1))
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
+REDIS_SHARED_URL = os.getenv("REDIS_SHARED_URL", REDIS_URL)
 APP_PORT = int(os.getenv("AIO_PORT", 9090))
 DEBUG = bool(os.getenv("DEBUG", "false").lower() in TRUES)
 
@@ -130,7 +132,13 @@ async def start_background_tasks(app: web.Application) -> None:
     Start the thread that periodically removes stale websocket connections
     """
     lapp = cast(LCPApplication, app)
-    lapp.addkey("redis_listener", Task[None], asyncio.create_task(listen_to_redis(app)))
+    for instance in ("redis", "shared_redis"):
+        if instance not in app:
+            continue
+        listener = f"{instance}_listener"
+        lapp.addkey(
+            listener, Task[None], asyncio.create_task(listen_to_redis(app, instance))
+        )
     lapp.addkey(
         "ws_cleanup", Task[None], asyncio.create_task(ws_cleanup(app["websockets"]))
     )
@@ -252,15 +260,12 @@ async def create_app(test: bool = False) -> web.Application:
     retry_policy: Retry = Retry(ConstantBackoff(sleep_time), 3)
     async_retry_policy: AsyncRetry = AsyncRetry(ConstantBackoff(sleep_time), 3)
 
-    # Danny seemed to say mypy used to need a parser_class here, but newer redis releases seem to do away with parser_class
-    # app["aredis"] = aioredis.Redis.from_url(url=redis_url, parser_class=ParserClass)
     app.addkey(
         "aredis",
         aioredis.Redis,
         aioredis.Redis.from_url(
             redis_url,
             health_check_interval=10,
-            # parser_class=ParserClass,
             retry_on_error=[ConnectionError],
             retry=async_retry_policy,
         ),
@@ -275,6 +280,29 @@ async def create_app(test: bool = False) -> web.Application:
             retry=retry_policy,
         ),
     )
+
+    if REDIS_SHARED_DB_INDEX > -1:
+        shared_redis_url: str = f"{REDIS_SHARED_URL}/{REDIS_SHARED_DB_INDEX}"
+        app.addkey(
+            "shared_redis",
+            Redis,
+            Redis.from_url(
+                shared_redis_url,
+                health_check_interval=10,
+                retry_on_error=[ConnectionError],
+                retry=retry_policy,
+            ),
+        )
+        app.addkey(
+            "ashared_aredis",
+            aioredis.Redis,
+            aioredis.Redis.from_url(
+                shared_redis_url,
+                health_check_interval=10,
+                retry_on_error=[ConnectionError],
+                retry=async_retry_policy,
+            ),
+        )
 
     redis = cast(web.Application, app)["redis"]
 

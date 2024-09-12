@@ -55,6 +55,7 @@ from .utils import (
     _decide_can_send,
     _time_remaining,
     _publish_msg,
+    _sharepublish_msg,
     format_meta_lines,
     TRUES,
 )
@@ -684,7 +685,9 @@ def _upload(
         "msg_id": msg_id,
     }
 
-    return _publish_msg(connection, cast(JSONObject, jso), msg_id)
+    # We want to notify *all* the instances of the new corpus
+    return _sharepublish_msg(cast(JSONObject, jso), msg_id)
+    # return _publish_msg(connection, cast(JSONObject, jso), msg_id)
 
 
 def _upload_failure(

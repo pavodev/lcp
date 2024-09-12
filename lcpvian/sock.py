@@ -69,6 +69,10 @@ async def _process_message(
         return
     data = json.loads(cast(bytes, message["data"]))
     raw: bytes = app["redis"].get(data["msg_id"])
+    if not raw and "shared_redis" in app:
+        raw = app["shared_redis"].get(data["msg_id"])
+    if not raw:
+        return None
     payload: JSONObject = json.loads(raw)
     payload["user"] = data.get("user", payload.get("user", ""))
     payload["room"] = data.get("room", payload.get("room", ""))
@@ -128,14 +132,19 @@ async def handle_redis_response(
         logging.error(str(err), extra=extra)
 
 
-async def listen_to_redis(app: web.Application, test: bool = False) -> None:
+async def listen_to_redis(
+    app: web.Application, instance: str, test: bool = False
+) -> None:
     """
     Using our async redis connection instance, listen for events coming from redis
     and delegate to the sender, All the try/except logic is shutdown logic only
     """
+    ainstance = f"a{instance}"
+    if instance not in app or ainstance not in app:
+        return
     while True:
         try:
-            async with app["aredis"].pubsub() as channel:
+            async with app[ainstance].pubsub() as channel:
                 await channel.subscribe(PUBSUB_CHANNEL)
                 await handle_redis_response(channel, app, test=test)
         except ConnectionError as err:
