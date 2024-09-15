@@ -1,10 +1,10 @@
 # Summary
 
+* [LCP](README.md#)
 * [Applications](README.md#applications)
     * [catchphrase](catchphrase.md)
     * [soundscript](soundscript.md)
     * [videoscope](videoscope.md)
-
 * [Links](README.md#links)
     * [DQD](dqd.md)
         * [Introduction](dqd.md#introduction)
