@@ -926,7 +926,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
                 on_cond = (
-                    f"get_bit({layer}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                    f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
                 )
                 sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
             else:
