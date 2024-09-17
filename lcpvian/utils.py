@@ -853,6 +853,13 @@ def _is_time_anchored(current_batch: Batch, config: CorpusConfig, layer: str) ->
     return False
 
 
+def _default_tracks(config: CorpusConfig) -> dict:
+    ret: dict = {}
+    segment: str = config["firstClass"]["segment"]
+    ret["layers"] = {segment: {}}
+    return ret
+
+
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     if not current_batch:
         raise ValueError("Need batch")

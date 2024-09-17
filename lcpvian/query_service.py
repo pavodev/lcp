@@ -49,6 +49,7 @@ from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import (
     BaseArgs,
     Config,
+    CorpusConfig,
     DocIDArgs,
     JSONObject,
     QueryArgs,
@@ -58,6 +59,7 @@ from .typed import (
     SentJob,
 )
 from .utils import (
+    _default_tracks,
     _format_config_query,
     _set_config,
     PUBSUB_CHANNEL,
@@ -267,20 +269,21 @@ class QueryService:
         doc_id: int,
         user: str,
         room: str | None,
-        config: dict,
+        config: CorpusConfig,
         queue: str = "internal",
     ) -> Job:
         """
         Fetch info about a document from DB/cache
         """
-        assert "tracks" in config, KeyError(
-            "Couldn't find 'tracks' in the corpus configuration"
-        )
+        tracks: dict = cast(dict, config.get("tracks", _default_tracks(config)))
+        # assert "tracks" in config, KeyError(
+        #     "Couldn't find 'tracks' in the corpus configuration"
+        # )
         global_tables: dict = {}
         doc_layer = config.get("document")
         query = f"WITH doc AS (SELECT frame_range FROM {schema}.{doc_layer} WHERE {doc_layer}_id = :doc_id)"
-        glob_attrs = config.get("globalAttributes", {})
-        for layer in config["tracks"].get("layers", {}):
+        glob_attrs: dict = cast(dict, config.get("globalAttributes", {}))
+        for layer in tracks.get("layers", {}):
             layer_table = _get_table(
                 layer, config, "", ""
             )  # no batch and no lang for now
@@ -330,8 +333,8 @@ class QueryService:
     FROM {schema}.{layer_table} {lab}, doc {crossjoin}
     WHERE {lab}.frame_range <@ doc.frame_range {whereand}
 )"""
-        layers_ctes = [x for x in config["tracks"].get("layers", {})]
-        for gar in config["tracks"].get("group_by", []):
+        layers_ctes = [x for x in tracks.get("layers", {})]
+        for gar in tracks.get("group_by", []):
             assert "globalAttributes" in config, KeyError(
                 "Could not find globalAttributes in corpus config"
             )
@@ -347,12 +350,12 @@ class QueryService:
         # , {', '.join(layers_ctes)}
         # WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
         # Trying to remove WHEREs under the assumption that global attributes will always be small
-        query += f"\nSELECT * FROM {next(x for x in config['tracks']['layers'])}"
-        for n, layer in enumerate(config["tracks"]["layers"]):
+        query += f"\nSELECT * FROM {next(x for x in tracks['layers'])}"
+        for n, layer in enumerate(tracks["layers"]):
             if n == 0:
                 continue
             query += f"\nUNION ALL SELECT * FROM {layer}"
-        for gar in config["tracks"].get("group_by", {}):
+        for gar in tracks.get("group_by", {}):
             query += f"\nUNION ALL SELECT * FROM {gar}"
         query += ";"
         if corpus == 115:
