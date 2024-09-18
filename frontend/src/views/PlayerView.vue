@@ -390,7 +390,7 @@
         </div>
       </div>
       <TimelineView
-        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false && loadingMedia == false"
+        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
         :data="currentDocumentData"
         :mediaDuration="currentMediaDuration"
         :playerIsPlaying="playerIsPlaying"
@@ -1163,6 +1163,8 @@ export default {
           })
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
+          if (!this.currentMediaDuration && "doc" in this.documentData && "frame_range" in this.documentData.doc)
+            this.currentMediaDuration = this.documentData.doc.frame_range.reduce((x,y)=>y-x) / this.frameRate;
           this.currentDocumentData = timelineData;
           this.loadingDocument = false;
           this.documentIndexKey++;

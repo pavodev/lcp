@@ -135,8 +135,10 @@ export default {
       updateVerticalLine(newXScale(currentTime));
     },
     zoomValue(){
+      const verticalLine = svg.selectAll(".vertical-line");
+      const xPosition = verticalLine.attr("x1");
       const scale = this.zoomValue;
-      svg.transition().call(zoom.scaleTo, parseFloat(scale));
+      svg.transition().call(zoom.scaleTo, parseFloat(scale), [xPosition, 0]);
     }
   },
   methods: {
@@ -148,6 +150,7 @@ export default {
     },
   },
   mounted() {
+
     // Example
     // const data = [
     //   {
@@ -346,7 +349,8 @@ export default {
 
       // Update the vertical line
       // const sliderValue = parseFloat(d3.select("#vertical-slider").node().value);
-      updateVerticalLine(newXScale(currentTime));
+      const verticalLineX = newXScale(currentTime);
+      updateVerticalLine(verticalLineX);
     }
 
     // Zoom control event handlers
@@ -499,6 +503,8 @@ export default {
           .style('opacity', '1')
           .text(Utils.secondsToTime(originalValue, true));
       });
+
+      this.zoomValue = 20;
   },
 };
 </script>

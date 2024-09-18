@@ -357,9 +357,9 @@ class QueryService:
             query += f"\nUNION ALL SELECT * FROM {layer}"
         for gar in tracks.get("group_by", {}):
             query += f"\nUNION ALL SELECT * FROM {gar}"
+        doc_range = range_to_array("doc.frame_range")
+        query += f"\nUNION ALL SELECT 'doc', '{doc_layer}', jsonb_build_object('frame_range',{doc_range}) AS props FROM doc"
         query += ";"
-        if corpus == 115:
-            query = "main.doc_export(115)"  # exception for old tangram
         print("document query", query)
         params = {"doc_id": doc_id}
         hashed = str(hash((query, doc_id)))
