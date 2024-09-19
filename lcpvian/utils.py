@@ -54,6 +54,8 @@ from .typed import (
     Websockets,
 )
 
+RESULTS_DIR = os.getenv("RESULTS", "results")
+
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
 TRUES = {"true", "1", "y", "yes"}
@@ -827,6 +829,13 @@ def _publish_msg(
     connection.expire(msg_id, MESSAGE_TTL)
     connection.publish(PUBSUB_CHANNEL, json.dumps({"msg_id": msg_id}))
     return None
+
+
+def results_dir_for_corpus(config: Any) -> str:
+    dir = os.path.join(RESULTS_DIR, config.get("schema_path", "anonymous"))
+    if not os.path.exists(dir):
+        os.mkdir(dir)
+    return dir
 
 
 def hasher(arg):

@@ -1140,7 +1140,8 @@ export default {
         } else if (data["action"] == "export_link") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
-          useCorpusStore().fetchExport(data.fn);
+          const {schema_path} = this.selectedCorpora.corpus;
+          useCorpusStore().fetchExport(schema_path, data.fn);
           useNotificationStore().add({
             type: "success",
             text: "Initiated export download"

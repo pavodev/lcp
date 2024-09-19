@@ -12,8 +12,9 @@ from .typed import JSONObject
 from .utils import (
     _determine_language,
     format_meta_lines,
-    push_msg,
     hasher,
+    push_msg,
+    results_dir_for_corpus,
     META_QUERY_REGEXP,
 )
 
@@ -463,7 +464,13 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             result_ttl=EXPORT_TTL,
             job_timeout=EXPORT_TTL,
             depends_on=depends_on,
-            args=(f"./results/dump_{first_job_id}.tsv", first_job_id, corpus_conf),
+            args=(
+                os.path.join(
+                    results_dir_for_corpus(corpus_conf), f"dump_{first_job_id}.tsv"
+                ),
+                first_job_id,
+                corpus_conf,
+            ),
             kwargs={
                 "download": payload.get("download", False),
                 "room": room,
@@ -513,4 +520,5 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 async def download_export(request: web.Request) -> web.FileResponse:
     fn = request.match_info["fn"]
-    return web.FileResponse(f"./results/{fn}")
+    path = os.path.join(results_dir_for_corpus(request.match_info), fn)
+    return web.FileResponse(path)

@@ -221,7 +221,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
-        ("/download_export/{fn}", "GET", download_export),
+        ("/download_export/{schema_path}/{fn}", "GET", download_export),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),

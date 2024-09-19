@@ -50,8 +50,8 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
-    async fetchExport(fn) {
-      let url = `${httpApi.getUri()}/download_export/${fn}`;
+    async fetchExport(schema_path, fn) {
+      let url = `${httpApi.getUri()}/download_export/${schema_path}/${fn}`;
       const a = document.createElement("A");
       a.target = "_blank";
       a.href = url;
