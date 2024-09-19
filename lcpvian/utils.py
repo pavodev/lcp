@@ -17,6 +17,7 @@ from asyncpg import Range
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
+from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 
@@ -826,6 +827,11 @@ def _publish_msg(
     connection.expire(msg_id, MESSAGE_TTL)
     connection.publish(PUBSUB_CHANNEL, json.dumps({"msg_id": msg_id}))
     return None
+
+
+def hasher(arg):
+    str_arg = json.dumps(arg)
+    return md5(str_arg.encode("utf-8")).digest().hex()
 
 
 def _parent_of(

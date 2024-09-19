@@ -9,7 +9,13 @@ from typing import Any, cast
 from .callbacks import _export_complete, _general_failure
 from .jobfuncs import _db_query, _swissdox_export
 from .typed import JSONObject
-from .utils import _determine_language, format_meta_lines, push_msg, META_QUERY_REGEXP
+from .utils import (
+    _determine_language,
+    format_meta_lines,
+    push_msg,
+    hasher,
+    META_QUERY_REGEXP,
+)
 
 import json
 import os
@@ -233,7 +239,7 @@ async def swissdox_query(query: str, use_cache: bool = True) -> Job:
     """
     conn = get_current_connection()
 
-    hashed = str(hash(query))
+    hashed = str(hasher(query))
     job: Job | None
 
     if use_cache:

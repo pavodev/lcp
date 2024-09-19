@@ -62,6 +62,7 @@ from .utils import (
     _default_tracks,
     _format_config_query,
     _set_config,
+    hasher,
     PUBSUB_CHANNEL,
     CustomEncoder,
     range_to_array,
@@ -158,7 +159,7 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        hashed = str(hash(query))
+        hashed = str(hasher(query))
         job: Job | None
 
         if self.use_cache:
@@ -243,7 +244,7 @@ class QueryService:
             "room": room,
             "corpus_id": corpus_id,
         }
-        hashed = str(hash((query, corpus_id)))
+        hashed = str(hasher((query, corpus_id)))
         job: Job
         if self.use_cache:
             try:
@@ -362,7 +363,7 @@ class QueryService:
         query += ";"
         print("document query", query)
         params = {"doc_id": doc_id}
-        hashed = str(hash((query, doc_id)))
+        hashed = str(hasher((query, doc_id)))
         job: Job
         if self.use_cache:
             try:
@@ -404,9 +405,9 @@ class QueryService:
         offset = kwargs.get("offset", 0)
         needed = kwargs.get("needed", 0)
         full = kwargs.get("full", False)
-        hashed = str(hash((query, hash_dep, offset, needed, full)))
+        hashed = str(hasher((query, hash_dep, offset, needed, full)))
         kwargs["sentences_query"] = query
-        hashed_meta = str(hash((meta, hash_dep, offset, needed, full)))
+        hashed_meta = str(hasher((meta, hash_dep, offset, needed, full)))
         job_sent: Job
 
         if self.use_cache:
