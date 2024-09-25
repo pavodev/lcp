@@ -25,6 +25,6 @@ By the end of 2024, digital editions will also be implemented and added to LCP s
 
   * [DQD](dqd.md)
   * [Corpora in LCP](corpora_in_lcp.md)
-  * [Corpus management](corpus_managament.md)
+  * [Corpus management](corpus_management.md)
   * [Querying](querying.md)
   * [Importing](importing.md)

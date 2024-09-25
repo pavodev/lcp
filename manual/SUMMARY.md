@@ -10,6 +10,6 @@
         * [Introduction](dqd.md#introduction)
         * [Quick Reference](dqd.md#quick-reference)
     * [Corpora in LCP](corpora_in_lcp.md)
-    * [Corpus management](corpus_managament.md)
+    * [Corpus management](corpus_management.md)
     * [Querying](querying.md)
     * [Importing](importing.md)

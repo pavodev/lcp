@@ -1,4 +1,4 @@
-# Corpus managamanet
+# Corpus managemanet
 
 In LCP system you can manage two types of resources on your own: your groups and corpora attached to those groups.
 
