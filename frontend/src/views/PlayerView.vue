@@ -764,31 +764,21 @@ export default {
       // if (index >= this.WSDataResults.result[0].result_sets.length)
       //   return;
       index = 0; // hard-coded for now
-      console.log("clicked on result", Date.now());
       const frameFromResult = this.frameFromResult(result,index);
       const doc_result_id = this.docIdFromFrame(frameFromResult);
       const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
       const adjustedFrames = frameFromResult.map(x=>parseInt(x) - parseInt(doc_result[3][0]));
-      console.log("got adjusted frames", Date.now());
       let [start, end] = adjustedFrames.map(x=>Utils.frameNumberToSeconds(x) / 1000);
       if (this.currentDocument == doc_result) {
-        console.log("current doc before setting time", Date.now(), start, end);
         this._playerSetTime(start);
-        console.log("current doc after setting time", Date.now());
         window.scrollTo(0, 120);
-        console.log("playerPlay start", Date.now());
         this.playerPlay(end);
-        console.log("playerPlay executed", Date.now());
       } else {
         //   // this.currentDocument = this.corpusData[result[2] - 1];
         // this.currentDocument = this.documentDict[result[2]];
         this.setResultTimes = [start,end];
         // TODO: should be fixed - corpusData changed
-        console.log("changing current document", Date.now());
         this.currentDocument = doc_result;
-        console.log("current document changed", Date.now());
-        //   // console.log("Change document")
-        // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
     },
     playerPlay(end=0) {
@@ -851,11 +841,11 @@ export default {
       this._playerSetTime(value);
     },
     _playerSetTime(value) {
-      const n_players = [1,2,3,4];
+      const n_players = [1, 2, 3, 4];
       for (let n in n_players) {
-        const player = this.$refs["videoPlayer"+n];
+        const player = this.$refs["videoPlayer" + n];
         if (!player) continue
-        const time = Math.min(value, (isNaN(player.duration) ? 0.1 : player.duration)-0.1);
+        const time = Math.min(value, (isNaN(player.duration) ? 0.1 : player.duration) - 0.1);
         player.currentTime = time;
         this.playerCurrentTime = time;
       }
