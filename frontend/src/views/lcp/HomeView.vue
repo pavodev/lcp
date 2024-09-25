@@ -306,7 +306,7 @@
                 </span>
               </div>
               <div class="col-7">
-                <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
+                <CorpusGraphViewNew :corpus="corpusModal" v-if="showGraph" />
               </div>
             </div>
           </div>
@@ -380,7 +380,7 @@ import { useNotificationStore } from "@/stores/notificationStore";
 
 import Title from "@/components/TitleComponent.vue";
 import ProjectNewView from "@/components/project/NewView.vue";
-import CorpusGraphView from "@/components/CorpusGraphView.vue";
+import CorpusGraphViewNew from "@/components/CorpusGraphViewNew.vue";
 import MetadataEdit from "@/components/corpus/MetadataEdit.vue";
 import ProjectEdit from "@/components/project/EditView.vue";
 import router from "@/router";
@@ -414,7 +414,7 @@ export default {
   components: {
     Title,
     ProjectNewView,
-    CorpusGraphView,
+    CorpusGraphViewNew,
     MetadataEdit,
     ProjectEdit,
   },
