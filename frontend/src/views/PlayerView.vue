@@ -574,19 +574,15 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(
-                          parseInt(frameFromResult(result,index)[0])
-                          -
-                          parseInt(corpusData.find(c=>c[0]==docIdFromFrame(frameFromResult(result,index)))[3][0])
-                        )"
+                        v-html="frameNumberToTimeInResults(result, index)"
                       ></span>
                     </div>
                     <div class="col">
                       <span class="text-bold" v-html="contextWithHighlightedEntities(result, index)" />
                       <span v-html="otherEntityInfo(result, index)"></span>
                     </div>
-                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result,index))]">
-                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result,index))]"></span>
+                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result, index))]">
+                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result, index))]"></span>
                       <!-- <br>
                       <span v-html="result[4]"></span> -->
                     </div>
@@ -739,7 +735,15 @@ export default {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
-    frameFromResult(result,index) {
+    frameNumberToTimeInResults(result, index) {
+      let docId = this.docIdFromFrame(this.frameFromResult(result, index))
+      return this.frameNumberToTime(
+        parseInt(this.frameFromResult(result, index)[0])
+        -
+        parseInt(this.corpusData.find(c => c[0] == docId)[3][0])
+      )
+    },
+    frameFromResult(result, index) {
       // if (index >= this.WSDataResults.result[0].result_sets.length)
       //   return [0,0];
       index = 0; // hard-coded for now
