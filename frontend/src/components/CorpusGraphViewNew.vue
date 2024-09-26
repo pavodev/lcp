@@ -81,7 +81,7 @@ export default {
       let i = 0;
       for (let [layerName, layerProperties] of layers) {
         i += 1;
-        const node = {index: i, x: 0, y: 0, text: layerName, depth: 1, type: "layer", folded: false};
+        const node = {index: i, x: 0, y: 0, text: layerName, depth: 1, type: "layer", folded: true};
         layerProperties.diagramNode = node;
         if (layerProperties.contains)
           parents[layerProperties.contains] = layers.find(l=>l[0] == layerProperties.contains);
@@ -111,8 +111,6 @@ export default {
           data.graph.nodes.push(attributeNode);
           data.graph.links.push({source: node.index, target: attributeNode.index});
         }
-        if (Object.keys(attributes).length > 3)
-          node.folded = true;
       }
     }
     const depths = {};
@@ -167,7 +165,7 @@ export default {
     },
     filterNodesLinks() {
       const nodes = [], links = [], indexMapping = {};
-      let i = 0, nSeeMore = this.graph.nodes.length;
+      let i = 0; //, nSeeMore = this.graph.nodes.length;
       for (let node of this.graph.nodes) {
         if (node.type == "attribute" && this.parentFolded(node))
           continue;
@@ -178,21 +176,21 @@ export default {
             continue;
           links.push(Object({...link})); // copy of object (do not mutate)
         }
-        if (node.folded) {
-          i += 1;
-          indexMapping[nSeeMore] = i;
-          nodes.push({
-            index: nSeeMore,
-            x: 0,
-            y: 0,
-            text: "... +",
-            type: "seeMore",
-            depth: node.depth+1,
-            parentIndex: node.index
-          });
-          links.push({source: node.index, target: nSeeMore});
-          nSeeMore += 1;
-        }
+        // if (node.folded) {
+        //   i += 1;
+        //   indexMapping[nSeeMore] = i;
+        //   nodes.push({
+        //     index: nSeeMore,
+        //     x: 0,
+        //     y: 0,
+        //     text: "... +",
+        //     type: "seeMore",
+        //     depth: node.depth+1,
+        //     parentIndex: node.index
+        //   });
+        //   links.push({source: node.index, target: nSeeMore});
+        //   nSeeMore += 1;
+        // }
         i += 1;
       }
       for (let link of links) {
