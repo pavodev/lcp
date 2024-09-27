@@ -17,6 +17,7 @@ from asyncpg import Range
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
+from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 
@@ -52,6 +53,8 @@ from .typed import (
     MainCorpus,
     Websockets,
 )
+
+RESULTS_DIR = os.getenv("RESULTS", "results")
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
@@ -828,6 +831,18 @@ def _publish_msg(
     return None
 
 
+def results_dir_for_corpus(config: Any) -> str:
+    dir = os.path.join(RESULTS_DIR, config.get("schema_path", "anonymous"))
+    if not os.path.exists(dir):
+        os.mkdir(dir)
+    return dir
+
+
+def hasher(arg):
+    str_arg = json.dumps(arg)
+    return md5(str_arg.encode("utf-8")).digest().hex()
+
+
 def _parent_of(
     current_batch: Batch, config: CorpusConfig, child: str, parent: str
 ) -> bool:
@@ -851,6 +866,13 @@ def _is_time_anchored(current_batch: Batch, config: CorpusConfig, layer: str) ->
             layer_config.get("contains", config["firstClass"]["token"]),
         )
     return False
+
+
+def _default_tracks(config: CorpusConfig) -> dict:
+    ret: dict = {}
+    segment: str = config["firstClass"]["segment"]
+    ret["layers"] = {segment: {}}
+    return ret
 
 
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
@@ -926,7 +948,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
                 on_cond = (
-                    f"get_bit({layer}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                    f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
                 )
                 sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
             else:

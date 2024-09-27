@@ -390,7 +390,7 @@
         </div>
       </div>
       <TimelineView
-        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false && loadingMedia == false"
+        v-if="Object.keys(currentDocumentData).length > 0 && loadingDocument == false"
         :data="currentDocumentData"
         :mediaDuration="currentMediaDuration"
         :playerIsPlaying="playerIsPlaying"
@@ -574,19 +574,15 @@
                     <div class="col-2">
                       <span
                         class="badge bg-secondary"
-                        v-html="frameNumberToTime(
-                          parseInt(frameFromResult(result,index)[0])
-                          -
-                          parseInt(corpusData.find(c=>c[0]==docIdFromFrame(frameFromResult(result,index)))[3][0])
-                        )"
+                        v-html="frameNumberToTimeInResults(result, index)"
                       ></span>
                     </div>
                     <div class="col">
                       <span class="text-bold" v-html="contextWithHighlightedEntities(result, index)" />
                       <span v-html="otherEntityInfo(result, index)"></span>
                     </div>
-                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result,index))]">
-                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result,index))]"></span>
+                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result, index))]">
+                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result, index))]"></span>
                       <!-- <br>
                       <span v-html="result[4]"></span> -->
                     </div>
@@ -739,7 +735,15 @@ export default {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
-    frameFromResult(result,index) {
+    frameNumberToTimeInResults(result, index) {
+      let docId = this.docIdFromFrame(this.frameFromResult(result, index))
+      return this.frameNumberToTime(
+        parseInt(this.frameFromResult(result, index)[0])
+        -
+        parseInt(this.corpusData.find(c => c[0] == docId)[3][0])
+      )
+    },
+    frameFromResult(result, index) {
       // if (index >= this.WSDataResults.result[0].result_sets.length)
       //   return [0,0];
       index = 0; // hard-coded for now
@@ -760,7 +764,6 @@ export default {
       // if (index >= this.WSDataResults.result[0].result_sets.length)
       //   return;
       index = 0; // hard-coded for now
-      // console.log(result, result[4][0][1], this.currentDocument)
       const frameFromResult = this.frameFromResult(result,index);
       const doc_result_id = this.docIdFromFrame(frameFromResult);
       const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
@@ -776,8 +779,6 @@ export default {
         this.setResultTimes = [start,end];
         // TODO: should be fixed - corpusData changed
         this.currentDocument = doc_result;
-        //   // console.log("Change document")
-        // console.log("Set doc", this.currentDocument, this.corpusData, result)
       }
     },
     playerPlay(end=0) {
@@ -840,11 +841,11 @@ export default {
       this._playerSetTime(value);
     },
     _playerSetTime(value) {
-      const n_players = [1,2,3,4];
+      const n_players = [1, 2, 3, 4];
       for (let n in n_players) {
-        const player = this.$refs["videoPlayer"+n];
+        const player = this.$refs["videoPlayer" + n];
         if (!player) continue
-        const time = Math.min(value, player.duration-0.1);
+        const time = Math.min(value, (isNaN(player.duration) ? 0.1 : player.duration) - 0.1);
         player.currentTime = time;
         this.playerCurrentTime = time;
       }
@@ -1163,6 +1164,8 @@ export default {
           })
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
+          if (!this.currentMediaDuration && "doc" in this.documentData && "frame_range" in this.documentData.doc)
+            this.currentMediaDuration = this.documentData.doc.frame_range.reduce((x,y)=>y-x) / this.frameRate;
           this.currentDocumentData = timelineData;
           this.loadingDocument = false;
           this.documentIndexKey++;

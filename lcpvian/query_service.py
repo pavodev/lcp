@@ -49,6 +49,7 @@ from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import (
     BaseArgs,
     Config,
+    CorpusConfig,
     DocIDArgs,
     JSONObject,
     QueryArgs,
@@ -58,8 +59,10 @@ from .typed import (
     SentJob,
 )
 from .utils import (
+    _default_tracks,
     _format_config_query,
     _set_config,
+    hasher,
     PUBSUB_CHANNEL,
     CustomEncoder,
     range_to_array,
@@ -156,7 +159,7 @@ class QueryService:
         """
         Here we send the query to RQ and therefore to redis
         """
-        hashed = str(hash(query))
+        hashed = str(hasher(query))
         job: Job | None
 
         if self.use_cache:
@@ -241,7 +244,7 @@ class QueryService:
             "room": room,
             "corpus_id": corpus_id,
         }
-        hashed = str(hash((query, corpus_id)))
+        hashed = str(hasher((query, corpus_id)))
         job: Job
         if self.use_cache:
             try:
@@ -267,20 +270,21 @@ class QueryService:
         doc_id: int,
         user: str,
         room: str | None,
-        config: dict,
+        config: CorpusConfig,
         queue: str = "internal",
     ) -> Job:
         """
         Fetch info about a document from DB/cache
         """
-        assert "tracks" in config, KeyError(
-            "Couldn't find 'tracks' in the corpus configuration"
-        )
+        tracks: dict = cast(dict, config.get("tracks", _default_tracks(config)))
+        # assert "tracks" in config, KeyError(
+        #     "Couldn't find 'tracks' in the corpus configuration"
+        # )
         global_tables: dict = {}
         doc_layer = config.get("document")
         query = f"WITH doc AS (SELECT frame_range FROM {schema}.{doc_layer} WHERE {doc_layer}_id = :doc_id)"
-        glob_attrs = config.get("globalAttributes", {})
-        for layer in config["tracks"].get("layers", {}):
+        glob_attrs: dict = cast(dict, config.get("globalAttributes", {}))
+        for layer in tracks.get("layers", {}):
             layer_table = _get_table(
                 layer, config, "", ""
             )  # no batch and no lang for now
@@ -330,8 +334,8 @@ class QueryService:
     FROM {schema}.{layer_table} {lab}, doc {crossjoin}
     WHERE {lab}.frame_range <@ doc.frame_range {whereand}
 )"""
-        layers_ctes = [x for x in config["tracks"].get("layers", {})]
-        for gar in config["tracks"].get("group_by", []):
+        layers_ctes = [x for x in tracks.get("layers", {})]
+        for gar in tracks.get("group_by", []):
             assert "globalAttributes" in config, KeyError(
                 "Could not find globalAttributes in corpus config"
             )
@@ -347,19 +351,19 @@ class QueryService:
         # , {', '.join(layers_ctes)}
         # WHERE {lab}.{gar}_id IN ({','.join(gar_props)})
         # Trying to remove WHEREs under the assumption that global attributes will always be small
-        query += f"\nSELECT * FROM {next(x for x in config['tracks']['layers'])}"
-        for n, layer in enumerate(config["tracks"]["layers"]):
+        query += f"\nSELECT * FROM {next(x for x in tracks['layers'])}"
+        for n, layer in enumerate(tracks["layers"]):
             if n == 0:
                 continue
             query += f"\nUNION ALL SELECT * FROM {layer}"
-        for gar in config["tracks"].get("group_by", {}):
+        for gar in tracks.get("group_by", {}):
             query += f"\nUNION ALL SELECT * FROM {gar}"
+        doc_range = range_to_array("doc.frame_range")
+        query += f"\nUNION ALL SELECT 'doc', '{doc_layer}', jsonb_build_object('frame_range',{doc_range}) AS props FROM doc"
         query += ";"
-        if corpus == 115:
-            query = "main.doc_export(115)"  # exception for old tangram
         print("document query", query)
         params = {"doc_id": doc_id}
-        hashed = str(hash((query, doc_id)))
+        hashed = str(hasher((query, doc_id)))
         job: Job
         if self.use_cache:
             try:
@@ -401,9 +405,9 @@ class QueryService:
         offset = kwargs.get("offset", 0)
         needed = kwargs.get("needed", 0)
         full = kwargs.get("full", False)
-        hashed = str(hash((query, hash_dep, offset, needed, full)))
+        hashed = str(hasher((query, hash_dep, offset, needed, full)))
         kwargs["sentences_query"] = query
-        hashed_meta = str(hash((meta, hash_dep, offset, needed, full)))
+        hashed_meta = str(hasher((meta, hash_dep, offset, needed, full)))
         job_sent: Job
 
         if self.use_cache:

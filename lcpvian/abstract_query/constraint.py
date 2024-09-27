@@ -639,9 +639,9 @@ class Constraint:
             ref_mapping = left_ref_info.get("mapping", {})
             lookup_table = ref_mapping.get("name", "")
             inner_op = "~" if self.type == "regex" else "="
+            dummy_mask = "".join(["0" for _ in range(nbit)])
             inner_condition = (
-                f"(SELECT bit_or(0::bit({nbit})<<0)::bit({nbit}) AS m UNION "  # In case no label matches the condition
-                + f"SELECT bit_or(1::bit({nbit})<<bit)::bit({nbit}) AS m "
+                f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
                 + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
             )
             # Use label_layer to store the inner conditions query-wide and give them unique labels
@@ -659,7 +659,8 @@ class Constraint:
             mask_label = f"{self.label}_mask_{n}"
             formed_join_table = f"{inner_condition} {mask_label}"
             self._add_join_on(formed_join_table, "")
-            op = "=" if self.op.lower().startswith(("not", "!")) else ">"
+            negated = self.op.lower().startswith(("not", "!"))
+            op = "=" if negated else ">"
             formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
 
         elif left_type == "date":
