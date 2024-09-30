@@ -1,0 +1,118 @@
+part_of : "@"label
+
+math : NUMBER
+     | (NUMBER | function) MATH_OPERATOR math
+min : NUMBER
+max : NUMBER | "*"
+repetition : min".."max
+
+window : "-"NUMBER "..+" NUMBER
+
+existential : NEGATION? EXISTENTIAL
+universal : NEGATION? UNIVERSAL
+
+quantifier : existential
+           | universal
+
+quantification : quantifier _NL _INDENT (unit | sequence) _DEDENT
+
+argument : (label | function | attribute | string | regex | math)
+function : FUNCTION_NAME (argument ","?)+ ")"
+
+regex : REGEX
+string : DOUBLE_QUOTED_STRING
+attribute : ATTRIBUTE
+label : LABEL
+layer : LAYER
+
+left : (function | label | attribute | string | regex | math)
+right : (function | label | attribute | string | regex | math)
+operator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN)
+
+comparison : left operator right
+
+unary_operator : NEGATION
+nary_operator : "AND"
+              | "OR"
+
+logical_expression : unary_operator _NL _INDENT constraint _NL* _DEDENT
+                   | nary_operator _NL _INDENT (constraint _NL*)+ _DEDENT
+
+unit : layer(part_of)? label? _NL (_INDENT (constraint _NL*)* _DEDENT)?
+constraint  : quantification
+            | unit
+            | logical_expression
+            | comparison
+
+sequence : "sequence"(part_of)? label? repetition? _NL _INDENT ((unit|sequence) _NL*)+ _DEDENT
+
+query : quantification
+      | sequence
+      | unit
+      | constraint
+
+results              : label "=>" (results_plain | results_analysis | results_collocation)
+
+results_plain        : "plain" _NL _INDENT results_plain_context results_plain_entities _DEDENT
+results_plain_context : "context" _NL _INDENT (label _NL*)+ _DEDENT
+results_plain_entities : "entities" _NL _INDENT (label _NL*)+ _DEDENT
+
+results_analysis     : "analysis" _NL _INDENT results_analysis_attributes results_analysis_functions results_analysis_filter? _DEDENT
+results_analysis_attributes : "attributes" _NL _INDENT ((label|attribute) _NL*)+ _DEDENT
+results_analysis_functions : "functions" _NL _INDENT (ANALYSIS_FUNCTIONS _NL*)+ _DEDENT
+results_analysis_filter : "filter" _NL _INDENT (comparison _NL*)+ _DEDENT
+
+results_collocation        : "collocation" _NL _INDENT results_collocation_center_or_space results_collocation_attributes _DEDENT
+results_collocation_center_or_space : "space" _NL _INDENT (label _NL*)+ _DEDENT
+                                    | "center" _NL _INDENT (label _NL)+ _DEDENT "window" _NL _INDENT window _NL _DEDENT
+results_collocation_attributes : "attributes" _NL _INDENT (label _NL*)+ _DEDENT
+
+top                  : (query _NL*)+ results+
+
+FUNCTION_NAME.3 : "length("
+                | "size("
+                | "range("
+                | "position("
+                | "start("
+                | "end("
+                | "century("
+                | "date("
+                | "year("
+                | "day("
+
+EXISTENTIAL.2 : "EXISTS"
+UNIVERSAL.2 : "ALL"
+
+ANALYSIS_FUNCTIONS : "frequency"
+                   | "minimum"
+                   | "maximum"
+                   | "average"
+                   | "stddev"
+
+MATH_OPERATOR : "+" | "-" | "/" | "*"
+NUMBER : /[1-9]*[0-9]/
+
+NEGATION.2 : /(~|¬|!|not )/i
+COMPARATIVE : /[><]=?/
+EQUAL : "="
+CONTAIN : "contain"
+
+LAYER : /[A-Z][a-zA-Z0-9_]+/
+LABEL : /[a-z][a-zA-Z0-9_]+/
+ATTRIBUTE : /[a-z][a-zA-Z0-9_]+(\.([a-zA-Z0-9_]+))+/
+
+DOUBLE_QUOTED_STRING : /"[^"\n]*"/
+REGEX           : /\/.+\//
+
+DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
+
+_NL: /((#[^\r\n]*)?\r?\n[\t ]*)+/
+
+%import common.WS
+%import common.SH_COMMENT
+%import common.WS_INLINE
+%declare _INDENT _DEDENT
+%ignore WS_INLINE
+%ignore DL_COMMENT
+%ignore WS
+%ignore SH_COMMENT
