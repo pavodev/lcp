@@ -31,6 +31,15 @@
                 Viewer
               </router-link>
             </li>
+            <li class="nav-item">
+              <a href="https://lcp.linguistik.uzh.ch/manual" target="_blank" class="nav-link">
+                <FontAwesomeIcon
+                  :icon="['fas', 'circle-question']"
+                  class="me-1"
+                />
+                Manual
+              </a>
+            </li>
           </ul>
           <ul class="navbar-nav ms-auto">
             <li class="nav-item">
