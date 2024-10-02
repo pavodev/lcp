@@ -1,57 +1,62 @@
 part_of : "@"label
 
-math : NUMBER
-     | (NUMBER | function) MATH_OPERATOR math
-min : NUMBER
-max : NUMBER | "*"
+operator : ("+"|"-"|"/"|"*")
+operand_left : math                                   // skip: math
+operand_right : math                                  // skip: math
+operation : operand_left operator operand_right
+math : POS_INT
+     | NEG_INT
+     | FLOAT
+     | function
+     | operation
+min : POS_INT
+max : POS_INT | "*"
 repetition : min".."max
 
-window : "-"NUMBER "..+" NUMBER
+left_span : NEG_INT
+right_span : POS_INT
+window : left_span ("..+"|"..") right_span
 
-existential : NEGATION? EXISTENTIAL
-universal : NEGATION? UNIVERSAL
+quantifier : NEGATION? EXISTENTIAL
+           | NEGATION? UNIVERSAL
 
-quantifier : existential
-           | universal
+quantification : quantifier _NL _INDENT (unit | sequence | set) _DEDENT
 
-quantification : quantifier _NL _INDENT (unit | sequence) _DEDENT
-
-argument : (label | function | attribute | string | regex | math)
-function : FUNCTION_NAME (argument ","?)+ ")"
+arguments : ((label | function | attribute | string | regex | math) ","?)+
+function_name : FUNCTION_NAME
+function : function_name arguments ")"
 
 regex : REGEX
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
-label : LABEL
+label : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
 layer : LAYER
 
 left : (function | label | attribute | string | regex | math)
 right : (function | label | attribute | string | regex | math)
-operator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN)
+comparator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN)
 
-comparison : left operator right
+comparison : left comparator right
 
 unary_operator : NEGATION
-nary_operator : "AND"
-              | "OR"
+nary_operator : CONJUNCTION | DISJUNCTION
 
 logical_expression : unary_operator _NL _INDENT constraint _NL* _DEDENT
-                   | nary_operator _NL _INDENT (constraint _NL*)+ _DEDENT
+                   | nary_operator _NL _INDENT constraints _DEDENT
 
-unit : layer(part_of)? label? _NL (_INDENT (constraint _NL*)* _DEDENT)?
-constraint  : quantification
-            | unit
-            | logical_expression
-            | comparison
+unit : layer(part_of)? label? _NL (_INDENT constraints? _DEDENT)?
+constraint : quantification
+           | unit
+           | logical_expression
+           | comparison
+constraints : (constraint _NL*)+                            // skip: constraint
 
-sequence : "sequence"(part_of)? label? repetition? _NL _INDENT ((unit|sequence) _NL*)+ _DEDENT
+members : ((unit|sequence) _NL*)+
+set : "set"(part_of)? label? _NL _INDENT members _DEDENT
+sequence : "sequence"(part_of)? label? repetition? _NL _INDENT members _DEDENT
 
-query : quantification
-      | sequence
-      | unit
-      | constraint
-
-results              : label "=>" (results_plain | results_analysis | results_collocation)
+result : label "=>" (results_plain | results_analysis | results_collocation)
+results : result+                                           // skip: result
 
 results_plain        : "plain" _NL _INDENT results_plain_context results_plain_entities _DEDENT
 results_plain_context : "context" _NL _INDENT (label _NL*)+ _DEDENT
@@ -62,12 +67,15 @@ results_analysis_attributes : "attributes" _NL _INDENT ((label|attribute) _NL*)+
 results_analysis_functions : "functions" _NL _INDENT (ANALYSIS_FUNCTIONS _NL*)+ _DEDENT
 results_analysis_filter : "filter" _NL _INDENT (comparison _NL*)+ _DEDENT
 
-results_collocation        : "collocation" _NL _INDENT results_collocation_center_or_space results_collocation_attributes _DEDENT
-results_collocation_center_or_space : "space" _NL _INDENT (label _NL*)+ _DEDENT
-                                    | "center" _NL _INDENT (label _NL)+ _DEDENT "window" _NL _INDENT window _NL _DEDENT
-results_collocation_attributes : "attributes" _NL _INDENT (label _NL*)+ _DEDENT
+results_collocation        : "collocation" _NL _INDENT (results_collocation_center | results_collocation_space) results_collocation_attribute _DEDENT
+results_collocation_space : "space" _NL _INDENT label _NL* _DEDENT
+results_collocation_center : "center" _NL _INDENT label _NL _DEDENT "window" _NL _INDENT window _NL _DEDENT
+results_collocation_attribute : "attribute" _NL _INDENT (attribute | label) _NL* _DEDENT
 
-top                  : (query _NL*)+ results+
+query : ((quantification | sequence | set | unit | constraint) _NL*)+
+
+top : query results
+
 
 FUNCTION_NAME.3 : "length("
                 | "size("
@@ -80,17 +88,20 @@ FUNCTION_NAME.3 : "length("
                 | "year("
                 | "day("
 
-EXISTENTIAL.2 : "EXISTS"
-UNIVERSAL.2 : "ALL"
-
-ANALYSIS_FUNCTIONS : "frequency"
+ANALYSIS_FUNCTIONS.3 : "frequency"
                    | "minimum"
                    | "maximum"
                    | "average"
                    | "stddev"
 
-MATH_OPERATOR : "+" | "-" | "/" | "*"
-NUMBER : /[1-9]*[0-9]/
+EXISTENTIAL.2 : "EXISTS"
+UNIVERSAL.2 : "ALL"
+CONJUNCTION.2 : "AND"
+DISJUNCTION.2 : "OR"
+
+POS_INT : /[1-9]*[0-9]/
+NEG_INT : /-[1-9]*[0-9]/
+FLOAT : /-?[1-9]*[0-9]\.[0-9]+/
 
 NEGATION.2 : /(~|¬|!|not )/i
 COMPARATIVE : /[><]=?/

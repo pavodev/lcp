@@ -1,9 +1,11 @@
 import os
+import re
 
 from collections.abc import Iterable
 from typing import Any, ClassVar
 
-from lark import Lark
+from lark import Lark, Tree
+from lark.grammar import Terminal, NonTerminal
 from lark.indenter import Indenter
 from lark.lexer import Token
 
@@ -17,7 +19,7 @@ test_dqd = """Layer1 label1
     AND
         left7 = right7
         left8 = right8
-    length(lemma) = 35 + 30
+    length(lemma, dummy) = 35 + 30
 
 # This is a random comment
 Layer2@label1 label2 # this is another random comment
@@ -25,10 +27,17 @@ Layer2@label1 label2 # this is another random comment
     left3 >= right3
     left4 < right4
     start(label2) > start(label1)
+    end(label2) < end(label1) - 30
 
 sequence@label1 seq 1..2
     Token t1
     Token t2
+
+set deps
+    Token tx
+        DepRel
+            head = t2
+            dep = tx
 
 label1 = label2
 
@@ -36,12 +45,34 @@ label1 = label2
     Token@label2
         upos = "ADV"
 
-results => plain
+results1 => plain
     context
         label1
     entities
         seq
         label2
+
+results2 => analysis
+    attributes
+        label1.lemma
+    functions
+        frequency
+    filter
+        frequency > 2
+
+results3 => collocation
+    space
+        seq
+    attribute
+        t2.form
+
+results3 => collocation
+    center
+        t2
+    window
+        -32..+32
+    attribute
+        t2.form
 """
 
 test_grammar: str = open(
@@ -60,242 +91,171 @@ class TreeIndenter(Indenter):
     always_accept: Iterable[str] = ()
 
 
-def get_leaf_value(node: Any) -> str:
-    out: str
-    try:
-        out = node.value
-    except:
-        out = get_leaf_value(node.children[0])
-    return out
-
-
-def nget(node: Any, prop: str) -> Any:
-    out: Any
-    try:
-        out = next(
-            (c for c in node.children if not isinstance(c, Token) and c.data == prop),
-            None,
-        )
-    except:
-        out = None
-    return out
-
-
-def process_quantifier(quantifier, range: list[int]) -> list[int]:
-    if quantifier:
-        r: Any = nget(quantifier, "range")
-        if r:
-            n_exact: int = int(
-                next(
-                    (
-                        c.value
-                        for c in r.children
-                        if isinstance(c, Token) and c.type == "RANGE_EXACT"
-                    ),
-                    -1,
-                )
-            )
-            if n_exact >= 0:
-                range = [n_exact, n_exact]
-            else:
-                min: int = int(
-                    next(
-                        (
-                            c.value
-                            for c in r.children
-                            if isinstance(c, Token) and c.type == "RANGE_MIN"
-                        ),
-                        0,
-                    )
-                )
-                max: int = int(
-                    next(
-                        (
-                            c.value
-                            for c in r.children
-                            if isinstance(c, Token) and c.type == "RANGE_MAX"
-                        ),
-                        -1,
-                    )
-                )
-                range = [min, max]
-        else:
-            value: str = get_leaf_value(quantifier)
-            if value == "+":
-                range[1] = -1
-            elif value == "?":
-                range[0] = 0
-            elif value == "*":
-                range[0] = 0
-                range[1] = -1
-    return range
-
-
-def process_brackets(node: Any) -> dict:
-    section: Any = nget(node, "node_section")
-    vp: Any = nget(node, "vp")
-    query: Any = nget(node, "query")
-
-    ir = nget(query, "inner_relation")
-    if query and ir:
-        op: str = "="
-        if nget(ir, "not_"):
-            op = "!="
-        at: str = get_leaf_value(nget(query, "attribute"))
-        if at == "word":
-            at = "form"  # hack
-        value: str = next(c for c in query.children if isinstance(c, Token)).value
-        comparison_type: str = (
-            "stringComparison"
-            if nget(query, "modifier")
-            and get_leaf_value(nget(query, "modifier")) == "%l"
-            else "regexComparison"
-        )
-        if comparison_type == "regexComparison":
-            value = f"/^{value[1:-1]}$/"
-        return {
-            "comparison": {
-                "left": {"entity": at},
-                "operator": op,
-                comparison_type: value,
-            }
-        }
-
-    elif section:
-        processed_section: dict
-        if nget(section, "not_"):
-            processed_section = {
-                "logicalOpUnary": {
-                    "operator": "NOT",
-                    "args": [process_brackets(section)],
-                }
-            }
-        else:
-            processed_section = process_brackets(section)
-
-        if vp:
-            disj: Any = nget(vp, "or_")
-            operator: str = "OR" if disj else "AND"
-            return {
-                "logicalOpNAry": {
-                    "operator": operator,
-                    "args": [processed_section, process_brackets(vp)],
-                }
-            }
-        else:
-            return processed_section
-
-    return {}
-
-
-def process_node(
-    node: Any, members: list, conf: dict[str, Any] = {"token": "Token"}
-) -> None:
-
-    token: dict[str, Any] = {"unit": {"layer": conf["token"]}}
-    range: list[int] = [1, 1]
-    label: Any = nget(node, "label")
-    quantifier: Any = None
-
-    if node.data == "brackets":  # Parentheses
-
-        tmp_members: list = []
-        children_nodes: list[Any] = nget(node, "expr").children
-        for cn in children_nodes:
-            process_node(cn, tmp_members, conf)
-
-        quantifier = nget(node, "quantifier")
-        range = process_quantifier(quantifier, range)
-
-        if len(tmp_members) == 0:
-            return
-        elif len(tmp_members) == 1 and range == [1, 1]:
-            token = tmp_members[0]
-            if label:
-                token["unit"]["label"] = get_leaf_value(label)
-            members.append(token)
-            return
-        else:
-            s: dict = {"sequence": {"members": tmp_members}}
-            if label:
-                s["sequence"]["label"] = get_leaf_value(label)
-            if range != [1, 1]:
-                s["sequence"]["repetition"] = {
-                    "min": range[0],
-                    "max": "*" if range[1] < 0 else str(range[1]),
-                }
-            members.append(s)
-            return
-
-    elif node.data == "node":
-
-        if label:
-            token["unit"]["label"] = get_leaf_value(label)
-
-        empty_node: Any = nget(node, "empty_node")
-        string_node: Any = nget(node, "string_node")
-        bracket_node: Any = nget(node, "bracket_node")
-
-        if string_node:
-            comp: str = get_leaf_value(string_node)
-            comp = f"/^{comp[1:-1]}$/"  # replace "s with /s
-            token["unit"]["constraints"] = [
-                {
-                    "comparison": {
-                        "left": {"entity": "form"},
-                        "operator": "=",
-                        "regexComparison": comp,
-                    }
-                }
-            ]
-            quantifier = nget(string_node, "quantifier")
-
-        elif empty_node:
-            quantifier = nget(empty_node, "quantifier")
-
-        elif bracket_node:
-            constraints: dict = process_brackets(bracket_node)
-            token["unit"]["constraints"] = [constraints]
-            quantifier = nget(bracket_node, "quantifier")
-
-        range = process_quantifier(quantifier, range)
-
-        if range == [1, 1]:
-            members.append(token)
-        else:
-            members.append(
-                {
-                    "sequence": {
-                        "members": [token],
-                        "repetition": {
-                            "min": str(range[0]),
-                            "max": "*" if range[1] == -1 else str(range[1]),
-                        },
-                    }
-                }
-            )
-
-
-# test is a Lark tree
-def test_to_json(test: Any, conf: dict[str, Any] | None = None) -> dict:
-
-    members: list = []
-    nodes = test.children[0].children  # expr > _
-
-    for n in nodes:
-        process_node(n, members)
-
-    out: dict = {}
-    if len(members) == 1:
-        out = members[0]
-    elif len(members) > 1:
-        out = {"sequence": {"members": members}}
-
-    return out
-
-
 test_parser = Lark(
     test_grammar, parser="earley", start="top", postlex=TreeIndenter(), debug=True
 )
-# print("Tree:", test_parser.parse(test_dqd).pretty())
-print("Tree:", test_parser.parse(test_dqd).pretty())
+
+parsed = test_parser.parse(test_dqd)
+
+print("Tree:", parsed.pretty())
+
+
+def underscore_to_camel(s) -> str:
+    return re.sub("_(.)", lambda m: f"{m[1].upper()}", s)
+
+
+class Schema:
+    def __init__(self, grammar):
+        self.grammar = grammar
+        self.defs = {}
+        self.ignores = (
+            "_NL",
+            "_INDENT",
+            "_DEDENT",
+            '"@"',
+            '","',
+            '".."',
+            '"..+"',
+            '")"',
+            '"set"',
+            '"sequence"',
+            '"=>"',
+            '"plain"',
+            '"context"',
+            '"entities"',
+            '"analysis"',
+            '"functions"',
+            '"attributes"',
+            '"filter"',
+            '"collocation"',
+            '"space"',
+            '"window"',
+            '"center"',
+            '"attribute"',
+        )
+        pass
+
+    def get_terminal_regex(self, name) -> str:
+        rgx = name[1:-1]
+        if term := next((t for t in self.grammar.term_defs if t[0] == name), None):
+            expansions = term[1][0]
+            disjuncts: list[str] = []
+            for expansion in expansions.children:
+                value = expansion.children[0].children[0].children[0]
+                if value.type == "REGEXP":
+                    rgx = re.sub(r"/(.+)/.*", "\\1", value.value)
+                else:
+                    # remove trailing ( in function names
+                    rgx = value.value[1:-1].rstrip("(")
+                    rgx = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], rgx)
+                disjuncts.append(rgx)
+            if len(disjuncts) > 1:
+                rgx = "(" + "|".join(d for d in disjuncts) + ")"
+            else:
+                rgx = disjuncts[0]
+        else:
+            rgx = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], rgx)
+        return rgx
+
+    def process_expr(self, expr) -> dict | None:
+        body: dict | None = None
+        child, op = expr.children
+        if op == "?":
+            body = self.process_node(child)
+            if body is None:
+                return None
+            body["required"] = False
+        else:
+            items = self.process_node(child)
+            if items is None:
+                return None
+            body = {"items": items}
+            if op == "*":
+                body["type"] = ["array", "null"]
+                body["required"] = False
+            else:
+                body["type"] = "array"
+        return body
+
+    def process_expansion(self, expansion) -> dict | None:
+        body: dict | None = None
+        children = self.process_children(expansion)
+        if not children:
+            return None
+        if len(children) == 1:
+            body = children[0]
+        else:
+            if all(c.get("type") == "string" for c in children):
+                seq = "".join(
+                    c.get("pattern", "") + ("?" if c.get("required") is False else "")
+                    for c in children
+                )
+                body = {
+                    "type": "string",
+                    "pattern": f"({seq})",
+                }
+            else:
+                body = {"properties": children}
+        return body
+
+    def process_expansions(self, expansions) -> dict | None:
+        body: dict | None = None
+        if len(expansions.children) > 1:
+            children = self.process_children(expansions)
+            if not children:
+                return None
+            if all(c.get("type") == "string" for c in children):
+                disjunction = "|".join(c.get("pattern", "") for c in children)
+                body = {
+                    "type": "string",
+                    "pattern": f"({disjunction})",
+                }
+            else:
+                body = {"oneOf": children}
+        else:
+            body = self.process_expansion(expansions.children[0])
+        return body
+
+    def process_node(self, node) -> dict | None:
+        body: dict | None = None
+        if node.data == "expr":
+            body = self.process_expr(node)
+        elif node.data == "expansions":
+            body = self.process_expansions(node)
+        elif node.data == "expansion":
+            body = self.process_expansion(node)
+        elif node.data == "value":
+            first_child = node.children[0]
+            if first_child.__class__ is NonTerminal:
+                if first_child.name in self.ignores:
+                    return None
+                rn = underscore_to_camel(first_child.name)
+                body = {"$ref": f"#/$defs/{rn}"}
+            else:
+                try:
+                    name = first_child.name
+                except:
+                    name = str(first_child.children[0])
+                if name in self.ignores:
+                    return None
+                pattern = self.get_terminal_regex(name)
+                body = {"type": "string", "pattern": pattern}
+        return body
+
+    def process_children(self, node):
+        children = [self.process_node(c) for c in node.children]
+        return [c for c in children if c is not None]
+
+    def process_rule(self, rule_name, expansions):
+        self.defs[rule_name] = self.process_expansions(expansions)
+
+    def solve_references(self):
+        pass
+
+
+def lark_grammar_to_json_schema(grammar):
+    schema = Schema(grammar)
+    for rule_name, _, expansions, _ in grammar.rule_defs:
+        rn = underscore_to_camel(rule_name.value)
+        schema.process_rule(rn, expansions)
+    return schema
