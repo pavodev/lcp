@@ -1,6 +1,6 @@
 # Results
 
-There is no formal separation between the query part and the results part of a DQD script, other than the convention of writing the results part after the query part. Results blocks always start with a variable name, a fat arrow (`=>`) and one of the three keywords [`plain`](dqd/results.md), [`analysis`](dqd/results.md) or [`collocation`](dqd/results.md).
+There is no formal separation between the query part and the results part of a DQD script, other than the convention of writing the results part after the query part. Results blocks always start with a variable name, a fat arrow (`=>`) and one of the three keywords [`plain`](results.md), [`analysis`](results.md) or [`collocation`](results.md).
 
 ## `plain`
 
