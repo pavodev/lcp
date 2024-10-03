@@ -1,3 +1,5 @@
+# TODO: add type number to math
+
 import os
 import re
 
@@ -105,7 +107,7 @@ def underscore_to_camel(s) -> str:
 
 
 class Schema:
-    def __init__(self, grammar):
+    def __init__(self, grammar, lark="newgrammar.lark"):
         self.grammar = grammar
         self.defs = {}
         self.ignores = (
@@ -133,7 +135,47 @@ class Schema:
             '"center"',
             '"attribute"',
         )
-        pass
+        self.skips = {}
+        self.poly = {}
+        self.renames = {}
+        with open(lark, "r") as larkfile:
+            while line := larkfile.readline():
+                line = line.strip()
+                toskip = re.match(r".*// skip: ([^/]+)$", line)
+                poly = re.match(r".*// type: ([^/]+)$", line)
+                rename = re.match(r".*// rename: ([^/]+)$", line)
+                if toskip:
+                    rule_name = underscore_to_camel(line.split(":")[0].strip())
+                    self.skips[rule_name] = toskip[1].strip()
+                if poly:
+                    rule_name = line.split(":")[0].strip()
+                    self.poly[rule_name] = poly[1].strip()
+                if rename:
+                    rule_name = underscore_to_camel(line.split(":")[0].strip())
+                    self.renames[rule_name] = {}
+                    for r in rename[1].split(" "):
+                        subrule_name, newname = r.split(">")
+                        self.renames[rule_name][
+                            underscore_to_camel(subrule_name.strip())
+                        ] = newname.strip()
+
+    def get_ref(self, x: dict):
+        ref = x.get("$ref", "")
+        ref_name = ref.removeprefix("#/$defs/")
+        return (ref, ref_name)
+
+    def collapse_anyOf(self, anyOf: list) -> list:
+        o = []
+        patterns = set()
+        for x in anyOf:
+            if "pattern" in x:
+                patterns.add(x["pattern"])
+            else:
+                o.append(x)
+        if patterns:
+            disjunction = "|".join(p for p in patterns)
+            o.append({"type": "string", "pattern": f"({disjunction})"})
+        return o
 
     def get_terminal_regex(self, name) -> str:
         rgx = name[1:-1]
@@ -186,14 +228,16 @@ class Schema:
             body = children[0]
         else:
             if all(c.get("type") == "string" for c in children):
-                seq = "".join(
-                    c.get("pattern", "") + ("?" if c.get("required") is False else "")
-                    for c in children
-                )
-                body = {
-                    "type": "string",
-                    "pattern": f"({seq})",
-                }
+                body = {"type": "string"}
+                patterns = set()
+                for c in children:
+                    p = c.get("pattern", "")
+                    if c.get("required") is False:
+                        p += "?"
+                    patterns.add(p)
+                    if poly := c.get("poly"):
+                        body["poly"] = poly
+                body["pattern"] = f"({''.join(p for p in patterns)})"
             else:
                 body = {"properties": children}
         return body
@@ -210,8 +254,10 @@ class Schema:
                     "type": "string",
                     "pattern": f"({disjunction})",
                 }
+                if poly := next((c["poly"] for c in children if "poly" in c), None):
+                    body["poly"] = poly
             else:
-                body = {"oneOf": children}
+                body = {"anyOf": self.collapse_anyOf(children)}
         else:
             body = self.process_expansion(expansions.children[0])
         return body
@@ -240,6 +286,8 @@ class Schema:
                     return None
                 pattern = self.get_terminal_regex(name)
                 body = {"type": "string", "pattern": pattern}
+                if name in self.poly:
+                    body["poly"] = self.poly[name]
         return body
 
     def process_children(self, node):
@@ -249,8 +297,97 @@ class Schema:
     def process_rule(self, rule_name, expansions):
         self.defs[rule_name] = self.process_expansions(expansions)
 
-    def solve_references(self):
-        pass
+    def build_props(self, props):
+        o = {}
+        if "$ref" in props:
+            o = {"$ref": props["$ref"]}
+        if "properties" in props:
+            o["type"] = "object"
+            o["properties"] = {}
+            requireds = []
+            for x in props["properties"]:
+                if "anyOf" in x:
+                    assert all(
+                        "$ref" in y for y in x["anyOf"]
+                    ), "anyOf inside properties only accepts refs"
+                    o["anyOf"] = o.get("anyOf", [])
+                    for y in x["anyOf"]:
+                        ref, ref_name = self.get_ref(y)
+                        o["anyOf"].append({"required": [ref_name]})
+                        o["properties"][ref_name] = {"$ref": ref}
+                else:
+                    assert "$ref" in x, "properties only accepts refs or anyOfs"
+                    ref, ref_name = self.get_ref(x)
+                    o["properties"][ref_name] = {"$ref": ref}
+                    if x.get("required") is not False:
+                        requireds.append(ref_name)
+            if requireds:
+                o["required"] = requireds
+        elif "anyOf" in props:
+            typs = set()
+            o["anyOf"] = []
+            for x in props["anyOf"]:
+                p = self.build_props(x)
+                typs.add(p.get("type", "object"))
+                if "$ref" in p:
+                    o["properties"] = o.get("properties", {})
+                    ref, ref_name = self.get_ref(p)
+                    o["properties"][ref_name] = {"$ref": ref}
+                    o["anyOf"].append({"required": [ref_name]})
+                else:
+                    o["anyOf"].append(p)
+            o["type"] = [t for t in typs] if len(typs) > 1 else next(t for t in typs)
+        elif "items" in props:
+            o["type"] = "array"
+            o["items"] = self.build_props(props["items"])
+            o["minItems"] = 1
+        elif "poly" in props:
+            o = {"type": ["string", props["poly"]], "pattern": props["pattern"]}
+        else:
+            o = props
+        return o
+
+    def make(self):
+        defs = {}
+        # First convert each rule
+        for rule_name, props in self.defs.items():
+            defs[rule_name] = self.build_props(props)
+        # Now simplify the skips
+        for rule_name, to_skip in self.skips.items():
+            rule = defs[rule_name]
+            dfpath = f"#/$defs/{to_skip}"
+            if "$ref" in rule and rule["$ref"] == dfpath:
+                defs[rule_name] = defs[to_skip]
+        # Finally, rename keys
+        for rule_name, renames in self.renames.items():
+            if "properties" in defs[rule_name]:
+                new_p = {
+                    (renames[p] if p in renames else p): v
+                    for p, v in defs[rule_name]["properties"].items()
+                }
+                defs[rule_name]["properties"] = new_p
+            if "anyOf" in defs[rule_name]:
+                new_a = [
+                    (
+                        {"required": [renames[a["required"][0]]]}
+                        if "required" in a and a["required"][0] in renames
+                        else a
+                    )
+                    for a in defs[rule_name]["anyOf"]
+                ]
+                defs[rule_name]["anyOf"] = new_a
+            if "required" in defs[rule_name]:
+                new_r = [
+                    (renames[r] if r in renames else r)
+                    for r in defs[rule_name]["required"]
+                ]
+                defs[rule_name]["required"] = new_r
+        schema = {
+            "$schema": "http://json-schema.org/draft-04/schema#",
+            "$defs": defs,
+            **defs.pop("top", {}),
+        }
+        return schema
 
 
 def lark_grammar_to_json_schema(grammar):
