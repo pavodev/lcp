@@ -14,11 +14,11 @@ Entities that can be temporally located, are aligned relative to the time axis. 
 
 Lastly, entities can occupy a section on a 2-dimensional plane: E.g. on a scanned medieval document, each *Token* can be unambiguously located by its x- and y-coordinate.
 
-## Entities
+## Layers
 
-Entities are defined in the [Corpus Template](corpus-template.md). Though arbitrary names can be used, we use *Document* for documents, *Segment* for sentence segments and *Token* for tokens in the examples. As a convention to distinguish between Entities and e.g. variables in DQD queries, Entities are expected to start with an uppercase character.
+Layers are defined in the [Corpus Template](corpus-template.md). Though arbitrary names can be used, we use *Document* for documents, *Segment* for sentence segments and *Token* for tokens in the examples. As a convention to distinguish between layer names and e.g. variables in DQD queries, layer names are expected to start with an uppercase character.
 
 
 ## Attributes
 
-Attributes are also defined in the [Corpus Template](corpus-template.md) and thus their naming is free for a corpus creator to define. As a standard set, we use *form* for word forms, *lemma* for lemmas, *upos* for [Universal part-of-speech tags](https://universaldependencies.org/u/pos/all.html), and *morph* for [Universal features](https://universaldependencies.org/u/feat/all.html). Attributes stored as [Meta Data](meta-data.md) is mapped to entity attributes unless a native attribute with the same name exists. In that case, the meta attribute needs to be explicitely referenced.
+Attributes are also defined in the [Corpus Template](corpus-template.md) and thus their naming is free for a corpus creator to define. As a standard set, we use *form* for word forms, *lemma* for lemmas, *upos* for [Universal part-of-speech tags](https://universaldependencies.org/u/pos/all.html), and *morph* for [Universal features](https://universaldependencies.org/u/feat/all.html). Attributes stored as [Meta Data](meta-data.md) is mapped to regular attributes unless a native attribute with the same name exists. In that case, the meta attribute needs to be explicitely referenced.
