@@ -8,7 +8,7 @@
 * [Links](README.md#links)
     * [DQD](dqd.md)
         * [Introduction](dqd.md#introduction)
-        * [Quick Reference](dqd.md#quick-reference)
+        * [Getting started](dqd.md#getting-started)
     * [Corpora in LCP](corpora_in_lcp.md)
     * [Corpus management](corpus_management.md)
     * [Querying](querying.md)

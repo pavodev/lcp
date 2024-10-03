@@ -17,7 +17,7 @@ Token@s to
 
 Say your corpus contains a segment with this sequence of tokens: `Moisha gave you something`. Assuming standard dependency relations, the query will match `s = <Moisha gave you something>, tv = <gave>, to = <you>`, but it will also match `s = <Moisha gave you something>, tv = <gave>, to = <something>` as a separate result; indeed, the latter triplet is different from the former and, as such, it constitutes a distinct match, even though the segment and the first token are the same in both matches
 
-If you'd rather capture all possible dependencies of the verb as part of the same, single match, you can declare the corresponding `Token` block inside a [`set`](dqd/set.md) block:
+If you'd rather capture all possible dependencies of the verb as part of the same, single match, you can declare the corresponding `Token` block inside a [`set`](set.md) block:
 
 ```
 Segment s

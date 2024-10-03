@@ -1,6 +1,6 @@
 # The DQD Query Language
 
-> For a list of keywords used in DQD, see [DQD keywords](dqd/keywords.md)
+> For a list of keywords used in DQD, see [DQD keywords](keywords.md)
 
 ## Introduction
 
@@ -29,13 +29,15 @@ We proceed to explain this simple query below.
 
 ### Instantiation and Scopes
 
-Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entitiy later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment` (LCP allows corpus creators to use arbitrary annotation layer names, but `Token` and `Segment` are common default names).
+Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entitiy later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
+
+> LCP allows corpus creators to use arbitrary annotation layer names, but `Token` and `Segment` are common default names. You can see the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
 
 An entity is by default existantially quantified, and its scope ranges from its instanciation to the end of the query. This means that the query will only output results where a matching entity was found, and that occurrences of its label will refer back it anywhere in the query below its instantiation line. 
 
-> Some exceptions exist, for example when entities are instantiated within the scope of a negative existential quantifier, or within the scope of a repeatable [sequence](dqd/sequence.md). We will touch on those later.
+> Some exceptions exist, for example when entities are instantiated within the scope of a negative existential quantifier, or within the scope of a repeatable [sequence](sequence.md). We will touch on those later.
 
-The code above declares a second entity, labeled `t`, on the annotation layer named `Token`. The character-containment operator [`@`](dqd/at.md) requires that the current entity (the token labeled `t`) be part of the entity whose label appears to the right of the operator (the segment labeled `s`). The use of this operator will become apparent later.
+The code above declares a second entity, labeled `t`, on the annotation layer named `Token`. The character-containment operator [`@`](at.md) requires that the current entity (the token labeled `t`) be part of the entity whose label appears to the right of the operator (the segment labeled `s`). The use of this operator will become apparent later.
 
 Scope is controled via **indentation**: in the code above, the constraint `form = "dogs"` is in the scope of the token instantiation, but the line that comes next (`result => plain`) is not in that scope, because the line was de-dented.
 
@@ -46,7 +48,7 @@ Simple constraints usually use the format `left operator right` and are interpre
 
 Annotation layers can come with any number of attributes, but it is standard for tokens to also define an attribute named `lemma`. Had we used the constraint `lemma = "dog"` instead, we would have matched token occurrences whose form could be either "dog" or "dogs".
 
-> Attributes can have different types; in this illustration, both `form` and `lemma` are assumed to be strings. Accordingly, we surround the test value in double quotes. DQD does **not** accept string surrounded by single quotes.
+> Attributes can have different types; in this illustration, both `form` and `lemma` are assumed to be strings. Accordingly, we surround the test value in double quotes. DQD does **not** accept string surrounded by single quotes. You can see the attributes of the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
 
 ### Regular expressions
 
@@ -55,16 +57,16 @@ In addition to plain strings, DQD supports references to regular expressions by 
 
 ## Sequences
 
-To look for consecutive entities, such as a series of tokens, one can use the keyword [`sequence`](dqd/sequence.md).
+To look for consecutive entities, such as a series of tokens, one can use the keyword [`sequence`](sequence.md).
 
 ## Sets
 
-By default, each entity produce one match for each occurrence in the corpus. For example, if one sentence contains three occurrences of "dogs", the results will report three distinct hits for that sentence. To prevent that behavior, one can use the keyword [`set`](dqd/set.md).
+By default, each entity produce one match for each occurrence in the corpus. For example, if one sentence contains three occurrences of "dogs", the results will report three distinct hits for that sentence. To prevent that behavior, one can use the keyword [`set`](set.md).
 
 ## Results
 
 DQD queries come with a constraint part, and a results part. There are three types of results:
 
- 1. [`plain`](dqd/results.md#plain)
- 2. [`analysis`](dqd/results.md#analysis)
- 3. [`collocation`](dqd/results.md#collocation)
+ 1. [`plain`](results.md#plain)
+ 2. [`analysis`](results.md#analysis)
+ 3. [`collocation`](results.md#collocation)
