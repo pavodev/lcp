@@ -58,16 +58,16 @@ sequence : "sequence"(part_of)? label? repetition? _NL _INDENT members _DEDENT
 result : label "=>" (results_plain | results_analysis | results_collocation)
 results : result+                                           // skip: result
 
-results_plain        : "plain" _NL _INDENT results_plain_context results_plain_entities _DEDENT
+results_plain        : "plain" _NL _INDENT results_plain_context results_plain_entities _DEDENT // rename: results_plain_context>context results_plain_entities>entities
 results_plain_context : "context" _NL _INDENT (label _NL*)+ _DEDENT
 results_plain_entities : "entities" _NL _INDENT (label _NL*)+ _DEDENT
 
-results_analysis     : "analysis" _NL _INDENT results_analysis_attributes results_analysis_functions results_analysis_filter? _DEDENT
+results_analysis     : "analysis" _NL _INDENT results_analysis_attributes results_analysis_functions results_analysis_filter? _DEDENT // rename: results_analysis_attributes>attributes results_analysis_functions>functions results_analysis_filter>filter
 results_analysis_attributes : "attributes" _NL _INDENT ((label|attribute) _NL*)+ _DEDENT
 results_analysis_functions : "functions" _NL _INDENT (ANALYSIS_FUNCTIONS _NL*)+ _DEDENT
 results_analysis_filter : "filter" _NL _INDENT (comparison _NL*)+ _DEDENT
 
-results_collocation        : "collocation" _NL _INDENT (results_collocation_center | results_collocation_space) results_collocation_attribute _DEDENT
+results_collocation        : "collocation" _NL _INDENT (results_collocation_center | results_collocation_space) results_collocation_attribute _DEDENT  // rename: results_collocation_space>space results_collocation_attribute>attribute results_collocation_center>center
 results_collocation_space : "space" _NL _INDENT label _NL* _DEDENT
 results_collocation_center : "center" _NL _INDENT label _NL _DEDENT "window" _NL _INDENT window _NL _DEDENT
 results_collocation_attribute : "attribute" _NL _INDENT (attribute | label) _NL* _DEDENT
@@ -99,9 +99,9 @@ UNIVERSAL.2 : "ALL"
 CONJUNCTION.2 : "AND"
 DISJUNCTION.2 : "OR"
 
-POS_INT : /[1-9]*[0-9]/
-NEG_INT : /-[1-9]*[0-9]/
-FLOAT : /-?[1-9]*[0-9]\.[0-9]+/
+POS_INT : /[1-9]*[0-9]/                   // type: number
+NEG_INT : /-[1-9]*[0-9]/                  // type: number
+FLOAT : /-?[1-9]*[0-9]\.[0-9]+/           // type: number
 
 NEGATION.2 : /(~|¬|!|not )/i
 COMPARATIVE : /[><]=?/
