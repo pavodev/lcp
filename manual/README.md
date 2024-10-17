@@ -5,8 +5,7 @@
   <img src="images/Doors_interface_Functionalities.png" alt="alt" width="600"/>
 </p>
 
-###### 1. Catchphrase is optimized for working with text corpora.
-Use it when you are working with mono- or multilingual text corpora of any size. You can also use it when you need a faster search of your audiovisual collections by bypassing the retrieval of multimedia files.
+*1. Catchphrase is optimized for working with text corpora:* Use it when you are working with mono- or multilingual text corpora of any size. You can also use it when you need a faster search of your audiovisual collections by bypassing the retrieval of multimedia files.
 
 ###### 2. Soundscript is optimized for working with audio corpora.
 Use it for speech corpora that include audio recordings, transcriptions, and any other annotations on the textual or media stream. Results will output text and sound recordings. You can use it for video collections, to output results reduced to audio only.
