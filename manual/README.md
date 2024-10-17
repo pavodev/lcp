@@ -1,6 +1,5 @@
-# LiRI Corpus Platform (LCP)
-
-The LiRI Corpus Platform (LCP) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. 
+# LiRI Corpus Platform
+[LiRI Corpus Platform (LCP)](https://www.liri.uzh.ch/en/services/LiRI-Corpus-Platform-LCP.html) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. LCP is being developed and maintained by a team at [LiRI](https://www.liri.uzh.ch/en.html), the Linguistic Research Infrastructure at UZH. 
 
 <p align="center">
   <img src="images/Doors_interface_Functionalities.png" alt="alt" width="600"/>
