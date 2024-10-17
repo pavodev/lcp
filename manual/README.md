@@ -1,6 +1,8 @@
 # LiRI Corpus Platform (LCP)
 
-The LiRI Corpus Platform (LCP) is a software system for handling and querying corpora of different kinds. Users can query corpora directly from their browser, and upload their own corpora using a command-line interface.
+The LiRI Corpus Platform (LCP) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. 
+
+![alt](images/Doors_interfaces_Visualization_Greenline.png)
 
 ## Functionalities
 
