@@ -19,21 +19,23 @@ Users can query corpora directly from their browser and upload their own corpora
 - [Text+Berg-Korpus - Alpine Journal](http://textberg.ch/site/de/willkommen/) – text corpus 
 - [corpus Oral de Français de Suisse Romande (OFROM)](https://ofrom.unine.ch/) - audio corpus 
 
-## Functionalities
-
-  * allows definition of **complex queries**
-  * users can import their **own corpora**
-  * corpora is **automatically indexed** for faster search and retrieval
-  * **modular system**: supports mono- or multilingual and mono- or multimodal data
-  * comes with a dedicated **DQD** (Descriptive Query Definition) language
+#### Beta Testing 
+LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
+Feel free to report any feedback or bugs to ((add email address here)).
 
 
-
-## Links
-
+#### Further Links
   * [DQD](dqd.md)
   * [Data Model](model.md)
   * [Corpora in LCP](corpora_in_lcp.md)
   * [Corpus management](corpus_management.md)
   * [Querying](querying.md)
   * [Importing](importing.md)
+
+#### LCP Functionalities
+
+  * allows definition of **complex queries**
+  * users can import their **own corpora**
+  * corpora is **automatically indexed** for faster search and retrieval
+  * **modular system**: supports mono- or multilingual and mono- or multimodal data
+  * comes with a dedicated **DQD** (Descriptive Query Definition) language
