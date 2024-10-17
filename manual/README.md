@@ -5,16 +5,17 @@
   <img src="images/Doors_interface_Functionalities.png" alt="alt" width="600"/>
 </p>
 
-Each interface is optimized to the corpus modality (or modalities) it supports: 
-1.	*Catchphrase is optimized for working with text corpora.* 
+1. *Catchphrase is optimized for working with text corpora.*
 
-Use it when you are working with mono- or multilingual text corpora of any size. You can also use it when you need a faster search of your audiovisual collections by bypassing the retrieval of multimedia files.
-2.	*Soundscript is optimized for working with audio corpora.*
+   Use it when you are working with mono- or multilingual text corpora of any size. You can also use it when you need a faster search of your audiovisual collections by bypassing the retrieval of multimedia files.
 
-Use it for speech corpora that include audio recordings, transcriptions and any other annotations on the textual or media stream. Results will output text and sound recordings. You can use it for video collections, to output results reduced to audio only.
-3.	*Videoscope is optimized for working with audiovisual/video corpora.* 
+2. *Soundscript is optimized for working with audio corpora.*
 
-Use it for viewing and querying audiovisual corpora based on video, that can include annotations on the media stream or text. The interface includes a video player and a timeline annotation preview. Querying results will output multimodal results and you can use them to navigate to the video recording.
+   Use it for speech corpora that include audio recordings, transcriptions, and any other annotations on the textual or media stream. Results will output text and sound recordings. You can use it for video collections, to output results reduced to audio only.
+
+3. *Videoscope is optimized for working with audiovisual/video corpora.*
+
+   Use it for viewing and querying audiovisual corpora based on video, that can include annotations on the media stream or text. The interface includes a video player and a timeline annotation preview. Querying results will output multimodal results and you can use them to navigate to the video recording.
 
 
 
