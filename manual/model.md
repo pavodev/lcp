@@ -1,4 +1,4 @@
-# Model
+# Data Model
 
 One goal of LCP is to store corpora that may contain very different data and annotations, and to offer a uniform query interface to interact with it.
 To that end, LCP models all corpora in a similar way.
