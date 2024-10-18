@@ -12,7 +12,7 @@ Annotations and data must be aligned along at least one of three dimension:
   - **Text** --
   - **Time** --
   - **Space** --
-    -
+
 ### Textual Dimension
 
 An entity being aligned to the text dimension simply means that the entity has a textual representation - e.g. tokens in a conventional text corpus: LCP concpetionally flattens all text in a corpus (= all text is concatenated into one large "string"), and for each *Token* its single, unambiguous spot, that can be described by means of a start and end position in that text stream is computed.
@@ -26,7 +26,7 @@ Entities that can be temporally located, are aligned relative to the time axis. 
 
 Lastly, entities can occupy a section on a 2-dimensional plane: E.g. on a scanned medieval document, each *Token* can be unambiguously located by its x- and y-coordinate.
 
-It is important to understand that layers can have several anchorings: In a transcribed speech corpus, *Tokens* are located in the text dimension on the one hand, and they occupy also a position along the time axis (of course only, if this time information has been annotated on the token level); thus, they can serve as a ``link'' between the two dimensions, and queries where purely temporal and textual entities are combined are possible: `Show me all Tokens of form X that overlap with a Gesture Y`.
+It is important to understand that layers can have several anchorings: In a transcribed speech corpus, *Tokens* are located in the text dimension on the one hand, and they occupy also a position along the time axis (of course only, if this time information has been annotated on the token level); thus, they can serve as a 'link' between the two dimensions, and queries where purely temporal and textual entities are combined are possible: *Show me all Tokens of form X that overlap with a Gesture Y*.
 
 ## Layers
 
