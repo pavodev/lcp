@@ -2,7 +2,7 @@
 [LCP](https://www.liri.uzh.ch/en/services/LiRI-Corpus-Platform-LCP.html) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. LCP is being developed and maintained by a team at [LiRI](https://www.liri.uzh.ch/en.html), the Linguistic Research Infrastructure at UZH. 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
-  <img src="images/Doors_interface_Functionalities.png" alt="alt" width="600"/>
+  <img src="images/Doors_interface_Functionalities.png" alt="alt" width="550"/>
 </p>
 
 **1. [Catchphrase](catchphrase.md) is optimized for working with text corpora:** Use it when you are working with mono- or multilingual text corpora of any size. You can also use it when you need a faster search of your audiovisual collections by bypassing the retrieval of multimedia files.
@@ -17,7 +17,7 @@ Users can query corpora directly from their browser and upload their own corpora
 
 - [British National Corpus (BNC)](http://www.natcorp.ox.ac.uk/) – text corpus 
 - [Text+Berg-Korpus - Alpine Journal](http://textberg.ch/site/de/willkommen/) – text corpus 
-- [corpus Oral de Français de Suisse Romande (OFROM)](https://ofrom.unine.ch/) - audio corpus 
+- [corpus Oral de Français de Suisse Romande (OFROM)](https://ofrom.unine.ch/) - speech corpus 
 
 #### Beta Testing 
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
@@ -25,16 +25,16 @@ Feel free to report any feedback or bugs to ((add email address here)).
 
 
 #### Further Links
-  * [DQD](dqd.md)
-  * [Corpora in LCP](corpora_in_lcp.md)
-  * [Corpus management](corpus_management.md)
-  * [Querying](querying.md)
-  * [Importing](importing.md)
+  * Further description of the [DQD query language](dqd.md)
+  * Detailed tutorial on [Querying](querying.md)
+  * [How corpora are modelled in LCP](corpora_in_lcp.md)
+  * How to store and share your corpora: [Corpus management](corpus_management.md)
+  * How to [import your own corpora](importing.md)
 
-#### LCP Functionalities
+#### LCP Functionalities <!-- Keep this? -->
 
   * allows definition of **complex queries**
   * users can import their **own corpora**
-  * corpora is **automatically indexed** for faster search and retrieval
+  * corpora are **automatically indexed** for faster search and retrieval
   * **modular system**: supports mono- or multilingual and mono- or multimodal data
   * comes with a dedicated **DQD** (Descriptive Query Definition) language
