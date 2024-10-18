@@ -12,7 +12,7 @@ Annotations and data must be aligned along at least one of three dimension:
   - **Text** --
   - **Time** --
   - **Space** --
-
+    -
 ### Textual Dimension
 
 An entity being aligned to the text dimension simply means that the entity has a textual representation - e.g. tokens in a conventional text corpus: LCP concpetionally flattens all text in a corpus (= all text is concatenated into one large "string"), and for each *Token* its single, unambiguous spot, that can be described by means of a start and end position in that text stream is computed.
@@ -38,4 +38,3 @@ Layers are defined in the [Corpus Template](corpus-template.md). Though arbitrar
 ## Attributes
 
 Attributes are also defined in the [Corpus Template](corpus-template.md) and thus their naming is free for a corpus creator to define. As a standard set, we use *form* for word forms, *lemma* for lemmas, *upos* for [Universal part-of-speech tags](https://universaldependencies.org/u/pos/all.html), and *morph* for [Universal features](https://universaldependencies.org/u/feat/all.html). Attributes stored as [Meta Data](meta-data.md) is mapped to regular attributes unless a native attribute with the same name exists. In that case, the meta attribute needs to be explicitely referenced.
-
