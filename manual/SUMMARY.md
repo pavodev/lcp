@@ -9,6 +9,7 @@
     * [DQD](dqd.md)
         * [Introduction](dqd.md#introduction)
         * [Getting started](dqd.md#getting-started)
+    * [Data Model](model.md)
     * [Corpora in LCP](corpora_in_lcp.md)
     * [Corpus management](corpus_management.md)
     * [Querying](querying.md)
