@@ -1,10 +1,15 @@
 # Model
 
+One goal of LCP is to store corpora that may contain very different data and annotations, and to offer a uniform query interface to interact with it.
+To that end, LCP models all corpora in a similar way.
+The main gist of this model is that all data and annotations are linearized and unambiguously positioned along at least one of three dimensions.
+
+
 ## Dimensions
 
-Annotations must be aligned along at least one of three dimension:
+Annotations and data must be aligned along at least one of three dimension:
 
-  - **Stream** --
+  - **Text** --
   - **Time** --
   - **Space** --
     -
@@ -25,6 +30,8 @@ It is important to understand that layers can have several anchorings: In a tran
 
 ## Layers
 
+A Layer is an abstract class of things: *Token* is e.g. a layer, that contains all instances of tokens.
+Through a layer definition, users can specify which attributes (see [below](model.md#attributes)) individual instances of it can or must have: E.g. a *Token* must always have form; or a *Gesture* must always have one of the types [X, Y, Z].
 Layers are defined in the [Corpus Template](corpus-template.md). Though arbitrary names can be used, we use *Document* for documents, *Segment* for sentence segments and *Token* for tokens in the examples. As a convention to distinguish between layer names and e.g. variables in DQD queries, layer names are expected to start with an uppercase character.
 
 
