@@ -163,6 +163,7 @@ config.appType = process.env.APP_TYPE;
 
 if (process.env.NODE_ENV == "production") {
   config['appLinks'] = {
+    "lcphome": "https://lcp.linguistik.uzh.ch",
     "catchphrase": "https://catchphrase.linguistik.uzh.ch",
     "soundscript": "https://soundscript.linguistik.uzh.ch",
     "videoscope": "https://videoscope.linguistik.uzh.ch",
@@ -170,6 +171,7 @@ if (process.env.NODE_ENV == "production") {
 }
 else if (process.env.NODE_ENV == "staging") {
   config['appLinks'] = {
+    "lcphome": "https://lcp.test.linguistik.uzh.ch",
     "catchphrase": "https://catchphrase.test.linguistik.uzh.ch",
     "soundscript": "https://soundscript.test.linguistik.uzh.ch",
     "videoscope": "https://videoscope.test.linguistik.uzh.ch"
@@ -177,6 +179,7 @@ else if (process.env.NODE_ENV == "staging") {
 }
 else {
   config['appLinks'] = {
+    "lcphome": "http://localhost:8080",
     "catchphrase": "http://localhost:8081",
     "soundscript": "http://localhost:8082",
     "videoscope": "http://localhost:8083"
