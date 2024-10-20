@@ -132,6 +132,16 @@ const Utils = {
       }
       return corpusType
     },
+    _hasProtocol(url) {
+      // Regular expression to check if the URL starts with http:// or https://
+      return /^(https?:\/\/)/i.test(url);
+    },
+    getURLWithProtocol(url) {
+      if (!Utils._hasProtocol(url) && url) {
+        return `https://${url}`; // Add default http:// if no protocol
+      }
+      return url; // Return the URL unchanged if it has a protocol
+    }
   }
 
   export default Utils
