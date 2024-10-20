@@ -1,5 +1,5 @@
 # Use the official PostgreSQL image as a base
-FROM postgres:latest
+FROM postgres:16.4
 
 # Install dependencies
 RUN apt-get update && \
