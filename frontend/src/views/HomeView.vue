@@ -313,7 +313,7 @@
                 </span>
                 <p class="word-count mb-0" v-if="'url' in corpusModal.meta">
                   URL:
-                  <a :href="corpusModal.meta.url" target="_blank">{{
+                  <a :href="getURLWithProtocol(corpusModal.meta.url)" target="_blank">{{
                     corpusModal.meta.url
                   }}</a>
                 </p>
@@ -573,6 +573,7 @@ export default {
     },
     nFormatter: Utils.nFormatter,
     formatDate: Utils.formatDate,
+    getURLWithProtocol: Utils.getURLWithProtocol,
     updateProjectModalData(valid, data) {
       this.allowProjectModalSave = valid;
       this.modalProjectData = data;

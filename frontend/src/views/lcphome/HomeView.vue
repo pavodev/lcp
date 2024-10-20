@@ -282,7 +282,7 @@
                 </p>
                 <p class="word-count mb-0">
                   URL:
-                  <a :href="corpusModal.meta.url" target="_blank">{{
+                  <a :href="getURLWithProtocol(corpusModal.meta.url)" target="_blank">{{
                     corpusModal.meta.url
                   }}</a>
                 </p>
@@ -433,6 +433,7 @@ export default {
         );
     },
     corpusDataType: Utils.corpusDataType,
+    getURLWithProtocol: Utils.getURLWithProtocol,
     projectIcons(project) {
       let icons = ['fas']
       if (project.isPublic == true || project.isSemiPublic == true) {
