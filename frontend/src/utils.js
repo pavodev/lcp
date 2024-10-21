@@ -141,7 +141,26 @@ const Utils = {
         return `https://${url}`; // Add default http:// if no protocol
       }
       return url; // Return the URL unchanged if it has a protocol
-    }
+    },
+    hasAccessToCorpus(corpus, userData) {
+      return (
+        (userData.user.displayName) && (
+          corpus.isSwissdox != true || userData.user.swissdoxUser == true
+        )
+      );
+      // Allow public corpora
+      // return !corpus.authRequired
+      //   || (
+      //     (corpus.authRequired == true && this.userData.user.displayName) && (
+      //       corpus.isSwissdox != true || this.userData.user.swissdoxUser == true
+      //     )
+      //   );
+    },
+    calculateSum(array) {
+      return array.reduce((accumulator, value) => {
+        return accumulator + value;
+      }, 0);
+    },
   }
 
   export default Utils
