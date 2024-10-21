@@ -1,5 +1,17 @@
 # Glossary
 
+## Corpus
+
+A corpus is a collection of represenation of things or facts of the real world. A typical text corpus, for example, will be a collection of actual texts that were produced at some point. While for textual corpora this may appear trivial, it is not so much the case for
+
+## Annotation (vs. Data)
+
+A corpus contains representation of things, or facts. However, in most cases, these data are ``enriched'' by information that is not there in the primary data. As is
+
+## Dimension
+
+A dimension is one of the three conceptual axes along which data and annotations are positioned in LCP: **Text**, **Time**, and **Space**.
+
 ## Layer
 
 The term "layer" should always be qualified to clarify what it refers to. Most often, it will occur in the phrase "**annotation layer**", in which case it refers to a level of representation of the data that corpus creators can define arbitrarily. See [this page](model.md#layers) for more details.
