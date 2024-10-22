@@ -5,6 +5,11 @@ To that end, LCP models all corpora in a similar way.
 The main gist of this model is that all data and annotations are linearized and unambiguously positioned along at least one of three dimensions.
 
 
+One goal of LCP is to store corpora that may contain very different data and annotations, and to offer a uniform query interface to interact with it.
+To that end, LCP models all corpora in a similar way.
+The main gist of this model is that all data and annotations are linearized and unambiguously positioned along at least one of three dimensions.
+
+
 ## Dimensions
 
 Annotations and data must be aligned along at least one of three dimension:
