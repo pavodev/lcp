@@ -23,6 +23,12 @@
               </router-link>
             </li>
             <li class="nav-item">
+              <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
+                <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
+                LCP Home
+              </a>
+            </li>
+            <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -102,9 +108,9 @@ import config from "@/config";
 export default {
   name: "AppCatchphrase",
   data() {
-    console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
+      appLinks: config.appLinks,
     }
   },
   mounted() {
