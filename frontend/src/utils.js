@@ -1,4 +1,5 @@
 import moment from 'moment';
+import config from "@/config";
 
 const Utils = {
     uuidv4(){
@@ -131,6 +132,45 @@ const Utils = {
         }
       }
       return corpusType
+    },
+    _hasProtocol(url) {
+      // Regular expression to check if the URL starts with http:// or https://
+      return /^(https?:\/\/)/i.test(url);
+    },
+    getURLWithProtocol(url) {
+      if (!Utils._hasProtocol(url) && url) {
+        return `https://${url}`; // Add default http:// if no protocol
+      }
+      return url; // Return the URL unchanged if it has a protocol
+    },
+    hasAccessToCorpus(corpus, userData) {
+      return (
+        (userData.user.displayName) && (
+          corpus.isSwissdox != true || userData.user.swissdoxUser == true
+        )
+      );
+      // Allow public corpora
+      // return !corpus.authRequired
+      //   || (
+      //     (corpus.authRequired == true && userData.user.displayName) && (
+      //       corpus.isSwissdox != true || userData.user.swissdoxUser == true
+      //     )
+      //   );
+    },
+    calculateSum(array) {
+      return array.reduce((accumulator, value) => {
+        return accumulator + value;
+      }, 0);
+    },
+    getAppLink(appType, corpus) {
+      let appLink = config.appLinks[appType]
+      if (["catchphrase", "soundscript"].includes(appType)) {
+        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      else {
+        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      return appLink
     },
   }
 

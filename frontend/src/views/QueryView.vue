@@ -620,7 +620,7 @@
             </button>
           </div>
           <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
-            <label class="form-label">SwissDox</label>
+            <label class="form-label">Swissdox</label>
             <button
               type="button"
               @click="exportResults('swissdox')"
@@ -1328,8 +1328,8 @@ export default {
     async exportResults(format, download=false, preview=false) {
       const to_export = {};
       to_export.format = {
-        'plain':'dump',
-        'swissdox':'swissdox'
+        'plain': 'dump',
+        'swissdox': 'swissdox'
       }[format];
       to_export.preview = preview;
       to_export.download = download;

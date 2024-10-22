@@ -23,6 +23,12 @@
               </router-link>
             </li>
             <li class="nav-item">
+              <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
+                <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
+                LCP Home
+              </a>
+            </li>
+            <li class="nav-item">
               <router-link class="nav-link" to="/player">
                 <FontAwesomeIcon
                   :icon="['fas', 'video']"
@@ -30,6 +36,15 @@
                 />
                 Viewer
               </router-link>
+            </li>
+            <li class="nav-item">
+              <a href="https://lcp.linguistik.uzh.ch/manual" target="_blank" class="nav-link">
+                <FontAwesomeIcon
+                  :icon="['fas', 'circle-question']"
+                  class="me-1"
+                />
+                Manual
+              </a>
             </li>
           </ul>
           <ul class="navbar-nav ms-auto">
@@ -80,6 +95,7 @@ export default {
   data() {
     return {
       appVersion: process.env.GIT_HASH,
+      appLinks: config.appLinks,
     }
   },
   mounted() {
