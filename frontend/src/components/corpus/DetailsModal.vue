@@ -4,15 +4,6 @@
       <div class="title mb-0" v-if="hasAccessToCorpus(corpusModal, userData)">
         <span>{{ corpusModal.meta.name }}</span>
         <br>
-        <!-- <div
-          class="icon-1 btn btn-primary btn-sm horizontal-space"
-          title="Query corpus"
-          @click="openQueryWithCorpus(corpusModal, 'catchphrase')"
-          data-bs-dismiss="modal"
-        >
-          <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-        </div> -->
-
         <a
           :href="appLinks['catchphrase']"
           target="_blank"
@@ -134,6 +125,7 @@
 
   import CorpusGraphViewNew from "@/components/CorpusGraphViewNew.vue";
 
+  import router from "@/router";
   import config from "@/config";
   import Utils from "@/utils";
 
@@ -153,6 +145,15 @@
       getURLWithProtocol: Utils.getURLWithProtocol,
       hasAccessToCorpus: Utils.hasAccessToCorpus,
       calculateSum: Utils.calculateSum,
+      openQueryWithCorpus(corpus, type) {
+        if (this.hasAccessToCorpus(corpus, this.userData)) {
+          if (type == "videoscope") {
+            router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
+          } else {
+            router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
+          }
+        }
+      },
     },
     computed: {
       ...mapState(useUserStore, ["userData"]),

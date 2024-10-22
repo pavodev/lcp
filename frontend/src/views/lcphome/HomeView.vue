@@ -511,15 +511,16 @@ export default {
       let modal = new Modal(document.getElementById('corpusEditModal'));
       modal.show()
     },
-    getAppLink(appType, corpus) {
-      let appLink = config.appLinks[appType]
-      if (["catchphrase", "soundscript"].includes(appType)) {
-        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+    openAppLink(corpus) {
+      let appType = 'catchphrase'
+      if (['video'].includes(this.corpusDataType(corpus))) {
+        appType = 'videoscope'
       }
-      else {
-        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      else if (['audio'].includes(this.corpusDataType(corpus))) {
+        appType = 'soundscript'
       }
-      return appLink
+      let link = this.getAppLink(appType, corpus)
+      window.location.href = link
     },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
