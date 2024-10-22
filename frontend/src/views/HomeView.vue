@@ -171,20 +171,41 @@
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
-                  <a class="details-button icon-2 tooltips" :href="getURLWithProtocol(corpus.meta.url)" title="Corpus origin"
-                    :disabled="!corpus.meta.url" target="_blank" @click.stop>
-                    <FontAwesomeIcon :icon="['fas', 'link']" />
-                  </a>
-                  <div class="details-button icon-3 tooltips" title="Corpus details" @click.stop="openCorpusDetailsModal(corpus)">
-                    <FontAwesomeIcon :icon="['fas', 'circle-info']" />
-                  </div>
-                  <div
-                    v-if="project.isAdmin"
-                    class="details-button icon-4 tooltips"
-                    title="Corpus edit"
-                    @click.stop="openCorpusEdit(corpus)"
-                  >
-                    <FontAwesomeIcon :icon="['fas', 'gear']" />
+
+                  <div class="details-button icon-2">
+                    <span
+                      v-if="project.isAdmin"
+                      class="tooltips icon-x"
+                      title="Corpus edit"
+                      @click.stop="openCorpusEdit(corpus)"
+                    >
+                      <FontAwesomeIcon :icon="['fas', 'gear']" />
+                    </span>
+                    <span
+                      :href="corpusStore.getLicenseByTag(corpus.meta.license)"
+                      class="tooltips icon-x"
+                      target="_blank"
+                      :title="`Corpus licence: User defined - Check details`"
+                      v-if="corpus.meta.license == 'user-defined'"
+                    >
+                      <FontAwesomeIcon :icon="['fas', 'certificate']" />
+                    </span>
+                    <a
+                      :href="corpusStore.getLicenseByTag(corpus.meta.license).url"
+                      target="_blank"
+                      class="tooltips icon-x"
+                      v-else-if="corpus.meta.license"
+                      :title="`Corpus licence: ${corpus.meta.license}`"
+                    >
+                      <FontAwesomeIcon :icon="['fas', 'certificate']" />
+                    </a>
+                    <span class="tooltips icon-x" title="Corpus details" @click.stop="openCorpusDetailsModal(corpus)">
+                      <FontAwesomeIcon :icon="['fas', 'circle-info']" />
+                    </span>
+                    <a class="tooltips icon-x" :href="getURLWithProtocol(corpus.meta.url)" title="Corpus origin"
+                      :disabled="!corpus.meta.url" target="_blank" @click.stop>
+                      <FontAwesomeIcon :icon="['fas', 'link']" />
+                    </a>
                   </div>
                   <div class="details-data-type icon-3 tooltips" title="Data type" v-if="appType == 'lcp'">
                     <FontAwesomeIcon :icon="['fas', 'music']" v-if="corpusDataType(corpus) == 'audio'" />
@@ -367,6 +388,8 @@ export default {
       inviteEmails: '',
       currentProjectToSubmit: null,
       modalIndexKey: 0,
+
+      corpusStore: useCorpusStore(),
     };
   },
   components: {
@@ -825,7 +848,11 @@ export default {
   opacity: 0.9;
 }
 
-details-button:disabled {
+.data-type-text .details-button .icon-x {
+  color: #2a7f62;
+}
+
+.details-button:disabled {
   filter: grayscale(100);
   opacity: 0.5;
 }
@@ -834,7 +861,8 @@ details-button:disabled {
   opacity: 1;
 }
 
-.details-button:hover {
+.details-button .icon-1:hover,
+.details-button .icon-x:hover {
   opacity: 0.7 !important;
 }
 
@@ -856,7 +884,8 @@ details-button:disabled {
 }
 
 .data-type-audio .details-data-type,
-.data-type-audio .details-button {
+.data-type-audio .details-button,
+.data-type-audio .icon-x {
   color: #0059be;
 }
 
@@ -870,7 +899,8 @@ details-button:disabled {
 }
 
 .data-type-video .details-data-type,
-.data-type-video .details-button {
+.data-type-video .details-button,
+.data-type-video .icon-x {
   color: #622A7F;
 }
 
@@ -892,12 +922,10 @@ details-button:disabled {
   right: 55px;
 }
 
-.details-button.icon-3 {
-  right: 90px;
-}
-
-.details-button.icon-4 {
-  right: 125px;
+.icon-x {
+  display: inline-block;
+  padding-left: 7px;
+  padding-right: 7px;
 }
 
 .horizontal-space {

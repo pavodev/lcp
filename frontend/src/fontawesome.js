@@ -9,6 +9,7 @@ import {
   faCaretDown,
   faCaretLeft,
   faCaretRight,
+  faCertificate,
   faChartSimple,
   faCircleInfo,
   faCircleNodes,
@@ -57,6 +58,7 @@ library.add(faCaretDown);
 library.add(faCaretLeft);
 library.add(faCaretRight);
 library.add(faChartSimple);
+library.add(faCertificate);
 library.add(faCircleInfo);
 library.add(faCircleNodes);
 library.add(faCirclePlus);
