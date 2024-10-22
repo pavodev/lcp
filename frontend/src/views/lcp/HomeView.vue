@@ -103,10 +103,11 @@
               </div>
             </div>
             <div class="row mt-2">
+              <!-- @click="openDropdown(corpus)" -->
               <div
                 v-for="corpus in filterCorpora(project.corpora)"
                 :key="corpus.id"
-                @click="openDropdown(corpus)"
+                @click.stop="openQueryWithCorpus(corpus, 'catchphrase')"
                 class="col-4 mb-3"
               >
                 <div
@@ -510,16 +511,7 @@ export default {
         }
       }
     },
-    getAppLink(appType, corpus) {
-      let appLink = config.appLinks[appType]
-      if (["catchphrase", "soundscript"].includes(appType)) {
-        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-      }
-      else {
-        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-      }
-      return appLink
-    },
+    getAppLink: Utils.getAppLink,
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
