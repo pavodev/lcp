@@ -1,4 +1,5 @@
 import moment from 'moment';
+import config from "@/config";
 
 const Utils = {
     uuidv4(){
@@ -151,8 +152,8 @@ const Utils = {
       // Allow public corpora
       // return !corpus.authRequired
       //   || (
-      //     (corpus.authRequired == true && this.userData.user.displayName) && (
-      //       corpus.isSwissdox != true || this.userData.user.swissdoxUser == true
+      //     (corpus.authRequired == true && userData.user.displayName) && (
+      //       corpus.isSwissdox != true || userData.user.swissdoxUser == true
       //     )
       //   );
     },
@@ -160,6 +161,16 @@ const Utils = {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
       }, 0);
+    },
+    getAppLink(appType, corpus) {
+      let appLink = config.appLinks[appType]
+      if (["catchphrase", "soundscript"].includes(appType)) {
+        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      else {
+        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+      }
+      return appLink
     },
   }
 
