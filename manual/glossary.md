@@ -2,7 +2,9 @@
 
 ## Layer
 
-The term "layer" should always be qualified to clarify what it refers to. Most often, it will occur in the phrase "**annotation layer**", in which case it refers to a level of representation of the data that corpus creators can define arbitrarily. See [this page](model.md#layers) for more details.
+The term "layer" should always be qualified to clarify what it refers to. Often, it will occur in the phrase "**annotation layer**", in which case it refers to a level of representation of the data that corpus creators can define arbitrarily.
+
+Mostly in LCP a 'Layer' designates an abstract class of entities - see [this page](model.md#layers) for more details.
 
 Alternatively, the term "layer" could be understood as synonymous with "tier" or "track", as can be seen in tools such as ELAN, or in the timeline of VideoScope for example. Although the timeline can dedicate a single track to display the annotations of one annotation layer in the corpus, that need not be the case, and there is **no** systematic one-to-one correspondance between the annotation layers of a corpus and the tracks of a timeline.
 
@@ -12,11 +14,14 @@ The term "track", in this documentation, refers to a horizontal band that can re
 
 ## Entity
 
-The term "entity" is used in the context of [DQD queries](dqd.md), and reflects the idea of [Entity-Relationship models](https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model). An entity is a unit that can have a _label_, constraints, and relate to other entities in the query. While most entities in DQD queries are directly associated to an _annotation layer_, the terms are not synonymous: for example, a DQD query can instantiate multiple entities on the same annotation layer (typically, multiple instances of the Token layer) and some entities do not match a single annotation layer unit: [sequences](sequence.md), [sets](set.md) or [groups](group.md) are entities in and of themselves (e.g. they can receive labels) but they contain _multiple_ units (for example, a sequence of several consecutive tokens).
+If the term "entity" is used in the context of [DQD queries](dqd.md), it reflects the idea of [Entity-Relationship models](https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model). An entity is a unit that can have a _label_, constraints, and relate to other entities in the query. While most entities in DQD queries are directly associated to an _annotation layer_, the terms are not synonymous: for example, a DQD query can instantiate multiple entities on the same annotation layer (typically, multiple instances of the Token layer) and some entities do not match a single annotation layer unit: [sequences](sequence.md), [sets](set.md) or [groups](group.md) are entities in and of themselves (e.g. they can receive labels) but they contain _multiple_ units (for example, a sequence of several consecutive tokens).
+If used outside the context of DQD, especiall in this documentation, 'entity' is used with its conventional meaning, i.e. *a concrete, existing thing, as distinguished from a mere function, or property*.
 
 ## Unit
 
-This term is used in the JSON representation of queries for to introduce entities that correspond to single annotation layer units: one token instance, one segment instance, etc.
+This term has two meanings:
+ 1. This term is used in the JSON representation of queries for to introduce entities that correspond to single annotation layer units: one token instance, one segment instance, etc.
+ 2. Furthermore, in the [Corpus Template](corpus-template.md) it specifies on of the Layer types: 'Unit' Layers are base layers, i.e. instances of those layers cannot be broken up into smaller entities (e.g. *Tokens* in a typical text corpus). This is in contrast to the other layer types 'span' (a layer that comprises sequential instances of other layers (e.g. *Segments* span *Tokens*)) and 'relation' (a layer that connects non-contiguous instances of other layers (e.g. a *Dependency Relation* connects two *Tokens*, that are not necessarily next to each other)).
 
 ## Metadata
 
