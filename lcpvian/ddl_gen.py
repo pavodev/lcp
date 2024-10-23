@@ -919,7 +919,7 @@ class CTProcessor:
             if x.name == self.globals.base_map["token"].lower() + "0"
         )
         rel_cols = [
-            x.name.rstrip("_id")
+            x.name.removesuffix("_id")
             for x in tok_tab.cols
             if not (x.constrs.get("primary_key") or x.name.endswith("range"))
         ]
@@ -993,7 +993,7 @@ class CTProcessor:
             ],
             key=lambda x: x.name,
         )
-        rel_cols_names = [x.name.rstrip("_id") for x in rel_cols]
+        rel_cols_names = [x.name.removesuffix("_id") for x in rel_cols]
         # Process any token dependency
         for lay_name, lay_conf in self.layers.items():
             if lay_conf.get("layerType") != "relation":
