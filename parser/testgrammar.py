@@ -4,6 +4,7 @@ import os
 import re
 
 from collections.abc import Iterable
+from json import dumps
 from typing import Any, ClassVar
 
 from lark import Lark, Tree
@@ -109,6 +110,7 @@ def underscore_to_camel(s) -> str:
 class Schema:
     def __init__(self, grammar, lark="newgrammar.lark"):
         self.grammar = grammar
+        self.schema = {}
         self.defs = {}
         self.ignores = (
             "_NL",
@@ -177,20 +179,30 @@ class Schema:
             o.append({"type": "string", "pattern": f"({disjunction})"})
         return o
 
+    def get_value_of_terminal(self, terminal) -> str:
+        if terminal.__class__ is not Token:
+            if len(terminal.children) == 1:
+                return self.get_value_of_terminal(terminal.children[0])
+            else:
+                disjuncts = [self.get_value_of_terminal(c) for c in terminal.children]
+                return "(" + "|".join(disjuncts) + ")"
+        value = ""
+        if terminal.type == "REGEXP":
+            value = re.sub(r"/(.+)/.*", "\\1", terminal.value)
+        else:
+            # remove trailing ( in function names
+            value = terminal.value[1:-1].rstrip("(")
+            value = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], value)
+        return value
+
     def get_terminal_regex(self, name) -> str:
         rgx = name[1:-1]
         if term := next((t for t in self.grammar.term_defs if t[0] == name), None):
             expansions = term[1][0]
             disjuncts: list[str] = []
             for expansion in expansions.children:
-                value = expansion.children[0].children[0].children[0]
-                if value.type == "REGEXP":
-                    rgx = re.sub(r"/(.+)/.*", "\\1", value.value)
-                else:
-                    # remove trailing ( in function names
-                    rgx = value.value[1:-1].rstrip("(")
-                    rgx = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], rgx)
-                disjuncts.append(rgx)
+                value = self.get_value_of_terminal(expansion)
+                disjuncts.append(value)
             if len(disjuncts) > 1:
                 rgx = "(" + "|".join(d for d in disjuncts) + ")"
             else:
@@ -387,6 +399,7 @@ class Schema:
             "$defs": defs,
             **defs.pop("top", {}),
         }
+        self.schema = schema
         return schema
 
 
@@ -395,4 +408,100 @@ def lark_grammar_to_json_schema(grammar):
     for rule_name, _, expansions, _ in grammar.rule_defs:
         rn = underscore_to_camel(rule_name.value)
         schema.process_rule(rn, expansions)
+    schema.make()
     return schema
+
+
+def get_specs(name, schema) -> dict:
+    specs = schema["$defs"].get(name, {})
+    if "$ref" in specs:
+        return get_specs(specs["$ref"].removeprefix("#/$defs/"), schema)
+    return specs
+
+
+def dqd_component(component, schema_obj, parent=""):
+    schema = schema_obj.schema
+    json_obj = {}
+    if component.__class__ is Token:
+        return component.value
+    key = component.data
+    key = re.sub(r"_(.)", lambda m: m[1].upper(), key)
+    processed_children = [
+        dqd_component(c, schema_obj, parent=key) for c in component.children
+    ]
+    specs = get_specs(key, schema)
+    typ = specs.get("type", "")
+    if typ == "array":
+        json_obj[key] = processed_children
+        if "properties" not in specs.get("items", {}):
+            # Skip the key of the children
+            json_obj[key] = [
+                (c if c.__class__ is str else next(x for x in c.values()))
+                for c in processed_children
+            ]
+    elif typ == "object":
+        json_obj[key] = {
+            next(x for x in c.keys()): next(x for x in c.values())
+            for c in processed_children
+        }
+    elif typ == "string":
+        children_strings = [
+            (next(x for x in c.values()) if c.__class__ is dict else c)
+            for c in processed_children
+        ]
+        assert all(
+            c.__class__ is str for c in children_strings
+        ), f"Non-string found for {key} ({children_strings})"
+        value = "".join(children_strings)  # type: ignore
+        json_obj[key] = value
+        if value.__class__ is dict:
+            # This is a case of "skip"
+            json_obj[key] = next(x for x in value.values())
+    elif "string" in typ and processed_children[0].__class__ is str:
+        json_obj[key] = processed_children[0]
+    elif "object" in typ and processed_children[0].__class__ is dict:
+        obj = {
+            next(x for x in c.keys()): next(x for x in c.values())
+            for c in processed_children
+        }
+        json_obj[key] = obj
+        first_entry = next({k: v} for k, v in obj.items())
+        properties = specs.get("properties", {})
+        if (
+            "string" in typ
+            and len(obj) == 1
+            and next(x for x in first_entry) not in properties
+        ):
+            value = next(v for v in first_entry.values())
+            json_obj[key] = value
+    else:
+        assert False, f"Type not supported: {typ}"
+    # One exception for functionName: remove trailing (
+    if key == "functionName":
+        json_obj[key] = json_obj[key].removesuffix("(")
+    if json_obj[key].__class__ is dict and key in schema_obj.renames:
+        # Do any renaming necessary
+        rnm = schema_obj.renames[key]
+        obj = {rnm.get(k, k): v for k, v in json_obj[key].items()}
+        json_obj[key] = obj
+    return json_obj
+
+
+def dqd_to_json(dqd, schema):
+    json_obj = {}
+    query, results = dqd.children
+    assert query.data == "query" and results.data == "results", "Invalid DQD"
+    json_obj["query"] = [
+        dqd_component(c, schema, parent="query") for c in query.children
+    ]
+    # Skip the "result" key of the results
+    json_obj["results"] = [
+        next(v for v in dqd_component(c, schema, parent="results").values())
+        for c in results.children
+    ]
+    return dumps(json_obj)
+
+
+# from testgrammar import test_parser, parsed, lark_grammar_to_json_schema, dqd_to_json
+
+# dqd_to_json(parsed, lark_grammar_to_json_schema(test_parser.grammar))
