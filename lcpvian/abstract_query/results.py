@@ -23,6 +23,7 @@ from .utils import (
     _get_table,
     _get_underlang,
     _is_anchored,
+    _parse_comparison,
     _parse_repetition,
 )
 
@@ -659,19 +660,17 @@ WHERE {entity}.char_range && contained_token.char_range
             return "", []
         out: list[dict[str, Any]] = []
         wheres: set[str] = set()
-
-        comp: dict[str, dict] = cast(dict[str, dict], filt)
-        for k, v in comp.items():
-            if k != "comparison":
-                raise NotImplementedError("todo")
-            if v.get("entity", "").lower() == "frequency":
-                out.append({k: v})
-            else:
-                # This needs to be revised (use Constraint from .constraints instead?)
-                # out.append({})
-                # entity, operator, type, text = _parse_comparison(v)
-                # wheres.add(f"{entity} {operator.replace('=','~') if type == 'regexComparison' else operator} '{text}'")
+        comps: list[dict] = cast(
+            list[dict], [f.get("comparison") for f in cast(dict, filt)]
+        )
+        for comp in comps:
+            left, comparator, _, right = _parse_comparison(comp)
+            left_str = left.get("label")
+            right_str = next(x for x in cast(dict, right).values())
+            if not left_str or not right_str:
                 continue
+            wheres.add(" ".join([left_str, comparator, right_str]))
+            # wheres.add(f"{entity} {operator.replace('=','~') if type == 'regexComparison' else operator} '{text}'")
 
         if wheres:
             strung = " WHERE " + " AND ".join(wheres)

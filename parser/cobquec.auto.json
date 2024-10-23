@@ -1,58 +1,206 @@
 {
-    "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://liri.linguistik.uzh.ch/cobquec5.schema.json",
-    "title": "Constraint-based Query Configuration",
-    "description": "A linguistic query for LCP data Representation",
-    "type": "object",
+    "$schema": "http://json-schema.org/draft-04/schema#",
     "$defs": {
-        "query": {
+        "partOf": {
+            "$ref": "#/$defs/label"
+        },
+        "operator": {
+            "type": "string",
+            "pattern": "(\\+|-|/|\\*)"
+        },
+        "operandLeft": {
+            "anyOf": [
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "operation"
+                    ]
+                },
+                {
+                    "type": "string",
+                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                }
+            ],
             "properties": {
+                "function": {
+                    "$ref": "#/$defs/function"
+                },
+                "operation": {
+                    "$ref": "#/$defs/operation"
+                }
+            },
+            "type": [
+                "string",
+                "object"
+            ]
+        },
+        "operandRight": {
+            "anyOf": [
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "operation"
+                    ]
+                },
+                {
+                    "type": "string",
+                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                }
+            ],
+            "properties": {
+                "function": {
+                    "$ref": "#/$defs/function"
+                },
+                "operation": {
+                    "$ref": "#/$defs/operation"
+                }
+            },
+            "type": [
+                "string",
+                "object"
+            ]
+        },
+        "operation": {
+            "type": "object",
+            "properties": {
+                "operandLeft": {
+                    "$ref": "#/$defs/operandLeft"
+                },
+                "operator": {
+                    "$ref": "#/$defs/operator"
+                },
+                "operandRight": {
+                    "$ref": "#/$defs/operandRight"
+                }
+            },
+            "required": [
+                "operandLeft",
+                "operator",
+                "operandRight"
+            ]
+        },
+        "math": {
+            "anyOf": [
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "operation"
+                    ]
+                },
+                {
+                    "type": "string",
+                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                }
+            ],
+            "properties": {
+                "function": {
+                    "$ref": "#/$defs/function"
+                },
+                "operation": {
+                    "$ref": "#/$defs/operation"
+                }
+            },
+            "type": [
+                "string",
+                "object"
+            ]
+        },
+        "min": {
+            "type": [
+                "string",
+                "number"
+            ],
+            "pattern": "[1-9]*[0-9]"
+        },
+        "max": {
+            "type": [
+                "string",
+                "number"
+            ],
+            "pattern": "([1-9]*[0-9]|\\*)"
+        },
+        "repetition": {
+            "type": "object",
+            "properties": {
+                "min": {
+                    "$ref": "#/$defs/min"
+                },
+                "max": {
+                    "$ref": "#/$defs/max"
+                }
+            },
+            "required": [
+                "min",
+                "max"
+            ]
+        },
+        "leftSpan": {
+            "type": [
+                "string",
+                "number"
+            ],
+            "pattern": "-[1-9]*[0-9]"
+        },
+        "rightSpan": {
+            "type": [
+                "string",
+                "number"
+            ],
+            "pattern": "[1-9]*[0-9]"
+        },
+        "window": {
+            "type": "object",
+            "properties": {
+                "leftSpan": {
+                    "$ref": "#/$defs/leftSpan"
+                },
+                "rightSpan": {
+                    "$ref": "#/$defs/rightSpan"
+                }
+            },
+            "required": [
+                "leftSpan",
+                "rightSpan"
+            ]
+        },
+        "quantifier": {
+            "type": "string",
+            "pattern": "(((~|\u00ac|!|not )?EXISTS)|(ALL(~|\u00ac|!|not )?))"
+        },
+        "quantification": {
+            "type": "object",
+            "properties": {
+                "quantifier": {
+                    "$ref": "#/$defs/quantifier"
+                },
+                "unit": {
+                    "$ref": "#/$defs/unit"
+                },
                 "sequence": {
-                    "type": "object",
                     "$ref": "#/$defs/sequence"
                 },
                 "set": {
-                    "type": "object",
                     "$ref": "#/$defs/set"
-                },
-                "group": {
-                    "type": "object",
-                    "$ref": "#/$defs/group"
-                },
-                "universalQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/universal_quantification"
-                },
-                "existentialQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/existential_quantification"
-                },
-                "logicalOpUnary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_unary"
-                },
-                "logicalOpBinary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_binary"
-                },
-                "logicalOpNAry": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_n_ary"
-                },
-                "unit": {
-                    "type": "object",
-                    "$ref": "#/$defs/unit"
-                },
-                "cqp": {
-                    "type": "object",
-                    "$ref": "#/$defs/cqp"
-                },
-                "reference": {
-                    "type": "string",
-                    "$ref": "#/$defs/reference"
                 }
             },
-            "oneOf": [
+            "anyOf": [
+                {
+                    "required": [
+                        "unit"
+                    ]
+                },
                 {
                     "required": [
                         "sequence"
@@ -62,438 +210,315 @@
                     "required": [
                         "set"
                     ]
-                },
-                {
-                    "required": [
-                        "group"
-                    ]
-                },
-                {
-                    "required": [
-                        "universalQuantification"
-                    ]
-                },
-                {
-                    "required": [
-                        "existentialQuantification"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpUnary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpBinary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpNAry"
-                    ]
-                },
-                {
-                    "required": [
-                        "unit"
-                    ]
-                },
-                {
-                    "required": [
-                        "cqp"
-                    ]
-                },
-                {
-                    "required": [
-                        "reference"
-                    ]
                 }
+            ],
+            "required": [
+                "quantifier"
             ]
         },
-        "sequence": {
+        "arguments": {
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "label"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "function"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "attribute"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "string"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "regex"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "math"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "label": {
+                        "$ref": "#/$defs/label"
+                    },
+                    "function": {
+                        "$ref": "#/$defs/function"
+                    },
+                    "attribute": {
+                        "$ref": "#/$defs/attribute"
+                    },
+                    "string": {
+                        "$ref": "#/$defs/string"
+                    },
+                    "regex": {
+                        "$ref": "#/$defs/regex"
+                    },
+                    "math": {
+                        "$ref": "#/$defs/math"
+                    }
+                },
+                "type": "object"
+            },
+            "minItems": 1
+        },
+        "functionName": {
+            "type": "string",
+            "pattern": "(length|size|range|position|start|end|century|date|year|day)"
+        },
+        "function": {
+            "type": "object",
             "properties": {
-                "partOf": {
-                    "type": "string",
-                    "$ref": "#/$defs/part_of"
+                "functionName": {
+                    "$ref": "#/$defs/functionName"
+                },
+                "arguments": {
+                    "$ref": "#/$defs/arguments"
+                }
+            },
+            "required": [
+                "functionName",
+                "arguments"
+            ]
+        },
+        "regex": {
+            "type": "string",
+            "pattern": "\\/.+\\/"
+        },
+        "string": {
+            "type": "string",
+            "pattern": "\"[^\"\\n]*\""
+        },
+        "attribute": {
+            "type": "string",
+            "pattern": "[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+"
+        },
+        "label": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+        },
+        "layer": {
+            "type": "string",
+            "pattern": "[A-Z][a-zA-Z0-9_]+"
+        },
+        "labelOrAttribute": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+        },
+        "left": {
+            "anyOf": [
+                {
+                    "required": [
+                        "function"
+                    ]
+                },
+                {
+                    "required": [
+                        "label"
+                    ]
+                },
+                {
+                    "required": [
+                        "attribute"
+                    ]
+                },
+                {
+                    "required": [
+                        "string"
+                    ]
+                },
+                {
+                    "required": [
+                        "regex"
+                    ]
+                },
+                {
+                    "required": [
+                        "math"
+                    ]
+                }
+            ],
+            "properties": {
+                "function": {
+                    "$ref": "#/$defs/function"
                 },
                 "label": {
-                    "type": "string",
                     "$ref": "#/$defs/label"
                 },
-                "repetition": {
-                    "type": "object",
-                    "$ref": "#/$defs/repetition"
+                "attribute": {
+                    "$ref": "#/$defs/attribute"
                 },
-                "members": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/members"
-                    },
-                    "minItems": 1
-                }
-            }
-        },
-        "statement__": {
-            "properties": {
-                "sequence": {
-                    "type": "object",
-                    "$ref": "#/$defs/sequence"
+                "string": {
+                    "$ref": "#/$defs/string"
                 },
-                "set": {
-                    "type": "object",
-                    "$ref": "#/$defs/set"
+                "regex": {
+                    "$ref": "#/$defs/regex"
                 },
-                "group": {
-                    "type": "object",
-                    "$ref": "#/$defs/group"
-                },
-                "universalQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/universal_quantification"
-                },
-                "existentialQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/existential_quantification"
-                },
-                "logicalOpUnary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_unary"
-                },
-                "logicalOpBinary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_binary"
-                },
-                "logicalOpNAry": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_n_ary"
-                },
-                "unit": {
-                    "type": "object",
-                    "$ref": "#/$defs/unit"
-                },
-                "cqp": {
-                    "type": "object",
-                    "$ref": "#/$defs/cqp"
-                },
-                "reference": {
-                    "type": "string",
-                    "$ref": "#/$defs/reference"
+                "math": {
+                    "$ref": "#/$defs/math"
                 }
             },
-            "oneOf": [
+            "type": "object"
+        },
+        "right": {
+            "anyOf": [
                 {
                     "required": [
-                        "sequence"
+                        "function"
                     ]
                 },
                 {
                     "required": [
-                        "set"
+                        "label"
                     ]
                 },
                 {
                     "required": [
-                        "group"
+                        "attribute"
                     ]
                 },
                 {
                     "required": [
-                        "universalQuantification"
+                        "string"
                     ]
                 },
                 {
                     "required": [
-                        "existentialQuantification"
+                        "regex"
                     ]
                 },
                 {
                     "required": [
-                        "logicalOpUnary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpBinary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpNAry"
-                    ]
-                },
-                {
-                    "required": [
-                        "unit"
-                    ]
-                },
-                {
-                    "required": [
-                        "cqp"
-                    ]
-                },
-                {
-                    "required": [
-                        "reference"
+                        "math"
                     ]
                 }
-            ]
-        },
-        "set": {
+            ],
             "properties": {
+                "function": {
+                    "$ref": "#/$defs/function"
+                },
                 "label": {
-                    "type": "string",
                     "$ref": "#/$defs/label"
                 },
-                "members": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/members"
+                "attribute": {
+                    "$ref": "#/$defs/attribute"
+                },
+                "string": {
+                    "$ref": "#/$defs/string"
+                },
+                "regex": {
+                    "$ref": "#/$defs/regex"
+                },
+                "math": {
+                    "$ref": "#/$defs/math"
+                }
+            },
+            "type": "object"
+        },
+        "comparator": {
+            "type": "string",
+            "pattern": "((~|\u00ac|!|not )?(=|[><]=?|contain))"
+        },
+        "comparison": {
+            "type": "object",
+            "properties": {
+                "left": {
+                    "$ref": "#/$defs/left"
+                },
+                "comparator": {
+                    "$ref": "#/$defs/comparator"
+                },
+                "right": {
+                    "$ref": "#/$defs/right"
+                }
+            },
+            "required": [
+                "left",
+                "comparator",
+                "right"
+            ]
+        },
+        "unaryOperator": {
+            "type": "string",
+            "pattern": "(~|\u00ac|!|not )"
+        },
+        "naryOperator": {
+            "type": "string",
+            "pattern": "(AND|OR)"
+        },
+        "logicalExpression": {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "properties": {
+                        "unaryOperator": {
+                            "$ref": "#/$defs/unaryOperator"
+                        },
+                        "constraint": {
+                            "$ref": "#/$defs/constraint"
+                        }
                     },
-                    "minItems": 1
-                }
-            }
-        },
-        "group": {
-            "properties": {
-                "label": {
-                    "type": "string",
-                    "$ref": "#/$defs/label"
+                    "required": [
+                        "unaryOperator",
+                        "constraint"
+                    ]
                 },
-                "members": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/members"
+                {
+                    "type": "object",
+                    "properties": {
+                        "naryOperator": {
+                            "$ref": "#/$defs/naryOperator"
+                        },
+                        "constraints": {
+                            "$ref": "#/$defs/constraints"
+                        }
                     },
-                    "minItems": 1
+                    "required": [
+                        "naryOperator",
+                        "constraints"
+                    ]
                 }
-            }
-        },
-        "universal_quantification": {
-            "properties": {
-                "quantor": {
-                    "type": "string",
-                    "$ref": "#/$defs/quantor__universal"
-                },
-                "args": {
-                    "type": "array",
-                    "$ref": "#/$defs/args__q_two"
-                }
-            },
-            "required": [
-                "quantor",
-                "args"
-            ]
-        },
-        "existential_quantification": {
-            "properties": {
-                "quantor": {
-                    "type": "string",
-                    "$ref": "#/$defs/quantor__existential"
-                },
-                "args": {
-                    "type": "array",
-                    "$ref": "#/$defs/args__q_one"
-                }
-            },
-            "required": [
-                "quantor",
-                "args"
-            ]
-        },
-        "logical_op_unary": {
-            "properties": {
-                "operator": {
-                    "type": "string",
-                    "$ref": "#/$defs/operator__unary"
-                },
-                "args": {
-                    "type": "array",
-                    "$ref": "#/$defs/args__one"
-                }
-            },
-            "required": [
-                "operator",
-                "args"
-            ]
-        },
-        "logical_op_binary": {
-            "properties": {
-                "operator": {
-                    "type": "string",
-                    "$ref": "#/$defs/operator__binary"
-                },
-                "args": {
-                    "type": "array",
-                    "$ref": "#/$defs/args__two"
-                }
-            },
-            "required": [
-                "operator",
-                "args"
-            ]
-        },
-        "logical_op_n_ary": {
-            "properties": {
-                "operator": {
-                    "type": "string",
-                    "$ref": "#/$defs/operator__n_ary"
-                },
-                "args": {
-                    "type": "array",
-                    "$ref": "#/$defs/args__any"
-                }
-            },
-            "required": [
-                "operator",
-                "args"
-            ]
+            ],
+            "type": "object"
         },
         "unit": {
+            "type": "object",
             "properties": {
                 "layer": {
-                    "type": "string",
                     "$ref": "#/$defs/layer"
                 },
-                "partition": {
-                    "type": "string",
-                    "$ref": "#/$defs/partition"
-                },
                 "partOf": {
-                    "type": "string",
-                    "$ref": "#/$defs/part_of"
+                    "$ref": "#/$defs/partOf"
                 },
                 "label": {
-                    "type": "string",
                     "$ref": "#/$defs/label"
                 },
                 "constraints": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/constraints"
-                    },
-                    "minItems": 1
+                    "$ref": "#/$defs/constraints"
                 }
             },
             "required": [
                 "layer"
             ]
         },
-        "cqp": {
-            "properties": {
-                "label": {
-                    "type": "string",
-                    "$ref": "#/$defs/label"
-                },
-                "partOf": {
-                    "type": "string",
-                    "$ref": "#/$defs/part_of"
-                },
-                "cqp": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/cqp__"
-                    },
-                    "minItems": 1
-                }
-            }
-        },
-        "reference": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "cqp__": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/cqp__"
-            },
-            "minItems": 1
-        },
-        "members": {
-            "properties": {
-                "sequence": {
-                    "type": "object",
-                    "$ref": "#/$defs/sequence"
-                },
-                "set": {
-                    "type": "object",
-                    "$ref": "#/$defs/set"
-                },
-                "group": {
-                    "type": "object",
-                    "$ref": "#/$defs/group"
-                },
-                "universalQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/universal_quantification"
-                },
-                "existentialQuantification": {
-                    "type": "object",
-                    "$ref": "#/$defs/existential_quantification"
-                },
-                "logicalOpUnary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_unary"
-                },
-                "logicalOpBinary": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_binary"
-                },
-                "logicalOpNAry": {
-                    "type": "object",
-                    "$ref": "#/$defs/logical_op_n_ary"
-                },
-                "unit": {
-                    "type": "object",
-                    "$ref": "#/$defs/unit"
-                },
-                "cqp": {
-                    "type": "object",
-                    "$ref": "#/$defs/cqp"
-                },
-                "reference": {
-                    "type": "string",
-                    "$ref": "#/$defs/reference"
-                }
-            },
-            "oneOf": [
+        "constraint": {
+            "anyOf": [
                 {
                     "required": [
-                        "sequence"
-                    ]
-                },
-                {
-                    "required": [
-                        "set"
-                    ]
-                },
-                {
-                    "required": [
-                        "group"
-                    ]
-                },
-                {
-                    "required": [
-                        "universalQuantification"
-                    ]
-                },
-                {
-                    "required": [
-                        "existentialQuantification"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpUnary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpBinary"
-                    ]
-                },
-                {
-                    "required": [
-                        "logicalOpNAry"
+                        "quantification"
                     ]
                 },
                 {
@@ -503,201 +528,119 @@
                 },
                 {
                     "required": [
-                        "cqp"
+                        "logicalExpression"
                     ]
                 },
-                {
-                    "required": [
-                        "reference"
-                    ]
-                }
-            ]
-        },
-        "comparison": {
-            "properties": {
-                "left": {
-                    "type": "object",
-                    "$ref": "#/$defs/left"
-                },
-                "operator": {
-                    "type": "string",
-                    "$ref": "#/$defs/operator"
-                },
-                "mathComparison": {
-                    "type": "string",
-                    "$ref": "#/$defs/math_comparison"
-                },
-                "stringComparison": {
-                    "type": "string",
-                    "$ref": "#/$defs/string_comparison"
-                },
-                "regexComparison": {
-                    "type": "string",
-                    "$ref": "#/$defs/regex_comparison"
-                },
-                "entityComparison": {
-                    "type": "string",
-                    "$ref": "#/$defs/entity_comparison"
-                },
-                "functionComparison": {
-                    "type": "object",
-                    "$ref": "#/$defs/function_comparison"
-                }
-            },
-            "oneOf": [
-                {
-                    "required": [
-                        "mathComparison"
-                    ]
-                },
-                {
-                    "required": [
-                        "stringComparison"
-                    ]
-                },
-                {
-                    "required": [
-                        "regexComparison"
-                    ]
-                },
-                {
-                    "required": [
-                        "entityComparison"
-                    ]
-                },
-                {
-                    "required": [
-                        "functionComparison"
-                    ]
-                }
-            ],
-            "required": [
-                "left",
-                "operator"
-            ]
-        },
-        "left": {
-            "properties": {
-                "entity": {
-                    "type": "string",
-                    "$ref": "#/$defs/entity"
-                },
-                "function": {
-                    "type": "object",
-                    "$ref": "#/$defs/function"
-                }
-            },
-            "oneOf": [
-                {
-                    "required": [
-                        "entity"
-                    ]
-                },
-                {
-                    "required": [
-                        "function"
-                    ]
-                }
-            ]
-        },
-        "constraints": {
-            "properties": {
-                "comparison": {
-                    "type": "object",
-                    "$ref": "#/$defs/comparison"
-                }
-            },
-            "oneOf": [
                 {
                     "required": [
                         "comparison"
                     ]
-                },
-                {
-                    "type": "object",
-                    "$ref": "#/$defs/statement__"
                 }
-            ]
-        },
-        "quantor__universal": {
-            "type": "string",
-            "pattern": "(ALL|!ALL|\u00acALL)"
-        },
-        "quantor__existential": {
-            "type": "string",
-            "pattern": "(EXISTS?|[!\u00ac~]EXISTS?|NOT EXISTS?)"
-        },
-        "operator__unary": {
-            "type": "string",
-            "pattern": "NOT"
-        },
-        "operator__binary": {
-            "type": "string",
-            "pattern": "(NAND|!AND|\u00acAND|NOR|!OR|\u00acOR|XOR|IMPLY|NIMPLY|!IMPLY|\u00acIMPLY)"
-        },
-        "operator__n_ary": {
-            "type": "string",
-            "pattern": "(AND|OR)"
-        },
-        "args__q_one": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/statement__"
+            ],
+            "properties": {
+                "quantification": {
+                    "$ref": "#/$defs/quantification"
+                },
+                "unit": {
+                    "$ref": "#/$defs/unit"
+                },
+                "logicalExpression": {
+                    "$ref": "#/$defs/logicalExpression"
+                },
+                "comparison": {
+                    "$ref": "#/$defs/comparison"
+                }
             },
-            "minItems": 1,
-            "maxItems": 1
+            "type": "object"
         },
-        "args__q_two": {
+        "constraints": {
             "type": "array",
             "items": {
-                "$ref": "#/$defs/statement__"
-            },
-            "minItems": 2,
-            "maxItems": 2
-        },
-        "args__one": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/constraints"
-            },
-            "minItems": 1,
-            "maxItems": 1
-        },
-        "args__two": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/constraints"
-            },
-            "minItems": 2,
-            "maxItems": 2
-        },
-        "args__any": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/constraints"
+                "$ref": "#/$defs/constraint"
             },
             "minItems": 1
         },
-        "results": {
+        "members": {
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "unit"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sequence"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "unit": {
+                        "$ref": "#/$defs/unit"
+                    },
+                    "sequence": {
+                        "$ref": "#/$defs/sequence"
+                    }
+                },
+                "type": "object"
+            },
+            "minItems": 1
+        },
+        "set": {
+            "type": "object",
             "properties": {
+                "partOf": {
+                    "$ref": "#/$defs/partOf"
+                },
                 "label": {
-                    "type": "string",
-                    "$ref": "#/$defs/label__results"
+                    "$ref": "#/$defs/label"
                 },
-                "resultsPlain": {
-                    "type": "object",
-                    "$ref": "#/$defs/results_plain"
-                },
-                "resultsAnalysis": {
-                    "type": "object",
-                    "$ref": "#/$defs/results_analysis"
-                },
-                "resultsCollocation": {
-                    "type": "object",
-                    "$ref": "#/$defs/results_collocation"
+                "members": {
+                    "$ref": "#/$defs/members"
                 }
             },
-            "oneOf": [
+            "required": [
+                "members"
+            ]
+        },
+        "sequence": {
+            "type": "object",
+            "properties": {
+                "partOf": {
+                    "$ref": "#/$defs/partOf"
+                },
+                "label": {
+                    "$ref": "#/$defs/label"
+                },
+                "repetition": {
+                    "$ref": "#/$defs/repetition"
+                },
+                "members": {
+                    "$ref": "#/$defs/members"
+                }
+            },
+            "required": [
+                "members"
+            ]
+        },
+        "result": {
+            "type": "object",
+            "properties": {
+                "label": {
+                    "$ref": "#/$defs/label"
+                },
+                "resultsPlain": {
+                    "$ref": "#/$defs/resultsPlain"
+                },
+                "resultsAnalysis": {
+                    "$ref": "#/$defs/resultsAnalysis"
+                },
+                "resultsCollocation": {
+                    "$ref": "#/$defs/resultsCollocation"
+                }
+            },
+            "anyOf": [
                 {
                     "required": [
                         "resultsPlain"
@@ -718,15 +661,21 @@
                 "label"
             ]
         },
-        "results_plain": {
+        "results": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/result"
+            },
+            "minItems": 1
+        },
+        "resultsPlain": {
+            "type": "object",
             "properties": {
                 "context": {
-                    "type": "array",
-                    "$ref": "#/$defs/context"
+                    "$ref": "#/$defs/resultsPlainContext"
                 },
                 "entities": {
-                    "type": "array",
-                    "$ref": "#/$defs/entities"
+                    "$ref": "#/$defs/resultsPlainEntities"
                 }
             },
             "required": [
@@ -734,19 +683,31 @@
                 "entities"
             ]
         },
-        "results_analysis": {
+        "resultsPlainContext": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/label"
+            },
+            "minItems": 1
+        },
+        "resultsPlainEntities": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/label"
+            },
+            "minItems": 1
+        },
+        "resultsAnalysis": {
+            "type": "object",
             "properties": {
                 "attributes": {
-                    "type": "array",
-                    "$ref": "#/$defs/attributes"
+                    "$ref": "#/$defs/resultsAnalysisAttributes"
                 },
                 "functions": {
-                    "type": "array",
-                    "$ref": "#/$defs/functions"
+                    "$ref": "#/$defs/resultsAnalysisFunctions"
                 },
                 "filter": {
-                    "type": "object",
-                    "$ref": "#/$defs/filter"
+                    "$ref": "#/$defs/resultsAnalysisFilter"
                 }
             },
             "required": [
@@ -754,30 +715,62 @@
                 "functions"
             ]
         },
-        "results_collocation": {
+        "resultsAnalysisAttributes": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/labelOrAttribute"
+            },
+            "minItems": 1
+        },
+        "resultsAnalysisFunctions": {
+            "type": "array",
+            "items": {
+                "type": "string",
+                "pattern": "(frequency|minimum|maximum|average|stddev)"
+            },
+            "minItems": 1
+        },
+        "resultsAnalysisFilter": {
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "comparison"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "comparison"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "comparison": {
+                        "$ref": "#/$defs/comparison"
+                    }
+                },
+                "type": "object"
+            },
+            "minItems": 1
+        },
+        "resultsCollocation": {
+            "type": "object",
             "properties": {
                 "center": {
-                    "type": "string",
-                    "$ref": "#/$defs/center"
-                },
-                "window": {
-                    "type": "string",
-                    "$ref": "#/$defs/window"
+                    "$ref": "#/$defs/resultsCollocationCenter"
                 },
                 "space": {
-                    "type": "array",
-                    "$ref": "#/$defs/space"
+                    "$ref": "#/$defs/resultsCollocationSpace"
                 },
                 "attribute": {
-                    "type": "string",
-                    "$ref": "#/$defs/attribute"
+                    "$ref": "#/$defs/resultsCollocationAttribute"
                 }
             },
-            "oneOf": [
+            "anyOf": [
                 {
                     "required": [
-                        "center",
-                        "window"
+                        "center"
                     ]
                 },
                 {
@@ -790,273 +783,149 @@
                 "attribute"
             ]
         },
-        "context": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/context__"
-            },
-            "minItems": 1
+        "resultsCollocationSpace": {
+            "$ref": "#/$defs/label"
         },
-        "entities": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/entity_ref__"
-            },
-            "minItems": 1
-        },
-        "attributes": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/attribute__"
-            },
-            "minItems": 1
-        },
-        "filter": {
+        "resultsCollocationCenter": {
             "type": "object",
-            "$ref": "#/$defs/comparison",
+            "properties": {
+                "label": {
+                    "$ref": "#/$defs/label"
+                },
+                "window": {
+                    "$ref": "#/$defs/window"
+                }
+            },
             "required": [
-                "comparison"
+                "label",
+                "window"
             ]
         },
-        "functions": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/functions__"
-            },
-            "minItems": 1
-        },
-        "center": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "window": {
-            "type": "string",
-            "pattern": "([-+][0-9]+|0)[.]{2}([-+][0-9]+|0)"
-        },
-        "space": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/entity_ref__"
-            },
-            "minItems": 1
-        },
-        "attribute": {
-            "type": "string",
-            "pattern": "[^\\n\\r ].*"
-        },
-        "entity": {
-            "oneOf": [
+        "resultsCollocationAttribute": {
+            "anyOf": [
                 {
-                    "type": "string",
-                    "pattern": "[a-z][a-zA-Z0-9_]*"
+                    "required": [
+                        "attribute"
+                    ]
                 },
                 {
-                    "type": "string",
-                    "pattern": "[A-Z_][a-zA-Z0-9_]*"
-                },
-                {
-                    "type": "string",
-                    "pattern": "[a-zA-Z_][a-zA-Z0-9_]*\\.[a-zA-Z0-9_]+"
+                    "required": [
+                        "label"
+                    ]
                 }
             ],
-            "type": "string"
-        },
-        "operator": {
-            "type": "string",
-            "pattern": "((not |!)?contain|<(-|\\d+(\\.\\.\\d+)?)?>|>=|<=|<|>|!=|\u00ac=|\u00ac~|~|\u00ac|=|!)"
-        },
-        "math_comparison": {
-            "type": "string",
-            "pattern": "-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\\s*[*\\/+-]\\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*"
-        },
-        "string_comparison": {
-            "type": "string",
-            "pattern": "('.+'|\".+\")"
-        },
-        "regex_comparison": {
-            "type": "string",
-            "pattern": "\\/.+\\/"
-        },
-        "entity_comparison": {
-            "oneOf": [
-                {
-                    "type": "string",
-                    "pattern": "[a-z][a-zA-Z0-9_]*"
-                },
-                {
-                    "type": "string",
-                    "pattern": "[A-Z_][a-zA-Z0-9_]*"
-                },
-                {
-                    "type": "string",
-                    "pattern": "[a-zA-Z_][a-zA-Z0-9_]*\\.[a-zA-Z0-9_]+"
-                }
-            ],
-            "type": "string"
-        },
-        "function_comparison": {
-            "type": "object",
-            "$ref": "#/$defs/function",
-            "required": [
-                "function"
-            ]
-        },
-        "label": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "layer": {
-            "type": "string",
-            "pattern": "[A-Z_][a-zA-Z0-9_]*"
-        },
-        "part_of": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "partition": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "repetition": {
             "properties": {
-                "min": {
-                    "type": "string",
-                    "$ref": "#/$defs/min"
+                "attribute": {
+                    "$ref": "#/$defs/attribute"
                 },
-                "max": {
-                    "type": "string",
-                    "$ref": "#/$defs/max"
+                "label": {
+                    "$ref": "#/$defs/label"
                 }
             },
-            "required": [
-                "min"
-            ]
+            "type": "object"
         },
-        "min": {
-            "type": "string",
-            "pattern": "\\d+"
-        },
-        "max": {
-            "type": "string",
-            "pattern": "(\\d+|\\*)"
-        },
-        "label__results": {
-            "oneOf": [
-                {
-                    "type": "string",
-                    "pattern": "[a-z][a-zA-Z0-9_]*"
-                },
-                {
-                    "type": "string",
-                    "pattern": "[A-Z_][a-zA-Z0-9_]*"
-                }
-            ],
-            "type": "string"
-        },
-        "entity_ref__": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "context__": {
-            "type": "string",
-            "pattern": "[a-z][a-zA-Z0-9_]*"
-        },
-        "functions__": {
-            "type": "string",
-            "pattern": "frequency|minimum|maximum|average|stddev"
-        },
-        "attribute__": {
-            "type": "string",
-            "pattern": "[^\\n\\r ].*"
-        },
-        "function": {
-            "properties": {
-                "functionName": {
-                    "type": "string",
-                    "$ref": "#/$defs/function_name"
-                },
-                "arguments": {
-                    "type": "array",
-                    "items": {
-                        "$ref": "#/$defs/arguments"
-                    },
-                    "minItems": 1
-                }
-            },
-            "required": [
-                "functionName",
-                "arguments"
-            ]
-        },
-        "function_name": {
-            "type": "string",
-            "pattern": "length|size|range|position|min|max|century|year|month|day"
-        },
-        "arguments": {
-            "properties": {
-                "entity": {
-                    "type": "string",
-                    "$ref": "#/$defs/entity"
-                },
-                "function": {
-                    "type": "object",
-                    "$ref": "#/$defs/function"
-                },
-                "argumentNumber": {
-                    "type": "string",
-                    "$ref": "#/$defs/argument_number"
-                },
-                "argumentString": {
-                    "type": "string",
-                    "$ref": "#/$defs/argument_string"
-                }
-            },
-            "oneOf": [
-                {
-                    "required": [
-                        "entity"
-                    ]
-                },
-                {
-                    "required": [
-                        "function"
-                    ]
-                },
-                {
-                    "required": [
-                        "argumentNumber"
-                    ]
-                },
-                {
-                    "required": [
-                        "argumentString"
-                    ]
-                }
-            ]
-        },
-        "argument_number": {
-            "type": "string",
-            "pattern": "-?([0-9]+[.])?[0-9]+[smy]?|[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?)(\\s*[*\\/+-]\\s*[(]*([a-zA-Z][a-zA-Z0-9.]*|-?([0-9]+[.])?[0-9]+[smy]?))+[)]*"
-        },
-        "argument_string": {
-            "type": "string",
-            "pattern": "('.+'|\".+\")"
-        }
-    },
-    "properties": {
         "query": {
             "type": "array",
             "items": {
-                "$ref": "#/$defs/query"
+                "anyOf": [
+                    {
+                        "required": [
+                            "quantification"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "sequence"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "set"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "unit"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "constraint"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "quantification": {
+                        "$ref": "#/$defs/quantification"
+                    },
+                    "sequence": {
+                        "$ref": "#/$defs/sequence"
+                    },
+                    "set": {
+                        "$ref": "#/$defs/set"
+                    },
+                    "unit": {
+                        "$ref": "#/$defs/unit"
+                    },
+                    "constraint": {
+                        "$ref": "#/$defs/constraint"
+                    }
+                },
+                "type": "object"
             },
             "minItems": 1
+        }
+    },
+    "type": "object",
+    "properties": {
+        "query": {
+            "$ref": "#/$defs/query"
         },
         "results": {
-            "type": "array",
-            "items": {
-                "$ref": "#/$defs/results"
-            },
-            "minItems": 1
+            "$ref": "#/$defs/results"
+        }
+    },
+    "required": [
+        "query",
+        "results"
+    ],
+    "skips": {
+        "operandLeft": [
+            "math"
+        ],
+        "operandRight": [
+            "math"
+        ],
+        "constraints": [
+            "constraint"
+        ],
+        "results": [
+            "result"
+        ],
+        "resultsPlainContext": [
+            "label"
+        ],
+        "resultsPlainEntities": [
+            "label"
+        ],
+        "resultsAnalysisAttributes": [
+            "labelOrAttribute"
+        ]
+    },
+    "renames": {
+        "resultsPlain": {
+            "resultsPlainContext": "context",
+            "resultsPlainEntities": "entities"
+        },
+        "resultsAnalysis": {
+            "resultsAnalysisAttributes": "attributes",
+            "resultsAnalysisFunctions": "functions",
+            "resultsAnalysisFilter": "filter"
+        },
+        "resultsCollocation": {
+            "resultsCollocationSpace": "space",
+            "resultsCollocationAttribute": "attribute",
+            "resultsCollocationCenter": "center"
         }
     }
 }

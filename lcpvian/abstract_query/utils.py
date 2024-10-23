@@ -192,22 +192,24 @@ def _bound_label(
 def _parse_comparison(
     comparison_object: dict,
 ) -> tuple[dict[str, Any], str, str, QueryType]:
-    assert "left" in comparison_object, KeyError("Couldn't find 'left' in comparison")
-    assert "operator" in comparison_object, KeyError(
-        "Couldn't find 'operator' in comparison"
+    left, right, comparator = (
+        comparison_object.get(x) for x in ("left", "right", "comparator")
     )
-    typ, right = next(
-        (a for a in comparison_object.items() if a[0].endswith("Comparison")),
-        (None, None),
+    assert left, KeyError(f"Couldn't find 'left' in comparison ({comparison_object})")
+    assert right, KeyError(f"Couldn't find 'right' in comparison ({comparison_object})")
+    assert comparator, KeyError(
+        f"Couldn't find 'comparator' in comparison ({comparison_object})"
     )
-    assert typ, KeyError("Couldn't find 'xyzComparison' in comparison")
-    key = cast(dict[str, Any], comparison_object["left"])
-    op = comparison_object["operator"]
-    if typ in ("stringComparison", "regexComparison"):
-        right = cast(str, right)[1:-1]
-    if op in (">=", "<=", ">", "<") and typ != "functionComparison":
-        typ = "mathComparison"  # Overwrite comparison type
-    return (key, cast(str, op), cast(str, typ), cast(str, right))
+
+    key = cast(dict[str, Any], left)
+    op = cast(str, comparator)
+    # op = comparison_object["comparator"]
+    # if typ in ("stringComparison", "regexComparison"):
+    #     right = cast(str, right)[1:-1]
+    # if op in (">=", "<=", ">", "<") and typ != "functionComparison":
+    #     typ = "mathComparison"  # Overwrite comparison type
+    # return (key, cast(str, op), cast(str, typ), cast(str, right))
+    return (key, op, "dummyType", right)
 
 
 def _label_layer(

@@ -254,16 +254,12 @@ class Constraint:
         """
         self.field_function = field.get("function", {})
         self.left = field
-        self.field = field.get("entity", "")
+        self.field = field.get("label", "")
         self._layer_info = self._get_layer_info(conf, layer)
         self._attribs = cast(dict[str, Any], self._layer_info.get("attributes", {}))
         self.type = typ
         self._query = query
-        self._query_variable = (
-            typ == "entity"
-            and "." in cast(str, query)
-            and cast(str, query).count(".") == 1
-        )
+        self._query_variable = "attribute" in cast(dict, query)
         self.op = self._standardise_op(op)
         self.label = label
         self.quantor = quantor
@@ -1082,47 +1078,48 @@ def _get_constraint(
             return None
         # This is a hack that needs to be improved to not ignore empty tokens in sequences
         constraint = {
-            "comparison": {"entity": "_", "operator": "=", "entityComparison": "_"}
+            "comparison": {
+                "left": {"string": "_"},
+                "operator": "=",
+                "right": {"string": "_"},
+            }
         }
 
     comp = cast(dict[str, Any], constraint.get("comparison", {}))
-    assert (
-        "left" in comp and "operator" in comp
-    ), "left and/or operator not found in comparison"
-
-    key, op, comparison_type, query = _parse_comparison(comp)
-    key_str: str = key.get("entity", "")
+    left, comparator, _, right = _parse_comparison(comp)
 
     is_time_anchored = _is_anchored(conf.config, layer, "time")
 
     # Use a TimeConstraint if the right-hand side of a math comparison contains a time unit (ie ending in \d(s|m|ms|h|d|w))
     if (
-        is_time_anchored
-        and key.get("entity", "") in ("start", "end")
-        and comparison_type == "mathComparison"
+        False
+        # and is_time_anchored
+        # and key.get("entity", "") in ("start", "end")
+        # and comparison_type == "mathComparison"
     ):  # and re.match(r".*\d(s|m|ms|h|d|w)([\s()*/+-]|$)",query):
         rest: dict = {
-            "boundary": "start" if "start" in key_str.lower() else "end",
-            "comp1": key,
-            "obj": query,
-            "comp2": query,
-            "diff": re.sub(
-                r"^.*?([0-9][0-9.]*(s|m|ms|h|d|w)?).*$", "\\1", cast(str, query)
-            ),
-            "op": op,
+            #     "boundary": "start" if "start" in key_str.lower() else "end",
+            #     "comp1": key,
+            #     "obj": query,
+            #     "comp2": query,
+            #     "diff": re.sub(
+            #         r"^.*?([0-9][0-9.]*(s|m|ms|h|d|w)?).*$", "\\1", cast(str, query)
+            #     ),
+            #     "op": op,
         }
         return TimeConstraint(
             conf.schema, layer, label, quantor, label_layer, conf, **rest
         )
     else:
         return Constraint(
-            key,
-            op,
-            query,
+            left,
+            comparator,
+            right,
             label,
             layer,
             conf,
-            comparison_type.replace("Comparison", ""),
+            "dummyType",
+            # comparison_type.replace("Comparison", ""),
             quantor,
             label_layer,
             entities,
