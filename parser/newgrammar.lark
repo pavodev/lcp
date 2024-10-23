@@ -1,6 +1,6 @@
 part_of : "@"label
 
-operator : ("+"|"-"|"/"|"*")
+operator : OPERATOR
 operand_left : math                                   // skip: math
 operand_right : math                                  // skip: math
 operation : operand_left operator operand_right
@@ -114,6 +114,8 @@ ATTRIBUTE : /[a-z][a-zA-Z0-9_]+(\.([a-zA-Z0-9_]+))+/
 
 DOUBLE_QUOTED_STRING : /"[^"\n]*"/
 REGEX           : /\/.+\//
+
+OPERATOR : ("+"|"-"|"/"|"*")
 
 DL_COMMENT      : /<#(>|#*[^#>]+)*#+>/ _NL
 
