@@ -38,7 +38,7 @@ While browsing the corpora can be done without it, any further action requires t
 LCP uses a dedicated query language called [DQD](dqd.md). To start out, LCP provides example queries for each corpus, with comments guiding the user through their first query. As you are getting to know the platform, you are invited to play around with the existing queries and see how the results change. To start a query, click “Submit”. 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
-  <img src="images/example_query_in_corpus.png" alt="alt" width="550"/>
+  <img src="images/example_query_in_corpus.png" alt="alt" width="650"/>
 </p>
 
 Once the results start showing up, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here.  of the results can be found [here](results.md). 
