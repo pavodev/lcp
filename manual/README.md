@@ -44,7 +44,7 @@ LCP uses a dedicated query language called [DQD](dqd.md). To start out, LCP prov
 Once the results start showing up, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here. Read more on the [visualization of results here](results.md). 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
-  <img src="images/Hover_over_results.png" alt="alt" width="550"/>
+  <img src="images/Hover_over_results.png" alt="alt" width="450"/>
 </p>
 Note that in this example, the query specified being interested in KWIC and NounDist; both are variables set by the user. To explore how to adapt your queries, see [Querying](querying.md). 
 
