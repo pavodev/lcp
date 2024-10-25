@@ -19,23 +19,28 @@ Users can query corpora directly from their browser and upload their own corpora
 - [Text+Berg-Korpus - Alpine Journal](http://textberg.ch/site/de/willkommen/) – text corpus
 - [corpus Oral de Français de Suisse Romande (OFROM)](https://ofrom.unine.ch/) - speech corpus
 
-### First Steps and Login
-Upon accessing LCP via https://lcp.linguistik.uzh.ch/  you can browse the publicly available corpora.  This screenshot shows the current selection, but keep in mind the list will expand over time. 
+## First Steps
+Upon accessing LCP via [lcp.linguistik.uzh.ch](https://lcp.linguistik.uzh.ch/)  you can browse the publicly available corpora.  This screenshot shows the current selection, but keep in mind the list will expand over time. 
 
 ((Put in current screenshot as soon as platform is ready))
 
-As you notice, four of the five currently available corpora are shaded in green; this tells you that those are text corpora, and therefore can be queried in Catchphrase. Accordingly, the OFROM corpus is shaded in blue: This is because this corpus contains audio data, and can therefore also be queried via Soundscript. Alternatively, hovering over the bottom right corner of a corpus lets you know which application is available. 
+The corpora are shaded according to their modality/modalities. E.g., green tells you that those are text corpora, and therefore can be queried in Catchphrase. Accordingly, the OFROM corpus is shaded in blue. Alternatively, hovering over the bottom right corner of a corpus lets you know which application is available. 
 
 Navigating directly to any of the three interfaces at the top, e.g., on the blue “Soundscript” button, will filter the corpora accordingly. 
 
-Clicking on one of the provided corpora reveals more details of the contained dataset, including the word count and information on the available metadata and parts of speech that can be queried for this corpus. Please note that the available metadata differs among the various datasets. 
+Clicking on one of the provided corpora reveals more details of the contained dataset, including the word count and information on the available metadata and parts of speech that can be queried for this corpus. Please note that the available metadata differs among the various datasets. See more information on the corpus structure on [Corpora in LCP](corpora_in_lcp.md). 
 
-((add what "structure tree" of each corpus tells us))
 
 #### Login
-While browsing the corpora can be done without it, querying them requires the user to log in. The user will be prompted to do so when trying to access one of the corpora (clicking on one of the available interfaces as shown in the top left) or by navigating to the login option on the top right. You will be asked to login using your SWITCH edu-ID or your institutional access. If you cannot find your institution in any of the provided options, please create e new switch-edu-login. You can do so [here](https://eduid.ch/registration). 
+While browsing the corpora can be done without it, any further action requires the user to log in. You will be prompted to do so when trying to access one of the corpora (clicking on one of the available interfaces as shown in the top left) or by navigating to the login option on the top right. You will be asked to login using your SWITCH edu-ID or institutional access. If you cannot find your institution in any of the provided options, please create e new switch-edu-login. You can do so [here](https://eduid.ch/registration). 
 
 #### Querying corpora
+LCP uses a dedicated query language called DQD. A in depth description of this language can be found [here](dqd.md). To start out, LCP provides example queries for each corpus, with comments guiding the user through their first query. As you are getting to know the platform, you are invited to play around with the existing queries and see how the results change. To start a query, click “Submit”. 
+
+Once the results start showing up below, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here. 
+<p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
+  <img src="images/Hover_over_results.png" alt="alt" width="550"/>
+</p>
 
 
 #### Beta Testing
