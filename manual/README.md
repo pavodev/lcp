@@ -37,11 +37,12 @@ While browsing the corpora can be done without it, any further action requires t
 #### Querying corpora
 LCP uses a dedicated query language called DQD. A in depth description of this language can be found [here](dqd.md). To start out, LCP provides example queries for each corpus, with comments guiding the user through their first query. As you are getting to know the platform, you are invited to play around with the existing queries and see how the results change. To start a query, click “Submit”. 
 
-Once the results start showing up below, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here. 
+Once the results start showing up below, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here. For a further description on the results, please refer to [Results](results.md). 
+
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/Hover_over_results.png" alt="alt" width="550"/>
 </p>
-Note that in this example, the query specified being interested in KWIC and NounDist; both are variables set by the user. To explore how to adapt your queries, see [Querying](querying.md). For a further description on the results, please refer to [Results](results.md). 
+Note that in this example, the query specified being interested in KWIC and NounDist; both are variables set by the user. To explore how to adapt your queries, see [Querying](querying.md). 
 
 #### Beta Testing
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
