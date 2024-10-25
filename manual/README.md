@@ -41,11 +41,12 @@ Once the results start showing up below, several pieces of information are acces
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/Hover_over_results.png" alt="alt" width="550"/>
 </p>
-
+Note that in this example, the query specified being interested in KWIC and NounDist; both are variables set by the user. To explore how to adapt your queries, see [Querying](querying.md). For a further description on the results, please refer to [Results](results.md). 
 
 #### Beta Testing
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
 Feel free to report any feedback or bugs to ((add email address here)).
+((Is this okay?))
 
 
 
