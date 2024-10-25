@@ -19,9 +19,29 @@ Users can query corpora directly from their browser and upload their own corpora
 - [Text+Berg-Korpus - Alpine Journal](http://textberg.ch/site/de/willkommen/) – text corpus
 - [corpus Oral de Français de Suisse Romande (OFROM)](https://ofrom.unine.ch/) - speech corpus
 
+### First Steps and Login
+Upon accessing LCP via https://lcp.linguistik.uzh.ch/  you can browse the publicly available corpora.  This screenshot shows the current selection, but keep in mind the list will expand over time. 
+
+((Put in current screenshot as soon as platform is ready))
+
+As you notice, four of the five currently available corpora are shaded in green; this tells you that those are text corpora, and therefore can be queried in Catchphrase. Accordingly, the OFROM corpus is shaded in blue: This is because this corpus contains audio data, and can therefore also be queried via Soundscript. Alternatively, hovering over the bottom right corner of a corpus lets you know which application is available. 
+
+Navigating directly to any of the three interfaces at the top, e.g., on the blue “Soundscript” button, will filter the corpora accordingly. 
+
+Clicking on one of the provided corpora reveals more details of the contained dataset, including the word count and information on the available metadata and parts of speech that can be queried for this corpus. Please note that the available metadata differs among the various datasets. 
+
+((add what "structure tree" of each corpus tells us))
+
+#### Login
+While browsing the corpora can be done without it, querying them requires the user to log in. The user will be prompted to do so when trying to access one of the corpora (clicking on one of the available interfaces as shown in the top left) or by navigating to the login option on the top right. You will be asked to login using your SWITCH edu-ID or your institutional access. If you cannot find your institution in any of the provided options, please create e new switch-edu-login. You can do so [here](https://eduid.ch/registration). 
+
+#### Querying corpora
+
+
 #### Beta Testing
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
 Feel free to report any feedback or bugs to ((add email address here)).
+
 
 
 #### Further Links
