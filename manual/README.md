@@ -50,7 +50,7 @@ Note that in this example, the query specified being interested in KWIC and Noun
 
 #### Beta Testing 
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
-Feel free to report any feedback or bugs to ((add email address here)).
+Feel free to report any feedback or bugs to [lcp@linguistik.uzh.ch](lcp@linguistik.uzh.ch).
 ((Is this okay?))
 
 
