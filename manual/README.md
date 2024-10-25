@@ -41,14 +41,14 @@ LCP uses a dedicated query language called [DQD](dqd.md). To start out, LCP prov
   <img src="images/example_query_in_corpus.png" alt="alt" width="650"/>
 </p>
 
-Once the results start showing up, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here.  of the results can be found [here](results.md). 
+Once the results start showing up, several pieces of information are accessible by hovering over the various symbols and the individual tokens, such as form, lemma and part of speech as shown here. Read more on the [visualization of results here](results.md). 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/Hover_over_results.png" alt="alt" width="550"/>
 </p>
 Note that in this example, the query specified being interested in KWIC and NounDist; both are variables set by the user. To explore how to adapt your queries, see [Querying](querying.md). 
 
-#### Beta Testing
+#### Beta Testing 
 LCP is currently in beta testing. The platform is free to use during this period as we gather input to improve it.
 Feel free to report any feedback or bugs to ((add email address here)).
 ((Is this okay?))
