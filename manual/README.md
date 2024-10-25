@@ -11,9 +11,9 @@
 
 **3. [Videoscope](videoscope.md) is optimized for working with audiovisual/video corpora:** Use it for viewing and querying audiovisual corpora based on video, that can include annotations on the media stream or text. The interface includes a video player and a timeline annotation preview. Querying results will output multimodal results and you can use them to navigate to the video recording.
 
-Importantly, all interfaces are powered by LCP and use the same unified query language, which has specific functions for different datatypes. The advantage of the separation into separate access points is their customization optimized to specific corpus modalities. Read more on the query language [DQD](dqd.md) and how to [build queries here](querying.md). By the end of 2024, digital editions will also be implemented and added to LCP system. <!--This last sentence was written in the earlier version of README.md-->
+Importantly, all interfaces are powered by LCP and use the same unified query language, which has specific functions for different datatypes. The advantage of the separation into separate access points is their customization optimized to specific corpus modalities. By the end of 2024, digital editions will also be implemented and added to LCP system. <!--This last sentence was written in the earlier version of README.md-->
 
-Users can query corpora directly from their browser and upload their own corpora using a command-line interface (for more information, please check [Importing](importing.md)). Currently, the following corpora are publicly available in LCP:
+Users can [query](querying.md) corpora directly from their browser and [import their own corpora](importing.md) using a command-line interface. Currently, the following corpora are publicly available in LCP:
 
 - [British National Corpus (BNC)](http://www.natcorp.ox.ac.uk/) – text corpus
 - [Text+Berg-Korpus - Alpine Journal](http://textberg.ch/site/de/willkommen/) – text corpus
