@@ -193,9 +193,11 @@ class ResultsMaker:
                 #    self.r.entities.add(s)
             elif "resultsAnalysis" in cast(JSONObject, result):
                 stat = cast(JSONObject, result["resultsAnalysis"])
-                attr = cast(list[str], stat.get("attributes", []))
+                attr = cast(list[str | dict], stat.get("attributes", []))
                 for a in attr:
-                    lab: str = a.split(".", 1)[0].lower()
+                    if not isinstance(a, dict) or not "attribute" in a:
+                        continue
+                    lab: str = cast(dict, a)["attribute"].split(".", 1)[0].lower()
                     assert lab in legal_refs, ReferenceError(
                         f"Label {lab} cannot be referenced (is not declared or scope-bound)"
                     )
@@ -377,12 +379,15 @@ class ResultsMaker:
         """
         Process a stats request
         """
-        attributes = cast(list[str], result["attributes"])
+        attributes = cast(list[str | dict], result["attributes"])
         for att in attributes:
-            lab = att.replace(".", "_").lower().strip()
-            shortest = att.split(".", 1)[0]
+            if not isinstance(att, dict) or "attribute" not in att:
+                continue
+            att_str = cast(dict, att)["attribute"]
+            lab = att_str.replace(".", "_").lower().strip()
+            shortest = att_str.split(".", 1)[0]
             shortest = self._label_mapping.get(shortest, shortest)
-            field = att.split(".")[-1]
+            field = att_str.split(".")[-1]
             layer, _ = self.r.label_layer[shortest]
             layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
             table = _get_table(layer, self.config, self.batch, self.lang)
@@ -416,7 +421,11 @@ class ResultsMaker:
         functions = cast(list[str], result["functions"])
         filt = cast(JSONObject, result.get("filter", {}))
         made, meta, filter_meta = self._stat_analysis(
-            i, varname, attributes, functions, filt
+            i,
+            varname,
+            [a.get("attribute", "") for a in attributes if isinstance(a, dict)],
+            functions,
+            filt,
         )
         return made, meta, filter_meta
 
