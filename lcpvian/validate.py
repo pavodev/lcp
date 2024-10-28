@@ -43,7 +43,7 @@ async def validate(
             tb = traceback.format_exc()
             print("Error during DQD->JSON:", err, tb)
             all_errors = []
-            if err.__class__ is UnexpectedToken:
+            if isinstance(err, UnexpectedToken):
                 error = cast(UnexpectedToken, err)
                 error_obj = {
                     "end_line": error.line,

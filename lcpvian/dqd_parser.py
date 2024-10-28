@@ -85,7 +85,7 @@ def get_specs(name, schema) -> dict:
 def dqd_component(component, schema_obj):
     schema = schema_obj.schema
     json_obj = {}
-    if component.__class__ is Token:
+    if isinstance(component, Token):
         return component.value
     key = component.data
     key = re.sub(r"_(.)", lambda m: m[1].upper(), key)
@@ -96,7 +96,7 @@ def dqd_component(component, schema_obj):
         processed_children = [
             (
                 next(x for x in c.values())
-                if c.__class__ is dict and next(x for x in c) in sk
+                if isinstance(c, dict) and next(x for x in c) in sk
                 else c
             )
             for c in processed_children
@@ -118,17 +118,17 @@ def dqd_component(component, schema_obj):
         }
     elif typ == "string":
         children_strings = [
-            (next(x for x in c.values()) if c.__class__ is dict else c)
+            (next(x for x in c.values()) if isinstance(c, dict) else c)
             for c in processed_children
         ]
         assert all(
-            c.__class__ is str for c in children_strings
+            isinstance(c, str) for c in children_strings
         ), f"Non-string found for {key} ({children_strings})"
         value = "".join(children_strings)  # type: ignore
         json_obj[key] = value
-    elif "string" in typ and processed_children[0].__class__ is str:
+    elif "string" in typ and isinstance(processed_children[0], str):
         json_obj[key] = processed_children[0]
-    elif "object" in typ and processed_children[0].__class__ is dict:
+    elif "object" in typ and isinstance(processed_children[0], dict):
         obj = {
             next(x for x in c.keys()): next(x for x in c.values())
             for c in processed_children
@@ -148,7 +148,7 @@ def dqd_component(component, schema_obj):
     # One exception for functionName: remove trailing (
     if key in VALUE_FILTERS:
         json_obj[key] = VALUE_FILTERS[key](json_obj[key])
-    if json_obj[key].__class__ is dict and key in schema_obj.renames:
+    if isinstance(json_obj[key], dict) and key in schema_obj.renames:
         # Do any renaming necessary
         rnm = schema_obj.renames[key]
         obj = {rnm.get(k, k): v for k, v in json_obj[key].items()}

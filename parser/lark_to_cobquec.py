@@ -117,7 +117,7 @@ class Schema:
         return o
 
     def get_value_of_terminal(self, terminal, name="") -> str:
-        if terminal.__class__ is not Token:
+        if not isinstance(terminal, Token):
             if len(terminal.children) == 1:
                 return self.get_value_of_terminal(terminal.children[0], name=name)
             else:
@@ -223,7 +223,7 @@ class Schema:
             body = self.process_expansion(node)
         elif node.data == "value":
             first_child = node.children[0]
-            if first_child.__class__ is NonTerminal:
+            if isinstance(first_child, NonTerminal):
                 if first_child.name in self.ignores:
                     return None
                 rn = underscore_to_camel(first_child.name)
