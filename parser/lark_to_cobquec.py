@@ -17,6 +17,12 @@ test_grammar: str = open(
     os.path.join(os.path.dirname(__file__), GRAMMAR_FILENAME)
 ).read()
 
+PATTERN_FILTERS: dict = {
+    "REGEX": lambda p: p[2:-2],  # remove slashes
+    "DOUBLE_QUOTED_STRING": lambda p: p[1:-1],  # remove double quotes
+    "FUNCTION_NAME": lambda p: re.sub("\\($", "(?", p),  # make trailing "(" optional
+}
+
 
 class TreeIndenter(Indenter):
     NL_type: str = "_NL"
@@ -110,20 +116,22 @@ class Schema:
             o.append({"type": "string", "pattern": f"({disjunction})"})
         return o
 
-    def get_value_of_terminal(self, terminal) -> str:
+    def get_value_of_terminal(self, terminal, name="") -> str:
         if terminal.__class__ is not Token:
             if len(terminal.children) == 1:
-                return self.get_value_of_terminal(terminal.children[0])
+                return self.get_value_of_terminal(terminal.children[0], name=name)
             else:
-                disjuncts = [self.get_value_of_terminal(c) for c in terminal.children]
+                disjuncts = [
+                    self.get_value_of_terminal(c, name=name) for c in terminal.children
+                ]
                 return "(" + "|".join(disjuncts) + ")"
         value = ""
         if terminal.type == "REGEXP":
             value = re.sub(r"/(.+)/.*", "\\1", terminal.value)
         else:
-            # remove trailing ( in function names
-            value = terminal.value[1:-1].rstrip("(")
-            value = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], value)
+            value = re.sub('([+*?"(){}])', lambda m: "\\" + m[0], terminal.value[1:-1])
+        if name in PATTERN_FILTERS:
+            value = PATTERN_FILTERS[name](value)
         return value
 
     def get_terminal_regex(self, name) -> str:
@@ -132,7 +140,7 @@ class Schema:
             expansions = term[1][0]
             disjuncts: list[str] = []
             for expansion in expansions.children:
-                value = self.get_value_of_terminal(expansion)
+                value = self.get_value_of_terminal(expansion, name=name)
                 disjuncts.append(value)
             if len(disjuncts) > 1:
                 rgx = "(" + "|".join(d for d in disjuncts) + ")"

@@ -12,6 +12,12 @@ from lark.lexer import Token
 
 # from .cqp_to_json import cqp_to_json
 
+VALUE_FILTERS: dict = {
+    "regex": lambda p: p[1:-1],  # remove slashes
+    "string": lambda p: p[1:-1],  # remove double quotes
+    "functionName": lambda p: p.removesuffix("("),  # remove trailing "("
+}
+
 PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "parser"))
 PARSER_FILES = [os.path.join(PARSER_PATH, f) for f in sorted(os.listdir(PARSER_PATH))]
 
@@ -140,8 +146,8 @@ def dqd_component(component, schema_obj):
     else:
         assert False, f"Type not supported: {typ}"
     # One exception for functionName: remove trailing (
-    if key == "functionName":
-        json_obj[key] = json_obj[key].removesuffix("(")
+    if key in VALUE_FILTERS:
+        json_obj[key] = VALUE_FILTERS[key](json_obj[key])
     if json_obj[key].__class__ is dict and key in schema_obj.renames:
         # Do any renaming necessary
         rnm = schema_obj.renames[key]
