@@ -6,7 +6,7 @@
         },
         "operator": {
             "type": "string",
-            "pattern": "(\\+|-|/|\\*)"
+            "pattern": "(\\+|-|\\/|\\*)"
         },
         "operandLeft": {
             "anyOf": [
@@ -22,7 +22,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
                 }
             ],
             "properties": {
@@ -52,7 +52,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
                 }
             ],
             "properties": {
@@ -101,7 +101,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9]|-[1-9]*[0-9])"
+                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
                 }
             ],
             "properties": {
@@ -277,7 +277,7 @@
         },
         "functionName": {
             "type": "string",
-            "pattern": "(length|size|range|position|start|end|century|date|year|day)"
+            "pattern": "(length\\(?|size\\(?|range\\(?|position\\(?|start\\(?|end\\(?|century\\(?|date\\(?|year\\(?|day\\(?)"
         },
         "function": {
             "type": "object",
@@ -296,11 +296,11 @@
         },
         "regex": {
             "type": "string",
-            "pattern": "\\/.+\\/"
+            "pattern": ".+"
         },
         "string": {
             "type": "string",
-            "pattern": "\"[^\"\\n]*\""
+            "pattern": "[^\\n]*?"
         },
         "attribute": {
             "type": "string",
@@ -310,13 +310,13 @@
             "type": "string",
             "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
         },
+        "entity": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+        },
         "layer": {
             "type": "string",
             "pattern": "[A-Z][a-zA-Z0-9_]+"
-        },
-        "labelOrAttribute": {
-            "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "left": {
             "anyOf": [
@@ -686,14 +686,14 @@
         "resultsPlainContext": {
             "type": "array",
             "items": {
-                "$ref": "#/$defs/label"
+                "$ref": "#/$defs/entity"
             },
             "minItems": 1
         },
         "resultsPlainEntities": {
             "type": "array",
             "items": {
-                "$ref": "#/$defs/label"
+                "$ref": "#/$defs/entity"
             },
             "minItems": 1
         },
@@ -718,7 +718,27 @@
         "resultsAnalysisAttributes": {
             "type": "array",
             "items": {
-                "$ref": "#/$defs/labelOrAttribute"
+                "anyOf": [
+                    {
+                        "required": [
+                            "attribute"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "function"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "attribute": {
+                        "$ref": "#/$defs/attribute"
+                    },
+                    "function": {
+                        "$ref": "#/$defs/function"
+                    }
+                },
+                "type": "object"
             },
             "minItems": 1
         },
@@ -805,21 +825,29 @@
             "anyOf": [
                 {
                     "required": [
+                        "entity"
+                    ]
+                },
+                {
+                    "required": [
                         "attribute"
                     ]
                 },
                 {
                     "required": [
-                        "label"
+                        "function"
                     ]
                 }
             ],
             "properties": {
+                "entity": {
+                    "$ref": "#/$defs/entity"
+                },
                 "attribute": {
                     "$ref": "#/$defs/attribute"
                 },
-                "label": {
-                    "$ref": "#/$defs/label"
+                "function": {
+                    "$ref": "#/$defs/function"
                 }
             },
             "type": "object"
@@ -903,13 +931,10 @@
             "result"
         ],
         "resultsPlainContext": [
-            "label"
+            "entity"
         ],
         "resultsPlainEntities": [
-            "label"
-        ],
-        "resultsAnalysisAttributes": [
-            "labelOrAttribute"
+            "entity"
         ]
     },
     "renames": {

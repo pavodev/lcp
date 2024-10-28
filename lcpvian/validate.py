@@ -1,7 +1,7 @@
 import json
 import traceback
 
-from lark.exceptions import UnexpectedInput, UnexpectedToken
+from lark.exceptions import UnexpectedToken
 from typing import cast, Any
 
 from .dqd_parser import convert
@@ -67,6 +67,9 @@ async def validate(
                         error_obj["value"] = val
                         all_errors.append(error_obj)
                 else:
+                    error_obj["start_pos"] = error_obj.get("end_pos", 0)
+                    error_obj["line"] = error_obj.get("end_line", 0)
+                    error_obj["column"] = error_obj.get("end_column", 0)
                     all_errors.append(error_obj)
             result = {
                 "kind": "dqd?",
