@@ -1,6 +1,7 @@
 import json
 import traceback
 
+from lark.exceptions import UnexpectedInput, UnexpectedToken
 from typing import cast, Any
 
 from .dqd_parser import convert
@@ -41,11 +42,38 @@ async def validate(
         except Exception as err:
             tb = traceback.format_exc()
             print("Error during DQD->JSON:", err, tb)
+            all_errors = []
+            if err.__class__ is UnexpectedToken:
+                error = cast(UnexpectedToken, err)
+                error_obj = {
+                    "end_line": error.line,
+                    "end_column": max(error.column - 1, 0),
+                    "end_pos": max((error.pos_in_stream or 1) - 1, 0),
+                }
+                if th := error.token_history:
+                    for t in th:
+                        val = t.value
+                        val_len = len(val)
+                        error_obj["start_pos"] = max(
+                            error_obj.get("end_pos", 0) - val_len, 0
+                        )
+                        error_obj["line"] = max(
+                            error_obj.get("end_line", 0) - val.count("\n"), 0
+                        )
+                        error_obj["column"] = max(
+                            error_obj.get("end_column", 0) - val_len, 0
+                        )
+                        error_obj["type"] = t.type
+                        error_obj["value"] = val
+                        all_errors.append(error_obj)
+                else:
+                    all_errors.append(error_obj)
             result = {
                 "kind": "dqd?",
                 "valid": False,
                 "action": "validate",
                 "error": str(err),
+                "errorList": all_errors,
                 "status": 400,
                 "traceback": tb,
             }

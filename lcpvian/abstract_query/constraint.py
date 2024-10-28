@@ -522,7 +522,7 @@ class Constraint:
                 assert (
                     field_type == "dict"
                     and field_mapping_type == "relation"
-                    and global_ref
+                    # and global_ref
                 ), ReferenceError(
                     f"Cannot reference sub-attributes on {ref_label}.{ref_field}"
                 )

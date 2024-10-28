@@ -244,6 +244,10 @@
                       ? isQueryValidData.error
                       : null
                   "
+                  :errorList="isQueryValidData && isQueryValidData.valid != true
+                      ? isQueryValidData.errorList
+                      : null
+                  "
                   @submit="submit"
                   @update="updateQueryDQD"
                 />
@@ -1106,6 +1110,7 @@ export default {
             this.query = JSON.stringify(data.json, null, 2);
           }
           this.isQueryValidData = data;
+          console.log("isQueryValidData", data);
           return;
         }
         if (data["action"] === "stats") {
