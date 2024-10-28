@@ -22,7 +22,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -34,8 +34,8 @@
                 }
             },
             "type": [
-                "string",
-                "object"
+                "object",
+                "string"
             ]
         },
         "operandRight": {
@@ -52,7 +52,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -64,8 +64,8 @@
                 }
             },
             "type": [
-                "string",
-                "object"
+                "object",
+                "string"
             ]
         },
         "operation": {
@@ -101,7 +101,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "([1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -113,8 +113,8 @@
                 }
             },
             "type": [
-                "string",
-                "object"
+                "object",
+                "string"
             ]
         },
         "min": {
@@ -177,7 +177,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "(((~|\u00ac|!|not )?EXISTS)|(ALL(~|\u00ac|!|not )?))"
+            "pattern": "(((~|\u00ac|!|not )?EXISTS)|((~|\u00ac|!|not )?ALL))"
         },
         "quantification": {
             "type": "object",
@@ -222,7 +222,7 @@
                 "anyOf": [
                     {
                         "required": [
-                            "label"
+                            "entity"
                         ]
                     },
                     {
@@ -252,8 +252,8 @@
                     }
                 ],
                 "properties": {
-                    "label": {
-                        "$ref": "#/$defs/label"
+                    "entity": {
+                        "$ref": "#/$defs/entity"
                     },
                     "function": {
                         "$ref": "#/$defs/function"
@@ -314,6 +314,10 @@
             "type": "string",
             "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
         },
+        "reference": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+        },
         "layer": {
             "type": "string",
             "pattern": "[A-Z][a-zA-Z0-9_]+"
@@ -327,7 +331,7 @@
                 },
                 {
                     "required": [
-                        "label"
+                        "reference"
                     ]
                 },
                 {
@@ -355,8 +359,8 @@
                 "function": {
                     "$ref": "#/$defs/function"
                 },
-                "label": {
-                    "$ref": "#/$defs/label"
+                "reference": {
+                    "$ref": "#/$defs/reference"
                 },
                 "attribute": {
                     "$ref": "#/$defs/attribute"
@@ -382,7 +386,7 @@
                 },
                 {
                     "required": [
-                        "label"
+                        "reference"
                     ]
                 },
                 {
@@ -410,8 +414,8 @@
                 "function": {
                     "$ref": "#/$defs/function"
                 },
-                "label": {
-                    "$ref": "#/$defs/label"
+                "reference": {
+                    "$ref": "#/$defs/reference"
                 },
                 "attribute": {
                     "$ref": "#/$defs/attribute"
@@ -430,7 +434,7 @@
         },
         "comparator": {
             "type": "string",
-            "pattern": "((~|\u00ac|!|not )?(=|[><]=?|contain))"
+            "pattern": "((=|[><]=?|contain)(~|\u00ac|!|not )?)"
         },
         "comparison": {
             "type": "object",
@@ -804,20 +808,20 @@
             ]
         },
         "resultsCollocationSpace": {
-            "$ref": "#/$defs/label"
+            "$ref": "#/$defs/entity"
         },
         "resultsCollocationCenter": {
             "type": "object",
             "properties": {
-                "label": {
-                    "$ref": "#/$defs/label"
+                "entity": {
+                    "$ref": "#/$defs/entity"
                 },
                 "window": {
                     "$ref": "#/$defs/window"
                 }
             },
             "required": [
-                "label",
+                "entity",
                 "window"
             ]
         },

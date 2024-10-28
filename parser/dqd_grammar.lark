@@ -22,7 +22,7 @@ quantifier : NEGATION? EXISTENTIAL
 
 quantification : quantifier _NL _INDENT (unit | sequence | set) _DEDENT
 
-arguments : ((label | function | attribute | string | regex | math) ","?)+
+arguments : ((entity | function | attribute | string | regex | math) ","?)+
 function_name : FUNCTION_NAME
 function : function_name arguments ")"
 
@@ -30,11 +30,12 @@ regex : REGEX
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
 label : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
-entity : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
+entity : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as an entity reference
+reference : LABEL | ANALYSIS_FUNCTIONS | ATTRIBUTE
 layer : LAYER
 
-left : (function | label | attribute | string | regex | math)
-right : (function | label | attribute | string | regex | math)
+left : (function | reference | attribute | string | regex | math)
+right : (function | reference | attribute | string | regex | math)
 comparator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN)
 
 comparison : left comparator right
@@ -69,8 +70,8 @@ results_analysis_functions : "functions" _NL _INDENT (ANALYSIS_FUNCTIONS _NL*)+ 
 results_analysis_filter : "filter" _NL _INDENT ((comparison | comparison) _NL*)+ _DEDENT // dirty trick to force 'comparison' key after lark_to_cobquec
 
 results_collocation        : "collocation" _NL _INDENT (results_collocation_center | results_collocation_space) results_collocation_attribute _DEDENT  // rename: results_collocation_space>space results_collocation_attribute>attribute results_collocation_center>center
-results_collocation_space : "space" _NL _INDENT label _NL* _DEDENT
-results_collocation_center : "center" _NL _INDENT label _NL _DEDENT "window" _NL _INDENT window _NL _DEDENT
+results_collocation_space : "space" _NL _INDENT entity _NL* _DEDENT
+results_collocation_center : "center" _NL _INDENT entity _NL _DEDENT "window" _NL _INDENT window _NL _DEDENT
 results_collocation_attribute : "attribute" _NL _INDENT (entity|attribute|function) _NL* _DEDENT
 
 query : ((quantification | sequence | set | unit | constraint) _NL*)+
