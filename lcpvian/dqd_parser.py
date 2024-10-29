@@ -13,7 +13,7 @@ from lark.lexer import Token
 # from .cqp_to_json import cqp_to_json
 
 VALUE_FILTERS: dict = {
-    "regex": lambda p: p[1:-1],  # remove slashes
+    "pattern": lambda p: p[1:-1],  # remove slashes
     "string": lambda p: p[1:-1],  # remove double quotes
     "functionName": lambda p: p.removesuffix("("),  # remove trailing "("
 }
