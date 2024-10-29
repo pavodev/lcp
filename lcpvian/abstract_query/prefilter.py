@@ -295,11 +295,10 @@ class Prefilter:
                     return None
                 if _is_prefix(pattern, operator, typ):
                     return SingleNode(attribute, operator, pattern, typ == "regex")
-            elif next(iter(filt[0]), "").startswith("logicalOp"):
+            elif next(iter(filt[0]), "") == "logicalExpression":
                 logic: dict[str, Any] = next(iter(filt[0].values()), {})
-                result = self._attempt_conjunct(
-                    logic.get("args", []), logic.get("operator", "AND")
-                )
+                operator = logic.get("unaryOperator", logic.get("naryOperator", "AND"))
+                result = self._attempt_conjunct(logic.get("args", []), operator)
                 return result
         return None
 
@@ -313,10 +312,12 @@ class Prefilter:
 
         for arg in sorted(filt, key=arg_sort_key):
             # todo recursive ... how to handle?
-            if next(iter(arg), "").startswith("logicalOp"):
+            if next(iter(arg), "") == "logicalExpression":
                 logic: dict[str, Any] = next(iter(arg.values()), {})
                 filt = cast(list[dict[str, Any]], logic.get("args", []))
-                result = self._attempt_conjunct(filt, logic.get("operator", "AND"))
+                result = self._attempt_conjunct(
+                    filt, logic.get("unaryOperator", logic.get("naryOperator", "AND"))
+                )
                 if result:
                     matches.append(result)
                 continue

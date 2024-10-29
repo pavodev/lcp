@@ -175,9 +175,12 @@ def _bound_label(
             for m in obj["sequence"].get("members", []):
                 if _bound_label(label, m, tmp_in_scope):
                     return True
-        if "logicalOpNAry" in obj:
-            tmp_in_scope = obj["logicalOpNAry"].get("operator") == "OR"
-            for a in obj["logicalOpNAry"].get("args", []):
+        if "logicalExpression" in obj:
+            logic = obj["logicalExpresion"]
+            tmp_in_scope = (
+                logic.get("naryOperator") == "OR" or logic.get("unaryOperator") == "NOT"
+            )
+            for a in logic.get("args", []):
                 if _bound_label(label, a, tmp_in_scope):
                     return True
         if obj.get("existentialQuantification", {}).get("quantor", "") == "NOT EXISTS":

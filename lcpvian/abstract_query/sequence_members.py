@@ -34,17 +34,18 @@ class Member:
         if "unit" in obj:
             return [Unit(obj, parent_sequence, depth)]
 
-        elif "logicalOpNAry" in obj:
+        elif logic := obj.get("logicalExpression"):
+            operator = logic.get("naryOperator", "")
             # Convert disjunctions of single tokens as a single token with a disjunction of constraints
-            assert obj["logicalOpNAry"].get("operator") == "OR", TypeError(
+            assert operator == "OR", TypeError(
                 "Invalid logical operator passed to sequence"
             )
-            members: list[dict] = obj["logicalOpNAry"].get("args", [])
+            members: list[dict] = logic.get("args", [])
             if all("unit" in m for m in members):
                 disjunction_constraints: list[dict] = [
                     {
-                        "logicalOpNAry": {
-                            "operator": "OR",
+                        "logicalExpression": {
+                            "naryOperator": "OR",
                             "args": [
                                 c
                                 for m in members
@@ -189,7 +190,7 @@ class Unit(Member):
 class Disjunction(Member):
     def __init__(self, obj: dict, parent_sequence: Sequence, depth: int = 0):
         super().__init__(obj, parent_sequence, depth)
-        args: list = obj["logicalOpNAry"].get("args", [])
+        args: list = obj["logicalExpression"].get("args", [])
         # Don't extract units from sub-sequences when those are inside a disjunction (otherwise they would become disjuncts too!)
         self.members: list[Member] = [
             x

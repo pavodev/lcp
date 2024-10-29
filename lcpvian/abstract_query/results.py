@@ -90,8 +90,8 @@ class ResultsMaker:
                     {x for x in sqlseq._internal_references.values()}
                 )
 
-            elif "logicalOpNAry" in obj:
-                coord = obj["logicalOpNAry"]
+            elif "logicalExpression" in obj:
+                coord = obj["logicalExpression"]
                 for arg in coord["args"]:
                     self.add_query_entities(arg)
             elif "unit" in obj:

@@ -341,7 +341,7 @@ class QueryMaker:
                     obj["unit"]["quantor"] = quantor
 
             # Turn any logical expression into a main constraint
-            if any(x.startswith("logicalOp") for x in obj):
+            if any(x == "logicalExpression" for x in obj):
                 obj = {"args": [obj]}
 
             is_sequence = "sequence" in obj
