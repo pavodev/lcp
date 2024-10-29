@@ -22,7 +22,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -34,8 +34,8 @@
                 }
             },
             "type": [
-                "object",
-                "string"
+                "string",
+                "object"
             ]
         },
         "operandRight": {
@@ -52,7 +52,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -64,8 +64,8 @@
                 }
             },
             "type": [
-                "object",
-                "string"
+                "string",
+                "object"
             ]
         },
         "operation": {
@@ -101,7 +101,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+|[1-9]*[0-9])"
+                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -113,8 +113,8 @@
                 }
             },
             "type": [
-                "object",
-                "string"
+                "string",
+                "object"
             ]
         },
         "min": {
@@ -177,7 +177,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "((EXISTS(~|\u00ac|!|not )?)|(ALL(~|\u00ac|!|not )?))"
+            "pattern": "(((~|\u00ac|!|not )?EXISTS)|(ALL(~|\u00ac|!|not )?))"
         },
         "quantification": {
             "type": "object",
@@ -452,7 +452,7 @@
         },
         "comparator": {
             "type": "string",
-            "pattern": "((=|[><]=?|contain)(~|\u00ac|!|not )?)"
+            "pattern": "((~|\u00ac|!|not )?(=|[><]=?|contain))"
         },
         "comparison": {
             "type": "object",
@@ -489,13 +489,13 @@
                         "unaryOperator": {
                             "$ref": "#/$defs/unaryOperator"
                         },
-                        "constraint": {
-                            "$ref": "#/$defs/constraint"
+                        "arg": {
+                            "$ref": "#/$defs/arg"
                         }
                     },
                     "required": [
                         "unaryOperator",
-                        "constraint"
+                        "arg"
                     ]
                 },
                 {
@@ -504,13 +504,13 @@
                         "naryOperator": {
                             "$ref": "#/$defs/naryOperator"
                         },
-                        "constraints": {
-                            "$ref": "#/$defs/constraints"
+                        "args": {
+                            "$ref": "#/$defs/args"
                         }
                     },
                     "required": [
                         "naryOperator",
-                        "constraints"
+                        "args"
                     ]
                 }
             ],
@@ -575,7 +575,53 @@
             },
             "type": "object"
         },
+        "arg": {
+            "anyOf": [
+                {
+                    "required": [
+                        "quantification"
+                    ]
+                },
+                {
+                    "required": [
+                        "unit"
+                    ]
+                },
+                {
+                    "required": [
+                        "logicalExpression"
+                    ]
+                },
+                {
+                    "required": [
+                        "comparison"
+                    ]
+                }
+            ],
+            "properties": {
+                "quantification": {
+                    "$ref": "#/$defs/quantification"
+                },
+                "unit": {
+                    "$ref": "#/$defs/unit"
+                },
+                "logicalExpression": {
+                    "$ref": "#/$defs/logicalExpression"
+                },
+                "comparison": {
+                    "$ref": "#/$defs/comparison"
+                }
+            },
+            "type": "object"
+        },
         "constraints": {
+            "type": "array",
+            "items": {
+                "$ref": "#/$defs/constraint"
+            },
+            "minItems": 1
+        },
+        "args": {
             "type": "array",
             "items": {
                 "$ref": "#/$defs/constraint"
@@ -947,6 +993,9 @@
             "math"
         ],
         "constraints": [
+            "constraint"
+        ],
+        "args": [
             "constraint"
         ],
         "results": [

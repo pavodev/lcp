@@ -45,15 +45,20 @@ comparison : left comparator right
 unary_operator : NEGATION
 nary_operator : CONJUNCTION | DISJUNCTION
 
-logical_expression : unary_operator _NL _INDENT constraint _NL* _DEDENT
-                   | nary_operator _NL _INDENT constraints _DEDENT
+logical_expression : unary_operator _NL _INDENT arg _NL* _DEDENT
+                   | nary_operator _NL _INDENT args _DEDENT
 
 unit : layer(part_of)? label? _NL (_INDENT constraints? _DEDENT)?
 constraint : quantification
            | unit
            | logical_expression
            | comparison
-constraints : (constraint _NL*)+                            // skip: constraint
+arg: quantification
+           | unit
+           | logical_expression
+           | comparison
+constraints : (constraint _NL*)+                     // skip: constraint
+args : (constraint _NL*)+                            // skip: constraint
 
 members : ((unit|sequence) _NL*)+
 set : "set"(part_of)? label? _NL _INDENT members _DEDENT

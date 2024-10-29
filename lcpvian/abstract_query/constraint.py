@@ -1059,11 +1059,14 @@ def _get_constraint(
         )
         return _get_constraints(*args)
 
-    elif first_key_in_constraint.startswith("logicalOp"):
+    elif first_key_in_constraint == "logicalExpression":
         obj = cast(dict[str, Any], next(iter(constraint.values())))
         # the default operator is AND, and it can be missing
-        if "operator" not in obj:
-            obj["operator"] = "AND"
+        operator = "AND"
+        if "unaryOperator" in obj:
+            operator = obj["naryOperator"]
+        elif "naryOperator" in obj:
+            operator = obj["naryOperator"]
 
         return _get_constraints(
             obj.get("args", []),
@@ -1071,7 +1074,7 @@ def _get_constraint(
             cast(str, obj.get("label", label)),
             conf,
             cast(str | None, quantor),
-            obj["operator"],
+            operator,
             n + 1,
             order,
             prev_label,
