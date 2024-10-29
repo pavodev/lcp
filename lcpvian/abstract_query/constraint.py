@@ -256,6 +256,12 @@ class Constraint:
         self.op = op
         self._layer_info = self._get_layer_info(conf, layer)
         self._attribs = cast(dict[str, Any], self._layer_info.get("attributes", {}))
+        # Dependency attributes have an "entity" key in their properties
+        self._deps = {
+            v.get("name", k): v
+            for k, v in self._attribs.items()
+            if isinstance(v, dict) and "entity" in v
+        }
         self.label = label
         self.quantor = quantor
         self.label_layer = label_layer
@@ -380,71 +386,149 @@ class Constraint:
         prefix: str | None = None,
         attributes: dict[str, Any] = {},
         mapping: dict[str, Any] = {},
-        as_pointer: bool = False,
-        no_join: bool = False,
     ) -> tuple[str, RefInfo]:
         """
         Parse a reference object and return an SQL-compatible string reference + info about the reference.
         If no_join is False (default), will also add necessary joins
         """
-        if not attributes:
-            attributes = self._attribs
-        if not mapping:
-            _get_mapping(self.layer, self.config, self.batch, self.lang or "")
-        if not prefix:
-            prefix = self.label
-        ref = ""
-        ref_info: RefInfo
         lab_lay: LabelLayer = cast(
             LabelLayer, (self.label_layer if self.label_layer else {})
         )
-        sub_fields: list[str] = []
-        # function | reference | string | regex | math
+        if not prefix:
+            prefix = self.label
+        layer = lab_lay.get(prefix, lab_lay.get(self.label, (self.layer, None)))[0]
+        if not attributes:
+            attributes = self._attribs
+        meta = attributes.get("meta", {})
+        deps = {
+            v.get("name", k): v
+            for k, v in attributes.items()
+            if isinstance(v, dict) and "entity" in v
+        }
+        if not mapping:
+            mapping = _get_mapping(layer, self.config, self.batch, self.lang or "")
+
+        ref = ""
+        ref_info: RefInfo = RefInfo(layer=layer, mapping=mapping)
+        # function string | regex | math | reference=
         if "function" in reference:
             ref, ref_info = self.parse_function(reference["function"])
         elif "string" in reference:
             ref = f"'{reference['string']}'"
-            ref_info = RefInfo(type="string")
+            ref_info["type"] = "string"
         elif "regex" in reference:
-            ref = f"'{reference['regex']}'"
-            ref_info = RefInfo(type="regex")
+            rgx = reference["regex"]
+            ref = f"'{rgx.get('pattern', '')}'"
+            ref_info["type"] = "regex"
+            ref_info["meta"] = rgx
         elif "math" in reference:
             ref, ref_info = self.parse_math(reference["math"])
         elif "reference" in reference:
             ref = reference["reference"]
+            post_dots: list[str] = []
+            sub_ref: str = ""
             if "." in ref:
-                pre_dot, *post_dots = reference["attribute"].split(".")
+                ref, *post_dots = reference["attribute"].strip().split(".")
                 sub_ref = ".".join(post_dots)
-                if pre_dot in attributes:
-                    attribute_info = attributes[pre_dot]
-                    assert attribute_info.get("type") == "dict", TypeError(
-                        f"Trying to access sub-attribute '{sub_ref}' on non-dict attribute {prefix}.{pre_dot}"
+            if ref in deps:
+                if post_dots:
+                    ref_label: str = f"{prefix}_{ref}"
+                    ref_layer: str = deps[ref].get("entity", self.layer)
+                    lab_lay[ref_label] = (ref_layer, {})
+                    self.label_layer = lab_lay
+                    ref_mapping = _get_mapping(
+                        ref_layer, self.config, self.batch, self.lang or ""
+                    )
+                    # join here
+                    return self.get_reference(
+                        {"reference": sub_ref}, prefix=ref_label, mapping=ref_mapping
                     )
                 else:
-                    assert pre_dot in lab_lay, ReferenceError(
-                        f"Could not resolve reference to '{pre_dot}'"
-                    )
-                    new_layer = lab_lay[pre_dot][0]
-                    new_attributes = (
-                        self.config["layer"].get(new_layer, {}).get("attributes", {})
-                    )
-                    new_mapping = _get_mapping(
-                        new_layer, self.config, self.batch, self.lang or ""
-                    ).get("attributes", {})
-                    # Now process the post-dot string as a reference to an attribute of the pre-dot layer
-                    return self.get_reference(
-                        {"reference": sub_ref}, pre_dot, new_attributes, new_mapping
-                    )
-            elif ref in attributes:
-                ref = f"{prefix}.{ref}"
-                ref_info = RefInfo(type=attributes[ref].get("type"), layer=self.layer)
+                    ref = f"{prefix}.{ref}"
+                    ref_info["type"] = "id"
+            elif ref in attributes or ref in meta:
+                in_meta = ref not in attributes
+                ref_template = meta[ref] if in_meta else attributes[ref]
+                ref_type = (
+                    ref_template.get("type", "string")
+                    .replace("categorical", "string")
+                    .replace("text", "string")
+                )
+                global_attr = ref_template.get("ref")
+                if post_dots:
+                    if global_attr:
+                        assert len(post_dots) == 1, SyntaxError(
+                            f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
+                        )
+                        ref_label = f"{prefix}_{ref}"
+                        # join here
+                        ref_attributes = self.config["globalAttributes"][
+                            global_attr
+                        ].get("keys", {})
+                        assert sub_ref in ref_attributes, ValueError(
+                            f"Sub-attribute '{sub_ref}' not found on {prefix}.{ref}"
+                        )
+                        ref = f"{ref_label}.{sub_ref}"
+                        ref_info = RefInfo(
+                            type=ref_attributes.get("type", "string").replace(
+                                "text", "string"
+                            )
+                        )
+                    elif ref_type in ("dict", "jsonb"):
+                        assert len(post_dots) == 1, SyntaxError(
+                            f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
+                        )
+                        ref_label = f"{prefix}_{ref}"
+                        ref_key = mapping.get(ref, {"name": ref})
+                        # join here
+                        ref = f"{ref_label}.{ref_key}->>'{sub_ref}'"
+                        ref_info = RefInfo(type="string")
+                    else:
+                        raise TypeError(
+                            f"Trying to access sub-attribute '{sub_ref}' on non-dict attribute {prefix}.{ref}"
+                        )
+                # No suffix
+                elif global_attr:
+                    ref = f"{prefix}.{ref}"
+                    ref_info["type"] = "id"
+                else:
+                    attr_mapping = mapping.get("attributes", {}).get(ref, {})
+                    need_to_join = attr_mapping.get("type") == "relation"
+                    if need_to_join:
+                        ref_label = f"{prefix.lower()}_{ref.lower()}"
+                        attr_join_table = attr_mapping.get(
+                            "name", f"{layer.lower()}_{ref.lower()}"
+                        )
+                        attr_key = attr_mapping.get("key", ref.lower())
+                        formed_ref_table = (
+                            f"{self.schema.lower()}.{attr_join_table} {ref_label}"
+                        )
+                        formed_ref_cond = (
+                            f"{ref_label}.{attr_key}_id = {prefix}.{attr_key}_id"
+                        )
+                        self._add_join_on(formed_ref_table, formed_ref_cond)
+                        ref = f"{ref_label}.{attr_key}"
+                    elif in_meta:
+                        accessor = "->>" if ref_type == "string" else "->"
+                        ref = f"{prefix}.meta{accessor}'{ref}'"
+                    else:
+                        ref = f"{prefix}.{ref}"
+                    ref_info["type"] = ref_type
             elif ref in lab_lay:
                 ref_layer = lab_lay[ref][0]
-                ref_info = RefInfo(type="entity", layer=ref_layer)
-            else:
-                raise ReferenceError(
-                    f"Could not find a declaration for the reference '{ref}'"
+                ref_mapping = _get_mapping(
+                    ref_layer, self.config, self.batch, self.lang or ""
                 )
+                if post_dots:
+                    return self.get_reference(
+                        {"reference": sub_ref}, prefix=ref, mapping=ref_mapping
+                    )
+                else:
+                    ref_info = RefInfo(
+                        type="entity", layer=ref_layer, mapping=ref_mapping
+                    )
+            else:
+                raise ReferenceError(f"Could not resolve reference to '{ref}'")
         return (ref, ref_info)
 
     def make(self) -> None:
@@ -454,145 +538,140 @@ class Constraint:
         if self._made:
             return None
 
+        formed_condition: str = ""
+
         if not self.label:
             self.label = f"{self.layer.lower()}_{str(self._n)}"
 
         left, left_info = self.get_reference(self.left)
         right, right_info = self.get_reference(self.right)
 
-        is_dependency = (
-            self._layer_info.get("layerType") == "relation"
-            and left in self._attribs
-            and right_info.get("type") == "entity"
-        )
+        left_type = left_info.get("type")
+        right_type = right_info.get("type")
 
-        # Special handling of dependencies
-        if is_dependency:
-            self.deprel(left, self.op, right)
-            self._made = True
-            return None
+        if "id" in (left_type, right_type):
+            assert self.op in ("=", "!="), SyntaxError(
+                f"References can only be compared for equality (invalid operator '{self.op}')"
+            )
+            if left_type == right_type:
+                formed_condition = f"{left} {self.op} {right}"
+            elif left_type == "entity":
+                left_layer = left_info.get("layer", self.layer).lower()
+                formed_condition = f"{left}.{left_layer}_id {self.op} {right}"
+            elif right_type == "entity":
+                right_layer = right_info.get("layer", self.layer).lower()
+                formed_condition = f"{left} {self.op} {right}.{right_layer}_id"
+            else:
+                raise TypeError(f"Cannot compare {left} to {right}")
 
-        mapping = _get_mapping(
-            self.layer, self.config, self.batch, self.lang or ""
-        ).get("attributes", {})
-
-        left_ref: tuple[str, dict]
-        right_ref: tuple[str, dict]
-        both_lookups: bool = False
-        both_layers: bool = False
-        if isinstance(right_member, dict):
-            # First pass without joins, just to get the types of the references
-            left_ref, right_ref = [
-                self.get_reference(x, self.label, self._attribs, mapping, no_join=True)
-                for x in (self.left, right_member)
-            ]
-            both_lookups = all(x[1].get("ref") for x in (left_ref, right_ref))
-            both_layers = all(
-                x[1].get("type") == "layer" for x in (left_ref, right_ref)
+        elif left_type == "entity" and right_type == "entity":
+            assert self.op in ("=", "!="), SyntaxError(
+                f"References can only be compared for equality (invalid operator '{self.op}')"
+            )
+            left_layer = left_info.get("layer", self.layer).lower()
+            right_layer = right_info.get("layer", self.layer).lower()
+            formed_condition = (
+                f"{left}.{left_layer}_id {self.op} {right}.{right_layer}_id"
             )
 
-        # Left reference
-        left_ref = self.get_reference(
-            self.left,
-            self.label,
-            self._attribs,
-            mapping,
-            as_pointer=both_lookups,
-        )
+        elif "regex" in (left_type, right_type):
+            assert self.op in ("=", "!="), SyntaxError(
+                f"Regular expression only accept operator '=' or '!=' (invalid input {self.op})"
+            )
+            if "string" in (left_type, right_type):
+                op = self.op.replace("=", "~")
+                meta = cast(dict, {**left_info, **right_info}.get("meta", {}))
+                if "caseInsensitive" in meta:
+                    op += "*"
+                left = f"({left})::text" if left_type == "string" else left
+                right = f"({right})::text" if right_type == "string" else right
+                formed_condition = f"{left} {op} {right}"
+            elif "label" in (left_type, right_type):
+                pass
 
-        # Right reference
-        if isinstance(right_member, dict):
-            right_ref = self.get_reference(
-                right_member,
-                self.label,
-                self._attribs,
-                mapping,
-                as_pointer=both_lookups,
-            )
-        else:
-            right_ref = (f"'{str(right_member)}'", {"type": "text"})
-
-        cast: str = ""
-        if self.type == "regex":
-            cast = "::text"
-        left_str: str = left_ref[0] + cast
-        right_str: str = right_ref[0]
-
-        if both_layers:
-            layer_left = left_ref[1].get("layer", "")
-            layer_right = right_ref[1].get("layer", "")
-            left_str = f"{left_ref[0]}.{layer_left}_id".lower()
-            right_str = f"{right_ref[0]}.{layer_right}_id".lower()
-
-        formed_condition: str = f"{left_str} {self.op} {right_str}"
-
-        # Special case: labels
-        left_ref_info = left_ref[1]
-        left_type = left_ref_info.get("type")
-        if left_type == "labels":
-            assert self.op.lower().endswith("contain"), SyntaxError(
-                f"Must use 'contain' on labels ({left_ref[0]} + {self.op})"
-            )
-            assert self.type in ("string", "regex"), TypeError(
-                f"Contained labels can only be tested against strings or regexes ({left_ref[0]} + {self.op} + {right_ref[0]})"
-            )
-            ref_layer = left_ref_info.get("layer", self.layer)
-            ref_layer_info = self.config["layer"].get(ref_layer, {})
-            assert "nlabels" in ref_layer_info, KeyError(
-                f"Missing 'nlabels' for layer '{ref_layer}' in config"
-            )
-            nbit = ref_layer_info["nlabels"]
-            ref_mapping = left_ref_info.get("mapping", {})
-            lookup_table = ref_mapping.get("name", "")
-            inner_op = "~" if self.type == "regex" else "="
-            dummy_mask = "".join(["0" for _ in range(nbit)])
-            inner_condition = (
-                f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
-                + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
-            )
-            # Use label_layer to store the inner conditions query-wide and give them unique labels
-            if self.label_layer is None:
-                self.label_layer = {}
-            if self.label not in self.label_layer:
-                self.label_layer[self.label] = (self.layer, {})
-            meta: dict = self.label_layer[self.label][1]
-            meta["labels inner conditions"] = meta.get("labels inner conditions", {})
-            comp_str: str = f"{self.op} {self.type} {right_ref[0]}"
-            n = meta["labels inner conditions"].get(
-                comp_str, len(meta["labels inner conditions"])
-            )
-            meta["labels inner conditions"][comp_str] = n
-            mask_label = f"{self.label}_mask_{n}"
-            formed_join_table = f"{inner_condition} {mask_label}"
-            self._add_join_on(formed_join_table, "")
-            negated = self.op.lower().startswith(("not", "!"))
-            op = "=" if negated else ">"
-            formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
-
-        elif left_type == "date":
-            right_ref_info = right_ref[1]
-            assert right_ref_info.get("type") in ("date", "text", "number"), TypeError(
-                f"Invalid date comparison ({left_ref[0]} {self.op} {right_ref[0]})"
-            )
-            q = right_ref[0]
-            if self.op in (">", "<", ">=", "<=", "=", "!="):
-                right_ref_no_quotes = right_ref[0].strip("'").strip('"')
-                lower_date = self._parse_date(right_ref_no_quotes)
-                upper_date = self._parse_date(
-                    right_ref_no_quotes, filler_month="12", filler_day="31"
+        elif "string" in (left_type, right_type):
+            if "label" in (left_type, right_type):
+                pass
+            elif left_type == right_type:
+                formed_condition = f"({left})::text {self.op} ({right})::text"
+            else:
+                raise TypeError(
+                    f"Could not resolve comparison {left} {self.op} {right}"
                 )
-                op = self.op
-                if op == "=":
-                    op = ">="
-                    q = f"'{lower_date}'::date AND {left_ref[0]}::date <= '{upper_date}'::date"
-                elif op == "!=":
-                    op = "<"
-                    q = f"'{lower_date}'::date OR {left_ref[0]}::date > '{upper_date}'::date"
-                elif op in (">", ">="):
-                    q = f"'{upper_date}'::date"
-                elif op in ("<", "<="):
-                    q = f"'{lower_date}'::date"
-            formed_condition = f"{left_ref[0]}::date {op} {q}"
+
+        elif "number" in (left_type, right_type):
+            assert self.op in ("=", "!=", ">=", "<=", ">", "<"), SyntaxError(
+                f"Invalid operator {self.op} for numerical comparison ({left} {self.op} {right})"
+            )
+            formed_condition = f"{left} {self.op.replace('=','~')} {right}"
+
+        # # Special case: labels
+        # left_ref_info = left_ref[1]
+        # left_type = left_ref_info.get("type")
+        # if left_type == "labels":
+        #     assert self.op.lower().endswith("contain"), SyntaxError(
+        #         f"Must use 'contain' on labels ({left_ref[0]} + {self.op})"
+        #     )
+        #     assert self.type in ("string", "regex"), TypeError(
+        #         f"Contained labels can only be tested against strings or regexes ({left_ref[0]} + {self.op} + {right_ref[0]})"
+        #     )
+        #     ref_layer = left_ref_info.get("layer", self.layer)
+        #     ref_layer_info = self.config["layer"].get(ref_layer, {})
+        #     assert "nlabels" in ref_layer_info, KeyError(
+        #         f"Missing 'nlabels' for layer '{ref_layer}' in config"
+        #     )
+        #     nbit = ref_layer_info["nlabels"]
+        #     ref_mapping = left_ref_info.get("mapping", {})
+        #     lookup_table = ref_mapping.get("name", "")
+        #     inner_op = "~" if self.type == "regex" else "="
+        #     dummy_mask = "".join(["0" for _ in range(nbit)])
+        #     inner_condition = (
+        #         f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
+        #         + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
+        #     )
+        #     # Use label_layer to store the inner conditions query-wide and give them unique labels
+        #     if self.label_layer is None:
+        #         self.label_layer = {}
+        #     if self.label not in self.label_layer:
+        #         self.label_layer[self.label] = (self.layer, {})
+        #     meta: dict = self.label_layer[self.label][1]
+        #     meta["labels inner conditions"] = meta.get("labels inner conditions", {})
+        #     comp_str: str = f"{self.op} {self.type} {right_ref[0]}"
+        #     n = meta["labels inner conditions"].get(
+        #         comp_str, len(meta["labels inner conditions"])
+        #     )
+        #     meta["labels inner conditions"][comp_str] = n
+        #     mask_label = f"{self.label}_mask_{n}"
+        #     formed_join_table = f"{inner_condition} {mask_label}"
+        #     self._add_join_on(formed_join_table, "")
+        #     negated = self.op.lower().startswith(("not", "!"))
+        #     op = "=" if negated else ">"
+        #     formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
+
+        # elif left_type == "date":
+        #     right_ref_info = right_ref[1]
+        #     assert right_ref_info.get("type") in ("date", "text", "number"), TypeError(
+        #         f"Invalid date comparison ({left_ref[0]} {self.op} {right_ref[0]})"
+        #     )
+        #     q = right_ref[0]
+        #     if self.op in (">", "<", ">=", "<=", "=", "!="):
+        #         right_ref_no_quotes = right_ref[0].strip("'").strip('"')
+        #         lower_date = self._parse_date(right_ref_no_quotes)
+        #         upper_date = self._parse_date(
+        #             right_ref_no_quotes, filler_month="12", filler_day="31"
+        #         )
+        #         op = self.op
+        #         if op == "=":
+        #             op = ">="
+        #             q = f"'{lower_date}'::date AND {left_ref[0]}::date <= '{upper_date}'::date"
+        #         elif op == "!=":
+        #             op = "<"
+        #             q = f"'{lower_date}'::date OR {left_ref[0]}::date > '{upper_date}'::date"
+        #         elif op in (">", ">="):
+        #             q = f"'{upper_date}'::date"
+        #         elif op in ("<", "<="):
+        #             q = f"'{lower_date}'::date"
+        #     formed_condition = f"{left_ref[0]}::date {op} {q}"
 
         self._joins.pop("", None)
         self._conditions.add(formed_condition)
@@ -677,31 +756,31 @@ class Constraint:
     #     formed = f"{self.label}.{col}{cast} {op} {self._formatted}{qcast}"
     #     self._add_join_on(f"{self.schema}.{self.layer} {self.label}", formed)
 
-    def metadata(self):
-        """
-        Handle metadata like IsPresident = No
-        """
-        lb, rb = "(", ")"
-        if not self._cast:
-            lb, rb = "", ""
-        lab = self.label
-        # mapping = _get_mapping(self.layer, self.config, self.batch, self.lang)
-        mapping = self.config["mapping"]["layer"].get(self.layer, {})
-        if (
-            "alignment" in mapping
-            and mapping["alignment"].get("hasMeta")
-            and (relation := mapping["alignment"].get("relation"))
-        ):
-            lab = f"{self.label}_aligned"
-            self._add_join_on(
-                f"{self.schema}.{relation} {lab}",
-                f"{self.label}.alignment_id = {lab}.alignment_id",
-            )
-        formed = f"{lb}{lab}.meta ->> '{self.field}'{rb}{self._cast} {self.op} {self._formatted}"
-        # if self.layer == self.config["document"]:
-        #     self._add_join_on(f"{self.schema}.{self.layer} {self.label}", formed)
-        # else:
-        self._conditions.add(formed)
+    # def metadata(self):
+    #     """
+    #     Handle metadata like IsPresident = No
+    #     """
+    #     lb, rb = "(", ")"
+    #     if not self._cast:
+    #         lb, rb = "", ""
+    #     lab = self.label
+    #     # mapping = _get_mapping(self.layer, self.config, self.batch, self.lang)
+    #     mapping = self.config["mapping"]["layer"].get(self.layer, {})
+    #     if (
+    #         "alignment" in mapping
+    #         and mapping["alignment"].get("hasMeta")
+    #         and (relation := mapping["alignment"].get("relation"))
+    #     ):
+    #         lab = f"{self.label}_aligned"
+    #         self._add_join_on(
+    #             f"{self.schema}.{relation} {lab}",
+    #             f"{self.label}.alignment_id = {lab}.alignment_id",
+    #         )
+    #     formed = f"{lb}{lab}.meta ->> '{self.field}'{rb}{self._cast} {self.op} {self._formatted}"
+    #     # if self.layer == self.config["document"]:
+    #     #     self._add_join_on(f"{self.schema}.{self.layer} {self.label}", formed)
+    #     # else:
+    #     self._conditions.add(formed)
 
     def deprel(self, left: str, operator: str, right: str) -> None:
         """
@@ -750,66 +829,66 @@ class Constraint:
         #     op = op.replace("=", "~")
         return op.upper()
 
-    def date(self) -> None:
-        q: str = f"{self._formatted}"
-        op = self.op
-        cast = self._cast
-        labfield = f"{self.label.lower()}.{self.field.lower()}"
-        if op in (">", "<", ">=", "<=", "=", "!="):
-            lower_date = self._parse_date(q)
-            upper_date = self._parse_date(q, filler_month="12", filler_day="31")
-            cast = "::date"
-            if op == "=":
-                op = ">="
-                q = f"'{lower_date}'::date AND {labfield}{cast} <= '{upper_date}'::date"
-            elif op == "!=":
-                op = "<"
-                q = f"'{lower_date}'::date OR {labfield}{cast} > '{upper_date}'::date"
-            elif op in (">", ">="):
-                q = f"'{upper_date}'::date"
-            elif op in ("<", "<="):
-                q = f"'{lower_date}'::date"
-        formed = f"{self.label.lower()}.{self.field.lower()}{cast} {op} {q}"
-        self._conditions.add(formed)
+    # def date(self) -> None:
+    #     q: str = f"{self._formatted}"
+    #     op = self.op
+    #     cast = self._cast
+    #     labfield = f"{self.label.lower()}.{self.field.lower()}"
+    #     if op in (">", "<", ">=", "<=", "=", "!="):
+    #         lower_date = self._parse_date(q)
+    #         upper_date = self._parse_date(q, filler_month="12", filler_day="31")
+    #         cast = "::date"
+    #         if op == "=":
+    #             op = ">="
+    #             q = f"'{lower_date}'::date AND {labfield}{cast} <= '{upper_date}'::date"
+    #         elif op == "!=":
+    #             op = "<"
+    #             q = f"'{lower_date}'::date OR {labfield}{cast} > '{upper_date}'::date"
+    #         elif op in (">", ">="):
+    #             q = f"'{upper_date}'::date"
+    #         elif op in ("<", "<="):
+    #             q = f"'{lower_date}'::date"
+    #     formed = f"{self.label.lower()}.{self.field.lower()}{cast} {op} {q}"
+    #     self._conditions.add(formed)
 
-    def _to_sql(self, query: QueryType) -> str | int | float:
-        """
-        Turn query into something that can be inserted into sql with f-string
-        """
-        # detect variable
-        if self.type == "entity":
-            return str(query)
-        elif self.type == "math":
-            if isinstance(query, str) and query.strip().isnumeric():
-                return int(query.strip())
-            elif (
-                isinstance(query, str)
-                and "." in query
-                and query.strip().replace(".", "").isnumeric()
-            ):
-                return float(query.strip())
-            else:
-                # check that the expression is well-formed here?
-                return f"({str(query)})"
-        elif self.type == "function":
-            # Hack for simple cases, need to do better
-            function_name: str = cast(dict, query).get("functionName", "")
-            function_arguments: list = cast(
-                list[dict[str, str]], cast(dict, query).get("arguments", [{}])
-            )
-            first_argument: str = (
-                function_arguments[0].get("entity", "").replace(".", "_")
-            )
-            return f"{function_name}({first_argument})"
+    # def _to_sql(self, query: QueryType) -> str | int | float:
+    #     """
+    #     Turn query into something that can be inserted into sql with f-string
+    #     """
+    #     # detect variable
+    #     if self.type == "entity":
+    #         return str(query)
+    #     elif self.type == "math":
+    #         if isinstance(query, str) and query.strip().isnumeric():
+    #             return int(query.strip())
+    #         elif (
+    #             isinstance(query, str)
+    #             and "." in query
+    #             and query.strip().replace(".", "").isnumeric()
+    #         ):
+    #             return float(query.strip())
+    #         else:
+    #             # check that the expression is well-formed here?
+    #             return f"({str(query)})"
+    #     elif self.type == "function":
+    #         # Hack for simple cases, need to do better
+    #         function_name: str = cast(dict, query).get("functionName", "")
+    #         function_arguments: list = cast(
+    #             list[dict[str, str]], cast(dict, query).get("arguments", [{}])
+    #         )
+    #         first_argument: str = (
+    #             function_arguments[0].get("entity", "").replace(".", "_")
+    #         )
+    #         return f"{function_name}({first_argument})"
 
-        if isinstance(query, (list, tuple)):
-            if len(query) == 1:
-                query = query[0]
-            else:
-                items = [f"'{a}'" if isinstance(a, str) else str(a) for a in query]
-                formed = ", ".join(items)
-                return f"({formed})"
-        return f"'{query}'" if isinstance(query, str) else cast(str, query)
+    #     if isinstance(query, (list, tuple)):
+    #         if len(query) == 1:
+    #             query = query[0]
+    #         else:
+    #             items = [f"'{a}'" if isinstance(a, str) else str(a) for a in query]
+    #             formed = ", ".join(items)
+    #             return f"({formed})"
+    #     return f"'{query}'" if isinstance(query, str) else cast(str, query)
 
 
 class TimeConstraint:

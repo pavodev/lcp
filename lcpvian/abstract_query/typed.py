@@ -26,6 +26,7 @@ class RefInfo(TypedDict, total=False):
     type: str
     layer: str
     mapping: dict | None
+    meta: dict | None
 
 
 # model corpus config data
