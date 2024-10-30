@@ -20,14 +20,14 @@ WITH RECURSIVE fixed_parts AS
      AND d.char_range && s.char_range
      AND fts_vector_s.segment_id = s.segment_id
      AND s.segment_id = t1.segment_id
-     AND t1.xpos2 = 'ART'
+     AND (t1.xpos2)::text = ('ART')::text
      AND s.segment_id = t2.segment_id
-     AND (t2_lemma.lemma = 'true'
-          AND t2.xpos2 = 'ADJ')
+     AND ((t2_lemma.lemma)::text = ('true')::text
+          AND (t2.xpos2)::text = ('ADJ')::text)
      AND s.segment_id = t3.segment_id
-     AND t3.xpos2 = 'SUBST'
-     AND t2.lemma_id = t2_lemma.lemma_id
+     AND (t3.xpos2)::text = ('SUBST')::text
      AND t2.token_id - t1.token_id = 1
+     AND t2_lemma.lemma_id = t2.lemma_id
      AND t3.token_id - t2.token_id = 1
      AND t3_lemma.lemma_id = t3.lemma_id ),
                gather AS

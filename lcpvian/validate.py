@@ -42,7 +42,7 @@ async def validate(
         except Exception as err:
             tb = traceback.format_exc()
             print("Error during DQD->JSON:", err, tb)
-            all_errors = []
+            all_errors: list[JSONObject] = []
             if isinstance(err, UnexpectedToken):
                 error = cast(UnexpectedToken, err)
                 error_obj = {
@@ -65,18 +65,18 @@ async def validate(
                         )
                         error_obj["type"] = t.type
                         error_obj["value"] = val
-                        all_errors.append(error_obj)
+                        all_errors.append(cast(JSONObject, error_obj))
                 else:
                     error_obj["start_pos"] = error_obj.get("end_pos", 0)
                     error_obj["line"] = error_obj.get("end_line", 0)
                     error_obj["column"] = error_obj.get("end_column", 0)
-                    all_errors.append(error_obj)
+                    all_errors.append(cast(JSONObject, error_obj))
             result = {
                 "kind": "dqd?",
                 "valid": False,
                 "action": "validate",
                 "error": str(err),
-                "errorList": all_errors,
+                "errorList": cast(JSONObject, all_errors),
                 "status": 400,
                 "traceback": tb,
             }

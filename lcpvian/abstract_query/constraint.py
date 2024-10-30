@@ -390,7 +390,7 @@ class Constraint:
             return self.conf.batch
         return layer
 
-    def get_reference(
+    def get_sql_expr(
         self,
         reference: dict[str, Any],
         prefix: str | None = None,
@@ -409,12 +409,6 @@ class Constraint:
         layer = lab_lay.get(prefix, lab_lay.get(self.label, (self.layer, None)))[0]
         if not attributes:
             attributes = self._attribs
-        meta = attributes.get("meta", {})
-        deps = {
-            v.get("name", k): v
-            for k, v in attributes.items()
-            if isinstance(v, dict) and "entity" in v
-        }
         if not mapping:
             mapping = _get_mapping(layer, self.config, self.batch, self.lang or "")
 
@@ -434,133 +428,9 @@ class Constraint:
         elif "math" in reference:
             ref, ref_info = self.parse_math(reference)
         elif "reference" in reference or "entity" in reference:
-            ref = cast(str, reference.get("reference", reference.get("entity", "")))
-            post_dots: list[str] = []
-            sub_ref: str = ""
-            if "." in ref:
-                ref, *post_dots = ref.strip().split(".")
-                sub_ref = ".".join(post_dots)
-            if ref in deps:
-                assert "." not in ref, SyntaxError(
-                    f"Cannot reference a sub-attribute ({sub_ref}) on a source/head of a dependency relation ({ref})"
-                )
-                ref_label = prefix
-                ref_mapping = mapping.get("attributes", {}).get(ref, {})
-                ref_table = ref_mapping.get("name", layer.lower())
-                ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
-                # hack: need a condition here because when inside a sequence,
-                # unconditional joins from tokens are ignored in sequence.py#_where_conditions_from_constraints
-                # (not sure why, probably to clean out unnecessary joins by sequence processing)
-                self._add_join_on(ref_formed_table, "1=1")
-                ref = f"{ref_label}.{ref}"
-                ref_info["type"] = "id"
-            elif ref in attributes or ref in meta:
-                in_meta = ref not in attributes
-                ref_template = meta[ref] if in_meta else attributes[ref]
-                ref_type = (
-                    ref_template.get("type", "string")
-                    .replace("categorical", "string")
-                    .replace("text", "string")
-                )
-                global_attr = ref_template.get("ref")
-                if post_dots:
-                    if global_attr:
-                        assert len(post_dots) == 1, SyntaxError(
-                            f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
-                        )
-                        ref_label = f"{prefix}_{ref}".lower()
-                        ref_mapping = mapping.get("attributes", {}).get(ref, {})
-                        ref_key = ref_mapping.get("key", ref)
-                        ref_table = ref_mapping.get("name", f"global_attributes_{ref}")
-                        ref_formed_table = (
-                            f"{self.schema}.{ref_table.lower()} {ref_label}"
-                        )
-                        ref_formed_condition = (
-                            f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
-                        )
-                        self._add_join_on(ref_formed_table, ref_formed_condition)
-                        ref_attributes = self.config["globalAttributes"][
-                            global_attr
-                        ].get("keys", {})
-                        ref_type = ref_attributes.get(sub_ref, {}).get("type", "string")
-                        ref_type = ref_type.replace("text", "string")
-                        # Uncomment once all keys have been reported in the db
-                        # assert sub_ref in ref_attributes, ValueError(
-                        #     f"Sub-attribute '{sub_ref}' not found on {prefix}.{ref}"
-                        # )
-                        accessor = "->>" if ref_type == "string" else "->"
-                        ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
-                        ref_info = RefInfo(type=ref_type)
-                    elif ref_type in ("dict", "jsonb"):
-                        assert len(post_dots) == 1, SyntaxError(
-                            f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
-                        )
-                        ref_label = f"{prefix}_{ref}"
-                        ref_mapping = mapping.get("attributes", {}).get(ref, {})
-                        ref_key = ref_mapping.get("key", ref.lower())
-                        ref_table = ref_mapping.get("name", ref.lower())
-                        ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
-                        ref_formed_condition = (
-                            f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
-                        )
-                        self._add_join_on(ref_formed_table, ref_formed_condition)
-                        ref_type = (
-                            attributes.get(ref, {})
-                            .get("keys", {})
-                            .get(sub_ref, {})
-                            .get("type", "string")
-                        ).replace("text", "string")
-                        accessor = "->>" if ref_type == "string" else "->"
-                        ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
-                        ref_info = RefInfo(type=ref_type)
-                    else:
-                        raise TypeError(
-                            f"Trying to access sub-attribute '{sub_ref}' on non-dict attribute {prefix}.{ref}"
-                        )
-                # No suffix
-                elif global_attr:
-                    ref = f"{prefix}.{ref}_id"
-                    ref_info["type"] = "id"
-                else:
-                    attr_mapping = mapping.get("attributes", {}).get(ref, {})
-                    need_to_join = attr_mapping.get("type") == "relation"
-                    if need_to_join:
-                        ref_label = f"{prefix.lower()}_{ref.lower()}"
-                        attr_join_table = attr_mapping.get(
-                            "name", f"{layer.lower()}_{ref.lower()}"
-                        )
-                        attr_key = attr_mapping.get("key", ref.lower())
-                        formed_ref_table = (
-                            f"{self.schema.lower()}.{attr_join_table} {ref_label}"
-                        )
-                        formed_ref_cond = (
-                            f"{ref_label}.{attr_key}_id = {prefix}.{attr_key}_id"
-                        )
-                        self._add_join_on(formed_ref_table, formed_ref_cond)
-                        ref = f"{ref_label}.{attr_key}"
-                    elif in_meta:
-                        accessor = "->>" if ref_type == "string" else "->"
-                        ref = f"{prefix}.meta{accessor}'{ref}'"
-                    else:
-                        ref = f"{prefix}.{ref}"
-                    ref_info["type"] = ref_type
-            elif ref in lab_lay:
-                ref_layer = lab_lay[ref][0]
-                ref_mapping = _get_mapping(
-                    ref_layer, self.config, self.batch, self.lang or ""
-                )
-                if post_dots:
-                    return self.get_reference(
-                        {"reference": sub_ref}, prefix=ref, mapping=ref_mapping
-                    )
-                else:
-                    ref_info = RefInfo(
-                        type="entity", layer=ref_layer, mapping=ref_mapping
-                    )
-            else:
-                raise ReferenceError(
-                    f"Could not resolve reference to '{ref}': no entity has that label and {layer} has no attribute of that name"
-                )
+            ref, ref_info = self.parse_reference(
+                reference, prefix, layer, lab_lay, attributes, mapping
+            )
         return (ref, ref_info)
 
     def make(self) -> None:
@@ -575,8 +445,8 @@ class Constraint:
         if not self.label:
             self.label = f"{self.layer.lower()}_{str(self._n)}"
 
-        left, left_info = self.get_reference(self.left)
-        right, right_info = self.get_reference(self.right)
+        left, left_info = self.get_sql_expr(self.left)
+        right, right_info = self.get_sql_expr(self.right)
 
         left_type = left_info.get("type")
         right_type = right_info.get("type")
@@ -710,6 +580,185 @@ class Constraint:
         self.made = True
         return None
 
+    def parse_reference(
+        self,
+        reference: dict[str, Any],
+        prefix: str,
+        layer: str,
+        lab_lay: LabelLayer,
+        attributes: dict[str, Any],
+        mapping: dict[str, Any],
+    ) -> tuple[str, RefInfo]:
+        ref: str = ""
+        ref_info: RefInfo = RefInfo(type="string")
+        meta = attributes.get("meta", {})
+        deps = {
+            v.get("name", k): v
+            for k, v in attributes.items()
+            if isinstance(v, dict) and "entity" in v
+        }
+        ref = cast(str, reference.get("reference", reference.get("entity", "")))
+        post_dots: list[str] = []
+        sub_ref: str = ""
+        if "." in ref:
+            ref, *post_dots = ref.strip().split(".")
+            sub_ref = ".".join(post_dots)
+        # Dependency attribute like 'head' or 'dependent'
+        if ref in deps:
+            assert "." not in ref, SyntaxError(
+                f"Cannot reference a sub-attribute ({sub_ref}) on a source/head of a dependency relation ({ref})"
+            )
+            ref_label = prefix
+            ref_mapping = mapping.get("attributes", {}).get(ref, {})
+            ref_table = ref_mapping.get("name", layer.lower())
+            ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
+            # hack: need a condition here because when inside a sequence,
+            # unconditional joins from tokens are ignored in sequence.py#_where_conditions_from_constraints
+            # (not sure why, probably to clean out unnecessary joins by sequence processing)
+            self._add_join_on(ref_formed_table, "1=1")
+            ref = f"{ref_label}.{ref}"
+            ref_info["type"] = "id"
+        # Attribute-related refs like 'xpos', 'year', 'agent', 'agent.region' or 'ufeat.Degree'
+        elif ref in attributes or ref in meta or ref in mapping:
+            in_meta = ref not in attributes and ref in meta
+            in_mapping = (
+                ref not in attributes
+                and (not in_meta or "meta" not in attributes)
+                and ref in mapping
+            )
+            # partition-specific attributes are listed in mapping only
+            # Handle any necessary mapping first
+            current_table = mapping.get("relation")
+            # Make sure current partition table is there
+            # if current_table:
+            #     formed_current_table = f"{self.schema}.{current_table} {prefix}"
+            #     self._add_join_on(formed_current_table, "1=1")
+            # Add alignment talbe if needed
+            alignment_table = (
+                self.config["mapping"]["layer"]
+                .get(layer, {})
+                .get("alignment", {})
+                .get("relation")
+            )
+            # Only add alignment table if attribute in mapping but not in attributes
+            if alignment_table and current_table and not in_mapping:
+                label_aligned = f"{prefix}_aligned"
+                formed_aligned_table = (
+                    f"{self.schema}.{alignment_table} {label_aligned}"
+                )
+                formed_aligned_condition = (
+                    f"{prefix}.alignment_id = {label_aligned}.alignment_id"
+                )
+                self._add_join_on(formed_aligned_table, formed_aligned_condition)
+                prefix = label_aligned
+            ref_template = meta[ref] if in_meta else attributes[ref]
+            ref_type = (
+                ref_template.get("type", "string")
+                .replace("categorical", "string")
+                .replace("text", "string")
+            )
+            global_attr = ref_template.get("ref")
+            # Sub-attribute reference like 'agent.region' or 'ufeat.Degree'
+            if post_dots:
+                # agent.region
+                if global_attr:
+                    assert len(post_dots) == 1, SyntaxError(
+                        f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
+                    )
+                    ref_label = f"{prefix}_{ref}".lower()
+                    ref_mapping = mapping.get("attributes", {}).get(ref, {})
+                    ref_key = ref_mapping.get("key", ref)
+                    ref_table = ref_mapping.get("name", f"global_attributes_{ref}")
+                    ref_formed_table = f"{self.schema}.{ref_table.lower()} {ref_label}"
+                    ref_formed_condition = (
+                        f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
+                    )
+                    self._add_join_on(ref_formed_table, ref_formed_condition)
+                    ref_attributes = self.config["globalAttributes"][global_attr].get(
+                        "keys", {}
+                    )
+                    ref_type = ref_attributes.get(sub_ref, {}).get("type", "string")
+                    ref_type = ref_type.replace("text", "string")
+                    # Uncomment once all keys have been reported in the db
+                    # assert sub_ref in ref_attributes, ValueError(
+                    #     f"Sub-attribute '{sub_ref}' not found on {prefix}.{ref}"
+                    # )
+                    accessor = "->>" if ref_type == "string" else "->"
+                    ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
+                    ref_info = RefInfo(type=ref_type)
+                # ufeat.Degree
+                elif ref_type in ("dict", "jsonb"):
+                    assert len(post_dots) == 1, SyntaxError(
+                        f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
+                    )
+                    ref_label = f"{prefix}_{ref}"
+                    ref_mapping = mapping.get("attributes", {}).get(ref, {})
+                    ref_key = ref_mapping.get("key", ref.lower())
+                    ref_table = ref_mapping.get("name", ref.lower())
+                    ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
+                    ref_formed_condition = (
+                        f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
+                    )
+                    self._add_join_on(ref_formed_table, ref_formed_condition)
+                    ref_type = (
+                        attributes.get(ref, {})
+                        .get("keys", {})
+                        .get(sub_ref, {})
+                        .get("type", "string")
+                    ).replace("text", "string")
+                    accessor = "->>" if ref_type == "string" else "->"
+                    ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
+                    ref_info = RefInfo(type=ref_type)
+                else:
+                    raise TypeError(
+                        f"Trying to access sub-attribute '{sub_ref}' on non-dict attribute {prefix}.{ref}"
+                    )
+            # Simple global attribute reference like 'agent'
+            elif global_attr:
+                ref = f"{prefix}.{ref}_id"
+                ref_info["type"] = "id"
+            # Normal attribute reference like 'upos'
+            else:
+                attr_mapping = mapping.get("attributes", {}).get(ref, {})
+                need_to_join = attr_mapping.get("type") == "relation"
+                if need_to_join:
+                    ref_label = f"{prefix.lower()}_{ref.lower()}"
+                    attr_join_table = attr_mapping.get(
+                        "name", f"{layer.lower()}_{ref.lower()}"
+                    )
+                    attr_key = attr_mapping.get("key", ref.lower())
+                    formed_ref_table = (
+                        f"{self.schema.lower()}.{attr_join_table} {ref_label}"
+                    )
+                    formed_ref_cond = (
+                        f"{ref_label}.{attr_key}_id = {prefix}.{attr_key}_id"
+                    )
+                    self._add_join_on(formed_ref_table, formed_ref_cond)
+                    ref = f"{ref_label}.{attr_key}"
+                elif in_meta:
+                    accessor = "->>" if ref_type == "string" else "->"
+                    ref = f"{prefix}.meta{accessor}'{ref}'"
+                else:
+                    ref = f"{prefix}.{ref}"
+                ref_info["type"] = ref_type
+        # Entity reference like t3
+        elif ref in lab_lay:
+            ref_layer = lab_lay[ref][0]
+            ref_mapping = _get_mapping(
+                ref_layer, self.config, self.batch, self.lang or ""
+            )
+            if post_dots:
+                return self.get_sql_expr(
+                    {"reference": sub_ref}, prefix=ref, mapping=ref_mapping
+                )
+            else:
+                ref_info = RefInfo(type="entity", layer=ref_layer, mapping=ref_mapping)
+        else:
+            raise ReferenceError(
+                f"Could not resolve reference to '{ref}': no entity has that label and {layer} has no attribute of that name"
+            )
+        return (ref, ref_info)
+
     def parse_math(
         self,
         math_obj: dict[str, Any],
@@ -731,9 +780,7 @@ class Constraint:
         right = operation.get("right", {"math": "0"})
         for i in range(2):
             operand = left if i == 0 else right
-            operand_ref, operand_info = self.get_reference(
-                cast(dict[str, Any], operand)
-            )
+            operand_ref, operand_info = self.get_sql_expr(cast(dict[str, Any], operand))
             assert (
                 operand_info.get("type") == "number"
             ), f"Only numbers can appear in mathematical operations ({operand})"
@@ -751,7 +798,7 @@ class Constraint:
         )
         ars = fn_obj.get("arguments", [])
         assert ars, ValueError(f"Arguments of function '{fn}' are missing")
-        parsed_ars = [self.get_reference(a) for a in ars]
+        parsed_ars = [self.get_sql_expr(a) for a in ars]
         ars_str = ",".join([a[0] for a in parsed_ars])
         fn_str = f"{fn}({ars_str})"
         ref_info = RefInfo(type="text")
