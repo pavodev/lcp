@@ -12,90 +12,71 @@
             "anyOf": [
                 {
                     "required": [
-                        "function"
+                        "math"
                     ]
                 },
                 {
                     "required": [
-                        "operation"
+                        "function"
                     ]
-                },
-                {
-                    "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
+                "math": {
+                    "$ref": "#/$defs/math"
+                },
                 "function": {
                     "$ref": "#/$defs/function"
-                },
-                "operation": {
-                    "$ref": "#/$defs/operation"
                 }
             },
-            "type": [
-                "string",
-                "object"
-            ]
+            "type": "object"
         },
         "operandRight": {
             "anyOf": [
                 {
                     "required": [
-                        "function"
+                        "math"
                     ]
                 },
                 {
                     "required": [
-                        "operation"
+                        "function"
                     ]
-                },
-                {
-                    "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
+                "math": {
+                    "$ref": "#/$defs/math"
+                },
                 "function": {
                     "$ref": "#/$defs/function"
-                },
-                "operation": {
-                    "$ref": "#/$defs/operation"
                 }
             },
-            "type": [
-                "string",
-                "object"
-            ]
+            "type": "object"
         },
         "operation": {
             "type": "object",
             "properties": {
-                "operandLeft": {
+                "left": {
                     "$ref": "#/$defs/operandLeft"
                 },
                 "operator": {
                     "$ref": "#/$defs/operator"
                 },
-                "operandRight": {
+                "right": {
                     "$ref": "#/$defs/operandRight"
                 }
             },
             "required": [
-                "operandLeft",
+                "left",
                 "operator",
-                "operandRight"
+                "right"
             ]
         },
         "math": {
             "anyOf": [
                 {
                     "required": [
-                        "function"
-                    ]
-                },
-                {
-                    "required": [
                         "operation"
                     ]
                 },
@@ -105,9 +86,6 @@
                 }
             ],
             "properties": {
-                "function": {
-                    "$ref": "#/$defs/function"
-                },
                 "operation": {
                     "$ref": "#/$defs/operation"
                 }
@@ -151,14 +129,14 @@
                 "string",
                 "number"
             ],
-            "pattern": "-[1-9]*[0-9]"
+            "pattern": "(-[1-9]*[0-9]|\\*)"
         },
         "rightSpan": {
             "type": [
                 "string",
                 "number"
             ],
-            "pattern": "[1-9]*[0-9]"
+            "pattern": "([1-9]*[0-9]|\\*)"
         },
         "window": {
             "type": "object",
@@ -177,7 +155,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "(((~|\u00ac|!|not )?EXISTS)|(ALL(~|\u00ac|!|not )?))"
+            "pattern": "((EXISTS(~|\u00ac|!|not )?)|((~|\u00ac|!|not )?ALL))"
         },
         "quantification": {
             "type": "object",
@@ -329,6 +307,14 @@
             "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
         },
         "entity": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+        },
+        "center": {
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+        },
+        "space": {
             "type": "string",
             "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
         },
@@ -843,82 +829,47 @@
             "minItems": 1
         },
         "resultsCollocation": {
-            "type": "object",
-            "properties": {
-                "center": {
-                    "$ref": "#/$defs/resultsCollocationCenter"
-                },
-                "space": {
-                    "$ref": "#/$defs/resultsCollocationSpace"
-                },
-                "attribute": {
-                    "$ref": "#/$defs/resultsCollocationAttribute"
-                }
-            },
             "anyOf": [
                 {
+                    "type": "object",
+                    "properties": {
+                        "space": {
+                            "$ref": "#/$defs/space"
+                        },
+                        "resultsCollocationAttribute": {
+                            "$ref": "#/$defs/resultsCollocationAttribute"
+                        }
+                    },
                     "required": [
-                        "center"
+                        "space",
+                        "resultsCollocationAttribute"
                     ]
                 },
                 {
+                    "type": "object",
+                    "properties": {
+                        "center": {
+                            "$ref": "#/$defs/center"
+                        },
+                        "window": {
+                            "$ref": "#/$defs/window"
+                        },
+                        "resultsCollocationAttribute": {
+                            "$ref": "#/$defs/resultsCollocationAttribute"
+                        }
+                    },
                     "required": [
-                        "space"
+                        "center",
+                        "window",
+                        "resultsCollocationAttribute"
                     ]
                 }
             ],
-            "required": [
-                "attribute"
-            ]
-        },
-        "resultsCollocationSpace": {
-            "$ref": "#/$defs/entity"
-        },
-        "resultsCollocationCenter": {
-            "type": "object",
-            "properties": {
-                "entity": {
-                    "$ref": "#/$defs/entity"
-                },
-                "window": {
-                    "$ref": "#/$defs/window"
-                }
-            },
-            "required": [
-                "entity",
-                "window"
-            ]
+            "type": "object"
         },
         "resultsCollocationAttribute": {
-            "anyOf": [
-                {
-                    "required": [
-                        "entity"
-                    ]
-                },
-                {
-                    "required": [
-                        "attribute"
-                    ]
-                },
-                {
-                    "required": [
-                        "function"
-                    ]
-                }
-            ],
-            "properties": {
-                "entity": {
-                    "$ref": "#/$defs/entity"
-                },
-                "attribute": {
-                    "$ref": "#/$defs/attribute"
-                },
-                "function": {
-                    "$ref": "#/$defs/function"
-                }
-            },
-            "type": "object"
+            "type": "string",
+            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "query": {
             "type": "array",
@@ -986,12 +937,6 @@
         "results"
     ],
     "skips": {
-        "operandLeft": [
-            "math"
-        ],
-        "operandRight": [
-            "math"
-        ],
         "constraints": [
             "constraint"
         ],
@@ -1006,9 +951,16 @@
         ],
         "resultsPlainEntities": [
             "entity"
+        ],
+        "resultsCollocationAttribute": [
+            "reference"
         ]
     },
     "renames": {
+        "operation": {
+            "operandLeft": "left",
+            "operandRight": "right"
+        },
         "resultsPlain": {
             "resultsPlainContext": "context",
             "resultsPlainEntities": "entities"
@@ -1019,9 +971,7 @@
             "resultsAnalysisFilter": "filter"
         },
         "resultsCollocation": {
-            "resultsCollocationSpace": "space",
-            "resultsCollocationAttribute": "attribute",
-            "resultsCollocationCenter": "center"
+            "resultsCollocationAttribute": "attribute"
         }
     }
 }

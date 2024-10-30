@@ -1,20 +1,19 @@
 part_of : "@"label
 
 operator : OPERATOR
-operand_left : math                                   // skip: math
-operand_right : math                                  // skip: math
-operation : operand_left operator operand_right
+operand_left : (math | function)
+operand_right : (math | function)
+operation : operand_left operator operand_right // rename: operand_left>left operand_right>right
 math : POS_INT
      | NEG_INT
      | FLOAT
-     | function
      | operation
 min : POS_INT
-max : POS_INT | "*"
+max : POS_INT | WILDCARD
 repetition : min".."max
 
-left_span : NEG_INT
-right_span : POS_INT
+left_span : NEG_INT | WILDCARD
+right_span : POS_INT | WILDCARD
 window : left_span ("..+"|"..") right_span
 
 quantifier : NEGATION? EXISTENTIAL
@@ -33,6 +32,8 @@ string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
 label : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
 entity : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as an entity reference
+center : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as center
+space : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as space
 reference : LABEL | ANALYSIS_FUNCTIONS | ATTRIBUTE
 layer : LAYER
 
@@ -76,14 +77,14 @@ results_analysis_attributes : "attributes" _NL _INDENT ((attribute|function) _NL
 results_analysis_functions : "functions" _NL _INDENT (ANALYSIS_FUNCTIONS _NL*)+ _DEDENT
 results_analysis_filter : "filter" _NL _INDENT ((comparison | comparison) _NL*)+ _DEDENT // dirty trick to force 'comparison' key after lark_to_cobquec
 
-results_collocation        : "collocation" _NL _INDENT (results_collocation_center | results_collocation_space) results_collocation_attribute _DEDENT  // rename: results_collocation_space>space results_collocation_attribute>attribute results_collocation_center>center
-results_collocation_space : "space" _NL _INDENT entity _NL* _DEDENT
-results_collocation_center : "center" _NL _INDENT entity _NL _DEDENT "window" _NL _INDENT window _NL _DEDENT
-results_collocation_attribute : "attribute" _NL _INDENT (entity|attribute|function) _NL* _DEDENT
+
+results_collocation : "collocation" _NL _INDENT "space" _NL _INDENT space _NL* _DEDENT results_collocation_attribute _DEDENT  // rename: results_collocation_attribute>attribute
+                    | "collocation" _NL _INDENT "center" _NL _INDENT center _NL* _DEDENT "window" _NL _INDENT window _NL* _DEDENT results_collocation_attribute _DEDENT
+results_collocation_attribute : "attribute" _NL _INDENT reference _NL* _DEDENT // skip: reference
 
 query : ((quantification | sequence | set | unit | constraint) _NL*)+
 
-top : query results
+top : _NL* query results
 
 
 FUNCTION_NAME.3 : "length("
@@ -111,6 +112,8 @@ DISJUNCTION.2 : "OR"
 POS_INT : /[1-9]*[0-9]/                   // type: number
 NEG_INT : /-[1-9]*[0-9]/                  // type: number
 FLOAT : /-?[1-9]*[0-9]\.[0-9]+/           // type: number
+
+WILDCARD : "*"
 
 NEGATION.2 : /(~|¬|!|not )/i
 COMPARATIVE : /[><]=?/

@@ -163,7 +163,10 @@ class Unit(Member):
     ):
         super().__init__(obj, parent_sequence, depth)
         query_data: QueryData = parent_sequence.query_data
-        self.label: str = str(obj["unit"].get("label", query_data.unique_label()))
+        unit_label = parent_sequence.conf.config["firstClass"]["token"]
+        self.label: str = str(
+            obj["unit"].get("label", query_data.unique_label(layer=unit_label))
+        )
         self.internal_label: str = self.label
         self.depth: int = depth
         self.min_length: int = 1

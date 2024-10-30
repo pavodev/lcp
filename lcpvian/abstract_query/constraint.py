@@ -12,7 +12,6 @@ from .utils import (
     arg_sort_key,
     QueryData,
     _joinstring,
-    _parse_comparison,
     _is_anchored,
     _layer_contains,
 )
@@ -28,7 +27,18 @@ QUANTOR_TEMPLATE = """
 """
 
 # callables allowed in dqd
-FUNCS = ("length", "century", "decade", "year", "month", "day", "position", "range")
+FUNCS = (
+    "length",
+    "century",
+    "decade",
+    "year",
+    "month",
+    "day",
+    "position",
+    "range",
+    "start",
+    "end",
+)
 
 
 def _valid_uuid(val: Any) -> bool:
@@ -165,7 +175,7 @@ class Constraints:
                 cons = member.conditions()
                 if cons.strip():
                     out[cons] = None
-            elif isinstance(member, (TimeConstraint, Constraint)):
+            elif isinstance(member, Constraint):
                 # do we need a sublevel here?
                 member.make()
                 # Constraint instances necessarily connect their conditions with AND
@@ -212,7 +222,7 @@ class Constraints:
                         out[k] = cast(set, out[k]).union(v)
                     else:
                         out[k] = v
-            elif isinstance(member, (TimeConstraint, Constraint)):
+            elif isinstance(member, Constraint):
                 member.make()
                 for k, v in member._joins.items():
                     if not k.strip():
@@ -410,7 +420,7 @@ class Constraint:
 
         ref = ""
         ref_info: RefInfo = RefInfo(layer=layer, mapping=mapping)
-        # function string | regex | math | reference=
+        # function string | regex | math | reference | entity
         if "function" in reference:
             ref, ref_info = self.parse_function(reference["function"])
         elif "string" in reference:
@@ -422,30 +432,28 @@ class Constraint:
             ref_info["type"] = "regex"
             ref_info["meta"] = rgx
         elif "math" in reference:
-            ref, ref_info = self.parse_math(reference["math"])
-        elif "reference" in reference:
-            ref = reference["reference"]
+            ref, ref_info = self.parse_math(reference)
+        elif "reference" in reference or "entity" in reference:
+            ref = cast(str, reference.get("reference", reference.get("entity", "")))
             post_dots: list[str] = []
             sub_ref: str = ""
             if "." in ref:
-                ref, *post_dots = reference["attribute"].strip().split(".")
+                ref, *post_dots = ref.strip().split(".")
                 sub_ref = ".".join(post_dots)
             if ref in deps:
-                if post_dots:
-                    ref_label: str = f"{prefix}_{ref}"
-                    ref_layer: str = deps[ref].get("entity", self.layer)
-                    lab_lay[ref_label] = (ref_layer, {})
-                    self.label_layer = lab_lay
-                    ref_mapping = _get_mapping(
-                        ref_layer, self.config, self.batch, self.lang or ""
-                    )
-                    # join here
-                    return self.get_reference(
-                        {"reference": sub_ref}, prefix=ref_label, mapping=ref_mapping
-                    )
-                else:
-                    ref = f"{prefix}.{ref}"
-                    ref_info["type"] = "id"
+                assert "." not in ref, SyntaxError(
+                    f"Cannot reference a sub-attribute ({sub_ref}) on a source/head of a dependency relation ({ref})"
+                )
+                ref_label = prefix
+                ref_mapping = mapping.get("attributes", {}).get(ref, {})
+                ref_table = ref_mapping.get("name", layer.lower())
+                ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
+                # hack: need a condition here because when inside a sequence,
+                # unconditional joins from tokens are ignored in sequence.py#_where_conditions_from_constraints
+                # (not sure why, probably to clean out unnecessary joins by sequence processing)
+                self._add_join_on(ref_formed_table, "1=1")
+                ref = f"{ref_label}.{ref}"
+                ref_info["type"] = "id"
             elif ref in attributes or ref in meta:
                 in_meta = ref not in attributes
                 ref_template = meta[ref] if in_meta else attributes[ref]
@@ -460,36 +468,58 @@ class Constraint:
                         assert len(post_dots) == 1, SyntaxError(
                             f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
                         )
-                        ref_label = f"{prefix}_{ref}"
-                        # join here
+                        ref_label = f"{prefix}_{ref}".lower()
+                        ref_mapping = mapping.get("attributes", {}).get(ref, {})
+                        ref_key = ref_mapping.get("key", ref)
+                        ref_table = ref_mapping.get("name", f"global_attributes_{ref}")
+                        ref_formed_table = (
+                            f"{self.schema}.{ref_table.lower()} {ref_label}"
+                        )
+                        ref_formed_condition = (
+                            f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
+                        )
+                        self._add_join_on(ref_formed_table, ref_formed_condition)
                         ref_attributes = self.config["globalAttributes"][
                             global_attr
                         ].get("keys", {})
-                        assert sub_ref in ref_attributes, ValueError(
-                            f"Sub-attribute '{sub_ref}' not found on {prefix}.{ref}"
-                        )
-                        ref = f"{ref_label}.{sub_ref}"
-                        ref_info = RefInfo(
-                            type=ref_attributes.get("type", "string").replace(
-                                "text", "string"
-                            )
-                        )
+                        ref_type = ref_attributes.get(sub_ref, {}).get("type", "string")
+                        ref_type = ref_type.replace("text", "string")
+                        # Uncomment once all keys have been reported in the db
+                        # assert sub_ref in ref_attributes, ValueError(
+                        #     f"Sub-attribute '{sub_ref}' not found on {prefix}.{ref}"
+                        # )
+                        accessor = "->>" if ref_type == "string" else "->"
+                        ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
+                        ref_info = RefInfo(type=ref_type)
                     elif ref_type in ("dict", "jsonb"):
                         assert len(post_dots) == 1, SyntaxError(
                             f"No support for nested references yet at {prefix}.{ref}.{sub_ref}"
                         )
                         ref_label = f"{prefix}_{ref}"
-                        ref_key = mapping.get(ref, {"name": ref})
-                        # join here
-                        ref = f"{ref_label}.{ref_key}->>'{sub_ref}'"
-                        ref_info = RefInfo(type="string")
+                        ref_mapping = mapping.get("attributes", {}).get(ref, {})
+                        ref_key = ref_mapping.get("key", ref.lower())
+                        ref_table = ref_mapping.get("name", ref.lower())
+                        ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
+                        ref_formed_condition = (
+                            f"{prefix}.{ref_key}_id = {ref_label}.{ref_key}_id"
+                        )
+                        self._add_join_on(ref_formed_table, ref_formed_condition)
+                        ref_type = (
+                            attributes.get(ref, {})
+                            .get("keys", {})
+                            .get(sub_ref, {})
+                            .get("type", "string")
+                        ).replace("text", "string")
+                        accessor = "->>" if ref_type == "string" else "->"
+                        ref = f"{ref_label}.{ref_key}{accessor}'{sub_ref}'"
+                        ref_info = RefInfo(type=ref_type)
                     else:
                         raise TypeError(
                             f"Trying to access sub-attribute '{sub_ref}' on non-dict attribute {prefix}.{ref}"
                         )
                 # No suffix
                 elif global_attr:
-                    ref = f"{prefix}.{ref}"
+                    ref = f"{prefix}.{ref}_id"
                     ref_info["type"] = "id"
                 else:
                     attr_mapping = mapping.get("attributes", {}).get(ref, {})
@@ -528,7 +558,9 @@ class Constraint:
                         type="entity", layer=ref_layer, mapping=ref_mapping
                     )
             else:
-                raise ReferenceError(f"Could not resolve reference to '{ref}'")
+                raise ReferenceError(
+                    f"Could not resolve reference to '{ref}': no entity has that label and {layer} has no attribute of that name"
+                )
         return (ref, ref_info)
 
     def make(self) -> None:
@@ -603,7 +635,7 @@ class Constraint:
             assert self.op in ("=", "!=", ">=", "<=", ">", "<"), SyntaxError(
                 f"Invalid operator {self.op} for numerical comparison ({left} {self.op} {right})"
             )
-            formed_condition = f"{left} {self.op.replace('=','~')} {right}"
+            formed_condition = f"{left} {self.op} {right}"
 
         # # Special case: labels
         # left_ref_info = left_ref[1]
@@ -682,26 +714,32 @@ class Constraint:
         self,
         math_obj: dict[str, Any],
     ) -> tuple[str, RefInfo]:
-        ref: list[str] = ["", math_obj.get("operator", "+"), ""]
-        left = math_obj.get("operandLeft")
-        right = math_obj.get("operandRight")
-        if isinstance(left, str):
-            ref[0] = left
-        else:
-            left_ref, left_type = self.get_reference(cast(dict[str, Any], left))
+        """
+        Return (number, {"type": "number"})
+        Input is {"math": ...} where ... can be a string number, {"function": ...} or {"operation": ...}
+        """
+        ref: str = ""
+        ref_info: RefInfo = RefInfo(type="number")
+        if isinstance(math_obj["math"], str):
+            ref = math_obj["math"]
+            return (ref, ref_info)
+        elif isinstance(math_obj["math"], dict) and "function" in math_obj["math"]:
+            return self.parse_function(math_obj["math"]["funciton"])
+        operation = math_obj["math"].get("operation", {})
+        ref_array: list[str] = ["", operation.get("operator", "+"), ""]
+        left = operation.get("left", {"math": "0"})
+        right = operation.get("right", {"math": "0"})
+        for i in range(2):
+            operand = left if i == 0 else right
+            operand_ref, operand_info = self.get_reference(
+                cast(dict[str, Any], operand)
+            )
             assert (
-                left_type.get("type") == "number"
-            ), f"Only numbers can appear in mathematical operations ({left})"
-            ref[0] = left_ref
-        if isinstance(right, str):
-            ref[2] = right
-        else:
-            right_ref, right_type = self.get_reference(cast(dict[str, Any], right))
-            assert (
-                right_type.get("type") == "number"
-            ), f"Only numbers can appear in mathematical operations ({right})"
-            ref[2] = right_ref
-        return (" ".join(ref), RefInfo(type="number"))
+                operand_info.get("type") == "number"
+            ), f"Only numbers can appear in mathematical operations ({operand})"
+            ref_array[2 * i] = operand_ref
+        ref = " ".join(ref_array)
+        return (ref, ref_info)
 
     def parse_function(
         self,
@@ -719,7 +757,7 @@ class Constraint:
         ref_info = RefInfo(type="text")
         if fn == "range":
             first_arg_str, first_arg_info = parsed_ars[0]
-            assert first_arg_info.get("type") == "layer", TypeError(
+            assert first_arg_info.get("type") == "entity", TypeError(
                 f"Range only applies to layer annotations (error in '{first_arg_str}')"
             )
             fn_str = (
@@ -728,106 +766,25 @@ class Constraint:
             ref_info = RefInfo(type="number")
         elif fn == "position":
             first_arg_str, first_arg_info = parsed_ars[0]
-            assert first_arg_info.get("type") == "layer", TypeError(
+            assert first_arg_info.get("type") == "entity", TypeError(
                 f"Range only applies to layer annotations (error in '{first_arg_str}')"
             )
             fn_str = f"lower({first_arg_str}.char_range)"
             ref_info = RefInfo(type="number")
+        elif fn in ("start", "end"):
+            first_arg_str, first_arg_info = parsed_ars[0]
+            assert first_arg_info.get("type") == "entity", TypeError(
+                f"{fn} only applies to layer annotations (error in '{first_arg_str}')"
+            )
+            assert _is_anchored(
+                self.config, first_arg_info.get("layer", self.layer), "time"
+            ), TypeError(
+                f"{fn} only applies to time-aligned layer annotations (error in '{first_arg_str})"
+            )
+            lower_or_upper = "lower" if fn == "start" else "upper"
+            fn_str = f"({lower_or_upper}({first_arg_str}.frame_range) / 25)"  # time in seconds
+            ref_info = RefInfo(type="number")
         return (fn_str, ref_info)
-
-    # def id_field(self):
-    #     """
-    #     Handle querying on segment_id, token_id etc
-    #     """
-    #     is_uuid = _valid_uuid(self._query)
-    #     cast = "::text" if not is_uuid else "::uuid"
-    #     op = self.op
-    #     qcast = ""
-    #     if _valid_uuid(self._query):
-    #         op = op.replace("~", "=")
-    #         qcast = "::uuid"
-    #     elif isinstance(self._formatted, int):
-    #         cast = "::bigint"
-    #     else:
-    #         cast = "::text"
-
-    #     col = f"{self.original_layer}_id"
-
-    #     formed = f"{self.label}.{col}{cast} {op} {self._formatted}{qcast}"
-    #     self._add_join_on(f"{self.schema}.{self.layer} {self.label}", formed)
-
-    # def metadata(self):
-    #     """
-    #     Handle metadata like IsPresident = No
-    #     """
-    #     lb, rb = "(", ")"
-    #     if not self._cast:
-    #         lb, rb = "", ""
-    #     lab = self.label
-    #     # mapping = _get_mapping(self.layer, self.config, self.batch, self.lang)
-    #     mapping = self.config["mapping"]["layer"].get(self.layer, {})
-    #     if (
-    #         "alignment" in mapping
-    #         and mapping["alignment"].get("hasMeta")
-    #         and (relation := mapping["alignment"].get("relation"))
-    #     ):
-    #         lab = f"{self.label}_aligned"
-    #         self._add_join_on(
-    #             f"{self.schema}.{relation} {lab}",
-    #             f"{self.label}.alignment_id = {lab}.alignment_id",
-    #         )
-    #     formed = f"{lb}{lab}.meta ->> '{self.field}'{rb}{self._cast} {self.op} {self._formatted}"
-    #     # if self.layer == self.config["document"]:
-    #     #     self._add_join_on(f"{self.schema}.{self.layer} {self.label}", formed)
-    #     # else:
-    #     self._conditions.add(formed)
-
-    def deprel(self, left: str, operator: str, right: str) -> None:
-        """
-        Handle dependency query
-        """
-        dep_table = _get_table(self.layer, self.config, self.batch, self.lang or "")
-        label = f"deprel_{self.label}".lower()
-        source, target = {
-            x.get("name", "")
-            for n, x in self._attribs.items()
-            if n in ("source", "target")
-        }
-        field = left.lower().strip()
-        if field in (source, target):
-            entity_label = right
-            lablay: dict[str, Any] = self.label_layer or {}
-            entity_layer = lablay.get(entity_label, [""])[0]
-            formed_condition = (
-                f"{label}.{field} {self.op} {entity_label}.{entity_layer}_id"
-            )
-            self._add_join_on(
-                f"{self.schema}.{dep_table} {label}", formed_condition.lower()
-            )
-        else:
-            cast = "::text"
-            lterm = f"{label}.{field}{cast}"
-            formed_condition = f"{lterm.lower()} {operator} {right}"
-            self._add_join_on(f"{self.schema}.{dep_table} {label}", formed_condition)
-
-    def _standardise_op(self, op: str) -> str:
-        """
-        post-process op: =, !=, etc
-        """
-        # if self._query_variable:
-        #     return op.replace("~", "=")
-        # if "CONTAIN" in op.upper():
-        #     if op.startswith(("!", "NOT", "not")):
-        #         op = "!contain"
-        #     else:
-        #         op = "contain"
-        # elif "NIN" in op.upper():
-        #     op = "NOT IN"
-        # elif "IN" in op.upper():
-        #     op = "IN"
-        # elif self.type == "regex":
-        #     op = op.replace("=", "~")
-        return op.upper()
 
     # def date(self) -> None:
     #     q: str = f"{self._formatted}"
@@ -851,136 +808,6 @@ class Constraint:
     #     formed = f"{self.label.lower()}.{self.field.lower()}{cast} {op} {q}"
     #     self._conditions.add(formed)
 
-    # def _to_sql(self, query: QueryType) -> str | int | float:
-    #     """
-    #     Turn query into something that can be inserted into sql with f-string
-    #     """
-    #     # detect variable
-    #     if self.type == "entity":
-    #         return str(query)
-    #     elif self.type == "math":
-    #         if isinstance(query, str) and query.strip().isnumeric():
-    #             return int(query.strip())
-    #         elif (
-    #             isinstance(query, str)
-    #             and "." in query
-    #             and query.strip().replace(".", "").isnumeric()
-    #         ):
-    #             return float(query.strip())
-    #         else:
-    #             # check that the expression is well-formed here?
-    #             return f"({str(query)})"
-    #     elif self.type == "function":
-    #         # Hack for simple cases, need to do better
-    #         function_name: str = cast(dict, query).get("functionName", "")
-    #         function_arguments: list = cast(
-    #             list[dict[str, str]], cast(dict, query).get("arguments", [{}])
-    #         )
-    #         first_argument: str = (
-    #             function_arguments[0].get("entity", "").replace(".", "_")
-    #         )
-    #         return f"{function_name}({first_argument})"
-
-    #     if isinstance(query, (list, tuple)):
-    #         if len(query) == 1:
-    #             query = query[0]
-    #         else:
-    #             items = [f"'{a}'" if isinstance(a, str) else str(a) for a in query]
-    #             formed = ", ".join(items)
-    #             return f"({formed})"
-    #     return f"'{query}'" if isinstance(query, str) else cast(str, query)
-
-
-class TimeConstraint:
-    """
-    Handle a constraint based on time
-    """
-
-    def __init__(
-        self,
-        schema: str,
-        layer: str,
-        label: str,
-        quantor: str | None,
-        label_layer: LabelLayer,
-        conf: Config,
-        boundary: str,
-        comp1: dict[str, Any],
-        obj: str,
-        comp2: str = "",
-        diff: str = "",
-        op: str = ">=",
-    ) -> None:
-        self.schema: str = schema
-        self.layer: str = layer
-        self.label: str = label
-        self.quantor: str | None = quantor
-        self.boundary: str = boundary
-        self.comp1: dict[str, Any] = comp1
-        self.obj: str = obj
-        self.comp2: str = comp2
-        self.label_layer: LabelLayer = label_layer
-        self.conf: Config = conf
-        self.diff: int | float | None = self._parse_time(diff)
-        self.op: str = op
-        self._joins: Joins = {}
-        self._conditions: set[str] = set()
-        self._quantor_label: str | None = None
-        self._made = False
-        # start and end in time queries
-
-    def make(self) -> None:
-        """
-        Build the constraint (populate _joins and _conditions)
-        """
-        is_start = "start" in self.boundary.lower()
-        is_start_compare = "start" in self.comp2.lower()
-        func = "lower" if is_start else "upper"
-        func_compare = "lower" if is_start_compare else "upper"
-        # sign = "-" if is_start else "+"
-        sign = "-" if re.match(rf"-\s*[0-9]", self.obj) else "+"
-        compare = self.obj.split(".", 1)[0]
-        lte: str = ">=" if self.op not in (">", ">=", "<", "<=") else self.op
-        # lte = ">=" if is_start else "<="
-        # lab = self._quantor_label or self.label
-        lab = self.label
-        formed = f"{func}({lab}.frame_range) {lte} {func_compare}({compare}.frame_range) {sign} {self.diff} * 25"
-        self._conditions.add(formed.lower())
-        table: str = _get_table(
-            self.layer, self.conf.config, self.conf.batch, cast(str, self.conf.lang)
-        )
-        join = f"{self.schema}.{table} {self.label}"
-        self._joins[join.lower()] = self._joins.get(join.lower(), None)
-        self._made = True
-        return None
-
-    @staticmethod
-    def _parse_time(time: str) -> int | float | None:
-        """
-        Normalise a time in format "1ms" to number of seconds as int if possible, float fallback
-        """
-        if not time.strip():
-            return None
-        unit = "".join([i for i in time if i.isalpha()]).lower()
-        amount: int | float = float(
-            "".join([i for i in time if i.isnumeric() or i == "."])
-        )
-        if unit == "s":
-            pass
-        elif unit == "ms":
-            amount = amount / 1000
-        elif unit == "m":
-            amount = amount * 60
-        elif unit == "h":
-            amount = amount * 3600
-        elif unit == "d":
-            amount = amount * 3600 * 24
-        elif amount == "w":
-            amount = amount * 3600 * 24 * 7
-        if isinstance(amount, float) and amount.is_integer():
-            amount = int(amount)
-        return amount
-
 
 def _get_constraint(
     constraint: JSONObject,
@@ -997,7 +824,7 @@ def _get_constraint(
     set_objects: set[str] | None = None,
     allow_any: bool = True,  # False,
     top_level: bool = False,
-) -> Constraint | Constraints | TimeConstraint | None:
+) -> Constraint | Constraints | None:
     """
     Handle a single constraint, or nested constraints
     """
@@ -1025,16 +852,17 @@ def _get_constraint(
     unit: dict[str, Any] = cast(dict[str, Any], constraint.get("unit", {}))
     if unit.get("constraints"):
         unit_layer: str = cast(str, unit.get("layer", ""))
-        unit_label = (
-            label  # Pass the parent's label if the layer is a dependency relation
-        )
-        if unit_layer.lower() not in ["deprel", "dependencyrelation"]:
-            unit_label = unit.get("label", "")
-        else:
-            label_layer[label] = (layer, dict())
+        unit_label = unit.get("label", "")
+        # unit_label = label
+        # # Pass the parent's label if the layer is a dependency relation
+        # layer_type = conf.config["layer"].get(unit_layer, {}).get("layerType")
+        # if layer_type != "relation":
+        #     unit_label = unit.get("label", "")
+        # else:
+        #     label_layer[label] = (layer, dict())
         part_of = unit.get("partOf", "")
         # Use the parent label as part_of if they are both stream-anchored
-        if label != unit.get("label") and (
+        if label != unit_label and (
             _layer_contains(conf.config, layer, unit_layer)
             or all(_is_anchored(conf.config, x, "stream") for x in (layer, unit_layer))
         ):
@@ -1100,48 +928,24 @@ def _get_constraint(
         }
 
     comp = cast(dict[str, Any], constraint.get("comparison", {}))
-    # left, comparator, _, right = _parse_comparison(comp)
 
-    is_time_anchored = _is_anchored(conf.config, layer, "time")
-
-    # Use a TimeConstraint if the right-hand side of a math comparison contains a time unit (ie ending in \d(s|m|ms|h|d|w))
-    if (
-        False
-        # and is_time_anchored
-        # and key.get("entity", "") in ("start", "end")
-        # and comparison_type == "mathComparison"
-    ):  # and re.match(r".*\d(s|m|ms|h|d|w)([\s()*/+-]|$)",query):
-        rest: dict = {
-            #     "boundary": "start" if "start" in key_str.lower() else "end",
-            #     "comp1": key,
-            #     "obj": query,
-            #     "comp2": query,
-            #     "diff": re.sub(
-            #         r"^.*?([0-9][0-9.]*(s|m|ms|h|d|w)?).*$", "\\1", cast(str, query)
-            #     ),
-            #     "op": op,
-        }
-        return TimeConstraint(
-            conf.schema, layer, label, quantor, label_layer, conf, **rest
-        )
-    else:
-        return Constraint(
-            comp.get("left", {}),
-            comp.get("comparator", ""),
-            comp.get("right", {}),
-            label,
-            layer,
-            conf,
-            quantor,
-            label_layer,
-            entities,
-            n,
-            is_set,
-            set_objects,
-            order,
-            prev_label,
-            allow_any,
-        )
+    return Constraint(
+        comp.get("left", {}),
+        comp.get("comparator", ""),
+        comp.get("right", {}),
+        label,
+        layer,
+        conf,
+        quantor,
+        label_layer,
+        entities,
+        n,
+        is_set,
+        set_objects,
+        order,
+        prev_label,
+        allow_any,
+    )
 
 
 def _get_constraints(
@@ -1236,8 +1040,7 @@ def _get_constraints(
             allow_any=allow_any,
             top_level=top_level,
         )
-        if not isinstance(tup, TimeConstraint):
-            n += 1
+        n += 1
         results.append(tup)
     lay: str = layer if not top_level else first_layer
     return Constraints(
