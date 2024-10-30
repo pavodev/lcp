@@ -147,13 +147,6 @@ export default {
 </script>
 
 <style scoped>
-.navbar-brand::after {
-  display: block;
-  content: "BETA";
-  font-style: italic;
-  position: absolute;
-  transform: translate(25%,-0.5em);
-}
 .version-number {
   font-size: 80% !important;
   opacity: 0.75;
