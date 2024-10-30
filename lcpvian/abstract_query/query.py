@@ -652,7 +652,7 @@ class QueryMaker:
                 gather_selects += f",\n{max_seq.replace('___lasttable___', last_table)}"
                 min_label = min_seq.split(" as ")[-1]
                 max_label = max_seq.split(" as ")[-1]
-                jttable = self.r.unique_label("t")
+                jttable = self.r.unique_label("t", layer=self.token)
                 infrom: str = f"{self.conf.schema}.{tok}{batch_suffix} {jttable}"
                 inwhere: str = (
                     f"{jttable}.{self.segment.lower()}_id = gather.{seg_lab} AND {jttable}.{tok}_id BETWEEN gather.{min_label}::bigint AND gather.{max_label}::bigint"

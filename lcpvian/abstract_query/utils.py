@@ -37,7 +37,10 @@ class QueryData:
     sqlsequences: list[Any] = field(default_factory=list)
 
     def unique_label(
-        self, label: str = "anonymous", references: LabelLayer | None = None
+        self,
+        label: str = "anonymous",
+        layer="__internal",
+        references: LabelLayer | None = None,
     ) -> str:
         if references is None:
             references = self.label_layer
@@ -47,7 +50,7 @@ class QueryData:
         while new_label in references:
             n += 1
             new_label = f"{label}{str(n)}"
-        references[new_label] = ("__internal", dict({}))
+        references[new_label] = (layer, dict({}))
         return new_label
 
 

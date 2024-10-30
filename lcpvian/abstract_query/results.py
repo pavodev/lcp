@@ -243,7 +243,9 @@ class ResultsMaker:
         not in entities. This might change ... if space is a set, maybe the
         criteria go into the collocation CTE instead of match_list CTE
         """
-        space = result.get("space", [])
+        # TODO: support a list of references as "space"
+        # space = result.get("space", [])
+        space = result.get("space", "")
         feat = cast(str, result.get("attribute", "lemma"))
         attribs = cast(JSONObject, self.conf_layer[self.token])["attributes"]
         assert isinstance(attribs, dict)
@@ -265,15 +267,15 @@ class ResultsMaker:
 
         feat_maybe_id = f"{feat}_id" if need_id and not feat.endswith("_id") else feat
         # in_entities = False if not space else space[0].lower() in self.r.entities
-        layer, _ = self.r.label_layer[space[0]]
+        layer, _ = self.r.label_layer[space]
         attr = f"{self.token.lower()}_id"
         self._n += 1
-        formed = f"{space[0]}.{attr} AS {space[0]}"
+        formed = f"{space}.{attr} AS {space}"
 
-        if space[0] not in self.r.set_objects:
+        if space not in self.r.set_objects:
             self.r.selects.add(formed.lower())
-            self.r.entities.add(space[0])
-            formed = f"{space[0]}.{feat_maybe_id} AS {space[0]}_{feat_maybe_id}"
+            self.r.entities.add(space)
+            formed = f"{space}.{feat_maybe_id} AS {space}_{feat_maybe_id}"
         # thead.lemma_id AS thead_lemma_id
         else:
             formed = process_set(
@@ -283,14 +285,14 @@ class ResultsMaker:
                 self.token,
                 self.segment,
                 self._underlang,
-                self.find_set(space[0]) or {},
+                self.find_set(space) or {},
                 seg_label="___seglabel___",
                 attribute=feat,
             )
 
         self.r.selects.add(formed.lower())
         # add entity: thead_lemma_id
-        self.r.entities.add(f"{space[0]}_{feat_maybe_id}".lower())
+        self.r.entities.add(f"{space}_{feat_maybe_id}".lower())
 
     def _update_context(self, context: str) -> None:
         """
@@ -849,23 +851,25 @@ WHERE {entity}.char_range && contained_token.char_range
         return " WHERE " + " AND ".join(formed)
 
     @staticmethod
-    def _parse_window(window: str, center: str | None) -> str:
+    def _parse_window(window: dict[str, str], center: str | None) -> str:
         """
         Parse the x..y format window into an SQL string
         """
         if not window:
             return ""
-        a, b = window.split("..", 1)
-        a = a.replace("+", "+ ", 1).replace("-", "- ", 1)
-        b = b.replace("+", "+ ", 1).replace("-", "- ", 1)
+        # a, b = window.split("..", 1)
+        a, b = (
+            cast(str, window.get("leftSpan", "1")).strip(),
+            cast(str, window.get("rightSpan", "1")).strip(),
+        )
         if "*" in a and "*" in b:
             return ""
         elif "*" not in a and "*" in b:  # *..5
-            return f">= {center} {a}"
+            return f">= {center} + ({a})"
         elif "*" in a and "*" not in b:  # 3..*
-            return f"<= {center} {b}"
+            return f"<= {center} + ({b})"
         else:  # 3..4
-            return f"BETWEEN {center} {a} AND {center} {b}"
+            return f"BETWEEN {center} + ({a}) AND {center} + ({b})"
 
     @staticmethod
     def _within_sent(segment_id, seg_name: str = "__seglabel__", **kwargs) -> str:
@@ -888,12 +892,20 @@ WHERE {entity}.char_range && contained_token.char_range
         self is the ResultsMaker object -- all this code could be methods on it,
         but danny put them here because that file is getting large...
         """
-        space = cast(list[str], result.get("space", []))
+        # TODO: support list of references as "space"
+        # space = cast(list[str], result.get("space", []))
+        space = cast(str, result.get("space", ""))
         center = cast(str | None, result.get("center"))
         assert not (space and center), "Only one of space/center allowed!"
         freq_n = self._freq_n_table()
         freq_table = self._freq_table()
-        windowed = self._parse_window(cast(str, result.get("window", "")), center)
+        windowed = self._parse_window(
+            cast(
+                dict[str, str],
+                result.get("window", {"leftSpan": "*", "rightSpan": "*"}),
+            ),
+            center,
+        )
         feat = cast(str, result.get("attribute", "lemma"))
         attribs = cast(JSONObject, self.conf_layer[self.token])["attributes"]
         assert isinstance(attribs, dict)
@@ -906,8 +918,8 @@ WHERE {entity}.char_range && contained_token.char_range
         feat_maybe_id = f"{feat}_id" if need_id and not feat.endswith("_id") else feat
         space_feat, lany, rbrack = "", "", ""
         if space:
-            space_feat = f"{space[0]}_{feat_maybe_id}"
-            if space[0] in self.r.set_objects:
+            space_feat = f"{space}_{feat_maybe_id}"
+            if space in self.r.set_objects:
                 lany = " ANY ( "
                 rbrack = " ) "
         elif center and (token_meta := self.r.label_layer.get(center)):
@@ -963,7 +975,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 """
             else:
                 select_feat = space_feat
-                if space[0] in self.r.set_objects:
+                if space in self.r.set_objects:
                     select_feat = f"unnest({space_feat})"
                 cte = f"""
                     collocates{i} AS (

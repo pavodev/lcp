@@ -388,7 +388,7 @@ export default {
             if (problematicText) {
               problematicText = problematicText[1];
               let oldline = line, nlines = model.getLineCount();
-              while (line < nlines && !model.getLineContent(line).match(problematicText)) line++;
+              while (line < nlines && !model.getLineContent(line).includes(problematicText)) line++;
               if (line < nlines)
                 column = model.getLineContent(line).length;
               else
