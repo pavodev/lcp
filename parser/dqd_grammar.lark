@@ -25,16 +25,16 @@ arguments : ((entity | function | attribute | string | regex | math) ","?)+
 function_name : FUNCTION_NAME
 function : function_name arguments ")"
 
-case_insensitive : "i"
+case_insensitive : IFLAG
 pattern : REGEX
 regex : pattern case_insensitive?
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
-label : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
-entity : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as an entity reference
-center : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as center
-space : LABEL | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as space
-reference : LABEL | ANALYSIS_FUNCTIONS | ATTRIBUTE
+label : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
+entity : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as an entity reference
+center : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as center
+space : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as space
+reference : LABEL | IFLAG | ANALYSIS_FUNCTIONS | ATTRIBUTE
 layer : LAYER
 
 left : (function | reference | attribute | string | regex | math)
@@ -114,6 +114,7 @@ NEG_INT : /-[1-9]*[0-9]/                  // type: number
 FLOAT : /-?[1-9]*[0-9]\.[0-9]+/           // type: number
 
 WILDCARD : "*"
+IFLAG : "i"
 
 NEGATION.2 : /(~|¬|!|not )/i
 COMPARATIVE : /[><]=?/

@@ -82,7 +82,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-[1-9]*[0-9]|[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
+                    "pattern": "([1-9]*[0-9]|-[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -91,8 +91,8 @@
                 }
             },
             "type": [
-                "string",
-                "object"
+                "object",
+                "string"
             ]
         },
         "min": {
@@ -304,23 +304,23 @@
         },
         "label": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
         },
         "entity": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
         },
         "center": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
         },
         "space": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
         },
         "reference": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "layer": {
             "type": "string",
@@ -869,7 +869,7 @@
         },
         "resultsCollocationAttribute": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "query": {
             "type": "array",
