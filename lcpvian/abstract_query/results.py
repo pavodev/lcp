@@ -387,13 +387,15 @@ class ResultsMaker:
                 continue
             att_str = cast(dict, att)["attribute"]
             lab = att_str.replace(".", "_").lower().strip()
-            shortest = att_str.split(".", 1)[0]
+            split_att = att_str.split(".")
+            shortest = split_att[0]
             shortest = self._label_mapping.get(shortest, shortest)
-            field = att_str.split(".")[-1]
+            field = split_att[1]
             layer, _ = self.r.label_layer[shortest]
             layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
             table = _get_table(layer, self.config, self.batch, self.lang)
             is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
+            is_chained = len(split_att) > 2
             conf_layer_info: dict[str, Any] = cast(
                 dict[str, Any], self.conf_layer[layer]
             )
@@ -404,9 +406,21 @@ class ResultsMaker:
             attrib_table = (
                 mapping.get("attributes", {}).get(field, {}).get("name", field)
             )
-            if is_meta:
+            if is_chained:
+                pre_att = f"{shortest}_{field}"
+                sub_field = split_att[2]
+                if is_meta:
+                    line = f"{pre_att}.meta -> '{field}' ->> '{sub_field}' AS {lab}"
+                else:
+                    line = f"{pre_att}.{field} ->> '{sub_field}' AS {lab}"
+                self.r.selects.add(line)
+            elif is_meta:
                 line = f"{shortest}.meta ->> '{field}' AS {lab}"
                 self.r.selects.add(line)
+            elif is_chained:
+                pre_att = f"{shortest}_{field}"
+                sub_field = split_att[2]
+                line = f"{pre_att}.{field}->> '{sub_field}' AS {lab}"
             elif attrs[field].get("type", "") == "text" or "ref" in attrs[field]:
                 formed_join = f"{self.schema}.{attrib_table} {lab}"
                 self.r.joins[formed_join.lower()] = True
