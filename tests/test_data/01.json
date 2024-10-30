@@ -8,10 +8,14 @@
           {
             "comparison": {
               "left": {
-                "entity": "classCode"
+                "reference": "classCode"
               },
-              "operator": "=",
-              "regexComparison": "/^S/"
+              "comparator": "=",
+              "right": {
+                "regex": {
+                  "pattern": "^S"
+                }
+              }
             }
           }
         ]
@@ -26,21 +30,23 @@
     },
     {
       "sequence": {
+        "partOf": "s",
         "label": "seq",
         "members": [
           {
             "unit": {
               "layer": "Token",
-              "partOf": "s",
               "label": "t1",
               "constraints": [
                 {
                   "comparison": {
                     "left": {
-                      "entity": "xpos2"
+                      "reference": "xpos2"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"ART\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "ART"
+                    }
                   }
                 }
               ]
@@ -49,25 +55,28 @@
           {
             "unit": {
               "layer": "Token",
-              "partOf": "s",
               "label": "t2",
               "constraints": [
                 {
                   "comparison": {
                     "left": {
-                      "entity": "xpos2"
+                      "reference": "lemma"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"ADJ\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "true"
+                    }
                   }
                 },
                 {
                   "comparison": {
                     "left": {
-                      "entity": "lemma"
+                      "reference": "xpos2"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"true\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "ADJ"
+                    }
                   }
                 }
               ]
@@ -76,16 +85,17 @@
           {
             "unit": {
               "layer": "Token",
-              "partOf": "s",
               "label": "t3",
               "constraints": [
                 {
                   "comparison": {
                     "left": {
-                      "entity": "xpos2"
+                      "reference": "xpos2"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"SUBST\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "SUBST"
+                    }
                   }
                 }
               ]
@@ -97,7 +107,7 @@
   ],
   "results": [
     {
-      "label": "KWIC",
+      "label": "kwic",
       "resultsPlain": {
         "context": [
           "s"
@@ -110,23 +120,29 @@
       }
     },
     {
-      "label": "NounDist",
+      "label": "nounDist",
       "resultsAnalysis": {
         "attributes": [
-          "t3.lemma"
+          {
+            "attribute": "t3.lemma"
+          }
         ],
         "functions": [
           "frequency"
         ],
-        "filter": {
-          "comparison": {
-            "left": {
-              "entity": "frequency"
-            },
-            "operator": ">",
-            "mathComparison": "1"
+        "filter": [
+          {
+            "comparison": {
+              "left": {
+                "reference": "frequency"
+              },
+              "comparator": ">",
+              "right": {
+                "math": "1"
+              }
+            }
           }
-        }
+        ]
       }
     }
   ]

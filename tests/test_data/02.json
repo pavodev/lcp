@@ -2,16 +2,20 @@
   "query": [
     {
       "unit": {
-        "layer": "Turn",
-        "label": "t",
+        "layer": "Session",
+        "label": "e",
         "constraints": [
           {
             "comparison": {
               "left": {
-                "entity": "Surname"
+                "reference": "date"
               },
-              "operator": "=",
-              "stringComparison": "\"Schulz\""
+              "comparator": "=",
+              "right": {
+                "regex": {
+                  "pattern": "^2000"
+                }
+              }
             }
           }
         ]
@@ -20,7 +24,7 @@
     {
       "unit": {
         "layer": "Segment",
-        "partOf": "t",
+        "partOf": "e",
         "label": "s"
       }
     },
@@ -37,10 +41,12 @@
                 {
                   "comparison": {
                     "left": {
-                      "entity": "upos"
+                      "reference": "upos"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"VERB\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "VERB"
+                    }
                   }
                 }
               ]
@@ -55,10 +61,12 @@
                 {
                   "comparison": {
                     "left": {
-                      "entity": "upos"
+                      "reference": "upos"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"DET\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "DET"
+                    }
                   }
                 }
               ]
@@ -73,10 +81,23 @@
                 {
                   "comparison": {
                     "left": {
-                      "entity": "upos"
+                      "reference": "upos"
                     },
-                    "operator": "=",
-                    "stringComparison": "\"NOUN\""
+                    "comparator": "=",
+                    "right": {
+                      "string": "NOUN"
+                    }
+                  }
+                },
+                {
+                  "comparison": {
+                    "left": {
+                      "reference": "xpos"
+                    },
+                    "comparator": "=",
+                    "right": {
+                      "string": "NP"
+                    }
                   }
                 }
               ]
@@ -101,23 +122,29 @@
       }
     },
     {
-      "label": "Stat1",
+      "label": "stat1",
       "resultsAnalysis": {
         "attributes": [
-          "t1.lemma"
+          {
+            "attribute": "t1.lemma"
+          }
         ],
         "functions": [
           "frequency"
         ],
-        "filter": {
-          "comparison": {
-            "left": {
-              "entity": "frequency"
-            },
-            "operator": ">",
-            "mathComparison": "1"
+        "filter": [
+          {
+            "comparison": {
+              "left": {
+                "reference": "frequency"
+              },
+              "comparator": ">",
+              "right": {
+                "math": "1"
+              }
+            }
           }
-        }
+        ]
       }
     }
   ]
