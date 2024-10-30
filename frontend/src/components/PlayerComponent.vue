@@ -1,86 +1,48 @@
 <template>
-  <div class="player mb-5">
-    <div class="container mt-4">
-      <div class="row">
-        <div class="col-5">
-          <label class="form-label">Corpus</label>
-          <select v-model="selectedCorpora" class="form-select">
-            <option
-              v-for="corpora in corpusList"
-              :value="corpora"
-              v-html="corpora.name"
-              :key="corpora.value"
-            ></option>
-          </select>
-        </div>
-        <!--<div class="col-5">
-          <label class="form-label">Document</label>
-          <!- - <span v-if="loading">Loading ...</span> - ->
-          <select v-model="currentDocument" class="form-select">
-            <option
-              v-for="document in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
-              :value="document"
-              v-html="document[1]"
-              :key="document[0]"
-            ></option>
-          </select>
-        </div>-->
-      </div>
-      <div class="row mt-4" v-if="selectedCorpora">
+  <div class="player">
+    <div class="container">
+      <div class="row" v-if="selectedCorpora">
         <div class="col">
-          <nav>
-            <div class="nav nav-tabs" id="nav-tab" role="tablist">
-              <button
-                v-for="document in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
-                :key="document[0]"
-                class="nav-link"
-                :class="currentDocument && currentDocument[2] == document[2] ? 'active' : ''"
-                :id="`nav-${document[0]}-tab`"
-                data-bs-toggle="tab"
-                :data-bs-target="`#nav-${document[0]}`"
-                type="button"
-                role="tab"
-                @click="setDocument(document)"
-                :aria-controls="`nav-${document[0]}`"
-                aria-selected="true"
-              >
-                {{ document[1] }}
-              </button>
+          <div class="row mt-4">
+            <div class="col">
+              <div class="mb-3 mt-3">
+                <label class="form-label">Document</label>
+                <multiselect
+                  v-model="currentDocumentSelected"
+                  :options="documentOptions"
+                  :multiple="false"
+                  label="name"
+                  track-by="value"
+                ></multiselect>
+              </div>
             </div>
-          </nav>
-          <!-- <div class="tab-content pt-3" id="nav-tabContent">
-            <div
-              v-for="(document, index) in corpusData.filter(corpus => Object.values(documentDict).includes(corpus[1]))"
-              :key="document[0]"
-              class="tab-pane fade"
-              :class="index == -1 ? 'active show' : ''"
-              :id="`nav-${document[0]}`"
-              role="tabpanel"
-              aria-labelledby="nav-results-tab"
-            >
-            </div>
-          </div> -->
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- <div id="eventdrops-demo" style="width: 90%" class="mt-4"></div> -->
-
     <div v-if="currentDocument">
       <div class="container mt-4 mb-4">
-        <div class="video-box">
-          <div class="video-text" v-html="subtext"></div>
+        <div :class="appType == 'videoscope' ? 'video-box' : 'audio-box'">
+          <div class="video-text" v-html="subtext" v-if="appType == 'videoscope'"></div>
+          <!-- v-if="appType == 'videoscope'" -->
           <div :class="mainVideo == 1 ? 'active' : ''">
-            <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay">
+            <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay" v-if="appType == 'videoscope'">
               <source
                 :src="baseMediaUrl + currentDocument[2][0]"
                 type="video/mp4"
               />
             </video>
+            <audio ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay" v-if="appType == 'soundscript'">
+              <source
+                :src="baseMediaUrl + currentDocument[2][0]"
+                type="audio/mpeg"
+              />
+            </audio>
           </div>
           <div
             :class="mainVideo == 2 ? 'active' : ''"
-            v-if="currentDocument[2].length > 1"
+            v-if="appType == 'videoscope' && currentDocument[2].length > 1"
           >
             <video ref="videoPlayer2">
               <source
@@ -91,7 +53,7 @@
           </div>
           <div
             :class="mainVideo == 3 ? 'active' : ''"
-            v-if="currentDocument[2].length > 2"
+            v-if="appType == 'videoscope' && currentDocument[2].length > 2"
           >
             <video ref="videoPlayer3">
               <source
@@ -102,7 +64,7 @@
           </div>
           <div
             :class="mainVideo == 4 ? 'active' : ''"
-            v-if="currentDocument[2].length > 3"
+            v-if="appType == 'videoscope' && currentDocument[2].length > 3"
           >
             <video ref="videoPlayer4">
               <source
@@ -147,20 +109,6 @@
           </button>
         </div>
         <div class="btn-group ms-1" role="group">
-          <!-- <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            @click="playerVolumeDown"
-          >
-            <FontAwesomeIcon :icon="['fas', 'volume-down']" />
-          </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            @click="playerVolumeUp"
-          >
-            <FontAwesomeIcon :icon="['fas', 'volume-up']" />
-          </button> -->
           <button
             type="button"
             class="btn btn-sm btn-primary"
@@ -187,15 +135,6 @@
           <span class="btn btn-sm btn-primary" style="width: 37px">
             <small>{{ parseInt(volume*100, 10) }}</small>
           </span>
-          <!-- <input
-            type="range"
-            class="form-range mt-1 ms-1"
-            v-model="volume"
-            min="0"
-            max="1"
-            step="0.001"
-          />
-          -->
         </div>
         <div class="btn-group ms-1" role="group">
           <button
@@ -271,7 +210,7 @@
             3x
           </button>
         </div>
-        <div class="btn-group ms-1" role="group">
+        <div class="btn-group ms-1" role="group" v-if="appType == 'videoscope'">
           <button
             type="button"
             class="btn btn-sm btn-text-icon"
@@ -308,7 +247,7 @@
             V4
           </button>
         </div>
-        <div class="btn-group ms-1" role="group">
+        <div class="btn-group ms-1" role="group" v-if="appType == 'videoscope'">
           <button
             type="button"
             class="btn btn-sm btn-text-icon"
@@ -403,206 +342,6 @@
       <div v-else-if="loadingDocument == true">
         Loading data ...
       </div>
-      <hr />
-
-      <div class="container mt-4">
-        <div class="row">
-          <div class="col-6">
-            <div class="form-floating mb-3">
-              <nav>
-                <div class="nav nav-tabs" id="nav-tab" role="tablist">
-                  <button
-                    class="nav-link active"
-                    id="nav-dqd-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#nav-dqd"
-                    type="button"
-                    role="tab"
-                    aria-controls="nav-dqd"
-                    aria-selected="true"
-                    @click="currentTab = 'dqd'"
-                  >
-                    DQD
-                  </button>
-                  <button
-                    class="nav-link"
-                    id="nav-json-tab"
-                    data-bs-toggle="tab"
-                    data-bs-target="#nav-json"
-                    type="button"
-                    role="tab"
-                    aria-controls="nav-json"
-                    aria-selected="false"
-                    @click="currentTab = 'json'"
-                  >
-                    JSON
-                  </button>
-                </div>
-              </nav>
-              <div class="tab-content" id="nav-tabContent">
-                <div
-                  class="tab-pane fade show active pt-3"
-                  id="nav-dqd"
-                  role="tabpanel"
-                  aria-labelledby="nav-results-tab"
-                >
-                  <EditorView
-                    :query="queryDQD"
-                    :corpora="selectedCorpora"
-                    @update="updateQueryDQD"
-                    @submit="submitQuery"
-                    :key="editorIndex"
-                  />
-                  <p
-                    class="error-text text-danger mt-3"
-                    v-if="isQueryValidData && isQueryValidData.valid != true"
-                  >
-                    {{ isQueryValidData.error }}
-                  </p>
-                </div>
-                <div
-                  class="tab-pane fade pt-3"
-                  id="nav-json"
-                  role="tabpanel"
-                  aria-labelledby="nav-stats-tab"
-                >
-                  <textarea
-                    class="form-control query-field"
-                    placeholder="Query (e.g. test.*)"
-                    :class="
-                      isQueryValidData == null || isQueryValidData.valid == true
-                        ? 'ok'
-                        : 'error'
-                    "
-                    v-model="query"
-                  ></textarea>
-                  <!-- <label for="floatingTextarea">Query</label> -->
-                  <p
-                    class="error-text text-danger"
-                    v-if="isQueryValidData && isQueryValidData.valid != true"
-                  >
-                    {{ isQueryValidData.error }}
-                  </p>
-                </div>
-              </div>
-            </div>
-            <div class="form-floating mb-3">
-              <!-- <textarea
-                class="form-control query-field"
-                style="height: 200px"
-                placeholder="Query (e.g. test.*)"
-                v-model="query"
-              ></textarea>
-              <label for="floatingTextarea">Query</label> -->
-            </div>
-            <button
-              type="button"
-              @click="submitQuery"
-              class="btn btn-primary me-1"
-              :disabled="
-                (selectedCorpora && selectedCorpora.length == 0) ||
-                loading ||
-                (isQueryValidData != null && isQueryValidData.valid == false) ||
-                !query
-              "
-            >
-              <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Submit
-            </button>
-            <button
-              v-if="loading"
-              type="button"
-              @click="stop"
-              :disabled="loading == false"
-              class="btn btn-primary"
-            >
-              Stop
-            </button>
-            <br />
-            <br />
-            Load example query:
-            <button
-              type="button"
-              @click="setExample(1)"
-              class="btn btn-sm btn-secondary ms-1"
-            >
-              1
-            </button>
-            <button type="button" @click="setExample(2)" class="btn btn-sm btn-secondary ms-1">2</button>
-            <button
-              type="button"
-              @click="setExample(3)"
-              class="btn btn-sm btn-secondary ms-1"
-            >
-              3
-            </button>
-            <!-- <button
-              type="button"
-              @click="setExample(4)"
-              class="btn btn-sm btn-secondary ms-1"
-            >
-              4
-            </button> -->
-          </div>
-          <div class="col-6" v-if="WSDataResults">
-            <!-- Total progress
-            <div class="progress mb-2">
-              <div
-                class="progress-bar"
-                :class="
-                  loading ? 'progress-bar-striped progress-bar-animated' : ''
-                "
-                role="progressbar"
-                aria-label="Basic example"
-                :style="`width: ${percentageTotalDone}%`"
-                :aria-valuenow="percentageTotalDone"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              >
-                {{ percentageTotalDone.toFixed(2) }}%
-              </div>
-            </div> -->
-            <span v-if="WSDataResults">
-              <ul class="list-no-bullets">
-                <li
-                  v-for="(result, index) in currentPageResults"
-                  :key="index"
-                  class="cursor-pointer hover-opacity"
-                  @click="resultClick(result, index)"
-                >
-                  <div class="row">
-                    <div class="col-2">
-                      <span
-                        class="badge bg-secondary"
-                        v-html="frameNumberToTimeInResults(result, index)"
-                      ></span>
-                    </div>
-                    <div class="col">
-                      <span class="text-bold" v-html="contextWithHighlightedEntities(result, index)" />
-                      <span v-html="otherEntityInfo(result, index)"></span>
-                    </div>
-                    <div class="col-1" :title="documentDict[docIdFromFrame(frameFromResult(result, index))]">
-                      <span v-html="documentDict[docIdFromFrame(frameFromResult(result, index))]"></span>
-                      <!-- <br>
-                      <span v-html="result[4]"></span> -->
-                    </div>
-                  </div>
-                </li>
-              </ul>
-              <PaginationComponent
-                :resultCount="WSDataResults.result[1].length"
-                :resultsPerPage="resultsPerPage"
-                :currentPage="currentPage"
-                @update="updatePage"
-                :key="WSDataResults.result[1].length"
-                :loading="loading"
-              />
-            </span>
-            <!-- <span v-else-if="queryData == 1"></span> -->
-            <span v-else>Loading ...</span>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -611,23 +350,21 @@
 import { mapState } from "pinia";
 
 import { useCorpusStore } from "@/stores/corpusStore";
-import { useNotificationStore } from "@/stores/notificationStore";
+// import { useNotificationStore } from "@/stores/notificationStore";
 import { useUserStore } from "@/stores/userStore";
 import { useWsStore } from "@/stores/wsStore";
 
 import config from "@/config";
 import Utils from "@/utils.js";
-import EditorView from "@/components/EditorView.vue";
 import TimelineView from "@/components/videoscope/TimelineView.vue";
-import PaginationComponent from "@/components/PaginationComponent.vue";
 
 const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
 
 export default {
+  props: ["selectedCorpora", "documentIds", "selectedMediaForPlay"],
   data() {
     return {
-      preselectedCorporaId: this.$route.params.id,
-      selectedCorpora: null,
+      currentDocumentSelected: null,
       currentDocument: null,
       currentDocumentData: null,
       currentMediaDuration: 0,
@@ -637,7 +374,6 @@ export default {
       isQueryValidData: null,
       loading: false,
       failedStatus: false,
-      WSDataResults: null,
 
       resultsPerPage: 20,
       currentPage: 1,
@@ -666,35 +402,31 @@ export default {
       queryDQD: '',
       corpusData: [],
       documentDict: {},
+
+      appType: config.appType,
     };
   },
   components: {
-    EditorView,
-    PaginationComponent,
+    // EditorView,
+    // PaginationComponent,
     TimelineView,
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
     ...mapState(useUserStore, ["userData", "roomId"]),
-    ...mapState(useWsStore, ["messages"]),
-    corpusList() {
-      return this.corpora
-        ? this.corpora.map((corpus) => {
-            return {
-              name: corpus.meta.name,
-              value: corpus.meta.id,
-              corpus: corpus,
-            };
-          })
-        : [];
-    },
-    currentPageResults() {
-      let start = this.resultsPerPage * (this.currentPage - 1);
-      let end = start + this.resultsPerPage;
-      return this.WSDataResults.result[1]
-        .filter((row, rowIndex) => {
-          return rowIndex >= start && rowIndex < end;
-        })
+    ...mapState(useWsStore, ["messagesPlayer"]),
+    documentOptions() {
+      return this.selectedCorpora ?
+        this.corpusData.filter(
+          corpus => Object.values(this.documentDict).includes(corpus[1])
+        ).map(document => {
+          return {
+            name: document[1],
+            value: document[0],
+            document: document
+          }
+        }) :
+        []
     },
     baseMediaUrl() {
       let retval = ""
@@ -705,54 +437,51 @@ export default {
     },
   },
   methods: {
-    setDocument(document) {
-      this.currentDocument = document;
-    },
-    otherEntityInfo(result, index) {
-      index = 0; // hard-coded for now
-      // const ret = [];
-      // const template = "{layer}: <b><span>{value}</span></b>";
-      // const context = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "identifier");
-      // const entities = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "entities");
-      return ([] || result[index]).join("<br>");
-    },
-    contextWithHighlightedEntities(result, index) {
-      index = 0; // hard-coded for now
-      const n_entities = this.WSDataResults.result[0].result_sets[index].attributes.findIndex(a=>a.name == "entities");
-      const context = [];
-      const offset = parseInt(this.WSDataResults.result[-1][result[0]][0]);
-      const segment_layer_name = this.selectedCorpora.corpus.firstClass.segment;
-      const column_names = this.selectedCorpora.corpus.mapping.layer[segment_layer_name].prepared.columnHeaders;
-      const form_n = column_names.indexOf("form");
-      const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[form_n]);
-      for (let n in toks) {
-        if (n_entities<0 || !(result[n_entities]||[]).includes(offset+parseInt(n))) context.push(toks[n]);
-        else context.push("<span style='color:brown;'>"+toks[n]+"</span>");
-      }
-      return context.join(' ')
-    },
+    // otherEntityInfo(result, index) {
+    //   index = 0; // hard-coded for now
+    //   // const ret = [];
+    //   // const template = "{layer}: <b><span>{value}</span></b>";
+    //   // const context = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "identifier");
+    //   // const entities = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "entities");
+    //   return ([] || result[index]).join("<br>");
+    // },
+    // contextWithHighlightedEntities(result, index) {
+    //   index = 0; // hard-coded for now
+    //   const n_entities = this.WSDataResults.result[0].result_sets[index].attributes.findIndex(a=>a.name == "entities");
+    //   const context = [];
+    //   const offset = parseInt(this.WSDataResults.result[-1][result[0]][0]);
+    //   const segment_layer_name = this.selectedCorpora.corpus.firstClass.segment;
+    //   const column_names = this.selectedCorpora.corpus.mapping.layer[segment_layer_name].prepared.columnHeaders;
+    //   const form_n = column_names.indexOf("form");
+    //   const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[form_n]);
+    //   for (let n in toks) {
+    //     if (n_entities<0 || !(result[n_entities]||[]).includes(offset+parseInt(n))) context.push(toks[n]);
+    //     else context.push("<span style='color:brown;'>"+toks[n]+"</span>");
+    //   }
+    //   return context.join(' ')
+    // },
     frameNumberToTime(frameNumber) {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
-    frameNumberToTimeInResults(result, index) {
-      let docId = this.docIdFromFrame(this.frameFromResult(result, index))
-      return this.frameNumberToTime(
-        parseInt(this.frameFromResult(result, index)[0])
-        -
-        parseInt(this.corpusData.find(c => c[0] == docId)[3][0])
-      )
-    },
-    frameFromResult(result, index) {
-      // if (index >= this.WSDataResults.result[0].result_sets.length)
-      //   return [0,0];
-      index = 0; // hard-coded for now
-      const resAttrs = this.WSDataResults.result[0].result_sets[index].attributes;
-      for (let n in resAttrs)
-        if (resAttrs[n].name == "frame_ranges")
-          return result[n];
-      return [0,0];
-    },
+    // frameNumberToTimeInResults(result, index) {
+    //   let docId = this.docIdFromFrame(this.frameFromResult(result, index))
+    //   return this.frameNumberToTime(
+    //     parseInt(this.frameFromResult(result, index)[0])
+    //     -
+    //     parseInt(this.corpusData.find(c => c[0] == docId)[3][0])
+    //   )
+    // },
+    // frameFromResult(result, index) {
+    //   // if (index >= this.WSDataResults.result[0].result_sets.length)
+    //   //   return [0,0];
+    //   index = 0; // hard-coded for now
+    //   const resAttrs = this.WSDataResults.result[0].result_sets[index].attributes;
+    //   for (let n in resAttrs)
+    //     if (resAttrs[n].name == "frame_ranges")
+    //       return result[n];
+    //   return [0,0];
+    // },
     updatePage(currentPage) {
       this.currentPage = currentPage;
     },
@@ -779,27 +508,27 @@ export default {
       }
       return null;
     },
-    resultClick(result, index) {
-      // if (index >= this.WSDataResults.result[0].result_sets.length)
-      //   return;
-      index = 0; // hard-coded for now
-      const frameFromResult = this.frameFromResult(result,index);
-      const doc_result_id = this.docIdFromFrame(frameFromResult);
-      const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
-      const adjustedFrames = frameFromResult.map(x=>parseInt(x) - parseInt(doc_result[3][0]));
-      let [start, end] = adjustedFrames.map(x=>Utils.frameNumberToSeconds(x) / 1000);
-      if (this.currentDocument == doc_result) {
-        this._playerSetTime(start);
-        window.scrollTo(0, 120);
-        this.playerPlay(end);
-      } else {
-        //   // this.currentDocument = this.corpusData[result[2] - 1];
-        // this.currentDocument = this.documentDict[result[2]];
-        this.setResultTimes = [start,end];
-        // TODO: should be fixed - corpusData changed
-        this.currentDocument = doc_result;
-      }
-    },
+    // resultClick(result, index) {
+    //   // if (index >= this.WSDataResults.result[0].result_sets.length)
+    //   //   return;
+    //   index = 0; // hard-coded for now
+    //   const frameFromResult = this.frameFromResult(result, index);
+    //   const doc_result_id = this.docIdFromFrame(frameFromResult);
+    //   const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
+    //   const adjustedFrames = frameFromResult.map(x=>parseInt(x) - parseInt(doc_result[3][0]));
+    //   let [start, end] = adjustedFrames.map(x=>Utils.frameNumberToSeconds(x) / 1000);
+    //   if (this.currentDocument == doc_result) {
+    //     this._playerSetTime(start);
+    //     window.scrollTo(0, 120);
+    //     this.playerPlay(end);
+    //   } else {
+    //     //   // this.currentDocument = this.corpusData[result[2] - 1];
+    //     // this.currentDocument = this.documentDict[result[2]];
+    //     this.setResultTimes = [start,end];
+    //     // TODO: should be fixed - corpusData changed
+    //     this.currentDocument = doc_result;
+    //   }
+    // },
     playerPlay(end=0) {
       const n_players = [1,2,3,4];
       for (let n of n_players) {
@@ -1012,50 +741,8 @@ export default {
         y = bottom - height;
       return {'left': x+'px', 'top': y+'px'};
     },
-    // loadData() {
-    //   if (this.currentDocument) {
-    //     this.mainVideo = 1;
-    //     this.mainAudio = 1;
-    //     this.subtitles = {};
-    //     this.loading = true;
-    //     this.playing = false;
-    //     this._playerSetTime(0);
-    //     useCorpusStore()
-    //       .fetchDocument(this.currentDocument[0])
-    //       .then((data) => {
-    //         this.loadDataJobId = data.job;
-    //       });
-    //   }
-    // },
-    updateQueryDQD(query) {
-      this.queryDQD = query
-      this.validate()
-    },
-    updateQueryJSON(query) {
-      console.log("Update JSON query", query)
-      this.query = query
-      // this.queryDQD = query;
-      // this.validate();
-    },
-    async submitQuery() {
-      this.WSDataResults = null;
-      this.currentPage = 1;
-
-      let data = {
-        corpora: this.selectedCorpora.value,
-        query: this.query,
-        user: this.userId,
-        room: this.roomId,
-      }
-      let retval = await useCorpusStore().fetchQuery(data);
-      if (retval.status == "started") {
-        this.loading = true;
-        this.percentageDone = 0.001;
-      }
-    },
     onSocketMessage(data) {
-      // let data = JSON.parse(event.data);
-      // console.log("SOC", data)
+      // console.log("SOC2", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
           this.documentData = data.document;
@@ -1063,7 +750,9 @@ export default {
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
           if (!(this.selectedCorpora.value in {115: 1})) { // old tangram exception
-            let tracks = this.selectedCorpora.corpus.tracks;
+            // TODO[URGENT]: hardcoded if there is no tracks
+            let tracks = this.selectedCorpora.corpus.tracks || {"layers": {"Utterance": {"split": []}}};
+            // console.log("CRP", this.selectedCorpora, data.document.layers)
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
               tracks: {},
@@ -1192,179 +881,12 @@ export default {
           return;
         }
         else if (data["action"] === "document_ids") {
-          // console.log("DOC", data);
-          // this.documentDict = data.document_ids
+          // console.log("DOC1", data);
           this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
           this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media),props.frame_range]);
           return;
         }
-        else if (data["action"] === "validate") {
-          // console.log("Query validation", data);
-          if (data.kind == "dqd" && data.valid == true) {
-            // console.log("Set query from server");
-            this.query = JSON.stringify(data.json, null, 2);
-          }
-          this.isQueryValidData = data;
-          return;
-        }
-        else if (data["action"] === "sentences") {
-          this.failedStatus = false;
-          if (this.WSDataResults && this.WSDataResults.first_job == data.first_job) {
-            Object.keys(this.WSDataResults.result).forEach(key => {
-              if (key > 0) {
-                this.WSDataResults.result[key] = this.WSDataResults.result[key].concat(data.result[key])
-              }
-            })
-            this.WSDataResults.result[-1] = {
-              ...this.WSDataResults.result[-1],
-              ...data.result[-1]
-            }
-          }
-          else {
-            this.WSDataResults = data;
-          }
-          return;
-          // this.failedStatus = false;
-          // this.WSDataResults = data;
-          // return;
-        } else if (data["action"] === "failed") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "error",
-            text: data.value,
-          });
-        }
-        else if (data["action"] === "timeout") {
-          console.log("Query job expired", data);
-          this.failedStatus = true;
-          // this.submit(null, false, false);
-          return;
-        }
-        else if (data["action"] === "query_error") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "error",
-            text: data.info,
-          });
-        }
-        if (["finished","satisfied"].includes(data["status"]))
-          this.loading = false;
-      } else if (Object.prototype.hasOwnProperty.call(data, "status")) {
-        if (data["status"] == "failed") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "error",
-            text: data.value,
-          });
-        }
-        if (data["status"] == "error") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "error",
-            text: data.info,
-          });
-        }
       }
-    },
-    setExample(num) {
-      console.log("setting example query", num);
-      if (num == 1) {
-        this.queryDQD = `Segment s
-
-sequence@s
-  Token t1
-    upos = "DET"
-  Token t2
-    upos = "NOUN"
-
-Gesture g1
-  agent = s.agent
-  type = "PG"
-  start >= s.start - 3s
-  end <= s.end + 3s
-
-KWIC => plain
-  context
-    s
-  entities
-    t1
-    t2
-    g1
-
-`
-      }
-      else if (num == 2) {
-        this.queryDQD = `Segment s
-
-sequence@s
-  Token@s t1
-    upos = "DET"
-  Token@s t2
-    upos = "NOUN"
-
-Gesture g
-  agent = s.agent
-  type = /^(PG|OG|IG|UG)$/
-  g.start >= s.start - 5s
-  g.end <= s.end + 2s
-
-KWIC => plain
-  context
-    s
-  entities
-    t1
-    t2
-    g
-
-`
-      }
-      else if (num == 3) {
-        this.queryDQD = `Segment s1
-  agent.name = speaker_1
-
-Token@s1 t1
-  form = /[kK]opf/
-
-Segment s2
-  agent.name = "speaker_2"
-  start >= s1.start
-  end <= s1.end
-
-Token@s2 t2
-  form = "rechts"
-
-KWIC => plain
-  context
-    s1
-    s2
-  entities
-    t1
-    t2
-
-`
-      }
-      else if (num == 4) {
-        this.queryDQD = `Document d
-
-Gesture g1
-  agent.name = "speaker_1"
-
-NOT EXISTS
-  Gesture g2
-    agent.name = "speaker_2"
-    start >= g1.start - 3s
-    end <= g1.end + 3s
-
-KWIC => plain
-  context
-    d
-  entities
-    g1
-
-`
-      }
-      this.editorIndex++
-      this.validate()
     },
     stop() {
       this.percentageDone = 0;
@@ -1437,11 +959,14 @@ KWIC => plain
     },
   },
   mounted() {
+    if (!this.document_ids) {
+      this.loadDocuments()
+    }
     if (this.userData) {
       this.userId = this.userData.user.id;
       // this.connectToRoom();
       // this.stop();
-      this.validate();
+      // this.validate();
     }
     this._setVolume();
     window.addEventListener("keydown", (e) => {
@@ -1453,10 +978,17 @@ KWIC => plain
         this.playerFrameUp(25);
       }
     });
-    this.setExample(1);
-    if (this.selectedCorpora && this.selectedCorpora.corpus && this.selectedCorpora.corpus.sample_query)
-      this.updateQueryDQD(this.selectedCorpora.corpus.sample_query);
+
+    // this.setExample(1);
+    // if (this.selectedCorpora && this.selectedCorpora.corpus && this.selectedCorpora.corpus.sample_query)
+    //   this.updateQueryDQD(this.selectedCorpora.corpus.sample_query);
   },
+  // updated() {
+  //   if (this.documentIds) {
+  //     this.documentDict = Object.fromEntries(Object.entries(this.documentIds).map(([id,props]) => [id,props.name]));
+  //     this.corpusData = Object.entries(this.documentIds).map(([id,props]) => [id,props.name,Object.values(props.media),props.frame_range]);
+  //   }
+  // },
   unmounted() {
     if (this.updateTimer) {
       clearInterval(this.updateTimer);
@@ -1464,6 +996,25 @@ KWIC => plain
     // this.sendLeft();
   },
   watch: {
+    selectedMediaForPlay() {
+      let document = this.corpusData.filter(
+        corpus => parseInt(corpus[0], 10) == parseInt(this.selectedMediaForPlay.documentId, 10)
+      )
+      if (document.length > 0) {
+        let [start, end] = [
+          this.selectedMediaForPlay.startTime,
+          this.selectedMediaForPlay.endTime
+        ]
+        this.setResultTimes = [start, end];
+
+        document = document[0]
+        this.currentDocumentSelected = {
+          name: document[1],
+          value: document[0],
+          document: document
+        }
+      }
+    },
     playerIsPlaying: {
       handler() {
         if (this.updateTimer) {
@@ -1477,83 +1028,26 @@ KWIC => plain
       },
       immediate: true,
     },
-    corpora: {
+    messagesPlayer: {
       handler() {
-        if (this.preselectedCorporaId) {
-          let corpus = this.corpora.filter(corpus => corpus.meta.id == this.preselectedCorporaId)
-          if (corpus.length) {
-            this.selectedCorpora = {
-              name: corpus[0].meta.name,
-              value: corpus[0].meta.id,
-              corpus: corpus[0],
-            }
-            if (corpus[0].sample_query)
-              this.queryDQD = corpus[0].sample_query;
-          }
-          this.preselectedCorporaId = null
-          this.loadDocuments()
-        }
-      },
-      immediate: true,
-      deep: true,
-    },
-    messages: {
-      handler() {
-        let _messages = this.messages;
+        let _messages = this.messagesPlayer;
         if (_messages.length > 0) {
           // console.log("WSM", _messages)
           _messages.forEach(message => this.onSocketMessage(message))
-          useWsStore().clear();
+          useWsStore().clearPlayer();
         }
       },
       immediate: true,
       deep: true,
     },
-    selectedCorpora() {
-      this.loadDocuments()
-      history.pushState(
-        {},
-        null,
-        `/player/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
-      )
-    },
-    currentDocument() {
+    currentDocumentSelected() {
+      this.currentDocument = this.currentDocumentSelected.document
       this.loadDocument();
     },
     volume() {
       this._setVolume();
     },
-    WSDataResults() {
-      if (this.WSDataResults) {
-        if (this.WSDataResults.percentage_done) {
-          this.percentageDone = this.WSDataResults.percentage_done;
-        }
-        if (
-          this.WSDataResults.total_results_so_far &&
-          this.WSDataResults.projected_results
-        ) {
-          this.percentageTotalDone =
-            (this.WSDataResults.total_results_so_far /
-              this.WSDataResults.projected_results) *
-            100;
-        }
-        if (["finished"].includes(this.WSDataResults.status)) {
-          this.percentageDone = 100;
-          this.percentageTotalDone = 100;
-          this.loading = false;
-        }
-        if (["satisfied"].includes(this.WSDataResults.status)) {
-          // this.percentageDone = this.WSDataResults.hit_limit/this.WSDataResults.projected_results*100.
-          this.percentageDone = 100;
-          this.loading = false;
-        }
-        // console.log("XXX", this.percentageTotalDone, this.percentageDone);
-        if (this.WSDataResults.percentage_done >= 100) {
-          this.loading = false;
-        }
-      }
-    },
-  },
+  }
 };
 </script>
 
@@ -1597,6 +1091,10 @@ video {
   text-align: center;
   background-color: #0000008c;
   padding: 2px;
+}
+
+.audio-box {
+  height: 0px;
 }
 
 .video-box {

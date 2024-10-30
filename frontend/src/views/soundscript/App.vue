@@ -23,12 +23,6 @@
               </router-link>
             </li>
             <li class="nav-item">
-              <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
-                <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
-                LCP Home
-              </a>
-            </li>
-            <li class="nav-item">
               <router-link class="nav-link" to="/query">
                 <FontAwesomeIcon
                   :icon="['fas', 'magnifying-glass']"
@@ -69,6 +63,12 @@
               </span>
             </li>
             <li class="nav-item">
+              <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
+                <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
+                LCP Home
+              </a>
+            </li>
+            <li class="nav-item">
               <a
                 v-if="userData && userData.user && userData.user.displayName"
                 class="nav-link"
@@ -91,6 +91,7 @@
     <FooterView />
     <NotificationView />
     <LoadingView />
+    <div class="beta-flag">BETA</div>
   </div>
 </template>
 
@@ -189,5 +190,19 @@ footer {
   --bs-btn-active-border-color: #00489a;
   --bs-btn-disabled-bg: #0059be;
   --bs-btn-disabled-border-color: #0059be;
+}
+* >>> .progress-bar {
+  background-color: #0059be;
+}
+* >>> span.action-button {
+  background-color: #0059be !important;
+}
+* >>> .page-link.active {
+  background-color: #0059be !important;
+  border-color: #0059be !important;
+  color: #fff !important;
+}
+* >>> .page-link {
+  color: #0059be !important;
 }
 </style>

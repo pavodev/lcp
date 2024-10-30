@@ -224,6 +224,7 @@
                     <a
                       :href="corpusStore.getLicenseByTag(corpus.meta.license).url"
                       target="_blank"
+                      @click.stop
                       class="tooltips icon-x"
                       v-else-if="corpus.meta.license"
                       :title="`Corpus licence: ${corpus.meta.license}`"

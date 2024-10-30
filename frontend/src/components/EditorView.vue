@@ -231,6 +231,9 @@ export default {
     this.setHighlighting();
     editor = monaco.editor.create(document.getElementById("editor"), {
       language: "DQDmonaco",
+      scrollbar: {
+        alwaysConsumeMouseWheel: false
+      },
       value: this.query,
       theme: 'DQDTheme',
       minimap: { enabled: false },
@@ -262,7 +265,7 @@ export default {
     // Generate a command ID for manual triggering of autocompletion
     // eslint-disable-next-line no-unused-vars
     suggestValuesCommandId = editor.addCommand( 0, (_,suggestion) => this.triggerAutocomplete(suggestion) );
-    
+
     window.addEventListener('contextmenu', e => {
       e.stopImmediatePropagation()
     }, true);
