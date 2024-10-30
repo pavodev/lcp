@@ -5,8 +5,8 @@
         <FontAwesomeIcon :icon="['fas', 'magnifying-glass-minus']" class="me-1" />
         Zoom Out
       </button>
-      <input type="range" min="1" max="20" class="zoom-slider" v-model="zoomValue" step="1" />
-      <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue >= 20" @click="zoomIn">
+      <input type="range" min="1" :max="MAX_ZOOM_LEVEL" class="zoom-slider" v-model="zoomValue" step="1" />
+      <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue >= MAX_ZOOM_LEVEL" @click="zoomIn">
         <FontAwesomeIcon :icon="['fas', 'magnifying-glass-plus']" class="me-1" />
         Zoom In
       </button>
@@ -69,6 +69,7 @@ let hoveringAnnotation = null;
 const padding = 180;
 const width = document.body.clientWidth - 20;
 const paddingBeforeTimeline = 40;
+const MAX_ZOOM_LEVEL = 100
 
 // Function to update the vertical timeline
 function updateVerticalLine(xPosition) {
@@ -120,19 +121,19 @@ export default {
   props: ["data", "playerIsPlaying", "playerCurrentTime", "mediaDuration"],
   data() {
     return {
+      defaultCurrentTime: this.playerCurrentTime,
       currentTime: 0,
       zoomValue: 1,
+      MAX_ZOOM_LEVEL: MAX_ZOOM_LEVEL,
     }
   },
   watch: {
     playerIsPlaying(){
       playerState = this.playerIsPlaying;
-      console.log("playerState", playerState);
+      // console.log("playerState", playerState);
     },
     playerCurrentTime(){
-      currentTime = this.playerCurrentTime;
-      const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
-      updateVerticalLine(newXScale(currentTime));
+      this.updateCurrentPosition(this.playerCurrentTime)
     },
     zoomValue(){
       const verticalLine = svg.selectAll(".vertical-line");
@@ -143,10 +144,15 @@ export default {
   },
   methods: {
     zoomIn() {
-      this.zoomValue = Math.min(parseFloat(this.zoomValue) + 1, 20);
+      this.zoomValue = Math.min(parseFloat(this.zoomValue) + 1, MAX_ZOOM_LEVEL);
     },
     zoomOut() {
       this.zoomValue = Math.max(parseFloat(this.zoomValue) - 1, 1);
+    },
+    updateCurrentPosition(time) {
+      this.currentTime = time;
+      const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
+      updateVerticalLine(newXScale(this.currentTime));
     },
   },
   mounted() {
@@ -505,6 +511,8 @@ export default {
       });
 
       this.zoomValue = 20;
+
+      this.updateCurrentPosition(this.defaultCurrentTime);
   },
 };
 </script>

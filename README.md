@@ -69,7 +69,7 @@ This makes various helper commands available on the system:
 lcp-setup
 ```
 
-will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required
+will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required.
 
 You can also run:
 
@@ -77,7 +77,7 @@ You can also run:
 lcp-frontend-setup
 ```
 
-to install the frontend (assuming you have node.js and NPM installed)
+to install the frontend (assuming you have node.js and NPM installed).
 
 ### Configuring `.env`
 

@@ -94,6 +94,7 @@
     <FooterView />
     <NotificationView />
     <LoadingView />
+    <div class="beta-flag">BETA</div>
   </div>
 </template>
 

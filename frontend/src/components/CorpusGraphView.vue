@@ -1,17 +1,26 @@
 <template>
   <div ref="mermaidcontainer">
-    <vue3-mermaid
-      :nodes="graphData"
-      type="graph TD"
-      :config="mermaidConfig"
-      :key="graphIndex"
-      @nodeClick="clickOnLayer"
-    ></vue3-mermaid>
+    <SvgPanZoom
+      :zoomEnabled="true"
+      :controlIconsEnabled="true"
+      :fit="false"
+      :center="true"
+    >
+      <vue3-mermaid
+        :nodes="graphData"
+        type="graph TD"
+        :config="mermaidConfig"
+        :key="graphIndex"
+        @nodeClick="clickOnLayer"
+      ></vue3-mermaid>
+    </SvgPanZoom>
   </div>
 </template>
-  
+
 <script>
 import { setTooltips, removeTooltips } from "@/tooltips";
+// import svgPanZoom from 'svg-pan-zoom';
+import { SvgPanZoom } from "vue-svg-pan-zoom";
 
 // Mermaid does not support arrows pointing to the source node(!)
 // This hack finds all the paths associated with an "in" label and reverses their line commands
@@ -20,10 +29,10 @@ function reverseIns(graph) {
   let inPaths = [];
   inLabels.forEach( label=>{
     let inPathClasses = [...label.classList].map( cls => '.' + (
-      cls=="edgeLabel" 
-        ? "edgePath" 
+      cls=="edgeLabel"
+        ? "edgePath"
         : cls.replace(/(^L-|')/g,'') // An L- prefix and some single quotes get inserted in labels' classes for some reason
-      ) 
+      )
     ).join('');
     let inPath = graph.querySelector( inPathClasses + " path" );
     if (inPath) inPaths.push(inPath);
@@ -101,6 +110,9 @@ export default {
       corpusLayersAttributes: corpus_layers_attributes
     };
   },
+  components: {
+    SvgPanZoom,
+  },
   props: ["corpus"],
   methods: {
     clickOnLayer(nodeId) {
@@ -138,7 +150,7 @@ export default {
           for (let [attribute_name, attribute_props] of Object.entries(this.corpusLayersAttributes[layer])) {
             let attributeId = `a-${index}-${attribute_name.replace("_","").toLowerCase()}`;
             let text = attribute_name.replace(/@/gi, "_");
-            console.log("attribute_name", attribute_name, "layer", layer);
+            // console.log("attribute_name", attribute_name, "layer", layer);
             if (layer_type == "relation" && "name" in attribute_props)
               text = attribute_props.name;
             let attributeData = {
@@ -214,7 +226,7 @@ export default {
         if (parentLayer===undefined) continue;
         // Remove the attributes from the parent: they will be inherited by the children
         // let parentAttributes = [];
-        // parentLayer.next = parentLayer.next.filter( (layerId) => 
+        // parentLayer.next = parentLayer.next.filter( (layerId) =>
         //   !String.prototype.startsWith.call(layerId,'a-') || (parentAttributes.push(layerId) && false)
         // );
         for (let childLayerData of partOfs[parentLayerId]) {
@@ -226,13 +238,13 @@ export default {
           parentLayer.link.push("---|part of|");
         }
       }
-      console.log("data", data);
+      // console.log("data", data);
       return data;
     },
   },
   mounted() {
     // Dirty fix -- ask Igor why a fix is needed in the first place
-    let updateGraphUntilSuccessful = ()=>{
+    let updateGraphUntilSuccessful = ()=> {
       if (this.$refs.mermaidcontainer==null) return;
       if (this.$refs.mermaidcontainer.querySelector("text.error-text")===null) {
         reverseIns(this.$refs.mermaidcontainer); // reverse the direction of the arrows of the 'in' relations
@@ -251,7 +263,7 @@ export default {
   }
 };
 </script>
-  
+
 <style>
 .mermaid .tooltips {
   border-bottom: dotted 1px black;

@@ -1298,7 +1298,7 @@ export default {
     },
     isSubmitDisabled() {
       return (this.selectedCorpora && this.selectedCorpora.length == 0) ||
-              this.loading===true ||
+              this.loading === true ||
               (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
               !this.query ||
               !this.selectedLanguages

@@ -97,7 +97,8 @@
       </p>
     </div>
     <div class="col-7">
-      <CorpusGraphViewNew :corpus="corpusModal" />
+      <!-- <CorpusGraphViewNew :corpus="corpusModal" /> -->
+      <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
     </div>
   </div>
 </template>
@@ -123,7 +124,8 @@
   import { useCorpusStore } from "@/stores/corpusStore";
   import { useUserStore } from "@/stores/userStore";
 
-  import CorpusGraphViewNew from "@/components/CorpusGraphViewNew.vue";
+  // import CorpusGraphViewNew from "@/components/CorpusGraphViewNew.vue";
+  import CorpusGraphView from "@/components/CorpusGraphView.vue";
 
   import router from "@/router";
   import config from "@/config";
@@ -134,6 +136,7 @@
     props: ["corpusModal"],
     data: function () {
       return {
+        showGraph: false,
         appLinks: config.appLinks,
         licence: this.corpusModal.meta.license
           ? useCorpusStore().getLicenseByTag((this.corpusModal.meta.license))
@@ -159,7 +162,13 @@
       ...mapState(useUserStore, ["userData"]),
     },
     components: {
-      CorpusGraphViewNew,
+      // CorpusGraphViewNew,
+      CorpusGraphView,
+    },
+    mounted() {
+      setTimeout(() => {
+        this.showGraph = true;
+      }, 500)
     },
   }
 </script>
