@@ -1,4 +1,4 @@
-# *catchphrase*
+# *Catchphrase*
 
 The Catchphrase interface is optimized for querying, analyzing and visualizing textual data. If you work with text corpora or focus on the textual aspects of a multimodal corpus, Catchphrase is most efficient. 
 
@@ -9,9 +9,9 @@ The langing page of Catchphrase is designed in the same way as the main LCP page
   <img src="images/catchphrase_landing.png" alt="alt" width="550"/>
 </p>
 
-## Querying interface
+## Query tab
 
-In the "Query" tab of the the catchphrase querying interface you can find the query entry field and the corpus template preview. Each corpus typically comes with a default DQD query as assistance. 
+The Query tab is designed the same way across all interfaces. It contains the query entry field and the corpus template preview. Each corpus typically comes with a default DQD query as assistance. Move and magnify the template visualization for a better overview.
 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
@@ -21,7 +21,7 @@ In the "Query" tab of the the catchphrase querying interface you can find the qu
 
 For more information on querying see the [DQD](dqd.md) page.
 
-## Results / Data interface
+## Results / Data tab
 
 Once the query has been submitted, results will show in the "Data" tab.
 
