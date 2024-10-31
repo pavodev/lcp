@@ -1,5 +1,5 @@
 # LiRI Corpus Platform (LCP)
-[LCP](https://www.liri.uzh.ch/en/services/LiRI-Corpus-Platform-LCP.html) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. LCP is being developed and maintained by a team at [LiRI](https://www.liri.uzh.ch/en.html), the Linguistic Research Infrastructure at UZH.
+[LCP](https://www.liri.uzh.ch/en/services/LiRI-Corpus-Platform-LCP.html) is a cloud-based software system for handling and querying corpora of different kinds. Data in LCP are accessible via three individual interfaces: Based on the modality of the corpus (text, audio, audiovisual/video) and the desired analysis, the user decides on which interface fits their needs best. LCP is being developed and maintained by a team at [LiRI](https://www.liri.uzh.ch/en.html), the Linguistic Research Infrastructure at UZH. To read more on the history of the platform, please visit [the website](https://www.liri.uzh.ch/en/services/LiRI-Corpus-Platform-LCP.html).
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/Doors_interface_Functionalities.png" alt="alt" width="550"/>
