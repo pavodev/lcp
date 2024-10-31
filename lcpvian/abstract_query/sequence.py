@@ -715,6 +715,7 @@ class SQLSequence:
         )  # For simple sequences: separation is a multiple of len(subsequence.members)
         current_cte: Cte | None = None  # The CTE we're currently working on
 
+        unit_labels_so_far: set[str] = set({})
         token_layer: str = self.config.config["firstClass"]["token"]
         # Go through all the members and identify the fixed tokens, which can serve as anchors
         for n, m in enumerate(self.get_members()):
@@ -731,12 +732,13 @@ class SQLSequence:
                         *{x for x in self._internal_references.values()},
                     }
                 }
-                m.internal_label = m.label or self.sequence.query_data.unique_label(
-                    layer=token_layer, references=references
-                )
-                self._internal_references[m.label] = (
-                    m.internal_label
-                )  # f"t{len(self.fixed_tokens)}"
+                m.internal_label = m.label
+                if not m.internal_label or m.internal_label in unit_labels_so_far:
+                    m.internal_label = self.sequence.query_data.unique_label(
+                        layer=token_layer, references=references
+                    )
+                unit_labels_so_far.add(m.internal_label)
+                self._internal_references[m.label] = m.internal_label
                 self.fixed_tokens.append((m, min_separation, max_separation, modulo))
                 self.close_cte(current_cte, m)
                 current_cte = None
