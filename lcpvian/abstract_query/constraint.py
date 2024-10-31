@@ -611,9 +611,10 @@ class Constraint:
                 f"Cannot reference a sub-attribute ({sub_ref}) on a source/head of a dependency relation ({ref})"
             )
             ref_label = prefix
-            ref_mapping = mapping.get("attributes", {}).get(ref, {})
-            ref_table = ref_mapping.get("name", layer.lower())
-            ref_formed_table = f"{self.schema}.{ref_table} {ref_label}"
+            layer_table = _get_table(layer, self.config, self.batch, self.lang or "")
+            # ref_mapping = mapping.get("attributes", {}).get(ref, {})
+            # ref_table = ref_mapping.get("name", layer.lower())
+            ref_formed_table = f"{self.schema}.{layer_table} {ref_label}"
             # hack: need a condition here because when inside a sequence,
             # unconditional joins from tokens are ignored in sequence.py#_where_conditions_from_constraints
             # (not sure why, probably to clean out unnecessary joins by sequence processing)
