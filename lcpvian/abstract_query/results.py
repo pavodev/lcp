@@ -414,13 +414,38 @@ class ResultsMaker:
                 else:
                     line = f"{pre_att}.{field} ->> '{sub_field}' AS {lab}"
                 self.r.selects.add(line)
+                shortest_layer: str = self.r.label_layer.get(shortest, ("", None))[0]
+                field_info = (
+                    cast(dict[str, Any], self.config["layer"])
+                    .get(shortest_layer, {})
+                    .get("attributes", {})
+                    .get(field, {})
+                )
+                field_mapping = (
+                    _get_mapping(
+                        shortest_layer, self.config, self.batch, self.lang or ""
+                    )
+                    .get("attributes", {})
+                    .get(field, {})
+                )
+                field_is_global = "ref" in field_info
+                if field_is_global:
+                    field_key = field_mapping.get("key", field)
+                    field_table = field_mapping.get(
+                        "name", f"global_attributes_{field}"
+                    )
+                    field_formed_table = (
+                        f"{self.schema}.{field_table.lower()} {pre_att}"
+                    )
+                    field_formed_condition = (
+                        f"{shortest}.{field_key}_id = {pre_att}.{field_key}_id"
+                    )
+                    if field_formed_table not in self.r.joins:
+                        self.r.joins[field_formed_table] = True
+                        self.r.conditions.add(field_formed_condition)
             elif is_meta:
                 line = f"{shortest}.meta ->> '{field}' AS {lab}"
                 self.r.selects.add(line)
-            elif is_chained:
-                pre_att = f"{shortest}_{field}"
-                sub_field = split_att[2]
-                line = f"{pre_att}.{field}->> '{sub_field}' AS {lab}"
             elif attrs[field].get("type", "") == "text" or "ref" in attrs[field]:
                 formed_join = f"{self.schema}.{attrib_table} {lab}"
                 self.r.joins[formed_join.lower()] = True
