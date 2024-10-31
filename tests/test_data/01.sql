@@ -7,14 +7,13 @@ WITH RECURSIVE fixed_parts AS
    FROM
      (SELECT Segment_id
       FROM bnc1.fts_vectorrest vec
-      WHERE vec.vector @@ E'2true'
-        AND vec.vector @@ E' 7ART <1> ( 2true &  7ADJ) <1>  7SUBST') AS fts_vector_s
+      WHERE vec.vector @@ E'(!1a|1a) <1> (!1a|1a) <1> (!1a|1a)') AS fts_vector_s
+   CROSS JOIN bnc1.tokenrest t3
    CROSS JOIN bnc1.document d
    CROSS JOIN bnc1.segmentrest s
    CROSS JOIN bnc1.tokenrest t1
    CROSS JOIN bnc1.tokenrest t2
    CROSS JOIN bnc1.lemma t3_lemma
-   CROSS JOIN bnc1.tokenrest t3
    CROSS JOIN bnc1.lemma t2_lemma
    WHERE (d.meta->>'classCode')::text ~ '^S'
      AND d.char_range && s.char_range
