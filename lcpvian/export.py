@@ -456,7 +456,10 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     ]
     job: Job
     if export_format == "dump":
-        print("Scheduled dump export depending on", depends_on)
+        rest: dict[str, Any] = {}
+        if depends_on:
+            print("Scheduled dump export depending on", depends_on)
+            rest = {"depends_on": depends_on}
         job = app["background"].enqueue(
             export_dump,
             on_success=Callback(_export_complete, EXPORT_TTL),
@@ -476,6 +479,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 "room": room,
                 "user": user,
             },
+            **rest,
         )
     elif export_format == "swissdox":
         batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
