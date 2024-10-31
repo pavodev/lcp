@@ -1157,13 +1157,13 @@ def process_set(
     from_table = batch if lay == token else _get_table(lay, config, batch, lang)
     disallowed = f"{schema}.{lay} {from_label}"
 
-    if "partOf" in first_unit:
-        part_of_label = first_unit["partOf"]
-        part_of_layer = r.label_layer.get(part_of_label, [""])[0]
-        if part_of_label == "___seglabel___":
-            part_of_layer = segment
-        if part_of_layer.lower() == segment.lower():
-            first_unit["partOf"] = seg_label
+    # if "partOf" in first_unit:
+    #     part_of_label = first_unit["partOf"]
+    #     part_of_layer = r.label_layer.get(part_of_label, [""])[0]
+    #     if part_of_label == "___seglabel___":
+    #         part_of_layer = segment
+    #     if part_of_layer.lower() == segment.lower():
+    #         first_unit["partOf"] = seg_label
 
     conn_obj = _get_constraints(
         first_unit.get("constraints", []),
