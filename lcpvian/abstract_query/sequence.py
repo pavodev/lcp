@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from automathon import NFA  # type: ignore
 
-from .constraint import _get_constraints
+from .constraint import _get_constraints, _get_table
 from .prefilter import Prefilter
 from .sequence_members import Member, Disjunction, Sequence, Unit
 from .typed import JSONObject, LabelLayer
@@ -601,23 +601,36 @@ class SQLSequence:
         return self._internal_references.get(reference, reference)
 
     def shifted_references_constraints(
-        self, constraints: list[dict], override: dict[str, str] = {}
+        self,
+        constraints: list[dict],
+        override: dict[str, str] = {},
+        in_subsequence: set | None = None,
     ) -> list[dict]:
         """Shift the entity references in the constraints written by the user to their internal labels"""
         ret_constraints: list[dict] = []
         for c in constraints:
             new_constraint: dict[str, Any] = {}
             for k, v in c.items():
-                if (k == "entity" or k == "entityComparison") and isinstance(v, str):
+                if k in ("reference", "attribute") and isinstance(v, str):
                     new_ref: str = self.internal_reference(v)
                     if override:
                         new_ref = override.get(v, v)
+                        v_lab = v.split(".")[0]
+                        if in_subsequence and "." in v and v_lab in override:
+                            pass
+                            # token_layer = self.config.config["firstClass"]["token"]
+                            # v_layer = self.label_layer.get(v_lab, (token_layer, None))[
+                            #     0
+                            # ].lower()
+                            # v_formed_join = f"{self.config.schema}.{v_layer}"
                     new_constraint[k] = new_ref
                 elif isinstance(v, list) and all(isinstance(x, dict) for x in v):
-                    new_constraint[k] = self.shifted_references_constraints(v, override)
+                    new_constraint[k] = self.shifted_references_constraints(
+                        v, override, in_subsequence=in_subsequence
+                    )
                 elif isinstance(v, dict):
                     new_constraint[k] = self.shifted_references_constraints(
-                        [v], override
+                        [v], override, in_subsequence=in_subsequence
                     )[0]
                 else:
                     new_constraint[k] = v
@@ -631,6 +644,7 @@ class SQLSequence:
         entities: set[str] = set(),
         override: dict[str, str] = dict(),
         part_of: str = "",
+        in_subsequence: set | None = None,
     ) -> tuple[list[str], list[str], dict[str, list[str]]]:
         """
         SQL-friendly constraints on a token using the provided label and entity references
@@ -639,7 +653,7 @@ class SQLSequence:
         Provide an override dict to bypass the entity references (useful for bound references in subsequence tables and CTEs)
         """
         shifted_constraints: list[dict] = self.shifted_references_constraints(
-            constraints=constraints, override=override
+            constraints=constraints, override=override, in_subsequence=in_subsequence
         )
         wheres, joins, refs = _where_conditions_from_constraints(
             self.config,
@@ -661,7 +675,38 @@ class SQLSequence:
             "",
         )
         if override and seg_lab:
+            # Dirty trick to join tables required in join conditions
+            if isinstance(in_subsequence, set):
+                new_wheres: list[str] = []
+                for w in wheres:
+                    new_w = w
+                    for lab in override:
+                        new_w = re.sub(rf"\b{lab}\.", f"{lab}_table.", new_w)
+                    new_wheres.append(new_w)
+                wheres = new_wheres
+                new_joins: list[str] = []
+                for j in joins:
+                    new_j = j
+                    after_on = j.split(" ON ")[1]
+                    for lab in override:
+                        if re.search(rf"\b{lab}.", after_on):
+                            new_j = re.sub(rf"\b{lab}\.", f"{lab}_table.", new_j)
+                            token_layer = self.config.config["firstClass"]["token"]
+                            layer = self.label_layer.get(lab, (token_layer, None))[
+                                0
+                            ].lower()
+                            table = _get_table(
+                                layer,
+                                self.config.config,
+                                self.config.batch,
+                                self.config.batch or "",
+                            )
+                            ref_join = f"{self.config.schema}.{table} {lab}_table ON {lab}_table.{layer}_id = {lab}"
+                            in_subsequence.add(ref_join)
+                    new_joins.append(new_j)
+                joins = new_joins
             override[str(seg_lab)] = f"fixed_parts.{seg_lab}"
+
         refs_to_replace = "|".join(
             [
                 f"{e}.{self.label_layer[e][0].lower()}_id"
@@ -896,12 +941,14 @@ class SQLSequence:
                         )
                     if not sub_member_part_of:
                         sub_member_part_of = self.part_of
+                joins_for_refs_from_prev_table: set = set({})
                 token_conds, ljs, refs = self.get_constraints(
                     f"s{n}_t{i}",
                     m.obj["unit"].get("constraints", []),
                     entities=entities,
                     override=override_internal_references,
                     part_of=(sub_member_part_of or ""),
+                    in_subsequence=joins_for_refs_from_prev_table,
                 )
                 # Replace dotted references to attributes of entities from fixed table
                 # with underscored labels + add those labels to the fixed table's selects
@@ -924,9 +971,13 @@ class SQLSequence:
                         fixed_part_ts += (
                             f",\n{from_table}.{new_lbl_attr} AS {new_lbl_attr}"
                         )
-                if ljs:
+                if ljs or joins_for_refs_from_prev_table:
                     from_cross += f"\n                LEFT JOIN "
-                    from_cross += f"\n                LEFT JOIN ".join(ljs)
+                    combined_joins: list[str] = [
+                        x for x in joins_for_refs_from_prev_table
+                    ]
+                    combined_joins += [x for x in ljs]
+                    from_cross += f"\n                LEFT JOIN ".join(combined_joins)
                 sselect += (",\n                    " if sselect else "") + (
                     " AND ".join(token_conds)
                 )
@@ -970,7 +1021,7 @@ class SQLSequence:
         # Now coordinate the subsequence conditions with AND ALL()
         simple_seq: str = "\n            AND ".join(
             [
-                f"({','.join(['true' for _ in range(n)])}) = ALL(\n{a}\n            )"
+                f"({','.join(['TRUE' for _ in range(n)])}) = ALL(\n{a}\n            )"
                 for n, a in simple_seq_conds
             ]
         )
