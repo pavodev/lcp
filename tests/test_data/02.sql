@@ -7,14 +7,14 @@ WITH RECURSIVE fixed_parts AS
    FROM
      (SELECT Segment_id
       FROM sparcling1.fts_vector_enrest vec
-      WHERE vec.vector @@ E' 3VERB <1>  3DET <1> ( 3NOUN &  6NP)') AS fts_vector_s
+      WHERE vec.vector @@ E'(!1a|1a) <1> (!1a|1a) <1> (!1a|1a)') AS fts_vector_s
+   CROSS JOIN sparcling1.token_enrest t1
    CROSS JOIN sparcling1.session_en e
    CROSS JOIN sparcling1.session_alignment e_aligned
    CROSS JOIN sparcling1.segment_enrest s
    CROSS JOIN sparcling1.token_enrest t2
    CROSS JOIN sparcling1.token_enrest t3
    CROSS JOIN sparcling1.lemma_en t1_lemma
-   CROSS JOIN sparcling1.token_enrest t1
    WHERE (e_aligned.meta->>'date')::text ~ '^2000'
      AND e.alignment_id = e_aligned.alignment_id
      AND e.char_range && s.char_range
