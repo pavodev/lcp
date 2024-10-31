@@ -1,30 +1,37 @@
 <template>
   <div class="player">
-    <div class="container">
+    <div class="container-fuild">
       <div class="row" v-if="selectedCorpora">
-        <div class="col">
-          <div class="row mt-4">
-            <div class="col">
-              <div class="mb-3 mt-3">
-                <label class="form-label">Document</label>
-                <multiselect
-                  v-model="currentDocumentSelected"
-                  :options="documentOptions"
-                  :multiple="false"
-                  label="name"
-                  track-by="value"
-                ></multiselect>
-              </div>
-            </div>
+        <div class="col-6">
+          <div class="mb-3 mt-3">
+            <!-- <label class="form-label">Document</label> -->
+            <multiselect
+              v-model="currentDocumentSelected"
+              :options="documentOptions"
+              :multiple="false"
+              label="name"
+              placeholder="Select document"
+              track-by="value"
+            ></multiselect>
+          </div>
+        </div>
+        <div class="col-2">
+          <div class="mb-3 mt-3">
+            <button type="button" class="btn btn-primary" @click="$emit('switchToQueryTab')">Query corpus</button>
           </div>
         </div>
       </div>
     </div>
 
     <div v-if="currentDocument">
-      <div class="container mt-4 mb-4">
-        <div :class="appType == 'videoscope' ? 'video-box' : 'audio-box'">
+      <div class="container-fluid mt-4 mb-4">
+        <div :class="appType == 'videoscope' ? 'video-box' : 'audio-box'" @click="playerTogglePlay" :data-is-playing="playerIsPlaying">
           <div class="video-text" v-html="subtext" v-if="appType == 'videoscope'"></div>
+          <div class="video-play-button" v-if="appType == 'videoscope'">
+            <div class="button" :class="playerIsPlaying ? '' : 'play'">
+              <span class="s1"></span>
+            </div>
+          </div>
           <!-- v-if="appType == 'videoscope'" -->
           <div :class="mainVideo == 1 ? 'active' : ''">
             <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay" v-if="appType == 'videoscope'">
@@ -76,7 +83,7 @@
         </div>
       </div>
 
-      <div class="container mt-4 mb-4">
+      <div class="container-fluid mt-4 mb-4">
         <div class="btn-group" role="group">
           <button
             type="button"
@@ -285,7 +292,7 @@
           </button>
         </div>
       </div>
-      <div class="container mt-4">
+      <div class="container-fluid mt-4">
         <div class="row">
           <div class="col" @click="timelineClick">
             <div
@@ -529,25 +536,32 @@ export default {
     //     this.currentDocument = doc_result;
     //   }
     // },
+    playerTogglePlay(){
+      if (this.playerIsPlaying) {
+        this.playerStop()
+      }
+      else {
+        setTimeout(() => this.playerPlay(), 100)
+      }
+    },
     playerPlay(end=0) {
-      const n_players = [1,2,3,4];
+      const n_players = [1, 2, 3, 4];
       for (let n of n_players) {
         const player = this.$refs['videoPlayer'+n];
         if (!player)
           continue
-        if (end >= 0) {
+        if (end && end >= 0) {
           end = Math.min(end, player.duration);
           const handler = ()=>{
             if (player.currentTime < end) return;
             this.playerStop();
           };
-          player.addEventListener("pause", ()=>player.removeEventListener("timeupdate", handler), {once: true});
+          player.addEventListener("pause", () => player.removeEventListener("timeupdate", handler), {once: true});
           player.addEventListener("timeupdate", handler);
         }
         player.play();
       }
       this.playerIsPlaying = true;
-      // this.$refs.timeline.player.playing = true;
     },
     playerStop() {
       if (this.$refs.videoPlayer1) {
@@ -1093,6 +1107,61 @@ video {
   padding: 2px;
 }
 
+.video-box[data-is-playing="true"] .video-play-button {
+  opacity: 0;
+}
+
+.video-box[data-is-playing="true"]:hover .video-play-button {
+  opacity: 0.3;
+}
+
+.video-box[data-is-playing="false"] .video-play-button {
+  opacity: 0.5;
+}
+
+.video-play-button {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: 50px;
+  background-color: #e8e8e854;
+  top: calc(50% - 50px);
+  left: 100px;
+  cursor: pointer;
+  transition: all 0.3s;
+  z-index: 1000;
+}
+
+.video-play-button:hover {
+  opacity: 1;
+}
+
+.video-play-button > .button {
+  margin-top: 39px;
+  margin-left: 54px;
+  transform: scale(2.0);
+}
+
+.video-play-button > .button.play {
+  margin-left: 58px;
+}
+
+.video-play-button > .button > .s1 {
+  display: block;
+  background: #FFFFFF;
+  width:20px;
+  height: 20px;
+  transition: all 0.3s ease;
+
+  -webkit-clip-path: polygon(100% 0, 100% 100%, 66% 100%, 66% 0, 35% 0, 35% 100%, 0 100%, 0 0);
+  clip-path: polygon(100% 0, 100% 100%, 66% 100%, 66% 0, 35% 0, 35% 100%, 0 100%, 0 0);
+}
+
+.video-play-button > .button.play > .s1 {
+  -webkit-clip-path: polygon(100% 49%, 100% 49%, 46% 77%, 46% 26%, 46% 25%, 46% 77%, 0 100%, 0 0);
+  clip-path: polygon(100% 49%, 100% 49%, 46% 77%, 46% 26%, 46% 25%, 46% 77%, 0 100%, 0 0);
+}
+
 .audio-box {
   height: 0px;
 }
@@ -1113,7 +1182,7 @@ video {
   min-height: 100%;
   order: -1;
 }
-div.active video {
+div.active > video {
   height: 450px;
 }
 
