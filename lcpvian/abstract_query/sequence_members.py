@@ -163,14 +163,20 @@ class Unit(Member):
     ):
         super().__init__(obj, parent_sequence, depth)
         query_data: QueryData = parent_sequence.query_data
-        unit_label = parent_sequence.conf.config["firstClass"]["token"]
-        self.label: str = str(
-            obj["unit"].get("label", query_data.unique_label(layer=unit_label))
-        )
-        self.internal_label: str = self.label
+        unit_layer = parent_sequence.conf.config["firstClass"]["token"]
+        self.label: str = str(obj["unit"].get("label", ""))
+        self.internal_label = self.label
+        sequence_unit_labels = [
+            cast(Unit, u).internal_label
+            for u in parent_sequence.members
+            if isinstance(u, Unit)
+        ]
+        if not self.label or self.label in sequence_unit_labels:
+            self.internal_label = query_data.unique_label(layer=unit_layer)
         self.depth: int = depth
         self.min_length: int = 1
         self.max_length: int = 1
+        parent_sequence.members.append(self)
 
     def str_constraints(self) -> list[str]:
         cs: list[str] = []
@@ -243,16 +249,15 @@ class Sequence(Member):
                 obj["sequence"].get("label", self.query_data.unique_label())
             )
 
-        self.members: list[Member] = [
-            x
-            for m in obj["sequence"].get("members", [])
-            for x in Member.from_obj(
+        self.members: list[Member] = []
+        obj_members = obj["sequence"].get("members", [])
+        for m in obj_members:
+            Member.from_obj(
                 m,
                 self,
                 depth + 1,
                 flatten_sequences=flatten,
             )
-        ]
 
         self.fixed: list[Member] = []
 
