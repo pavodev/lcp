@@ -466,7 +466,6 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             on_failure=Callback(_general_failure, EXPORT_TTL),
             result_ttl=EXPORT_TTL,
             job_timeout=EXPORT_TTL,
-            depends_on=depends_on,
             args=(
                 os.path.join(
                     results_dir_for_corpus(corpus_conf), f"dump_{first_job_id}.tsv"
