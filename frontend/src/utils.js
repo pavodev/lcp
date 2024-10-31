@@ -144,18 +144,18 @@ const Utils = {
       return url; // Return the URL unchanged if it has a protocol
     },
     hasAccessToCorpus(corpus, userData) {
-      return (
-        (userData.user.displayName) && (
-          corpus.isSwissdox != true || userData.user.swissdoxUser == true
-        )
-      );
+      // return (
+      //   (userData.user.displayName) && (
+      //     corpus.isSwissdox != true || userData.user.swissdoxUser == true
+      //   )
+      // );
       // Allow public corpora
-      // return !corpus.authRequired
-      //   || (
-      //     (corpus.authRequired == true && userData.user.displayName) && (
-      //       corpus.isSwissdox != true || userData.user.swissdoxUser == true
-      //     )
-      //   );
+      return corpus.authRequired != true
+        || (
+          (corpus.authRequired == true && userData.user.displayName) && (
+            corpus.isSwissdox != true || userData.user.swissdoxUser == true
+          )
+        );
     },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {

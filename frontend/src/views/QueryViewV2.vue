@@ -122,7 +122,7 @@
 
                   <button
                     type="button"
-                    v-if="queryStatus in {'satisfied':1,'finished':1} && !loading"
+                    v-if="queryStatus in {'satisfied':1,'finished':1} && !loading && userData.user.anon != true"
                     class="btn btn-primary me-1 mb-1"
                     data-bs-toggle="modal"
                     data-bs-target="#exportModal"
@@ -133,7 +133,7 @@
 
                   <button
                     type="button"
-                    v-if="queryStatus == 'satisfied' && !loading"
+                    v-if="queryStatus == 'satisfied' && !loading && userData.user.anon != true"
                     @click="submitFullSearch"
                     class="btn btn-primary me-1 mb-1"
                   >
