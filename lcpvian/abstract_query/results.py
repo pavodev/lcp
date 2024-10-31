@@ -431,7 +431,12 @@ class ResultsMaker:
             else:
                 line = f"{shortest}.{attrib_table} AS {lab}"
                 self.r.selects.add(line)
-            self.r.joins[f"{self.schema}.{table} {shortest}".lower()] = True
+            all_layer_names = cast(dict[str, Any], self.config.get("layer", {})).keys()
+            shortest_layer: str = self.r.label_layer.get(shortest, ("", {}))[0]
+            shortest_table = f"{self.schema}.{table} {shortest}".lower()
+            self.r.joins[shortest_table] = (
+                None if shortest_layer in all_layer_names else True
+            )
             self.r.entities.add(lab)
 
         functions = cast(list[str], result["functions"])

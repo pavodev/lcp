@@ -262,7 +262,7 @@ class Prefilter:
         if not attribute:
             return ("", "", "", "other")
         pattern = ""
-        typ = "string"
+        typ = "other"
         if "string" in left:
             pattern = left["string"]
         if "string" in right:
