@@ -438,7 +438,7 @@
         },
         "comparator": {
             "type": "string",
-            "pattern": "((~|\u00ac|!|not )?(=|[><]=?|contain))"
+            "pattern": "((=|[><]=?|contain)(~|\u00ac|!|not )?)"
         },
         "comparison": {
             "type": "object",

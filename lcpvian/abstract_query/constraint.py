@@ -505,7 +505,7 @@ class Constraint:
             assert self.op in ("=", "!=", ">=", "<=", ">", "<"), SyntaxError(
                 f"Invalid operator {self.op} for numerical comparison ({left} {self.op} {right})"
             )
-            formed_condition = f"{left} {self.op} {right}"
+            formed_condition = f"({left})::numeric {self.op} ({right})::numeric"
 
         # # Special case: labels
         # left_ref_info = left_ref[1]
