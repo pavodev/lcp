@@ -613,7 +613,7 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label class="form-label">Plain fromat (TSV + JSON)</label>
+            <label class="form-label">Plain format (TSV + JSON)</label>
             <button
               type="button"
               @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
@@ -622,14 +622,14 @@
             >
               Download preview
             </button>
-            <button
+            <!-- <button
               type="button"
               @click="exportResults('plain')"
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
               Launch export
-            </button>
+            </button> -->
           </div>
           <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
             <label class="form-label">Swissdox</label>
