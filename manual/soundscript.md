@@ -36,7 +36,7 @@ The Query tab is designed the same way across all interfaces. It contains the qu
   <img src="images/soundscript_query.png" alt="alt" width="550"/>
 </p>
 
-For more information on querying see the [DQD](dqd.md) page.
+For more information on querying see the [Querying](querying.md) page and the [DQD](dqd.md) page.
 
 ## Results / Data tab
 
