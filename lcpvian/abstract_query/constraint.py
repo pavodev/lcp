@@ -832,7 +832,7 @@ class Constraint:
                 f"{fn} only applies to time-aligned layer annotations (error in '{first_arg_str})"
             )
             lower_or_upper = "lower" if fn == "start" else "upper"
-            fn_str = f"({lower_or_upper}({first_arg_str}.frame_range) / 25)"  # time in seconds
+            fn_str = f"({lower_or_upper}({first_arg_str}.frame_range) / 25.0)"  # time in seconds
             ref_info = RefInfo(type="number")
         return (fn_str, ref_info)
 
