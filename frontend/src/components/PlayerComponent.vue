@@ -753,7 +753,7 @@ export default {
         x = right - width;
       if (y + height > bottom)
         y = bottom - height;
-      return {'left': x+'px', 'top': y+'px'};
+      return {'left': x+'px', 'top': y-250+'px'};
     },
     onSocketMessage(data) {
       // console.log("SOC2", data)
@@ -895,9 +895,20 @@ export default {
           return;
         }
         else if (data["action"] === "document_ids") {
-          // console.log("DOC1", data);
           this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
           this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media),props.frame_range]);
+
+          // Preselect first document
+          if (!this.currentDocumentSelected) {
+            let document = this.corpusData[0]
+            if (document) {
+              this.currentDocumentSelected = {
+                name: document[1],
+                value: document[0],
+                document: document
+              }
+            }
+          }
           return;
         }
       }

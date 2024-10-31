@@ -353,7 +353,7 @@
                       </div>
                     </div>
                   </div>
-                  <div class="col-12">
+                  <div class="col-12" id="results">
                     <div class="row mb-4">
                       <div class="col">
                         <p class="mb-1">
@@ -813,6 +813,8 @@ textarea {
 <script>
 import { mapState } from "pinia";
 
+import { nextTick } from 'vue'
+
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useNotificationStore } from "@/stores/notificationStore";
 import { useUserStore } from "@/stores/userStore";
@@ -956,6 +958,7 @@ export default {
       if (this.selectedCorpora) {
         // this.loadDocuments();
         this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
+        this.queryDQD = this.selectedCorpora.corpus.sample_query || "";
         history.pushState(
           {},
           null,
@@ -1667,6 +1670,12 @@ export default {
       // console.log(document.querySelector("button#nav-results-tab"))
       this.querySubmitted = true
       this.activeMainTab = 'data'
+      nextTick(() => {
+        const section = document.getElementById("results");
+        if (section) {
+          section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      });
       // .tab("show")
     },
     resume() {
