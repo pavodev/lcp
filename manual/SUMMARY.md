@@ -11,5 +11,7 @@
 * [Corpus management](corpus_management.md)
 * [Querying](querying.md)
 * [Importing](importing.md)
-* [Links](README.md#links)
+* [Exporting](exporting.md)
+
+
 
