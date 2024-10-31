@@ -394,6 +394,14 @@ class ResultsMaker:
             layer, _ = self.r.label_layer[shortest]
             layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
             table = _get_table(layer, self.config, self.batch, self.lang)
+            # Join shortest table
+            all_layer_names = cast(dict[str, Any], self.config.get("layer", {})).keys()
+            shortest_layer = self.r.label_layer.get(shortest, ("", {}))[0]
+            shortest_table = f"{self.schema}.{table} {shortest}".lower()
+            self.r.joins[shortest_table] = (
+                None if shortest_layer in all_layer_names else True
+            )
+            # Proceed
             is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
             is_chained = len(split_att) > 2
             conf_layer_info: dict[str, Any] = cast(
@@ -414,7 +422,6 @@ class ResultsMaker:
                 else:
                     line = f"{pre_att}.{field} ->> '{sub_field}' AS {lab}"
                 self.r.selects.add(line)
-                shortest_layer: str = self.r.label_layer.get(shortest, ("", None))[0]
                 field_info = (
                     cast(dict[str, Any], self.config["layer"])
                     .get(shortest_layer, {})
@@ -456,12 +463,6 @@ class ResultsMaker:
             else:
                 line = f"{shortest}.{attrib_table} AS {lab}"
                 self.r.selects.add(line)
-            all_layer_names = cast(dict[str, Any], self.config.get("layer", {})).keys()
-            shortest_layer: str = self.r.label_layer.get(shortest, ("", {}))[0]
-            shortest_table = f"{self.schema}.{table} {shortest}".lower()
-            self.r.joins[shortest_table] = (
-                None if shortest_layer in all_layer_names else True
-            )
             self.r.entities.add(lab)
 
         functions = cast(list[str], result["functions"])
