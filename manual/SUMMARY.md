@@ -1,7 +1,7 @@
 # Summary
 
 * [LCP](README.md#)
-* [Applications](README.md#applications)
+    * [Landing page](lcp_landing.md)
     * [catchphrase](catchphrase.md)
     * [soundscript](soundscript.md)
     * [videoscope](videoscope.md)
