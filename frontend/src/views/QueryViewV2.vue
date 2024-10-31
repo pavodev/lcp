@@ -958,6 +958,7 @@ export default {
       if (this.selectedCorpora) {
         // this.loadDocuments();
         this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
+        this.queryDQD = this.selectedCorpora.corpus.sample_query || "";
         history.pushState(
           {},
           null,
