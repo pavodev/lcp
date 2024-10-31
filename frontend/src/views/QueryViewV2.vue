@@ -918,6 +918,8 @@ export default {
             this.defaultQueryDQD = corpus[0].sample_query || "";
             this.queryDQD = this.defaultQueryDQD;
             this.preselectedCorporaId = null;
+            this.showGraph = 'main'
+            setTimeout(() => this.graphIndex++, 1)
           }
           this.validate();
         }
