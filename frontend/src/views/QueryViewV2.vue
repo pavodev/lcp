@@ -11,14 +11,14 @@
           <div class="form-group row">
             <label for="staticEmail" class="col-sm-3 col-form-label">
               Corpora
-              <div
+              <!-- <div
                 v-if="selectedCorpora && selectedCorpora.corpus"
                 class="details-button icon-3 tooltips corpus-structure-button"
                 @click.stop="switchGraph()"
                 title="Show/hide corpus structure"
               >
                 <FontAwesomeIcon :icon="['fas', 'circle-info']" />
-              </div>
+              </div> -->
             </label>
             <div class="col-sm-9">
               <multiselect
@@ -42,23 +42,17 @@
             </div>
           </div>
         </div>
-        <div class="col-8">
-          <div class="corpus-graph mt-3" v-if="corpusGraph">
-            <FontAwesomeIcon
-              :icon="['fas', 'expand']"
-              @click="openGraphInModal"
-              data-bs-toggle="modal"
-              data-bs-target="#corpusDetailsModal"
-            />
-            <CorpusGraphView :corpus="corpusGraph" @graphReady="resizeGraph" />
-          </div>
-        </div>
       </div>
-      <div class="row mt-5">
+      <div class="row mt-5" v-if="selectedCorpora">
         <div class="col-12 mt-3">
           <div class="form-floating mb-3">
             <nav>
-              <div class="nav nav-tabs" id="nav-main-tab" role="tablist">
+              <div
+                class="nav nav-tabs"
+                id="nav-main-tab"
+                role="tablist"
+                :class="{ 'reverse-items': ['soundscript', 'videoscope'].includes(appType) }"
+              >
                 <button
                   class="nav-link"
                   :class="{ active: activeMainTab === 'query' }"
@@ -69,21 +63,27 @@
                   role="tab"
                   aria-controls="nav-query"
                   aria-selected="true"
+                  @click="activeMainTab = 'query'"
                 >
                   Query
                 </button>
                 <button
                   class="nav-link"
-                  :class="{ active: activeMainTab === 'results' }"
-                  id="nav-results-tab"
+                  :class="{ active: activeMainTab === 'data' }"
+                  id="nav-data-tab"
                   data-bs-toggle="tab"
-                  data-bs-target="#nav-results"
+                  data-bs-target="#nav-data"
                   type="button"
                   role="tab"
-                  aria-controls="nav-results"
+                  aria-controls="nav-data"
                   aria-selected="false"
+                  @click="activeMainTab = 'data'"
                 >
-                  Results
+                  Data
+                  <div class="lds-ripple lds-white lds-xs" v-if="loading">
+                    <div></div>
+                    <div></div>
+                  </div>
                 </button>
                 <!-- <button
                   class="nav-link"
@@ -152,114 +152,134 @@
                   </button>
                 </div>
 
-                <div class="form-floating mb-3">
-                  <nav>
-                    <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
-                      <button
-                        class="nav-link active"
-                        id="nav-dqd-tab"
-                        data-bs-toggle="tab"
-                        data-bs-target="#nav-dqd"
-                        type="button"
-                        role="tab"
-                        aria-controls="nav-dqd"
-                        aria-selected="true"
-                        @click="currentTab = 'dqd'"
-                      >
-                        DQD
-                      </button>
-                      <button
-                        class="nav-link"
-                        id="nav-json-tab"
-                        data-bs-toggle="tab"
-                        data-bs-target="#nav-json"
-                        type="button"
-                        role="tab"
-                        aria-controls="nav-json"
-                        aria-selected="false"
-                        @click="currentTab = 'json'"
-                      >
-                        JSON
-                      </button>
-                      <button
-                        v-if="sqlQuery"
-                        class="nav-link"
-                        id="nav-sql-tab"
-                        data-bs-toggle="tab"
-                        data-bs-target="#nav-sql"
-                        type="button"
-                        role="tab"
-                        aria-controls="nav-sql"
-                        aria-selected="false"
-                        @click="currentTab = 'sql'"
-                      >
-                        SQL
-                      </button>
+                <div class="row">
+                  <div class="col-6">
+                    <div class="form-floating mb-3">
+                      <nav>
+                        <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
+                          <button
+                            class="nav-link active"
+                            id="nav-dqd-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-dqd"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-dqd"
+                            aria-selected="true"
+                            @click="currentTab = 'dqd'"
+                          >
+                            DQD
+                          </button>
+                          <button
+                            class="nav-link"
+                            id="nav-json-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-json"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-json"
+                            aria-selected="false"
+                            @click="currentTab = 'json'"
+                          >
+                            JSON
+                          </button>
+                          <button
+                            v-if="sqlQuery"
+                            class="nav-link"
+                            id="nav-sql-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-sql"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-sql"
+                            aria-selected="false"
+                            @click="currentTab = 'sql'"
+                          >
+                            SQL
+                          </button>
+                        </div>
+                      </nav>
+                      <div class="tab-content" id="nav-query-tabContent">
+                        <div
+                          class="tab-pane fade show active pt-3"
+                          id="nav-dqd"
+                          role="tabpanel"
+                          aria-labelledby="nav-results-tab"
+                        >
+                          <EditorView
+                            :query="queryDQD"
+                            :defaultQuery="defaultQueryDQD"
+                            :corpora="selectedCorpora"
+                            :invalidError="
+                              isQueryValidData && isQueryValidData.valid != true
+                                ? isQueryValidData.error
+                                : null
+                            "
+                            @submit="submit"
+                            @update="updateQueryDQD"
+                          />
+                          <p
+                            class="error-text text-danger mt-3"
+                            v-if="
+                              isQueryValidData && isQueryValidData.valid != true && debug
+                            "
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
+                          class="tab-pane fade pt-3"
+                          id="nav-json"
+                          role="tabpanel"
+                          aria-labelledby="nav-json-tab"
+                        >
+                          <textarea
+                            class="form-control query-field"
+                            placeholder="Query (e.g. test.*)"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="query"
+                          ></textarea>
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
+                          v-if="sqlQuery"
+                          class="tab-pane fade pt-3"
+                          id="nav-sql"
+                          role="tabpanel"
+                          aria-labelledby="nav-sql-tab"
+                        >
+                          <textarea
+                            class="form-control query-field"
+                            v-model="sqlQuery"
+                          ></textarea>
+                        </div>
+                      </div>
                     </div>
-                  </nav>
-                  <div class="tab-content" id="nav-query-tabContent">
-                    <div
-                      class="tab-pane fade show active pt-3"
-                      id="nav-dqd"
-                      role="tabpanel"
-                      aria-labelledby="nav-results-tab"
-                    >
-                      <EditorView
-                        :query="queryDQD"
-                        :defaultQuery="defaultQueryDQD"
-                        :corpora="selectedCorpora"
-                        :invalidError="
-                          isQueryValidData && isQueryValidData.valid != true
-                            ? isQueryValidData.error
-                            : null
-                        "
-                        @submit="submit"
-                        @update="updateQueryDQD"
+                  </div>
+                  <div class="col-6">
+                    <div class="corpus-graph mt-3" v-if="selectedCorpora">
+                      <FontAwesomeIcon
+                        :icon="['fas', 'expand']"
+                        @click="openGraphInModal"
+                        data-bs-toggle="modal"
+                        data-bs-target="#corpusDetailsModal"
                       />
-                      <p
-                        class="error-text text-danger mt-3"
-                        v-if="
-                          isQueryValidData && isQueryValidData.valid != true && debug
-                        "
-                      >
-                        {{ isQueryValidData.error }}
-                      </p>
-                    </div>
-                    <div
-                      class="tab-pane fade pt-3"
-                      id="nav-json"
-                      role="tabpanel"
-                      aria-labelledby="nav-json-tab"
-                    >
-                      <textarea
-                        class="form-control query-field"
-                        placeholder="Query (e.g. test.*)"
-                        :class="
-                          isQueryValidData == null || isQueryValidData.valid == true
-                            ? 'ok'
-                            : 'error'
-                        "
-                        v-model="query"
-                      ></textarea>
-                      <!-- <label for="floatingTextarea">Query</label> -->
-                      <p
-                        class="error-text text-danger"
-                        v-if="isQueryValidData && isQueryValidData.valid != true"
-                      >
-                        {{ isQueryValidData.error }}
-                      </p>
-                    </div>
-                    <div
-                      v-if="sqlQuery"
-                      class="tab-pane fade pt-3"
-                      id="nav-sql"
-                      role="tabpanel"
-                      aria-labelledby="nav-sql-tab"
-                    >
-                      <textarea
-                        class="form-control query-field"
-                        v-model="sqlQuery"
-                      ></textarea>
+                      <CorpusGraphView
+                        :corpus="selectedCorpora.corpus"
+                        :key="graphIndex"
+                        v-if="showGraph == 'main'"
+                        @graphReady="resizeGraph"
+                      />
                     </div>
                   </div>
                 </div>
@@ -281,16 +301,22 @@
               </div> -->
               <div
                 class="tab-pane fade"
-                :class="{ active: activeMainTab === 'results', show: activeMainTab === 'results' }"
-                id="nav-results"
+                :class="{ active: activeMainTab === 'data', show: activeMainTab === 'data' }"
+                id="nav-data"
                 role="tabpanel"
-                aria-labelledby="nav-results-tab"
+                aria-labelledby="nav-data-tab"
               >
-                <div class="lds-ripple" v-if="loading">
-                  <div></div>
-                  <div></div>
-                </div>
-                <div class="mt-3 row">
+
+                <PlayerComponent
+                  v-if="selectedCorpora && showExploreTab()"
+                  :key="selectedCorpora"
+                  :selectedCorpora="selectedCorpora"
+                  :selectedMediaForPlay="selectedMediaForPlay"
+                  @switchToQueryTab="setMainTab"
+                />
+
+                <hr>
+                <div class="mt-5 row" v-if="querySubmitted">
                   <div class="col-6">
                     <h6 class="mb-2">Query result</h6>
                     <div class="progress mb-2">
@@ -367,13 +393,6 @@
                   </div>
                 </div>
 
-                <PlayerComponent
-                  v-if="selectedCorpora && showExploreTab()"
-                  :key="selectedCorpora"
-                  :selectedCorpora="selectedCorpora"
-                  :selectedMediaForPlay="selectedMediaForPlay"
-                />
-
                 <div
                   v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
                   class="tooltip bs-tooltip-auto fade show"
@@ -414,9 +433,7 @@
                 </div>
 
                 <div
-                  v-if="
-                    percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)
-                  "
+                  v-if="percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)"
                   style="text-align: center"
                   class="mb-3 mt-2"
                 >
@@ -704,10 +721,10 @@
               aria-label="Close"
             ></button>
           </div>
-          <div class="modal-body text-start" v-if="corpusModal">
+          <div class="modal-body text-start" v-if="showGraph == 'modal'">
             <div class="row">
-              <p class="title mb-0">{{ corpusModal.meta.name }}</p>
-              <CorpusGraphView :corpus="corpusModal" v-if="showGraph" />
+              <p class="title mb-0">{{ selectedCorpora.corpus.meta.name }}</p>
+              <CorpusGraphView :corpus="selectedCorpora.corpus" />
             </div>
           </div>
           <div class="modal-footer">
@@ -785,6 +802,12 @@ textarea {
   display: inline-block;
   float: right;
 }
+.reverse-items > button#nav-query-tab {
+  order: 2;
+}
+.reverse-items > button#nav-data-tab {
+  order: 1;
+}
 </style>
 
 <script>
@@ -840,9 +863,9 @@ export default {
       sqlQuery: null,
       isDebug: false,
       queryStatus: null,
-      corpusGraph: null,
+      // corpusGraph: null,
       corpusModal: null,
-      showGraph: false,
+      showGraph: '',
       showResultsNotification: false,
       showLoadingBar: false,
 
@@ -853,7 +876,10 @@ export default {
       // userId: null,
       // corpusData: [],
 
-      activeMainTab: "query",
+      activeMainTab: ['soundscript', 'videoscope'].includes(config.appType) ? "data" : "query",
+      graphIndex: 0,
+      appType: config.appType,
+      querySubmitted: false,
       // playerIndex: 0,
 
       // loadingDocument: false,
@@ -908,15 +934,24 @@ export default {
       immediate: true,
       deep: true,
     },
+    activeMainTab() {
+      if (this.activeMainTab == 'query') {
+        this.showGraph = 'main'
+      }
+      else {
+        this.showGraph = ''
+      }
+    },
     selectedCorpora() {
-      this.activeMainTab = 'query'
+      this.activeMainTab = ['soundscript', 'videoscope'].includes(config.appType) ? "data" : "query"
+      this.querySubmitted = false
       this.queryStatus = null
       this.checkAuthUser();
-      let updateGraph = false;
-      if (this.corpusGraph) {
-        this.corpusGraph = null;
-        updateGraph = true;
-      }
+      // let updateGraph = false;
+      // if (this.corpusGraph) {
+      //   this.corpusGraph = null;
+      //   updateGraph = true;
+      // }
       // this.validate();
       if (this.selectedCorpora) {
         // this.loadDocuments();
@@ -926,9 +961,11 @@ export default {
           null,
           `/query/${this.selectedCorpora.value}/${this.selectedCorpora.corpus.shortname}`
         );
-        if (updateGraph)
-          // make sure to delay the re-setting of corpusGraph
-          setTimeout(() => (this.corpusGraph = this.selectedCorpora.corpus), 1);
+        // if (updateGraph)
+        //   // make sure to delay the re-setting of corpusGraph
+        //   setTimeout(() => (this.corpusGraph = this.selectedCorpora.corpus), 1);
+        this.showGraph = 'main'
+        setTimeout(() => this.graphIndex++, 1)
       } else {
         history.pushState({}, null, `/query/`);
       }
@@ -1003,6 +1040,9 @@ export default {
     // },
   },
   methods: {
+    setMainTab() {
+      this.activeMainTab = 'query'
+    },
     playMedia(data) {
       this.selectedMediaForPlay = data;
     },
@@ -1533,24 +1573,26 @@ export default {
               !this.query ||
               !this.selectedLanguages
     },
-    switchGraph() {
-      if (!this.corpusGraph && this.selectedCorpora)
-        this.corpusGraph = this.selectedCorpora.corpus;
-      else this.corpusGraph = null;
-    },
+    // switchGraph() {
+    //   if (!this.corpusGraph && this.selectedCorpora)
+    //     this.corpusGraph = this.selectedCorpora.corpus;
+    //   else this.corpusGraph = null;
+    // },
     openGraphInModal() {
-      if (!this.corpusGraph) return;
-      this.corpusModal = this.corpusGraph;
-      // Cannot have more than one graph displayed at a time
-      let restoreSmallGraphWith = this.corpusGraph;
-      this.corpusGraph = null;
+      console.log("Test")
+      // this.showGraph = 'model'
+      // if (!this.corpusGraph) return;
+      // this.corpusModal = this.corpusGraph;
+      // // Cannot have more than one graph displayed at a time
+      // let restoreSmallGraphWith = this.corpusGraph;
+      // this.corpusGraph = null;
       this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
-        this.showGraph = true;
+        this.showGraph = 'modal';
       });
       this.$refs.vuemodal.addEventListener("hide.bs.modal", () => {
-        this.showGraph = false;
-        if (restoreSmallGraphWith) this.corpusGraph = restoreSmallGraphWith;
-        restoreSmallGraphWith = null;
+        this.showGraph = 'main';
+        // if (restoreSmallGraphWith) this.corpusGraph = restoreSmallGraphWith;
+        // restoreSmallGraphWith = null;
       });
     },
     resizeGraph(container) {
@@ -1623,7 +1665,8 @@ export default {
       }
 
       // console.log(document.querySelector("button#nav-results-tab"))
-      this.activeMainTab = 'results'
+      this.querySubmitted = true
+      this.activeMainTab = 'data'
       // .tab("show")
     },
     resume() {
