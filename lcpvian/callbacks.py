@@ -832,14 +832,9 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
-    if (
-        job.dependency
-        and job.args
-        and isinstance(job.args[0], str)
-        and os.path.exists(job.args[0])
-    ):
+    if job.args and isinstance(job.args[0], str) and os.path.exists(job.args[0]):
         j_kwargs: dict = cast(dict, job.kwargs)
-        dep_kwargs: dict = cast(dict, job.dependency.kwargs)
+        dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
         user = j_kwargs.get("user", dep_kwargs.get("user", ""))
         room = j_kwargs.get("room", dep_kwargs.get("room", ""))
         if user and room and cast(dict, job.kwargs).get("download", False):
