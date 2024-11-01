@@ -109,9 +109,9 @@ UNIVERSAL.2 : "ALL"
 CONJUNCTION.2 : "AND"
 DISJUNCTION.2 : "OR"
 
-POS_INT : /[1-9]*[0-9]/                   // type: number
-NEG_INT : /-[1-9]*[0-9]/                  // type: number
-FLOAT : /-?[1-9]*[0-9]\.[0-9]+/           // type: number
+POS_INT : /[0-9]+/                   // type: number
+NEG_INT : /-[0-9]+/                  // type: number
+FLOAT : /-?[0-9]+\.[0-9]+/           // type: number
 
 WILDCARD : "*"
 IFLAG : "i"
