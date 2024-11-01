@@ -326,18 +326,15 @@ class QueryMaker:
 
         for obj in to_iter:
             # Lift any argument of a quantifier to obj
-            if qkey := next((x for x in obj if x.endswith("Quantification")), None):
-                quan_obj = cast(dict[str, Any], obj[qkey])
-                assert "args" in quan_obj, SyntaxError(
-                    "Could not find 'args' in quantifier"
-                )
-                quantor = quan_obj.get("quantor", "")
+            if "quantification" in obj:
+                quan_obj = cast(dict[str, Any], obj["quantification"])
+                quantor = quan_obj.get("quantifier", "")
                 if quantor.endswith(("EXISTS", "EXIST")):
                     if quantor.startswith(("~", "!", "NOT", "¬")):
                         quantor = "NOT EXISTS"
                     else:
                         quantor = "EXISTS"
-                    obj = next(a for a in quan_obj["args"])
+                    obj = {k: v for k, v in quan_obj.items() if k == "unit"}
                     obj["unit"]["quantor"] = quantor
 
             # Turn any logical expression into a main constraint
