@@ -467,14 +467,35 @@ class Constraint:
                 raise TypeError(f"Cannot compare {left} to {right}")
 
         elif left_type == "entity" and right_type == "entity":
-            assert self.op in ("=", "!="), SyntaxError(
-                f"References can only be compared for equality (invalid operator '{self.op}')"
-            )
-            left_layer = left_info.get("layer", self.layer).lower()
-            right_layer = right_info.get("layer", self.layer).lower()
-            formed_condition = (
-                f"{left}.{left_layer}_id {self.op} {right}.{right_layer}_id"
-            )
+            if self.op.endswith("overlaps"):
+                assert left in (self.label_layer or {}), ReferenceError(
+                    f"{left} cannot overlap anything since it is not a label"
+                )
+                assert right in (self.label_layer or {}), ReferenceError(
+                    f"{right} cannot overlap anything since it is not a label"
+                )
+                assert _is_anchored(
+                    self.config, left_info.get("layer", ""), "time"
+                ), TypeError(
+                    f"Entity {left} cannot overlap because it is not time-anchored"
+                )
+                assert _is_anchored(
+                    self.config, right_info.get("layer", ""), "time"
+                ), TypeError(
+                    f"Entity {right} cannot overlap because it is not time-anchored"
+                )
+                formed_condition = f"{left}.frame_range && {right}.frame_range"
+                if self.op != "overlaps":
+                    formed_condition = f"NOT({formed_condition})"
+            else:
+                assert self.op in ("=", "!="), SyntaxError(
+                    f"References can only be compared for equality (invalid operator '{self.op}')"
+                )
+                left_layer = left_info.get("layer", self.layer).lower()
+                right_layer = right_info.get("layer", self.layer).lower()
+                formed_condition = (
+                    f"{left}.{left_layer}_id {self.op} {right}.{right_layer}_id"
+                )
 
         elif "regex" in (left_type, right_type):
             assert self.op in ("=", "!="), SyntaxError(
