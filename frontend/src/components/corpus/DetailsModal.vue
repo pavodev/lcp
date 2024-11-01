@@ -85,7 +85,7 @@
       <p class="word-count mb-0 mt-2" v-if="license">
         License:
         <span v-if="license.tag == 'user-defined'">
-          User defined: {{ corpusModal.userLicense }}
+          User defined: {{ corpusModal.meta.userLicense }}
         </span>
         <span v-else>
           <a :href="license.url" target="_blank">
@@ -138,8 +138,8 @@
       return {
         showGraph: false,
         appLinks: config.appLinks,
-        license: this.corpusModal.license
-          ? useCorpusStore().getLicenseByTag((this.corpusModal.license))
+        license: this.corpusModal.meta.license
+          ? useCorpusStore().getLicenseByTag((this.corpusModal.meta.license))
           : null,
       }
     },
