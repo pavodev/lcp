@@ -213,21 +213,21 @@
                       <FontAwesomeIcon :icon="['fas', 'gear']" />
                     </span>
                     <span
-                      :href="corpusStore.getLicenseByTag(corpus.meta.license)"
+                      :href="corpusStore.getLicenseByTag(corpus.license)"
                       class="tooltips icon-x"
                       target="_blank"
                       :title="`Corpus licence: User defined - Check details`"
-                      v-if="corpus.meta.license == 'user-defined'"
+                      v-if="corpus.license == 'user-defined'"
                     >
                       <FontAwesomeIcon :icon="['fas', 'certificate']" />
                     </span>
                     <a
-                      :href="corpusStore.getLicenseByTag(corpus.meta.license).url"
+                      :href="corpusStore.getLicenseByTag(corpus.license).url"
                       target="_blank"
                       @click.stop
                       class="tooltips icon-x"
-                      v-else-if="corpus.meta.license"
-                      :title="`Corpus licence: ${corpus.meta.license}`"
+                      v-else-if="corpus.license"
+                      :title="`Corpus licence: ${corpus.license}`"
                     >
                       <FontAwesomeIcon :icon="['fas', 'certificate']" />
                     </a>
