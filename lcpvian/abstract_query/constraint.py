@@ -427,7 +427,11 @@ class Constraint:
             ref_info["meta"] = rgx
         elif "math" in reference:
             ref, ref_info = self.parse_math(reference)
-        elif "reference" in reference or "entity" in reference:
+        elif (
+            "reference" in reference
+            or "entity" in reference
+            or "attribute" in reference
+        ):
             ref, ref_info = self.parse_reference(
                 reference, prefix, layer, lab_lay, attributes, mapping
             )
@@ -620,7 +624,12 @@ class Constraint:
             for k, v in attributes.items()
             if isinstance(v, dict) and "entity" in v
         }
-        ref = cast(str, reference.get("reference", reference.get("entity", "")))
+        ref = cast(
+            str,
+            reference.get(
+                "reference", reference.get("entity", reference.get("attribute", ""))
+            ),
+        )
         post_dots: list[str] = []
         sub_ref: str = ""
         if "." in ref:
@@ -902,23 +911,22 @@ def _get_constraint(
 
     first_key_in_constraint = next(iter(constraint), "")
 
-    if first_key_in_constraint.endswith("Quantification"):
-        obj: dict[str, Any] = cast(dict[str, Any], next(iter(constraint.values())))
-        if "quantor" in obj:
-            quantor_str: str = obj.get("quantor", "")
-            if quantor_str.endswith(("EXIST", "EXISTS")):
-                if quantor_str.startswith(("!", "~", "¬", "NOT")):
-                    quantor_str = "NOT EXISTS"
-                else:
-                    quantor_str = "EXISTS"
-            quantor = quantor_str
-            constraint = obj.get("args", [{}])[0]
-            obj_layer = label_layer.get(obj.get("label", ""), [""])[0]
-            if _layer_contains(conf.config, layer, obj_layer) or all(
-                _is_anchored(conf.config, x, "stream") for x in (layer, obj_layer)
-            ):
-                part_of = label
-            first_key_in_constraint = next(iter(constraint), "")
+    if first_key_in_constraint == "quantification":
+        obj: dict[str, Any] = cast(dict, constraint)["quantification"]
+        quantor_str: str = obj.get("quantifier", "")
+        if quantor_str.endswith(("EXIST", "EXISTS")):
+            if quantor_str.startswith(("!", "~", "¬", "NOT")):
+                quantor_str = "NOT EXISTS"
+            else:
+                quantor_str = "EXISTS"
+        quantor = quantor_str
+        constraint = {k: v for k, v in obj.items() if k in ("unit", "sequence", "set")}
+        obj_layer = label_layer.get(obj.get("label", ""), [""])[0]
+        if _layer_contains(conf.config, layer, obj_layer) or all(
+            _is_anchored(conf.config, x, "stream") for x in (layer, obj_layer)
+        ):
+            part_of = label
+        first_key_in_constraint = next(iter(constraint), "")
 
     unit: dict[str, Any] = cast(dict[str, Any], constraint.get("unit", {}))
     if unit.get("constraints"):
