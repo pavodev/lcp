@@ -30,16 +30,16 @@ pattern : REGEX
 regex : pattern case_insensitive?
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
-label : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as a label
-entity : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as an entity reference
-center : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as center
-space : LABEL | IFLAG | ANALYSIS_FUNCTIONS // e.g. it's OK to use "frequency" as space
-reference : LABEL | IFLAG | ANALYSIS_FUNCTIONS | ATTRIBUTE
+label : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
+entity : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
+center : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
+space : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
+reference : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS | ATTRIBUTE
 layer : LAYER
 
 left : (function | reference | attribute | string | regex | math)
 right : (function | reference | attribute | string | regex | math)
-comparator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN)
+comparator : NEGATION? (EQUAL|COMPARATIVE|CONTAIN|OVERLAPS)
 
 comparison : left comparator right
 
@@ -120,6 +120,7 @@ NEGATION.2 : /(~|¬|!|not )/i
 COMPARATIVE : /[><]=?/
 EQUAL : "="
 CONTAIN : "contain"
+OVERLAPS : "overlaps"
 
 LAYER : /[A-Z][a-zA-Z0-9_]+/
 LABEL : /[a-z][a-zA-Z0-9_]*/

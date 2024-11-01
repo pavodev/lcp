@@ -36,9 +36,9 @@ The Query tab is designed the same way across all interfaces. It contains the qu
   <img src="images/soundscript_query.png" alt="alt" width="550"/>
 </p>
 
-For more information on querying see the [DQD](dqd.md) page.
+For more information on querying see the [Querying](querying.md) page and the [DQD](dqd.md) page.
 
-## Results / Data tab
+## Results
 
 Once the query has been submitted, results will automatically show in the "Data" tab, below the player. Pressing the Play button will navigate the media player to the place in the document for a chosen example.
 

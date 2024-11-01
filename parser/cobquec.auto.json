@@ -82,7 +82,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "([1-9]*[0-9]|-[1-9]*[0-9]|-?[1-9]*[0-9]\\.[0-9]+)"
+                    "pattern": "(-?[1-9]*[0-9]\\.[0-9]+|-[1-9]*[0-9]|[1-9]*[0-9])"
                 }
             ],
             "properties": {
@@ -91,8 +91,8 @@
                 }
             },
             "type": [
-                "object",
-                "string"
+                "string",
+                "object"
             ]
         },
         "min": {
@@ -155,7 +155,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "((EXISTS(~|\u00ac|!|not )?)|((~|\u00ac|!|not )?ALL))"
+            "pattern": "(((~|\u00ac|!|not )?EXISTS)|(ALL(~|\u00ac|!|not )?))"
         },
         "quantification": {
             "type": "object",
@@ -304,23 +304,23 @@
         },
         "label": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)"
         },
         "entity": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)"
         },
         "center": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)"
         },
         "space": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev))"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)"
         },
         "reference": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "layer": {
             "type": "string",
@@ -438,7 +438,7 @@
         },
         "comparator": {
             "type": "string",
-            "pattern": "((=|[><]=?|contain)(~|\u00ac|!|not )?)"
+            "pattern": "((=|[><]=?|contain|overlaps)(~|\u00ac|!|not )?)"
         },
         "comparison": {
             "type": "object",
@@ -869,7 +869,7 @@
         },
         "resultsCollocationAttribute": {
             "type": "string",
-            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "([a-z][a-zA-Z0-9_]*|i|(frequency|minimum|maximum|average|stddev)|contain|overlaps|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "query": {
             "type": "array",
