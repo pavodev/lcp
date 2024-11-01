@@ -186,10 +186,12 @@ def _bound_label(
             for a in logic.get("args", []):
                 if _bound_label(label, a, tmp_in_scope):
                     return True
-        if obj.get("existentialQuantification", {}).get("quantor", "") == "NOT EXISTS":
-            for a in obj["existentialQuantification"].get("args", []):
-                if _bound_label(label, a, in_scope=True):
-                    return True
+        quantor = obj.get("quantification", {}).get("quantor", "")
+        # If the quantifier is a NEGATIVE existential (i.e. not EXIST(S))
+        if quantor.endswith(("EXIST", "EXISTS")) and quantor not in ("EXIST", "EXISTS"):
+            arg = {k: v for k, v in obj.items() if k in ("unit", "sequence", "set")}
+            if _bound_label(label, arg, in_scope=True):
+                return True
 
     # Label not found
     return False
