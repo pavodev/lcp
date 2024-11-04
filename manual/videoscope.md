@@ -17,7 +17,7 @@ In Videoscope (and in Soundscript), the data tab is shown first, to allow for br
 
 ### Media Player
 
-In Videoscope, the meida player can show up to four video and audio channels for a single document. 
+In Videoscope, the media player can show up to four video and audio channels for a single document. 
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/videoscope_player.png" alt="alt" width="550"/>
@@ -25,7 +25,7 @@ In Videoscope, the meida player can show up to four video and audio channels for
 
 ### Timeline
 
-The timeline previews time-aligned transcripts and other annotations in layers. You can click and drag the timeline left and right to view annotations. if you hover over annotation tiles, more information will show associated to that element.
+The timeline previews time-aligned transcripts and other annotations in layers. You can click and drag the timeline left and right to view annotations. If you hover over annotation tiles, more information will show associated to that element.
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
   <img src="images/videoscope_timeline.png" alt="alt" width="550"/>
