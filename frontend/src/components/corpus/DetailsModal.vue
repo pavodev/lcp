@@ -82,16 +82,16 @@
           </p> -->
         </div>
       </span>
-      <p class="word-count mb-0" v-if="licence">
+      <p class="word-count mb-0 mt-2" v-if="license">
         License:
-        <span v-if="licence.tag == 'user-defined'">
+        <span v-if="license.tag == 'user-defined'">
           User defined: {{ corpusModal.meta.userLicense }}
         </span>
         <span v-else>
-          <a :href="licence.url" target="_blank">
-            <img :src="`/licenses/${licence.tag}.png`" :alt="licence.name" class="license-img me-1" />
+          <a :href="license.url" target="_blank">
+            <img :src="`/licenses/${license.tag}.png`" :alt="license.name" class="license-img me-1" />
             <FontAwesomeIcon :icon="['fas', 'link']" />
-            {{ licence.name }}
+            {{ license.name }}
           </a>
         </span>
       </p>
@@ -138,7 +138,7 @@
       return {
         showGraph: false,
         appLinks: config.appLinks,
-        licence: this.corpusModal.meta.license
+        license: this.corpusModal.meta.license
           ? useCorpusStore().getLicenseByTag((this.corpusModal.meta.license))
           : null,
       }

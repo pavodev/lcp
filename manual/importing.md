@@ -40,11 +40,11 @@ lcpcli --help
 
 Besides the standard token-level CoNLL-U fields (`form`, `lemma`, `upos`, `xpos`, `feats`, `head`, `deprel`, `deps`) one can also provide document- and sentence-level annotations using comment lines in the files (see [the CoNLL-U Format section](#conll-u-format))
 
-A more advanced functionality, `lcpcli` supports annotations aligned at the character level, such as named entities. See [the Named Entities section](#character-aligned-annotations-(e.g.-named-entities)) for more information
+A more advanced functionality, `lcpcli` supports annotations aligned at the character level, such as named entities. See [the Named Entities section](#character-aligned-annotations-(e.g.-named-entities)) for more information.
 
 #### Example corpus
 
-`lcpcli` ships with an example one-video "corpus": the video is an excerpt from the CC-BY 3.0 "Big Buck Bunny" video ((c) copyright 2008, Blender Foundation / www.bigbuckbunny.org) and the "transcription" is a sample of the Declaration of the Human Rights
+`lcpcli` ships with an example one-video "corpus": the video is an excerpt from the CC-BY 3.0 "Big Buck Bunny" video ((c) copyright 2008, Blender Foundation / www.bigbuckbunny.org) and the "transcription" is a sample of the Declaration of the Human Rights.
 
 To populate a folder with the example data, use this command
 
@@ -64,21 +64,21 @@ This will create a subfolder named *free_video_corpus* in */destination/folder* 
 The CoNLL-U format is documented at: https://universaldependencies.org/format.html
 
 The LCP CLI converter will treat all the comments that start with `# newdoc KEY = VALUE` as document-level attributes.
-This means that if a CoNLL-U file contains the line `# newdoc author = Jane Doe`, then in LCP all the sentences from this file will be associated with a document whose `meta` attribute will contain `author: 'Jane Doe'`
+This means that if a CoNLL-U file contains the line `# newdoc author = Jane Doe`, then in LCP all the sentences from this file will be associated with a document whose `meta` attribute will contain `author: 'Jane Doe'`.
 
-All other comment lines following the format `# key = value` will add an entry to the `meta` attribute of the _segment_ corresponding to the sentence below that line (ie not at the document level)
+All other comment lines following the format `# key = value` will add an entry to the `meta` attribute of the _segment_ corresponding to the sentence below that line (ie not at the document level).
 
 The key-value pairs in the `MISC` column of a token line will go in the `meta` attribute of the corresponding token, with the exceptions of these key-value combinations:
  - `SpaceAfter=Yes` vs. `SpaceAfter=No` (case senstive) controls whether the token will be represented with a trailing space character in the database
  - `start=n.m|end=o.p` (case senstive) will align tokens, segments (sentences) and documents along a temporal axis, where `n.m` and `o.p` should be floating values in seconds
 
-See below how to report all the attributes in the template `.json` file
+See below how to report all the attributes in the template `.json` file. 
 
 ##### CoNLL-U Plus
 
 CoNLL-U Plus is an extension to the CoNLLU-U format documented at: https://universaldependencies.org/ext-format.html
 
-If your files start with a comment line of the form `# global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS MISC`, `lcpcli` will treat them as CoNLL-U Plus files and process the columns according to the names you set in that line
+If your files start with a comment line of the form `# global.columns = ID FORM LEMMA UPOS XPOS FEATS HEAD DEPREL DEPS MISC`, `lcpcli` will treat them as CoNLL-U Plus files and process the columns according to the names you set in that line. 
 
 
 ##### Annotations of sequences of tokens (e.g. Named Entities)
@@ -357,26 +357,26 @@ The `.json` template should also define a main key named `tracks` to control wha
 }
 ```
 
-Finally, your **output** corpus folder should include a subfolder named `media` in which all the referenced media files have been placed
+Finally, your **output** corpus folder should include a subfolder named `media` in which all the referenced media files have been placed.
 
 
 ##### Attribute types
 
 
-The values of each attribute (on tokens, segments, documents or at any other level) have a **type**; the most common types are `text`, `number` or `categorical`. The attributes must be reported in the template `.json` file, along with their type (you can see an example in the section **Convert and Upload**)
+The values of each attribute (on tokens, segments, documents or at any other level) have a **type**; the most common types are `text`, `number` or `categorical`. The attributes must be reported in the template `.json` file, along with their type (you can see an example in the section **Convert and Upload**).
 
- - `text` vs `categorical`: while both types correspond to alpha-numerical values, `categorical` is meant for attributes that have a limited number of possible values (typically, less than 100 distinct values) of a limited length (as a rule of thumb, each value can have up to 50 characters). There is no such limits on values of attributes of type `text`. When a user starts typing a constraint on an attribute of type `categorical`, the DQD editor will offer autocompletition suggestions. The attributes of type `text` will have their values listed in a dedicated table (`lcpcli`'s conversion step produces corresponding `.tsv` files) so a query that expresses a constraint on an attribute will be slower if that attribute if of type `text` than of type `categorical`
+ - `text` vs `categorical`: while both types correspond to alpha-numerical values, `categorical` is meant for attributes that have a limited number of possible values (typically, less than 100 distinct values) of a limited length (as a rule of thumb, each value can have up to 50 characters). There is no such limits on values of attributes of type `text`. When a user starts typing a constraint on an attribute of type `categorical`, the DQD editor will offer autocompletition suggestions. The attributes of type `text` will have their values listed in a dedicated table (`lcpcli`'s conversion step produces corresponding `.tsv` files) so a query that expresses a constraint on an attribute will be slower if that attribute if of type `text` than of type `categorical`.
 
  - the type `labels` (with an `s` at the end) corresponds to a set of labels that users will be able to constrain in DQD using the `contain` keyword: for example, if an attribute named `genre` is of type `labels`, the user could write a constraint like `genre contain 'drama'` or `hobbies !contain 'comedy'`. The values of attributes of type `labels` should be one-line strings, with each value separated by a comma (`,`) character (as in, e.g., `# newdoc genre = drama, romance, coming of age, fiction`); as a consequence, no label can contain the character `,`.
 
- - the type `dict` corresponds to key-values pairs as represented in JSON
+ - the type `dict` corresponds to key-values pairs as represented in JSON.
 
- - the type `date` requires values to be formatted in a way that can be parsed by PostgreSQL
+ - the type `date` requires values to be formatted in a way that can be parsed by PostgreSQL.
 
 
 #### Convert and Upload
 
-1. Create a directory in which you have all your properly-fromatted CONLLU files
+1. Create a directory in which you have all your properly-formatted CONLLU files.
 
 2. In the same directory, create a template `.json` file that describes your corpus structure (see above about the `attributes` key on `Document` and `Segment`), for example:
 
@@ -554,9 +554,9 @@ The values of each attribute (on tokens, segments, documents or at any other lev
 }
 ```
 
-3. If your corpus defines a character-anchored entity type such as named entities, make sure you also include a properly named and formatted TSV file for it in the directory (see [the Named Entities section](#named-entities))
+3. If your corpus defines a character-anchored entity type such as named entities, make sure you also include a properly named and formatted TSV file for it in the directory (see [the Named Entities section](#named-entities)).
 
-4. Visit an LCP instance (e.g. _catchphrase_) and create a new project if you don't already have one where your corpus should go
+4. Visit an LCP instance (e.g. _catchphrase_) and create a new project if you don't already have one where your corpus should go.
 
 5. Retrieve the API key and secret for your project by clicking on the button that says: "Create API Key"
 
@@ -570,8 +570,8 @@ The values of each attribute (on tokens, segments, documents or at any other lev
 lcpcli -i $CONLLU_FOLDER -o $OUTPUT_FOLDER -m upload -k $API_KEY -s $API_SECRET -p $PROJECT_NAME --live
 ```
 
-- `$CONLLU_FOLDER` should point to the folder that contains your CONLLU files
-- `$OUTPUT_FOLDER` should point to *another* folder that will be used to store the converted files to be uploaded
-- `$API_KEY` is the key you copied from your project on LCP (still visible when you visit the page)
-- `$API_SECRET` is the secret you copied from your project on LCP (only visible upon API Key creation)
-- `$PROJECT_NAME` is the name of the project exactly as displayed on LCP -- it is case-sensitive, and space characters should be escaped
+- `$CONLLU_FOLDER` should point to the folder that contains your CONLLU files.
+- `$OUTPUT_FOLDER` should point to *another* folder that will be used to store the converted files to be uploaded.
+- `$API_KEY` is the key you copied from your project on LCP (still visible when you visit the page).
+- `$API_SECRET` is the secret you copied from your project on LCP (only visible upon API Key creation).
+- `$PROJECT_NAME` is the name of the project exactly as displayed on LCP — it is case-sensitive, and space characters should be escaped.

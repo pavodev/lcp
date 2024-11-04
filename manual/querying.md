@@ -2,15 +2,15 @@
 
 ![LCP querying](images/lcp-query.png)
 
-To start querying, you need to select "Query" option from navigation bar at the top of the page.
+To start querying, select the "Query" option from the navigation bar at the top of the page.
 
-Once you are in the query interface, ensure that the corpus you want to query is selected. To write your query you will need to use DQD (Descriptive Query Definition) language. 
+Once you are in the query interface, ensure that the corpus you want to query is selected. To write your query you will need to use the [DQD language](dqd.md). 
 
 ## The DQD language
 
-DQD is a linguistic query language designed specifically for use in LCP and its ecosystem. Like other such languages (TGrep, CQL, AQL, etc.), DQD is designed to allow users to build complex queries on parsed/annotated corpora, and specify the format in which query results should be provided.
+DQD is a linguistic query language designed specifically for use in LCP and its ecosystem. Like other such languages (TGrep, CQL, AQL, etc.), DQD is designed to allow users to build complex queries on parsed/annotated corpora, and to specify the format in which query results should be provided.
 
-For DQD, a key concept was the Entity relationship (ER) model used for modeling data structures in software development, especially for database schemata. For corpora hosted by our infrastructure, the structure needs to be defined in terms of entities (plus their attributes and attribute types), and relations between them. [In detailed DQD documentation](dqd.md) you can find more information about how to make queries using DQD or how to translate CQP into DQD. On this page, we provide a more general introduction to the main components of the DQD language.
+For DQD, a key concept is the Entity relationship (ER) model used for modeling data structures in software development, especially for database schemata. For corpora hosted by our infrastructure, the structure needs to be defined in terms of entities (plus their attributes and attribute types), and relations between them. [In the detailed DQD documentation](dqd.md) you can find more information about how to make queries using DQD or how to translate CQP into DQD. On this page, we provide a more general introduction to the main components of the DQD language.
 
 Aside from selecting a corpus, for multilingual corpora, you can select the language from a dropdown menu. In a future version, language selection will become part of the DQD query syntax.
 
@@ -37,7 +37,7 @@ KWIC => plain
 
 You can see immediately that in comparison to most linguistic query languages, DQD is fairly verbose. The advantage of this is that components of the query can be given labels and referred to elsewhere (`sent`, `raceProcess`). As queries get more complex, the ability to name and refer to specific parts becomes more and more powerful, while the query remains readable to a human, can be annotated with comments, and so on.
 
-In the above query, there are three "blocks"---the first two constitute the *query*, and the third constitute the *results format*:
+In the above query, there are three "blocks"—the first two constitute the *query*, and the third constitutes the *results format*:
 
 1. The first line simply defines a name we can use to refer to the segment/sentence level throughout the rest of the query. Most queries on text corpora will use this convention, though some exceptions apply, such as for multimodal corpora.
 2. The second block defines a single token inside a sentence called `raceProcess`, matching the verb `race` in any form, as in `I raced to the exit`
@@ -85,7 +85,7 @@ Token@s t3
 
 #### Negation
 
-You can also negate equality with `!=`; below we find any *non-verbal token*
+You can also negate equality with `!=`; below we find any *non-verbal token*:
 
 ```
 Segment s
@@ -188,7 +188,7 @@ set tdeps
       dep = modifier
 ```
 
-In the example above, a single result will conain the noun `mirror` and its immediate dependents; `big old mirror`, for example, is a single match. If we remove the `set` construct, `big old mirror` will match twice---one match being `big ,,, nirror` and the other being `old mirror`:
+In the example above, a single result will contain the noun `mirror` and its immediate dependents; `big old mirror`, for example, is a single match. If we remove the `set` construct, `big old mirror` will match twice—one match being `big ,,, nirror` and the other being `old mirror`:
 
 
 ```
@@ -228,11 +228,11 @@ Gesture g
 
 Accompanying each query definition should be one or more blocks that specify the format of results. 
 
-Currently, three types of result are possible, each with different options and parameters:
+Currently, three types of results are possible, each with different options and parameters:
 
 1. `plain`, which provides a simple KWIC table/list of matching esentences
 2. `analysis`: a frequency table
-3. `collocation`: calculate the ectent to which tokens tend to co-occur
+3. `collocation`: calculate the extent to which tokens tend to co-occur
 
 Below we provide a query and request one of each result type:
 
@@ -269,7 +269,7 @@ collocationTable1 => collocation
         lemma
 ```
 
-Each *result block* begins with a name that you can choose---this will be the name of the tab that appears in the interface. Following this is the specification of the result type, e.g. `=> collocation` for a collocation result.
+Each *result block* begins with a name that you can choose—this will be the name of the tab that appears in the interface. Following this is the specification of the result type, e.g. `=> collocation` for a collocation result.
 
 You can request results in as many formats as you like, and different results blocks can focus on different parts of the query. For example, in the above query, we can generate separate collocation results for the adverb and the adjective:
 
@@ -409,7 +409,7 @@ LCP is designed to work with corpora containing anywhere from hundreds to billio
 
 When KWIC queries are run, the LCP engine will query subsections of the corpus until a reasonable number of matches are provided (the usual default is currently around 200). Browsing through the pages of KWIC results can cause a paused query to continue, so that more pages are filled. This can be done until a hard maximum (currently around 1000 KWIC results) is reached.
 
-ALternatively, you can click the `Search whole corpsu` button to run the query over the entire dataset. If your query contains no KWIC *result blocks* (i.e. only requests frequency tables and/or collocations), the entire corpus will be searched without pausing.
+ALternatively, you can click the `Search whole corpus` button to run the query over the entire dataset. If your query contains no KWIC *result blocks* (i.e. only requests frequency tables and/or collocations), the entire corpus will be searched without pausing.
 
 ### Query cache
 

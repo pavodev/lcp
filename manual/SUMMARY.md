@@ -9,7 +9,6 @@
 * [DQD](dqd.md)
     * [Keywords](keywords.md)
         * [`@`](at.md)
-        * [`group`](group.md)
         * [`sequence`](sequence.md)
         * [`set`](set.md)
     * [Results](results.md)
@@ -18,6 +17,3 @@
 * [Corpus management](corpus_management.md)
 * [Importing](importing.md)
 * [Exporting](exporting.md)
-
-
-

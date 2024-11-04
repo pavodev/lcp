@@ -28,6 +28,10 @@ Users can [query](querying.md) corpora directly from their browser and [import t
 
 Upon accessing LCP via [https://lcp.linguistik.uzh.ch](https://lcp.linguistik.uzh.ch/)  you can browse the publicly available corpora.  This screenshot shows the current selection, though more corpora will be made available over time. 
 
+<p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->
+  <img src="manual/images/landing_page_beforelogin.png" alt="alt" width="550"/>
+</p>
+
 The corpora are shaded according to their modality/modalities. Green shading, for example, tells you that those are text corpora, and therefore can be queried via the *Catchphrase* interface. Accordingly, the OFROM corpus is shaded in blue. Alternatively, hovering over the bottom right corner of a corpus lets you know which application is available.
 
 Navigating directly to any of the three interfaces at the top, e.g., on the blue *Soundscript* button, will filter the corpora to just those that are best navigated by the *Soundscript* interface. 
