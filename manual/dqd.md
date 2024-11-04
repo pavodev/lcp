@@ -29,7 +29,7 @@ We proceed to explain this simple query below.
 
 ### Instantiation and Scopes
 
-Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entitiy later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
+Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entity later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
 
 > LCP allows corpus creators to use arbitrary annotation layer names, but `Token` and `Segment` are common default names. You can see the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
 
