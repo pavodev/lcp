@@ -1,6 +1,6 @@
 # `sequence`
 
-One can use the keyword [`sequence`](sequence.md) to look for consecutive entities. The query below, for example, looks for artciles that are _immediately_ followed by the word "dogs". Note that `sequence` also accepts the [`@`](../dqd.md) operator (all entities defined in the sequence must then be part of the referenced entity) and labels for future references to the sequence.
+One can use the keyword [`sequence`](sequence.md) to look for consecutive entities. The query below, for example, looks for artciles that are _immediately_ followed by the word "dogs". Note that `sequence` also accepts the [`@`](at.md) operator (all entities defined in the sequence must then be part of the referenced entity) and labels for future references to the sequence.
 
 ```
 Segment s
