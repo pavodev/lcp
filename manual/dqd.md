@@ -29,7 +29,7 @@ We proceed to explain this simple query below.
 
 ### Instantiation and Scopes
 
-Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entitiy later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
+Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entity later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
 
 > LCP allows corpus creators to use arbitrary annotation layer names, but `Token` and `Segment` are common default names. You can see the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
 
@@ -43,8 +43,9 @@ Scope is controled via **indentation**: in the code above, the constraint `form 
 
 ## Constraints
 
-Simple constraints usually use the format `left operator right` and are interpreted in the scope 
-. The constraint in the example above respects this schema, where `left` is `form`, `operator` is `=` and `right` is `"dogs"`. LCP allows corpus creators to define arbitrary attributes for each layer, but `form` is mandatory on the token-level attribute. Because the constraint is in the scope of the token, `form` refers to the token attribute named "form": this constraint states that we are looking for token entities whose form must be "dogs". 
+Simple constraints usually use the format `left operator right`; when the constraint appears in the scope of an entity, left and right can be the name of an attribute of that entity (attribute names need to be preceded by `prefix.` everywhere else, where prefix is the label of the target entity).
+
+The constraint in the example above respects this schema, where `left` is `form`, `operator` is `=` and `right` is `"dogs"`. LCP allows corpus creators to define arbitrary attributes for each layer, but `form` is mandatory on the token-level attribute. Because the constraint is in the scope of the token, `form` refers to the token attribute named "form": this constraint states that we are looking for token entities whose form must be "dogs". 
 
 Annotation layers can come with any number of attributes, but it is standard for tokens to also define an attribute named `lemma`. Had we used the constraint `lemma = "dog"` instead, we would have matched token occurrences whose form could be either "dog" or "dogs".
 

@@ -437,6 +437,55 @@ class Constraint:
             )
         return (ref, ref_info)
 
+    def join_labels_table(
+        self,
+        label: str,
+        layer: str,
+        op: str,
+        ref_mapping: dict[str, Any],
+        value: str,
+        value_type: str,
+    ) -> tuple[int, str, str]:
+        assert op.lower().endswith("contain"), SyntaxError(
+            f"Must use 'contain' on labels (attempted to use {op} instead)"
+        )
+        assert value_type in ("string", "regex"), TypeError(
+            f"Contained labels can only be tested against strings or regexes"
+        )
+        ref_layer = layer or self.layer
+        ref_layer_info = self.config["layer"].get(ref_layer, {})
+        assert "nlabels" in ref_layer_info, KeyError(
+            f"Missing 'nlabels' for layer '{ref_layer}' in config"
+        )
+        nbit = ref_layer_info["nlabels"]
+        lookup_table = ref_mapping.get("name", "")
+        inner_op = "~" if value_type == "regex" else "="
+        dummy_mask = "".join(["0" for _ in range(nbit)])
+        inner_condition = (
+            f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
+            + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {value})"
+        )
+        # Use label_layer to store the inner conditions query-wide and give them unique labels
+        label = label or self.label
+        if self.label_layer is None:
+            self.label_layer = {}
+        if label not in self.label_layer:
+            self.label_layer[label] = (layer, {})
+        meta: dict = self.label_layer[label][1]
+        meta["labels inner conditions"] = meta.get("labels inner conditions", {})
+        comp_str: str = f"{op} {type} {value}"
+        n = meta["labels inner conditions"].get(
+            comp_str, len(meta["labels inner conditions"])
+        )
+        meta["labels inner conditions"][comp_str] = n
+        mask_label = f"{label.replace('.','_')}_mask_{n}"
+        formed_join_table = f"{inner_condition} {mask_label}"
+        self._add_join_on(formed_join_table, "")
+        negated = op.lower().startswith(("not", "!"))
+        op = "=" if negated else ">"
+        return (nbit, op, mask_label)
+        # formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
+
     def make(self) -> None:
         """
         Actually make the joins and the WHERE clause bits
@@ -452,8 +501,8 @@ class Constraint:
         left, left_info = self.get_sql_expr(self.left)
         right, right_info = self.get_sql_expr(self.right)
 
-        left_type = left_info.get("type")
-        right_type = right_info.get("type")
+        left_type = left_info.get("type", "")
+        right_type = right_info.get("type", "")
 
         if "id" in (left_type, right_type):
             assert self.op in ("=", "!="), SyntaxError(
@@ -500,6 +549,25 @@ class Constraint:
                 formed_condition = (
                     f"{left}.{left_layer}_id {self.op} {right}.{right_layer}_id"
                 )
+
+        elif "labels" in (left_type, right_type):
+            labels_left = left_type == "labels"
+            ref: str = left if labels_left else right
+            ref_layer = (left_info if labels_left else right_info).get(
+                "layer", self.layer
+            )
+            ref_attr = ref.split(".")[-1]
+            ref_mapping = (
+                _get_mapping(ref_layer, self.config, self.batch, self.lang or "")
+                .get("attributes", {})
+                .get(ref_attr, {"name": ref_attr})
+            )
+            value = right if labels_left else left
+            value_type: str = right_type if labels_left else left_type
+            (nbit, parsed_op, mask) = self.join_labels_table(
+                ref, ref_layer, self.op, ref_mapping, value, value_type
+            )
+            formed_condition = f"{ref} & {mask}.m {parsed_op} 0::bit({nbit})"
 
         elif "regex" in (left_type, right_type):
             assert self.op in ("=", "!="), SyntaxError(
@@ -690,6 +758,10 @@ class Constraint:
                 .replace("categorical", "string")
                 .replace("text", "string")
             )
+            if ref_type == "labels":
+                ref = f"{prefix}.{ref}"
+                ref_info = RefInfo(type="labels")
+                return (ref, ref_info)
             global_attr = ref_template.get("ref")
             # Sub-attribute reference like 'agent.region' or 'ufeat.Degree'
             if post_dots:

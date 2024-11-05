@@ -7,7 +7,7 @@ WITH RECURSIVE fixed_parts AS
    FROM
      (SELECT Segment_id
       FROM sparcling1.fts_vector_enrest vec
-      WHERE vec.vector @@ E'(!1a|1a) <1> (!1a|1a) <1> (!1a|1a)') AS fts_vector_s
+      WHERE vec.vector @@ E' 3VERB <1>  3DET <1> ( 3NOUN &  6NP)') AS fts_vector_s
    CROSS JOIN sparcling1.token_enrest t1
    CROSS JOIN sparcling1.session_en e
    CROSS JOIN sparcling1.session_alignment e_aligned
@@ -67,3 +67,4 @@ FROM res1
 UNION ALL
 SELECT *
 FROM res2 ;
+
