@@ -28,7 +28,7 @@ Token@sent raceProcess
   upos = "VERB"
   lemma = "race"
 
-KWIC => plain
+kwic => plain
   context
     sent
   entities
@@ -68,7 +68,7 @@ If you want to use regular expressions, rather than simple strings, quotation ma
 Segment s
 
 Token@s anyverb
-  xpos = /V.*/
+  upos = /V.*/
 ```
 
 ### String length
@@ -76,7 +76,7 @@ Token@s anyverb
 The `length(feature)` syntax can be provided to search based on the number of characters in a string:
 
 ```
-Segment@d s
+Segment s
 
 Token@s t3
   lemma = /^[ABC]/
@@ -137,12 +137,15 @@ Below, we allow any number of adjectives or adverbs, followed by a noun, "citize
 Segment s
 
 sequence@s
+  # The sequence below is nested
   sequence 1..*
     Token classifier
       upos = /ADJ|ADV/
-    Token head
-      upos = "NOUN"
-      lemma = "citizen"
+  # The token below belongs to the main sequence,
+  # not to the subsequence immediately above
+  Token head
+    upos = "NOUN"
+    lemma = "citizen"
 ```
 
 #### Grammatical / dependency queries
@@ -157,11 +160,11 @@ Token@s thead
   lemma = /^d/
   length(lemma) > 3
 
-Token@s thead
+Token@s t3
   upos = "VERB"
   DepRel
     head = thead
-    dep = t3
+    dependent = t3
 ```
 
 In the above, note the important distinction between
@@ -185,10 +188,10 @@ set tdeps
   Token@s modifier
     DepRel
       head = thead
-      dep = modifier
+      dependent = modifier
 ```
 
-In the example above, a single result will contain the noun `mirror` and its immediate dependents; `big old mirror`, for example, is a single match. If we remove the `set` construct, `big old mirror` will match twice—one match being `big ,,, nirror` and the other being `old mirror`:
+In the example above, a single result will contain the noun `mirror` and its immediate dependents; `big old mirror`, for example, is a single match. If we remove the `set` construct, `big old mirror` will match twice&mdash;one match being `big ... mirror` and the other being `old mirror`:
 
 
 ```
@@ -202,12 +205,12 @@ Token@s thead
 Token@s modifier
   DepRel
     head = thead
-    dep = modifier
+    dependent = modifier
 ```
 
 #### Time- and video-based queries
 
-For corpora with time-alignment, it is possible to query based on temporal distance (i.e. how much time passed between two features). 15 minutes could be expressed as `900s`, '15m' or `0.25h`.
+For corpora with time-alignment, it is possible to query based on temporal distance (i.e. how much time passed between two features). DQD provides dedicated operators and functions that return second-based values.
 
 For a corpus of videos annotated with gesture information, we can query for a gesture that co-occurs temporally with an utterance. If interested in the gestures made by a speaker when talking about a direction, we can search for a three-second context via:
 
@@ -217,10 +220,12 @@ Document d
 Segment@d s
 
 Token@s direction_word
-  form = /up|down|left|right/
+  form = /up|down|left|right/i
   
 Gesture g
+  # The gesture should start at most 3s before the target token
   start(g) >= start(direction_word) - 3
+  # The gesture should end at most 3s after the target token
   end(g) <= end(direction_word) + 3
 ```
 
@@ -245,14 +250,14 @@ sequence@s
   Token@s quality
     upos = "ADJ"
 
-KWICTable1 => plain
+kwicTable1 => plain
     context
         s
     entities
         intensifier
         quality
 
-frequencyCounts1 => analysis
+frequencCounts1 => analysis
     attributes
         quality.lemma
     functions
@@ -285,12 +290,16 @@ sequence@s
 coll1 => collocation
     center
         intensifier
+    window
+        -2..+2
     attribute
         form
 
 coll2 => collocation
     center
         quality
+    window
+        -3..+3
     attribute
         lemma
 ```
@@ -306,19 +315,19 @@ For KWIC results, create a block beginning with `<name> => plain`. Additionally,
 For example:
 
 ```
-Segment@d s
+Segment s
 
-sequence seq
-  Token@s t1
+sequence@s seq
+  Token t1
     upos = "DET"
-  Token@s t2
+  Token t2
     upos = "ADJ"
-  Token@s t3
+  Token t3
     lemma = /^fr.*/
     length(lemma) > 5
     upos = "NOUN"
 
-SimpleNP => plain
+simpleNP => plain
   context
     s
   entities
@@ -338,7 +347,7 @@ Frequency tables are defined via `<name> => analysis`. You need to provide:
 In the following, we get absolute frequencies, but skip instances that occur fewer than ten times:
 
 ```
-Segment@d s
+Segment s
 
 sequence seq
   Token@s t1
@@ -349,7 +358,7 @@ sequence seq
     lemma = /^fr.*/
     upos = "NOUN"
 
-TotalFreq => analysis
+totalFreq => analysis
   attributes
     t1.lemma
     t2.lemma
@@ -370,7 +379,7 @@ Collocation tables are defined via `<name> => collocation`. A collocation can ha
 These are shown as `collocationType1` and `collocationType2` below:
 
 ```
-Segment@d s
+Segment s
 
 sequence seq
     Token@s t1
@@ -385,7 +394,7 @@ set tdeps
     Token@s tx
         DepRel
             head = t3
-            dep = tx
+            dependent = tx
 
 
 collocationType1 => collocation
