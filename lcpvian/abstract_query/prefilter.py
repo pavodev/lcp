@@ -265,8 +265,10 @@ class Prefilter:
         typ = "other"
         if "string" in left:
             pattern = left["string"]
+            typ = "string"
         if "string" in right:
             pattern = right["string"]
+            typ = "string"
         if "regex" in left and "caseInsensitive" not in left["regex"]:
             pattern = left["regex"]["pattern"]
             # Prefilters *need* to be case-sensitive because of E''
@@ -352,7 +354,6 @@ class Prefilter:
         Create the prefilter string from a single item in the defaultdict value
         """
         all_made = []
-
         for prefilt in prefilter:
             if prefilt is None:
                 all_made.append("(!1a|1a)")  # Add a tautology

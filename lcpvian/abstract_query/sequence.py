@@ -681,6 +681,8 @@ class SQLSequence:
                 for w in wheres:
                     new_w = w
                     for lab in override:
+                        if not lab:
+                            continue
                         new_w = re.sub(rf"\b{lab}\.", f"{lab}_table.", new_w)
                     new_wheres.append(new_w)
                 wheres = new_wheres
@@ -689,6 +691,8 @@ class SQLSequence:
                     new_j = j
                     after_on = j.split(" ON ")[1]
                     for lab in override:
+                        if not lab:
+                            continue
                         if re.search(rf"\b{lab}.", after_on):
                             new_j = re.sub(rf"\b{lab}\.", f"{lab}_table.", new_j)
                             token_layer = self.config.config["firstClass"]["token"]
@@ -924,7 +928,10 @@ class SQLSequence:
                 override_internal_references[k] = f"{from_table}.{v}"
             # Temporarily map fixed token labels to subsequence-internal labels as applicable
             for i, m in enumerate(s.members):
-                override_internal_references[cast(Unit, m).label] = f"s{n}_t{i}"
+                label = cast(Unit, m).label or cast(Unit, m).internal_label
+                if not label:
+                    continue
+                override_internal_references[label] = f"s{n}_t{i}"
             # Entities is the set of local variables that point to a token row; references to token IDs are not in it
             entities: set[str] = {
                 e for e in override_internal_references.values() if "." not in e

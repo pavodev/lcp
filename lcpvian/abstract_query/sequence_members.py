@@ -23,6 +23,8 @@ class Member:
         self.min_length: int = 0
         self.max_length: int = 0
         self.need_cte: bool = False
+        if isinstance(parent_sequence, Sequence):
+            parent_sequence.members.append(self)
 
     @staticmethod
     def from_obj(
@@ -176,7 +178,6 @@ class Unit(Member):
         self.depth: int = depth
         self.min_length: int = 1
         self.max_length: int = 1
-        parent_sequence.members.append(self)
 
     def str_constraints(self) -> list[str]:
         cs: list[str] = []
@@ -316,7 +317,6 @@ class Sequence(Member):
         """All the fixed subsequences that can be built from this sequence (for prefiltering purposes)"""
         if self.repetition[0] == 0:
             return [-1]
-
         subseq: list[int | Unit] = []
         sep: int = 0
         for m in self.members:
