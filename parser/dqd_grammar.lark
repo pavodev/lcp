@@ -30,11 +30,11 @@ pattern : REGEX
 regex : pattern case_insensitive?
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
-label : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-entity : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-center : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-space : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-reference : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS | ATTRIBUTE
+label : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+entity : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+center : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+space : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+reference : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL | ATTRIBUTE
 layer : LAYER
 
 left : (function | reference | attribute | string | regex | math)
@@ -85,7 +85,6 @@ results_collocation_attribute : "attribute" _NL _INDENT reference _NL* _DEDENT /
 query : ((quantification | sequence | set | unit | constraint) _NL*)+
 
 top : _NL* query results
-
 
 FUNCTION_NAME.3 : "length("
                 | "size("
