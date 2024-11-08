@@ -408,7 +408,9 @@ class Constraint:
             prefix = self.label
         layer = lab_lay.get(prefix, lab_lay.get(self.label, (self.layer, None)))[0]
         if not attributes:
-            attributes = self._attribs
+            attributes = self._attribs or self.config["layer"].get(layer, {}).get(
+                "attributes", {}
+            )
         if not mapping:
             mapping = _get_mapping(layer, self.config, self.batch, self.lang or "")
 
@@ -420,11 +422,13 @@ class Constraint:
         elif "string" in reference:
             ref = f"'{reference['string']}'"
             ref_info["type"] = "string"
+            ref_info["meta"] = {"str": reference["string"]}
         elif "regex" in reference:
             rgx = reference["regex"]
             ref = f"'{rgx.get('pattern', '')}'"
             ref_info["type"] = "regex"
             ref_info["meta"] = rgx
+            cast(dict, ref_info["meta"])["str"] = rgx.get("pattern", "")
         elif "math" in reference:
             ref, ref_info = self.parse_math(reference)
         elif (
@@ -434,6 +438,10 @@ class Constraint:
         ):
             ref, ref_info = self.parse_reference(
                 reference, prefix, layer, lab_lay, attributes, mapping
+            )
+            ref_info["meta"] = ref_info.get("meta") or {}
+            cast(dict, ref_info["meta"])["str"] = reference.get(
+                "reference", reference.get("entity", reference.get("attribute", ""))
             )
         return (ref, ref_info)
 
@@ -873,14 +881,16 @@ class Constraint:
         Input is {"math": ...} where ... can be a string number, {"function": ...} or {"operation": ...}
         """
         ref: str = ""
-        ref_info: RefInfo = RefInfo(type="number")
+        ref_info: RefInfo = RefInfo(type="number", meta={"str": ["", "", ""]})
         if isinstance(math_obj["math"], str):
             ref = math_obj["math"]
             return (ref, ref_info)
         elif isinstance(math_obj["math"], dict) and "function" in math_obj["math"]:
             return self.parse_function(math_obj["math"]["funciton"])
         operation = math_obj["math"].get("operation", {})
-        ref_array: list[str] = ["", operation.get("operator", "+"), ""]
+        op: str = operation.get("operator", "+")
+        ref_array: list[str] = ["", op, ""]
+        ref_info["meta"]["str"][1] = op  # type: ignore
         left = operation.get("left", {"math": "0"})
         right = operation.get("right", {"math": "0"})
         for i in range(2):
@@ -890,6 +900,7 @@ class Constraint:
                 operand_info.get("type") == "number"
             ), f"Only numbers can appear in mathematical operations ({operand})"
             ref_array[2 * i] = operand_ref
+            ref_info["meta"]["str"][2 * i] = (operand_info.get("meta") or {}).get("str", operand_ref)  # type: ignore
         ref = " ".join(ref_array)
         return (ref, ref_info)
 
@@ -906,7 +917,11 @@ class Constraint:
         parsed_ars = [self.get_sql_expr(a) for a in ars]
         ars_str = ",".join([a[0] for a in parsed_ars])
         fn_str = f"{fn}({ars_str})"
-        ref_info = RefInfo(type="text")
+        ref_str_ars = ",".join(
+            (a[1].get("meta") or {}).get("str", a[0]) for a in parsed_ars
+        )
+        ref_info_str = f"{fn}({ref_str_ars})"
+        ref_info = RefInfo(type="text", meta={"str": ref_info_str})
         if fn == "range":
             first_arg_str, first_arg_info = parsed_ars[0]
             assert first_arg_info.get("type") == "entity", TypeError(
@@ -915,14 +930,14 @@ class Constraint:
             fn_str = (
                 f"upper({first_arg_str}.char_range) - lower({first_arg_str}.char_range)"
             )
-            ref_info = RefInfo(type="number")
+            ref_info = RefInfo(type="number", meta={"str": ref_info_str})
         elif fn == "position":
             first_arg_str, first_arg_info = parsed_ars[0]
             assert first_arg_info.get("type") == "entity", TypeError(
                 f"Range only applies to layer annotations (error in '{first_arg_str}')"
             )
             fn_str = f"lower({first_arg_str}.char_range)"
-            ref_info = RefInfo(type="number")
+            ref_info = RefInfo(type="number", meta={"str": ref_info_str})
         elif fn in ("start", "end"):
             first_arg_str, first_arg_info = parsed_ars[0]
             assert first_arg_info.get("type") == "entity", TypeError(
@@ -935,7 +950,21 @@ class Constraint:
             )
             lower_or_upper = "lower" if fn == "start" else "upper"
             fn_str = f"({lower_or_upper}({first_arg_str}.frame_range) / 25.0)"  # time in seconds
-            ref_info = RefInfo(type="number")
+            ref_info = RefInfo(type="number", meta={"str": ref_info_str})
+        elif fn in (
+            "year",
+            "decade",
+            "century",
+            "day",
+            "dayofweek",
+            "dayofmonth",
+            "week",
+            "month",
+        ):
+            first_arg_str, first_arg_info = parsed_ars[0]
+            sql_fn = fn.replace("dayofweek", "dow").replace("dayofyear", "doy")
+            fn_str = f"extract('{sql_fn}' from ({first_arg_str})::date)"
+            ref_info = RefInfo(type="number", meta={"str": ref_info_str})
         return (fn_str, ref_info)
 
     # def date(self) -> None:
