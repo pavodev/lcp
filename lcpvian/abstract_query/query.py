@@ -661,11 +661,7 @@ class QueryMaker:
             additional_from: str = last_table
             if last_cte:
                 # make sure to reach the last state of the last CTE!
-                orderby: str = "" if last_cte.no_transition else f" ORDER BY ordercol"
-                final_states: str = ",".join(
-                    [str(x) for x in last_cte.get_final_states()]
-                )
-                additional_from = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({final_states}){orderby}) {last_table}"
+                additional_from = last_cte.get_gather_in(last_table)
 
             additional_ctes += f"""gather AS (
                 SELECT {gather_selects}
@@ -676,10 +672,7 @@ class QueryMaker:
 
         # If there's no sequence range to return, there's no gather table, but we still need to put a constraint on the last state
         elif last_cte:
-            # make sure to reach the last state of the last CTE!
-            orderby = "" if last_cte.no_transition else f" ORDER BY ordercol"
-            final_states = ",".join([str(x) for x in last_cte.get_final_states()])
-            last_table = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({final_states}){orderby}) {last_table}"
+            last_table = last_cte.get_gather_in(last_table)
 
         for g, refs in groups.items():
             str_refs: str = ",".join(refs)

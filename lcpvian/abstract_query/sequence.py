@@ -234,6 +234,27 @@ class Cte:
             s.append(-1)
         return s
 
+    def get_gather_in(self, last_table: str = "") -> str:
+        orderby: str = "" if self.no_transition else f" ORDER BY ordercol"
+        last_table_wheres: list[str] = []
+        final_states_int = self.get_final_states()
+        if cte_next_token := self.next_fixed_token:
+            next_label: str = cte_next_token.internal_label
+            if -1 in final_states_int:
+                last_table_wheres.append(
+                    f"({last_table}.state = -1 AND {last_table}.{next_label} = {last_table}.id)"
+                )
+                final_states_int = [x for x in final_states_int if x != -1]
+            final_states_str = ",".join(str(x) for x in final_states_int)
+            last_table_wheres.append(
+                f"({last_table}.state IN ({final_states_str}) AND {last_table}.{next_label} = {last_table}.id + 1)"
+            )
+        else:
+            final_states_str = ",".join(str(x) for x in final_states_int)
+            last_table_wheres.append(f"({last_table}.state IN ({final_states_str}))")
+        last_table_where_str: str = " OR ".join(last_table_wheres)
+        return f"(SELECT * FROM {last_table} WHERE {last_table_where_str}{orderby}) {last_table}"
+
     def where(
         self, which: str = "start", from_table: str = "fixed_parts", tok: str = "token"
     ) -> tuple[str, set[str]]:
@@ -318,11 +339,11 @@ class Cte:
                 cond: str = (
                     f"{source}transition{self.n}.dest_state = {destination_n} AND {constraints}"
                 )
-                if self.next_fixed_token:
-                    ref_table: str = (
-                        from_table if which == "start" else f"traversal{self.n}"
-                    )
-                    cond += f" AND {ref_table}.{self.next_fixed_token.internal_label} = token.{tok}_id + 1"
+                # if self.next_fixed_token:
+                #     ref_table: str = (
+                #         from_table if which == "start" else f"traversal{self.n}"
+                #     )
+                #     cond += f" AND {ref_table}.{self.next_fixed_token.internal_label} = token.{tok}_id + 1"
                 state_conds.add(f"({cond})")
 
         big_disjunction: str = "\n                OR ".join(state_conds)
