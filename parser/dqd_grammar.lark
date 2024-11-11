@@ -3,7 +3,7 @@ part_of : "@"label
 operator : OPERATOR
 operand_left : (math | function)
 operand_right : (math | function)
-operation : operand_left operator operand_right // rename: operand_left>left operand_right>right
+operation : "("? operand_left operator operand_right ")"? // rename: operand_left>left operand_right>right
 math : POS_INT
      | NEG_INT
      | FLOAT

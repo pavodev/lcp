@@ -267,6 +267,8 @@ class Schema:
                         o["anyOf"].append({"required": [ref_name]})
                         o["properties"][ref_name] = {"$ref": ref}
                 else:
+                    if x.get("type", "") == "string":
+                        continue
                     assert "$ref" in x, "properties only accepts refs or anyOfs"
                     ref, ref_name = self.get_ref(x)
                     o["properties"][ref_name] = {"$ref": ref}
