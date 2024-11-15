@@ -4,6 +4,11 @@
 
 A corpus is a collection of represenation of things or facts of the real world. A typical text corpus, for example, will be a collection of actual texts that were produced at some point. While for textual corpora this may appear trivial, it is not so much the case for
 
+## Anchoring
+
+This term is used interchangeable with [**dimension**](#dimension).
+
+
 ## Annotation (vs. Data)
 
 A corpus contains representation of things, or facts. However, in most cases, these data are ``enriched'' by information that is not there in the primary data. As is
