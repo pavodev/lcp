@@ -312,6 +312,7 @@
                   :key="selectedCorpora"
                   :selectedCorpora="selectedCorpora"
                   :selectedMediaForPlay="selectedMediaForPlay"
+                  :hoveredResult="hoveredResult"
                   @switchToQueryTab="setMainTab"
                 />
 
@@ -555,6 +556,7 @@
                               :corpora="selectedCorpora"
                               @updatePage="updatePage"
                               @playMedia="playMedia"
+                              @hoverResultLine="hoverResultLine"
                               :resultsPerPage="resultsPerPage"
                               :loading="loading"
                             />
@@ -872,6 +874,7 @@ export default {
       showLoadingBar: false,
 
       selectedMediaForPlay: null,
+      hoveredResult: null,
 
       // selectedDocument: null,
       // documentDict: {},
@@ -1047,6 +1050,9 @@ export default {
   methods: {
     setMainTab() {
       this.activeMainTab = 'query'
+    },
+    hoverResultLine(line) {
+      this.hoveredResult = line;
     },
     playMedia(data) {
       this.selectedMediaForPlay = data;
@@ -1437,6 +1443,7 @@ export default {
           }
           return;
         } else if (data["action"] === "query_result") {
+          useWsStore().addMessageForPlayer(data)
           // console.log("query_result", data);
           this.updateLoading(data.status);
           if (
@@ -1457,6 +1464,7 @@ export default {
           this.WSDataResults = data;
           return;
         } else if (data["action"] === "sentences") {
+          useWsStore().addMessageForPlayer(data)
           // console.log("sentences", data);
           this.updateLoading(data.status);
           if (

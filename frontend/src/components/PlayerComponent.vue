@@ -341,9 +341,11 @@
         :mediaDuration="currentMediaDuration"
         :playerIsPlaying="playerIsPlaying"
         :playerCurrentTime="playerCurrentTime"
+        :hoveredResult="hoveredResult"
         @updateTime="_playerSetTime"
         @annotationEnter="_annotationEnter"
         @annotationLeave="_annotationLeave"
+        @mouseleave="_annotationLeave"
         :key="documentIndexKey"
       />
       <div v-else-if="loadingDocument == true">
@@ -368,7 +370,7 @@ import TimelineView from "@/components/videoscope/TimelineView.vue";
 const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
 
 export default {
-  props: ["selectedCorpora", "documentIds", "selectedMediaForPlay"],
+  props: ["selectedCorpora", "documentIds", "selectedMediaForPlay", "hoveredResult"],
   data() {
     return {
       currentDocumentSelected: null,

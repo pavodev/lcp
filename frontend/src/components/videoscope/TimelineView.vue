@@ -118,7 +118,7 @@ function moveRight() {
 
 export default {
   name: "TimelineView",
-  props: ["data", "playerIsPlaying", "playerCurrentTime", "mediaDuration"],
+  props: ["data", "playerIsPlaying", "playerCurrentTime", "mediaDuration", "hoveredResult"],
   data() {
     return {
       defaultCurrentTime: this.playerCurrentTime,
@@ -128,6 +128,11 @@ export default {
     }
   },
   watch: {
+    hoveredResult(){
+      console.log("hoveredResult", this.hoveredResult);
+      if (this.hoveredResult && this.hoveredResult instanceof Array && this.hoveredResult.length>2)
+        console.log("frame range of hovered line", [...this.hoveredResult[2]]);
+    },
     playerIsPlaying(){
       playerState = this.playerIsPlaying;
       // console.log("playerState", playerState);

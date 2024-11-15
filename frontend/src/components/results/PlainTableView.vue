@@ -22,6 +22,8 @@
           v-for="(item, resultIndex) in results"
           :key="`tr-results-${resultIndex}`"
           :data-index="resultIndex"
+          @mousemove="hoverResultLine(resultIndex)"
+          @mouseleave="hoverResultLine(null)"
         >
           <td scope="row" class="results">
             <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
@@ -405,7 +407,7 @@ class TokenToDisplay {
 
 export default {
   name: "ResultsPlainTableView",
-  emits: ["updatePage"],
+  emits: ["updatePage", "hoverResultLine"],
   props: [
     "data",
     "sentences",
@@ -518,6 +520,14 @@ export default {
     showModal(index) {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
       this.modalVisible = true;
+    },
+    hoverResultLine(resultIndex) {
+      let line = null;
+      if (resultIndex !== null) {
+        const adjustedIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+        line = this.data[adjustedIndex]
+      }
+      this.$emit("hoverResultLine", line);
     },
     updatePage(currentPage) {
       this.currentPage = currentPage;
