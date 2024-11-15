@@ -30,9 +30,11 @@ from .utils import (
     _parse_repetition,
 )
 
+# TODO: add a count(DISTINCT resX.*) on each plain result table
+# this way FE can detect differences and warn user about it
 COUNTER = f"""
     res0 AS (SELECT 0::int2 AS rstype,
-      jsonb_build_array(count(*))
+      jsonb_build_array(count(match_list.*))
        FROM match_list)
 
 """
@@ -136,7 +138,8 @@ class ResultsMaker:
         """
         Build the results section of the postgres query
         """
-        strings = [COUNTER]
+        # strings = [COUNTER]
+        strings = []
         attribs = []
 
         made: str
@@ -233,6 +236,7 @@ class ResultsMaker:
             strings.append(made)
             attribs.append(meta)
 
+        strings.append(COUNTER)
         self.r.meta_json = {"result_sets": attribs}
         self.r.needed_results = "\n , ".join(strings)
         return self.r
@@ -598,7 +602,7 @@ WHERE {entity}.char_range && contained_token.char_range
         )
 
         out = f"""
-            res{i} AS ( SELECT
+            res{i} AS ( SELECT DISTINCT
             {i}::int2 AS rstype,
             jsonb_build_array({context}, jsonb_build_array({ents_form}) {select_extra})
         FROM
