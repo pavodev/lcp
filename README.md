@@ -69,7 +69,7 @@ This makes various helper commands available on the system:
 lcp-setup
 ```
 
-will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required.
+This will create a `~/lcp/.env` with some default and some missing settings, which you can then edit/fill in as required.
 
 You can also run:
 
@@ -235,7 +235,7 @@ In seconds, how long can a query be running until it gets stopped?
 
 > `UPLOAD_TIMEOUT`
 
-In seconds, how long can an upload job be running until it gets stopped (should be considerably longer!)
+In seconds, how long can an upload job be running until it gets stopped (should be considerably longer!).
 
 > `QUERY_TTL`
 
@@ -243,7 +243,7 @@ In seconds, how long should query data stay in Redis? If a user tries to change 
 
 > `USE_CACHE`
 
-Queries are stored by a key in Redis, and this key is a hash of the data needed to generate the query. Therefore, when a new query is created, we hash it to check that it hasn't already been performed. If it has, and if `USE_CACHE` is truthy, we retrieve the earlier data from Redis and send that to the user (whio may be different from the one who generated the original query). You can disable this for debugging if the cache doesn't seem to be working correctly, but ideally it is switched on in production, as it provides a lot of performance benefit for common queries!
+Queries are stored by a key in Redis, and this key is a hash of the data needed to generate the query. Therefore, when a new query is created, we hash it to check that it hasn't already been performed. If it has, and if `USE_CACHE` is truthy, we retrieve the earlier data from Redis and send that to the user (who may be different from the one who generated the original query). You can disable this for debugging if the cache doesn't seem to be working correctly, but ideally it is switched on in production, as it provides a lot of performance benefit for common queries!
 
 > `SQL_(QUERY|UPLOAD)_(USERNAME|PASSWORD)`
 
@@ -287,7 +287,7 @@ Currently not used; in theory if there are free resources we could allow a user 
 
 ## Command line 'interface'
 
-Once `lcpvian` is installed you can run a variety of commands via `python -m lcpvian`
+Once `lcpvian` is installed you can run a variety of commands via `python -m lcpvian`.
 
 Start backend:
 
