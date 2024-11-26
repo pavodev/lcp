@@ -4,6 +4,7 @@ import traceback
 from lark.exceptions import UnexpectedToken
 from typing import cast, Any
 
+from .cqp_to_json import full_cqp_to_json
 from .dqd_parser import convert
 from .textsearch_to_json import textsearch_to_json
 from .typed import JSONObject
@@ -91,6 +92,24 @@ async def validate(
                 "errorList": cast(JSONObject, all_errors),
                 "status": 400,
                 "traceback": tb,
+            }
+    elif kind == "cqp":
+        try:
+            # plain text search
+            result = {
+                "kind": "cqp",
+                "valid": True,
+                "action": "validate",
+                "status": 200,
+            }
+            result["json"] = full_cqp_to_json(query, conf)
+        except Exception as e:
+            result = {
+                "kind": "cqp",
+                "valid": False,
+                "action": "validate",
+                "error": str(e),
+                "status": 400,
             }
     elif kind == "text":
         try:

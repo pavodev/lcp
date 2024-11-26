@@ -185,6 +185,19 @@
                           </button>
                           <button
                             class="nav-link"
+                            id="nav-cqp-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-cqp"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-cqp"
+                            aria-selected="false"
+                            @click="currentTab = 'cqp'"
+                          >
+                            CQP
+                          </button>
+                          <button
+                            class="nav-link"
                             id="nav-json-tab"
                             data-bs-toggle="tab"
                             data-bs-target="#nav-json"
@@ -262,6 +275,31 @@
                             v-if="
                               isQueryValidData && isQueryValidData.valid != true && debug
                             "
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
+                          class="tab-pane fade pt-3"
+                          id="nav-cqp"
+                          role="tabpanel"
+                          aria-labelledby="nav-cqp-tab"
+                        >
+                          <textarea
+                            class="form-control query-field"
+                            placeholder="Query (e.g. [word=&quot;hello&quot;])"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="cqp"
+                            @keyup="$event.key=='Enter' && $event.ctrlKey && this.submit()"
+                          ></textarea>
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
                           >
                             {{ isQueryValidData.error }}
                           </p>
@@ -880,6 +918,7 @@ export default {
       query: "",
       queryDQD: "",
       textsearch: "",
+      cqp: "",
       defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
@@ -1081,6 +1120,10 @@ export default {
       if (this.currentTab != "text") return;
       this.validate();
     },
+    cqp() {
+      if (this.currentTab != "cqp") return;
+      this.validate();
+    },
     loading() {
       if (this.loading) {
         this.showLoadingBar = true;
@@ -1279,7 +1322,7 @@ export default {
             this.selectedLanguages = [this.availableLanguages[0]];
           }
           // console.log("Query validation", data);
-          if (data.kind in {dqd:1, text:1} && data.valid == true) {
+          if (data.kind in {dqd:1, text:1, cqp: 1} && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
@@ -1754,9 +1797,16 @@ export default {
       });
     },
     validate() {
+      let query = this.query;
+      if (this.currentTab == "text")
+        query = this.textsearch;
+      if (this.currentTab == "dqd")
+        query = this.queryDQD + "\n";
+      if (this.currentTab == "cqp")
+        query = this.cqp;
       useWsStore().sendWSMessage({
         action: "validate",
-        query: this.currentTab == "json" ? this.query : (this.currentTab == "text" ? this.textsearch : this.queryDQD + "\n"),
+        query: query,
         kind: this.currentTab,
         corpus: this.selectedCorpora.value
       });

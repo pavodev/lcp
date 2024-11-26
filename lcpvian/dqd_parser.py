@@ -10,8 +10,6 @@ from lark import Lark
 from lark.indenter import Indenter
 from lark.lexer import Token
 
-# from .cqp_to_json import cqp_to_json
-
 VALUE_FILTERS: dict = {
     "pattern": lambda p: p[1:-1],  # remove slashes
     "string": lambda p: p[1:-1],  # remove double quotes
@@ -28,15 +26,6 @@ assert os.path.isfile(
     dqd_grammar_fn
 ), f"Could not find a valid DQD lark file in the current directory"
 dqd_grammar: str = open(dqd_grammar_fn).read()
-
-cqp_grammar_fn: str = next(
-    (f for f in PARSER_FILES if re.match(r".*cqp[^/]*\.lark$", f)), ""
-)
-assert os.path.isfile(
-    cqp_grammar_fn
-), f"Could not find a valid CQP lark file in the current directory"
-cqp_grammar: str = open(cqp_grammar_fn).read()
-
 
 json_schema_fn: str = next((f for f in PARSER_FILES if f.endswith(".json")), "")
 assert os.path.isfile(
