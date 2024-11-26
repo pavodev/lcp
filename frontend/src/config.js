@@ -27,6 +27,15 @@ if (process.env.APP_TYPE == "videoscope") {
       sentryDSN: null,
       baseMediaUrl: "https://videoscope.test.linguistik.uzh.ch/media",
     };
+  } else if (process.env.NODE_ENV == "USI") {
+    config = {
+      appName: "videoscope",
+      apiUrl: "https://videoscope.lcp.usi.ch/be",
+      wsUrl: "wss://videoscope.lcp.usi.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://videoscope.lcp.usi.ch/media/",
+    };
   } else {
     // development
     config = {
@@ -58,6 +67,15 @@ else if (process.env.APP_TYPE == "soundscript") {
       sentryDSN: null,
       baseMediaUrl: "https://soundscript.test.linguistik.uzh.ch/media",
     };
+  } else if (process.env.NODE_ENV === "USI") {
+    config = {
+      appName: "soundscript",
+      apiUrl: "https://soundscript.lcp.usi.ch/be",
+      wsUrl: "wss://soundscript.lcp.usi.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://soundscript.lcp.usi.ch/media/",
+    };
   } else {
     // development
     config = {
@@ -86,6 +104,15 @@ else if (process.env.APP_TYPE == "catchphrase") {
       wsUrl: "wss://catchphrase.test.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
+    };
+  } else if (process.env.NODE_ENV === "USI") {
+    config = {
+      appName: "catchphrase",
+      apiUrl: "https://catchphrase.lcp.usi.ch/be",
+      wsUrl: "wss://catchphrase.lcp.usi.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://catchphrase.lcp.usi.ch/media/",
     };
   } else {
     // development
@@ -117,6 +144,15 @@ else if (process.env.APP_TYPE == "lcphome") {
       apiHeaders: {},
       sentryDSN: null,
     };
+  } else if (process.env.NODE_ENV === "USI") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.usi.ch/be",
+      wsUrl: "wss://lcp.usi.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://lcp.usi.ch/media/",
+    };
   } else {
     // development
     config = {
@@ -147,6 +183,15 @@ else {
       apiHeaders: {},
       sentryDSN: null,
     };
+  } else if (process.env.NODE_ENV === "USI") {
+    config = {
+      appName: "LCP",
+      apiUrl: "https://lcp.usi.ch/be",
+      wsUrl: "wss://lcp.usi.ch/ws",
+      apiHeaders: {},
+      sentryDSN: null,
+      baseMediaUrl: "https://lcp.usi.ch/media/",
+    };
   } else {
     // development
     config = {
@@ -175,6 +220,13 @@ else if (process.env.NODE_ENV == "staging") {
     "catchphrase": "https://catchphrase.test.linguistik.uzh.ch",
     "soundscript": "https://soundscript.test.linguistik.uzh.ch",
     "videoscope": "https://videoscope.test.linguistik.uzh.ch"
+  }
+}
+else if (process.env.NODE_ENV == "USI") {
+  config['appLinks'] = {
+    "catchphrase": "https://catchphrase.lcp.usi.ch",
+    "soundscript": "https://soundscript.lcp.usi.ch",
+    "videoscope": "https://videoscope.lcp.usi.ch"
   }
 }
 else {
