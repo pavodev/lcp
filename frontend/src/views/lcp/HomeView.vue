@@ -100,6 +100,17 @@
                     </div>
                   </div>
                 </div>
+                <div class="col-1 text-end" v-if="project.isAdmin">
+                  <button
+                    type="button"
+                    class="btn btn-sm btn-light"
+                    data-bs-toggle="modal"
+                    data-bs-target="#editProjectModal"
+                    @click="modalIndexKey++"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'gear']" />
+                  </button>
+                </div>
               </div>
             </div>
             <div class="row mt-2">
