@@ -800,6 +800,7 @@ class SQLSequence:
                         *{x for x in self._sequence_references},
                         *{x for x in self._internal_references},
                         *{x for x in self._internal_references.values()},
+                        *{x for x in unit_labels_so_far},
                     }
                 }
                 m.internal_label = m.label
