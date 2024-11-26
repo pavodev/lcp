@@ -158,6 +158,19 @@
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
                           <button
+                            class="nav-link"
+                            id="nav-plaintext-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-plaintext"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-plaintext"
+                            aria-selected="false"
+                            @click="currentTab = 'text'"
+                          >
+                            Text
+                          </button>
+                          <button
                             class="nav-link active"
                             id="nav-dqd-tab"
                             data-bs-toggle="tab"
@@ -200,6 +213,32 @@
                         </div>
                       </nav>
                       <div class="tab-content" id="nav-query-tabContent">
+                        <div
+                          class="tab-pane fade pt-3"
+                          id="nav-plaintext"
+                          role="tabpanel"
+                          aria-labelledby="nav-plaintext-tab"
+                        >
+                          <input
+                            class="form-control"
+                            type="text"
+                            placeholder="Query (e.g. a cat)"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="textsearch"
+                            @keyup="$event.key=='Enter' && this.submit()"
+                          />
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
                         <div
                           class="tab-pane fade show active pt-3"
                           id="nav-dqd"
@@ -840,6 +879,7 @@ export default {
     return {
       query: "",
       queryDQD: "",
+      textsearch: "",
       defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
@@ -1028,11 +1068,18 @@ export default {
         this.loading = false;
       }
     },
+    currentTab() {
+      this.validate();
+    },
     query() {
       // console.log("Check is valid")
       if (this.currentTab != "dqd") {
         this.validate();
       }
+    },
+    textsearch() {
+      if (this.currentTab != "text") return;
+      this.validate();
     },
     loading() {
       if (this.loading) {
@@ -1232,7 +1279,7 @@ export default {
             this.selectedLanguages = [this.availableLanguages[0]];
           }
           // console.log("Query validation", data);
-          if (data.kind == "dqd" && data.valid == true) {
+          if (data.kind in {dqd:1, text:1} && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
@@ -1709,7 +1756,8 @@ export default {
     validate() {
       useWsStore().sendWSMessage({
         action: "validate",
-        query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
+        query: this.currentTab == "json" ? this.query : (this.currentTab == "text" ? this.textsearch : this.queryDQD + "\n"),
+        kind: this.currentTab,
         corpus: this.selectedCorpora.value
       });
     },
