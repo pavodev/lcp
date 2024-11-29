@@ -3,7 +3,7 @@ FROM postgres:16.4
 
 # Install dependencies
 RUN apt-get update && \
-    apt-get install -y postgresql-server-dev-all build-essential git
+    apt-get install -y postgresql-server-dev-16 build-essential git
 
 # Clone and install the RUM extension
 RUN git clone https://github.com/postgrespro/rum.git && \
