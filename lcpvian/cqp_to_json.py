@@ -262,7 +262,7 @@ def full_cqp_to_json(cqp: str, conf: dict[str, Any] = {}):
     obj_label = "sequence" if "sequence" in query_json else "unit"
     obj = query_json[obj_label]
     obj["label"] = label
-    obj["partOf"] = seg_label
+    obj["partOf"] = [{"partOfStream": seg_label}]
 
     res = {
         "label": "matches",

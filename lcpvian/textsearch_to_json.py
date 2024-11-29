@@ -54,7 +54,13 @@ def textsearch_to_json(text: str, conf: dict[str, Any] | None = None) -> dict:
     out: dict[str, Any] = {
         "query": [
             {"unit": {"layer": segment_layer, "label": "s"}},
-            {"sequence": {"partOf": "s", "label": "seq", "members": tokens}},
+            {
+                "sequence": {
+                    "partOf": [{"partOfStream": "s"}],
+                    "label": "seq",
+                    "members": tokens,
+                }
+            },
         ],
         "results": [
             {

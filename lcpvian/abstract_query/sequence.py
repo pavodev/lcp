@@ -21,7 +21,7 @@ def _where_conditions_from_constraints(
     label: str = "anonymous",
     constraints: list[dict] = [],
     entities: set[str] = set(),
-    part_of: str = "",
+    part_of: list[dict[str, str]] = [],
     label_layer: LabelLayer = {},
 ) -> tuple[list[str], list[str], dict[str, list[str]]]:
     """
@@ -329,7 +329,7 @@ class Cte:
                     constraints=[c for c in state.constraints if isinstance(c, dict)],
                     entities={"token"},
                     override=override_references,
-                    part_of=state.unit.obj.get("partOf", "") if state.unit else "",
+                    part_of=state.unit.obj.get("partOf", []) if state.unit else [],
                 )
                 constraints = f"{' AND '.join(where_conditions)} AND transition{self.n}.label = '{state.label}'"
                 state_left_joins = state_left_joins.union({ls for ls in ljs})
@@ -413,8 +413,9 @@ class Cte:
         seg: str = "segment",
     ) -> str:
         n: str = str(self.n)
+        part_of: str = self.sequence.get_first_stream_part_of()
         join_first_token: str = (
-            f"{schema}.{tok}{batch_suffix} token ON token.{seg}_id = prev_cte.{self.sequence.part_of}"
+            f"{schema}.{tok}{batch_suffix} token ON token.{seg}_id = prev_cte.{part_of}"
         )
         if self.prev_fixed_token:
             pl: str = self.prev_fixed_token.internal_label
@@ -475,7 +476,7 @@ class Cte:
             where_union = f"WHERE {where_union}" if where_union else ""
 
         retval: str = f"""traversal{n} AS (
-        SELECT  prev_cte.{self.sequence.part_of},
+        SELECT  prev_cte.{part_of},
                 {', '.join(['prev_cte.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
                 {start_id}           start_id,
                 token.{tok}_id           id,
@@ -489,7 +490,7 @@ class Cte:
         if where_union:
             retval += f"""
         UNION ALL
-        SELECT  traversal{n}.{self.sequence.part_of},
+        SELECT  traversal{n}.{part_of},
                 {', '.join(['traversal'+str(n)+'.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
                 traversal{n}.start_id,
                 token.token_id   id,
@@ -497,7 +498,7 @@ class Cte:
                 traversal{n}.token_list || jsonb_build_array(jsonb_build_array(token.{tok}_id, transition{n}.label, transition{n}.sequence))
         FROM traversal{n} traversal{n}
         JOIN transition{n} ON transition{n}.source_state = traversal{n}.state
-        JOIN {schema}.{tok}{batch_suffix} token ON token.{tok}_id = traversal{n}.id + 1 AND token.{seg}_id = traversal{n}.{self.sequence.part_of}
+        JOIN {schema}.{tok}{batch_suffix} token ON token.{tok}_id = traversal{n}.id + 1 AND token.{seg}_id = traversal{n}.{part_of}
         {where_union}
     )
     SEARCH DEPTH FIRST BY id SET ordercol"""
@@ -516,12 +517,12 @@ class SQLSequence:
         label_layer = self.sequence.query_data.label_layer
         config = self.sequence.conf
         entities = label_layer.keys()
-        self.part_of: str = ""
+        self.part_of: list[dict[str, str]] = []
         if "partOf" in sequence.obj.get("sequence", {}):
             self.part_of = sequence.obj["sequence"]["partOf"]
         else:
             for tok in sequence.obj.get("sequence", {}).get("members", []):
-                part_of = tok.get("unit", {}).get("partOf")
+                part_of = tok.get("unit", {}).get("partOf", [])
                 if not part_of:
                     continue
                 self.part_of = part_of
@@ -530,9 +531,10 @@ class SQLSequence:
             n = 1
             while f"anonymous_segment_{n}" in label_layer:
                 n += 1
-            part_of = f"anonymous_segment_{n}"
+            part_of_label = f"anonymous_segment_{n}"
+            part_of = [{"partOfStream": part_of_label}]
             self.part_of = part_of
-            label_layer[part_of] = (config.config["firstClass"]["segment"], {})
+            label_layer[part_of_label] = (config.config["firstClass"]["segment"], {})
         self.fixed_tokens: list[tuple[Unit, int, int, int]] = (
             []
         )  # A list of (fixed_token,min_separation,max_separation,modulo)
@@ -554,6 +556,11 @@ class SQLSequence:
         )
         self.config: Config = config
         self.label_layer: LabelLayer = label_layer
+
+    def get_first_stream_part_of(self) -> str:
+        return next(
+            (p["partOfStream"] for p in self.part_of if "partOfStream" in p), "s"
+        )
 
     def get_members(self) -> list[Member]:
         if self._members is None:
@@ -664,7 +671,7 @@ class SQLSequence:
         constraints: list[dict] = [],
         entities: set[str] = set(),
         override: dict[str, str] = dict(),
-        part_of: str = "",
+        part_of: list[dict[str, str]] = [],
         in_subsequence: set | None = None,
     ) -> tuple[list[str], list[str], dict[str, list[str]]]:
         """
@@ -873,13 +880,13 @@ class SQLSequence:
         left_joins: list[str] = []
         for n, (token, min_sep, max_sep, modulo) in enumerate(self.fixed_tokens):
             l: str = token.internal_label
-            part_of: str = token.obj["unit"].get("partOf")
+            part_of: list[dict[str, str]] = token.obj["unit"].get("partOf", [])
             if not part_of:
                 tok_par_seq = token.parent_sequence
                 if tok_par_seq:
-                    part_of = tok_par_seq.obj["sequence"].get("partOf")
+                    part_of = tok_par_seq.obj["sequence"].get("partOf", [])
                 if not part_of:
-                    part_of = self.sequence.obj["sequence"].get("partOf", "")
+                    part_of = self.sequence.obj["sequence"].get("partOf", [])
             if token.label and token.label in self.label_layer:
                 # Update label_layer with the computed partOf
                 token_dict = cast(dict, self.label_layer[token.label][1])
@@ -923,6 +930,8 @@ class SQLSequence:
         if not self.simple_sequences:
             return ("", set())
 
+        part_of_stream = self.get_first_stream_part_of()
+
         add_to_fixed_selects: set[str] = set()
 
         simple_seq_conds: list[tuple[int, str]] = []
@@ -961,12 +970,14 @@ class SQLSequence:
 
             # Add conditions for each member in the subsequence
             for i, m in enumerate(s.members):
-                sub_member_part_of: str = m.obj["unit"].get("partOf")
+                sub_member_part_of: list[dict[str, str]] = m.obj["unit"].get(
+                    "partOf", {}
+                )
                 if not sub_member_part_of:
                     sub_member_sequence = m.parent_sequence
                     if sub_member_sequence:
                         sub_member_part_of = sub_member_sequence.obj["sequence"].get(
-                            "partOf"
+                            "partOf", []
                         )
                     if not sub_member_part_of:
                         sub_member_part_of = self.part_of
@@ -976,7 +987,7 @@ class SQLSequence:
                     m.obj["unit"].get("constraints", []),
                     entities=entities,
                     override=override_internal_references,
-                    part_of=(sub_member_part_of or ""),
+                    part_of=(sub_member_part_of or []),
                     in_subsequence=joins_for_refs_from_prev_table,
                 )
                 # Replace dotted references to attributes of entities from fixed table
@@ -1026,7 +1037,7 @@ class SQLSequence:
                                 if i > 0
                                 else ""
                             ),
-                            f"s{n}_t{i}.{seg}_id = {from_table}.{self.part_of}",
+                            f"s{n}_t{i}.{seg}_id = {from_table}.{part_of_stream}",
                             (
                                 f"s{n}_t{i}.{tok}_id <= t{np} AND ({from_table}.t{np} - s{n}_t{i}.{tok}_id) % {mod} = 0"
                                 if nxt is None and i + 1 == len(s.members)
