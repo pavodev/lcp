@@ -183,7 +183,7 @@ class DDL:
         self.tabwidth = 8
 
         self.anchoring = {
-            "location": ("2d_coord", "point"),
+            "location": ("xy_box", "box"),
             "stream": ("char_range", "int4range"),
             "time": ("frame_range", "int4range"),
         }
