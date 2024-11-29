@@ -364,6 +364,7 @@ class Table(DDL):
             f'CREATE INDEX ON "{schema}".{self.name} ' + idx
             for col in self.cols
             if (idx := col.ret_idx())
+            and col.type != "box"  # Cannot create an index on type box
         ]
         return ret
 
@@ -680,6 +681,9 @@ class CTProcessor:
             elif typ == "number":
                 table_cols.append(Column(attr, "int", nullable=nullable))
 
+            elif typ == "image":
+                table_cols.append(Column(attr, "text", nullable=nullable))
+
             elif typ == "uuid":
                 table_cols.append(Column(attr, "uuid", nullable=nullable))
 
@@ -922,7 +926,7 @@ class CTProcessor:
         rel_cols = [
             x.name.removesuffix("_id")
             for x in tok_tab.cols
-            if not (x.constrs.get("primary_key") or x.name.endswith("range"))
+            if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
         ]
         mapd["FTSvectorCols"] = {n: rc for n, rc in enumerate(rel_cols, start=1)}
         self.globals.mapping = mapd
@@ -969,7 +973,7 @@ class CTProcessor:
             [
                 x.name
                 for x in token_tbl.cols
-                if not (x.constrs.get("primary_key") or "range" in x.name)
+                if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
             ]
         )
         statement = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl + "0")
@@ -990,7 +994,7 @@ class CTProcessor:
             [
                 x
                 for x in tok_tab.cols
-                if not (x.constrs.get("primary_key") or "range" in x.name)
+                if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
             ],
             key=lambda x: x.name,
         )
