@@ -29,7 +29,7 @@ from .utils import _sanitize_corpus_name, _row_to_value
 
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
-MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
+MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg", "png", "jpg", "jpeg", "bmp")
 UPLOADS_PATH = os.getenv("TEMP_UPLOADS_PATH", "uploads")
 
 

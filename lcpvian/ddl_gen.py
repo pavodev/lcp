@@ -21,6 +21,7 @@ TYPES_MAP = {
     "dict": "jsonb",
     "array": "text[]",
     "vector": "main.vector",
+    "image": "text",
 }
 
 
