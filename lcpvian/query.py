@@ -198,6 +198,7 @@ async def query(
     request: web.Request,
     manual: JSONObject | None = None,
     app: web.Application | None = None,
+    api: bool = False,
 ) -> web.Response:
     """
     Main query endpoint: generate and queue up corpus queries
@@ -228,7 +229,7 @@ async def query(
         qi = await QueryIteration.from_manual(manual, app)
     else:
         # request is from the frontend, most likely a new query...
-        qi = await QueryIteration.from_request(request)
+        qi = await QueryIteration.from_request(request, api=api)
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
@@ -240,7 +241,7 @@ async def query(
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
-            elif qi.to_export:
+            elif qi.to_export or api:
                 ready_to_export = len(qi.done_batches) == len(
                     qi.all_batches
                 ) or qi.to_export.get("preview")
@@ -250,6 +251,13 @@ async def query(
                 else:
                     qi_job = cast(Job, qi.job)
                     qi_job.meta["to_export"] = qi.to_export
+                    if api and not qi_job.meta["to_export"]:
+                        qi_job.meta["to_export"] = {
+                            "room": "api",
+                            "user": "api",
+                            "format": "dump",
+                            "config": qi.config[str(qi.corpora[0])],
+                        }
                     qi_job.save_meta()
             http_response.append(qi.job_info)
     except Exception as err:

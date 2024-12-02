@@ -9,10 +9,11 @@ import json
 import os
 import sys
 
-from .api import corpora, query, refresh_config
+from .api import corpora, query
 from .ddl_gen import main
 from .dqd_parser import cmdline
 from .cqp_to_json import cqp_to_json
+from .project import refresh_config
 
 COMMANDS = {
     "start",

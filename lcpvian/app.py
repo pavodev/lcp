@@ -35,6 +35,7 @@ from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
 
+from .api import api_query
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -214,6 +215,7 @@ async def create_app(test: bool = False) -> web.Application:
     # app["auth"] = Authenticator(app)
 
     endpoints: list[tuple[str, str, Endpoint]] = [
+        ("/api/{corpus}/", "POST", api_query),
         ("/check-file-permissions", "GET", check_file_permissions),
         ("/config", "POST", refresh_config),
         ("/corpora", "POST", corpora),

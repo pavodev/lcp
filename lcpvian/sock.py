@@ -382,6 +382,15 @@ async def _handle_query(
         and not payload.get("no_restart")
     ):
         payload["config"] = app["config"]
+        if room == "api":
+            payload["to_export"] = {
+                "room": "api",
+                "user": "api",
+                "format": "dump",
+                "config": cast(dict[str, Any], app["config"]).get(
+                    str(cast(list[int], payload["current_batch"])[0]), {}
+                ),
+            }
         to_submit = query(None, manual=payload, app=app)
 
     if do_full:

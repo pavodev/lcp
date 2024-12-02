@@ -170,7 +170,7 @@ class QueryIteration:
         return sorted(out, key=lambda x: x[-1])
 
     @classmethod
-    async def from_request(cls, request: web.Request) -> Self:
+    async def from_request(cls, request: web.Request, api: bool = False) -> Self:
         """
         The first time we encounter the data, it's an aiohttp request
 
@@ -206,11 +206,14 @@ class QueryIteration:
         to_export: dict = request_data.get("to_export", {})
         preview = to_export.get("preview", False)
 
+        user: str = "api" if api else request_data.get("user", "")
+        room: str = "api" if api else request_data.get("room", "")
+
         details = {
             "corpora": corpora_to_use,
-            "user": request_data["user"],
+            "user": user,
             "app": request.app,
-            "room": request_data["room"],
+            "room": room,
             "config": request.app["config"],
             "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
@@ -234,8 +237,8 @@ class QueryIteration:
                 "preview": to_export.get("preview", False),
                 "download": to_export.get("download", False),
                 "config": request.app["config"][str(corpora_to_use[0])],
-                "user": request_data.get("user", ""),
-                "room": request_data.get("room", ""),
+                "user": user,
+                "room": room,
             }
         made: Self = cls(**details)
         made.get_word_count()
