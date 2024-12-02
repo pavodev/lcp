@@ -78,6 +78,7 @@ else if (process.env.APP_TYPE == "catchphrase") {
       wsUrl: "wss://catchphrase.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
+      baseMediaUrl: "https://catchphrase.linguistik.uzh.ch/media",
     };
   } else if (process.env.NODE_ENV === "staging") {
     config = {
@@ -86,6 +87,7 @@ else if (process.env.APP_TYPE == "catchphrase") {
       wsUrl: "wss://catchphrase.test.linguistik.uzh.ch/ws",
       apiHeaders: {},
       sentryDSN: null,
+      baseMediaUrl: "https://catchphrase.test.linguistik.uzh.ch/media",
     };
   } else {
     // development
