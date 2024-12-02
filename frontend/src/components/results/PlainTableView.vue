@@ -172,7 +172,7 @@
                 <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
                   <tr v-if="allowedMetaColums[layer].includes(meta_key)">
                     <td>{{ meta_key }}</td>
-                    <td v-if="corpora.corpus.layer[layer].attributes[meta_key].type == 'image'">
+                    <td v-if="(corpora.corpus.layer[layer].attributes[meta_key]||{}).type == 'image'">
                       <span
                         data-bs-toggle="modal"
                         :data-bs-target="`#imageModal${randInt}`"
