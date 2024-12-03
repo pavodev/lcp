@@ -229,7 +229,15 @@ async def query(
         qi = await QueryIteration.from_manual(manual, app)
     else:
         # request is from the frontend, most likely a new query...
-        qi = await QueryIteration.from_request(request, api=api)
+        request_data = await request.json()
+        app = request.app
+        if api:
+            request_data["room"] = "api"
+            corpus_id: int = request_data.get("corpora", [0])[0]
+            request_data["to_export"] = request_data.get(
+                "to_export", {"format": "dump", "config": app["config"][str(corpus_id)]}
+            )
+        qi = await QueryIteration.from_request(request_data, app, api=api)
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
@@ -241,23 +249,18 @@ async def query(
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
-            elif qi.to_export or api:
+            elif qi.to_export:
                 ready_to_export = len(qi.done_batches) == len(
                     qi.all_batches
                 ) or qi.to_export.get("preview")
+                print("all batches", qi.all_batches)
+                print("done batches", qi.done_batches)
                 if ready_to_export:
                     await export(qi.app, qi.to_export, qi.first_job)
                 # elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
                 else:
                     qi_job = cast(Job, qi.job)
                     qi_job.meta["to_export"] = qi.to_export
-                    if api and not qi_job.meta["to_export"]:
-                        qi_job.meta["to_export"] = {
-                            "room": "api",
-                            "user": "api",
-                            "format": "dump",
-                            "config": qi.config[str(qi.corpora[0])],
-                        }
                     qi_job.save_meta()
             http_response.append(qi.job_info)
     except Exception as err:

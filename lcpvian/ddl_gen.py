@@ -288,7 +288,7 @@ class Column(DDL):
         """
         if self.constrs.get("primary_key", False):
             return ""
-        elif self.type == "int4range" or self.type == "int8range":
+        elif self.type in ("int4range", "int8range", "point", "box"):
             return self._idx_constr.format("USING gist", self.name)
         elif self.type == "tsvector":
             return self._idx_constr.format("USING rum", self.name)
@@ -364,7 +364,6 @@ class Table(DDL):
             f'CREATE INDEX ON "{schema}".{self.name} ' + idx
             for col in self.cols
             if (idx := col.ret_idx())
-            and col.type != "box"  # Cannot create an index on type box
         ]
         return ret
 

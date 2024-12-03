@@ -170,7 +170,9 @@ class QueryIteration:
         return sorted(out, key=lambda x: x[-1])
 
     @classmethod
-    async def from_request(cls, request: web.Request, api: bool = False) -> Self:
+    async def from_request(
+        cls, request_data: dict, app: Application, api: bool = False
+    ) -> Self:
         """
         The first time we encounter the data, it's an aiohttp request
 
@@ -178,7 +180,8 @@ class QueryIteration:
 
         Also used when query is resumed, or when user does `Search entire corpus`
         """
-        request_data = await request.json()
+        # request_data = await request.json()
+        # app = request.app
         corp = request_data.get("corpora", [])
         if not isinstance(corp, list):
             corp = [corp]
@@ -192,16 +195,14 @@ class QueryIteration:
         total_results_so_far = 0
         needed = total_requested
         if previous:
-            prev = Job.fetch(previous, connection=request.app["redis"])
+            prev = Job.fetch(previous, connection=app["redis"])
             prev_kwargs: dict[str, Any] = cast(dict[str, Any], prev.kwargs)
             first_job_id = prev_kwargs.get("first_job") or previous
             total_duration = prev_kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
         sim = request_data.get("simultaneous", False)
-        all_batches = cls._get_query_batches(
-            corpora_to_use, request.app["config"], languages
-        )
+        all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
 
         to_export: dict = request_data.get("to_export", {})
         preview = to_export.get("preview", False)
@@ -212,9 +213,9 @@ class QueryIteration:
         details = {
             "corpora": corpora_to_use,
             "user": user,
-            "app": request.app,
+            "app": app,
             "room": room,
-            "config": request.app["config"],
+            "config": app["config"],
             "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
@@ -236,7 +237,7 @@ class QueryIteration:
                 "format": str(to_export.get("format", "")),
                 "preview": to_export.get("preview", False),
                 "download": to_export.get("download", False),
-                "config": request.app["config"][str(corpora_to_use[0])],
+                "config": app["config"][str(corpora_to_use[0])],
                 "user": user,
                 "room": room,
             }

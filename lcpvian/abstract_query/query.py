@@ -372,7 +372,7 @@ class QueryMaker:
 
             layerlang = f"{layer}{self._underlang}".lower()
             llabel = label.lower()
-            if not self._backup_table and (is_document or is_segment or is_token):
+            if not self._backup_table:  # and (is_document or is_segment or is_token):
                 self._backup_table = (layerlang, llabel)
 
             if is_segment or is_document or is_meta or is_above_segment:

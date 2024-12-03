@@ -180,6 +180,16 @@ class CustomEncoder(json.JSONEncoder):
         return default
 
 
+class Timer:
+    def __init__(self, duration):
+        self._start = datetime.now()
+        self._duration = duration
+
+    def elapsed(self):
+        diff = datetime.now() - self._start
+        return diff.total_seconds() > self._duration
+
+
 def load_env() -> None:
     """
     Load .env from ~/lcp/.env if present, otherwise from current dir/dotenv defaults
