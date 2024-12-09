@@ -29,7 +29,7 @@ from .utils import _sanitize_corpus_name, _row_to_value
 
 VALID_EXTENSIONS = ("vrt", "csv", "tsv")
 COMPRESSED_EXTENTIONS = ("zip", "tar", "tar.gz", "tar.xz", "7z")
-MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg")
+MEDIA_EXTENSIONS = ("mp3", "mp4", "wav", "ogg", "png", "jpg", "jpeg", "bmp")
 UPLOADS_PATH = os.getenv("TEMP_UPLOADS_PATH", "uploads")
 
 
@@ -37,8 +37,6 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
     """
     What to do when user check status on an upload job
     """
-    short_url = str(request.url).split("?", 1)[0]
-    whole_url = f"{short_url}?job={job_id}"
     qs = request.app["query_service"]
     job: Job | None = qs.get(job_id)
     if not job:
@@ -62,7 +60,7 @@ async def _create_status_check(request: web.Request, job_id: str) -> web.Respons
         "project": kwargs["project"],
         "project_name": kwargs["project_name"],
         "corpus_name": kwargs["corpus_name"],
-        "target": whole_url,
+        "target": f"/create?job={job_id}",
     }
     return web.json_response(ret)
 
@@ -313,7 +311,7 @@ async def upload(request: web.Request) -> web.Response:
             "project": str(project_id),
             "project_name": project_name,
             "info": info,
-            "target": suggest_url,
+            "target": f"/upload?job={upload_job.id}",
         }
     )
 
@@ -539,7 +537,6 @@ async def make_schema(request: web.Request) -> web.Response:
     with open(os.path.join(directory, "_data.json"), "w") as fo:
         json.dump(pieces, fo)
 
-    short_url = str(request.url).split("?", 1)[0]
     job = request.app["query_service"].create(
         pieces["create"],
         project=proj_id,
@@ -551,7 +548,6 @@ async def make_schema(request: web.Request) -> web.Response:
         project_name=existing_project["title"],
         corpus_name=corpus_name,
     )
-    whole_url = f"{short_url}?job={job.id}"
     return web.json_response(
         {
             "status": "started",
@@ -559,7 +555,7 @@ async def make_schema(request: web.Request) -> web.Response:
             "project": proj_id,
             "schema": schema_name,
             "path": corpus_path,
-            "target": whole_url,
+            "target": f"/create?job={job.id}",
             "user_id": user_id,
         }
     )

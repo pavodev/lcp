@@ -158,6 +158,19 @@
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
                           <button
+                            class="nav-link"
+                            id="nav-plaintext-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-plaintext"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-plaintext"
+                            aria-selected="false"
+                            @click="currentTab = 'text'"
+                          >
+                            Text
+                          </button>
+                          <button
                             class="nav-link active"
                             id="nav-dqd-tab"
                             data-bs-toggle="tab"
@@ -169,6 +182,19 @@
                             @click="currentTab = 'dqd'"
                           >
                             DQD
+                          </button>
+                          <button
+                            class="nav-link"
+                            id="nav-cqp-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-cqp"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-cqp"
+                            aria-selected="false"
+                            @click="currentTab = 'cqp'"
+                          >
+                            CQP
                           </button>
                           <button
                             class="nav-link"
@@ -201,6 +227,32 @@
                       </nav>
                       <div class="tab-content" id="nav-query-tabContent">
                         <div
+                          class="tab-pane fade pt-3"
+                          id="nav-plaintext"
+                          role="tabpanel"
+                          aria-labelledby="nav-plaintext-tab"
+                        >
+                          <input
+                            class="form-control"
+                            type="text"
+                            placeholder="Query (e.g. a cat)"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="textsearch"
+                            @keyup="$event.key=='Enter' && this.submit()"
+                          />
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
                           class="tab-pane fade show active pt-3"
                           id="nav-dqd"
                           role="tabpanel"
@@ -223,6 +275,31 @@
                             v-if="
                               isQueryValidData && isQueryValidData.valid != true && debug
                             "
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
+                          class="tab-pane fade pt-3"
+                          id="nav-cqp"
+                          role="tabpanel"
+                          aria-labelledby="nav-cqp-tab"
+                        >
+                          <textarea
+                            class="form-control query-field"
+                            placeholder="Query (e.g. [word=&quot;hello&quot;])"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="cqp"
+                            @keyup="$event.key=='Enter' && $event.ctrlKey && this.submit()"
+                          ></textarea>
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
                           >
                             {{ isQueryValidData.error }}
                           </p>
@@ -312,6 +389,7 @@
                   :key="selectedCorpora"
                   :selectedCorpora="selectedCorpora"
                   :selectedMediaForPlay="selectedMediaForPlay"
+                  :hoveredResult="hoveredResult"
                   @switchToQueryTab="setMainTab"
                 />
 
@@ -555,6 +633,7 @@
                               :corpora="selectedCorpora"
                               @updatePage="updatePage"
                               @playMedia="playMedia"
+                              @hoverResultLine="hoverResultLine"
                               :resultsPerPage="resultsPerPage"
                               :loading="loading"
                             />
@@ -838,6 +917,8 @@ export default {
     return {
       query: "",
       queryDQD: "",
+      textsearch: "",
+      cqp: "",
       defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
@@ -872,6 +953,7 @@ export default {
       showLoadingBar: false,
 
       selectedMediaForPlay: null,
+      hoveredResult: null,
 
       // selectedDocument: null,
       // documentDict: {},
@@ -1025,11 +1107,22 @@ export default {
         this.loading = false;
       }
     },
+    currentTab() {
+      this.validate();
+    },
     query() {
       // console.log("Check is valid")
       if (this.currentTab != "dqd") {
         this.validate();
       }
+    },
+    textsearch() {
+      if (this.currentTab != "text") return;
+      this.validate();
+    },
+    cqp() {
+      if (this.currentTab != "cqp") return;
+      this.validate();
     },
     loading() {
       if (this.loading) {
@@ -1047,6 +1140,9 @@ export default {
   methods: {
     setMainTab() {
       this.activeMainTab = 'query'
+    },
+    hoverResultLine(line) {
+      this.hoveredResult = line;
     },
     playMedia(data) {
       this.selectedMediaForPlay = data;
@@ -1226,7 +1322,7 @@ export default {
             this.selectedLanguages = [this.availableLanguages[0]];
           }
           // console.log("Query validation", data);
-          if (data.kind == "dqd" && data.valid == true) {
+          if (data.kind in {dqd:1, text:1, cqp: 1} && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
@@ -1437,6 +1533,7 @@ export default {
           }
           return;
         } else if (data["action"] === "query_result") {
+          useWsStore().addMessageForPlayer(data)
           // console.log("query_result", data);
           this.updateLoading(data.status);
           if (
@@ -1457,6 +1554,7 @@ export default {
           this.WSDataResults = data;
           return;
         } else if (data["action"] === "sentences") {
+          useWsStore().addMessageForPlayer(data)
           // console.log("sentences", data);
           this.updateLoading(data.status);
           if (
@@ -1699,9 +1797,17 @@ export default {
       });
     },
     validate() {
+      let query = this.query;
+      if (this.currentTab == "text")
+        query = this.textsearch;
+      if (this.currentTab == "dqd")
+        query = this.queryDQD + "\n";
+      if (this.currentTab == "cqp")
+        query = this.cqp;
       useWsStore().sendWSMessage({
         action: "validate",
-        query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
+        query: query,
+        kind: this.currentTab,
         corpus: this.selectedCorpora.value
       });
     },

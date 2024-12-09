@@ -1,9 +1,12 @@
-part_of : "@"label
+part_of_stream : "@" label // skip: label
+part_of_time : "%" label // skip: label
+part_of_location : "&" label // skip: label
+part_of : (part_of_location | part_of_stream | part_of_time)+
 
 operator : OPERATOR
 operand_left : (math | function)
 operand_right : (math | function)
-operation : operand_left operator operand_right // rename: operand_left>left operand_right>right
+operation : "("? operand_left operator operand_right ")"? // rename: operand_left>left operand_right>right
 math : POS_INT
      | NEG_INT
      | FLOAT
@@ -30,11 +33,11 @@ pattern : REGEX
 regex : pattern case_insensitive?
 string : DOUBLE_QUOTED_STRING
 attribute : ATTRIBUTE
-label : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-entity : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-center : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-space : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS
-reference : LABEL | IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS | ATTRIBUTE
+label : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+entity : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+center : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+space : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL
+reference : ((IFLAG | ANALYSIS_FUNCTIONS | CONTAIN | OVERLAPS) (LABEL|LAYER)?) | LABEL | ATTRIBUTE
 layer : LAYER
 
 left : (function | reference | attribute | string | regex | math)
@@ -86,17 +89,20 @@ query : ((quantification | sequence | set | unit | constraint) _NL*)+
 
 top : _NL* query results
 
-
 FUNCTION_NAME.3 : "length("
                 | "size("
                 | "range("
                 | "position("
                 | "start("
                 | "end("
-                | "century("
-                | "date("
                 | "year("
+                | "decade("
+                | "century("
                 | "day("
+                | "dayofweek("
+                | "dayofmonth("
+                | "week("
+                | "month("
 
 ANALYSIS_FUNCTIONS.3 : "frequency"
                    | "minimum"

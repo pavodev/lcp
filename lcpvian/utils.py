@@ -13,7 +13,7 @@ import shutil
 import traceback
 
 from dotenv import load_dotenv
-from asyncpg import Range
+from asyncpg import Range, Box
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
@@ -178,6 +178,16 @@ class CustomEncoder(json.JSONEncoder):
             return obj.isoformat()
         default: JSON = json.JSONEncoder.default(self, obj)
         return default
+
+
+class Timer:
+    def __init__(self, duration):
+        self._start = datetime.now()
+        self._duration = duration
+
+    def elapsed(self):
+        diff = datetime.now() - self._start
+        return diff.total_seconds() > self._duration
 
 
 def load_env() -> None:
@@ -661,18 +671,25 @@ def format_meta_lines(
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if isinstance(res[n + 1], dict):
-                        segment[layer][prop] = json.dumps(res[n + 1])
+                    if isinstance(res[n + 1], Range):
+                        segment[layer][prop] = [
+                            cast(Range, res[n + 1]).lower,
+                            cast(Range, res[n + 1]).upper,
+                        ]
+                    elif isinstance(res[n + 1], Box):
+                        segment[layer][prop] = [
+                            cast(Box, res[n + 1]).low.x,
+                            cast(Box, res[n + 1]).low.y,
+                            cast(Box, res[n + 1]).high.x,
+                            cast(Box, res[n + 1]).high.y,
+                        ]
                     elif any(
-                        isinstance(res[n + 1], type)
-                        for type in [int, str, bool, list, tuple, UUID, date]
+                        isinstance(res[n + 1], typ)
+                        for typ in [int, str, bool, list, tuple, UUID, date]
                     ):
                         segment[layer][prop] = str(res[n + 1])
-                    elif isinstance(res[n + 1], Range):
-                        segment[layer][prop] = [
-                            cast(str, res[n + 1]).lower,
-                            cast(str, res[n + 1]).upper,
-                        ]
+                    elif isinstance(res[n + 1], dict):
+                        segment[layer][prop] = json.dumps(res[n + 1])
         segment = {
             layer: props
             for layer, props in segment.items()
@@ -993,6 +1010,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         # And frame_range if applicable
         if _is_time_anchored(current_batch, config, layer):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
+        # And xy_box if applicable
+        if config["layer"].get(layer, {}).get("anchoring", {}).get("location", False):
+            selects.append(f'{char_range_table}."xy_box" AS {layer}_xy_box')
 
     # Add code here to add "media" if dealing with a multimedia corpus
     if has_media:

@@ -39,7 +39,7 @@ class Token:
     def __init__(
         self,
         layer: str,
-        part_of: str,
+        part_of: list[dict[str, str]],
         label: str,
         constraints: Any,
         order: int | None,
@@ -123,15 +123,6 @@ class Token:
         if self.quantor:
             out.add(self.conn_obj._build_subquery(self.conn_obj))
             return out
-        # part_of is now part of get_constraints itself
-        # elif self.part_of:
-        #     seg = self.segment.lower()
-        #     formed: str
-        #     if self.label_layer.get(self.part_of, ("",None))[0].lower() == seg:
-        #         formed = f"{self.part_of}.{seg}_id = {self.label}.{seg}_id"
-        #     else:
-        #         formed = f"{self.part_of}.char_range && {self.label}.char_range"
-        #     out.add(formed)
         conditions: str = self.conn_obj.conditions() if self.conn_obj else ""
         if conditions.strip():
             out.add(conditions)
@@ -195,7 +186,7 @@ class QueryMaker:
         obj: JSONObject,  # obj should be a "unit" object as defined in cobquec
         _layer: str,
         _label: str,
-        _part_of: str,
+        _part_of: list[dict[str, str]],
         j: int | None = None,
         prev_label: str | None = None,
     ) -> tuple[Joins, set[str]]:
@@ -209,11 +200,8 @@ class QueryMaker:
                 label = f"anonymous_token_from_{_label}_{str(j)}".lower()
             else:
                 label = _label
-        # part_of = self._get_part_of(cast(str, obj.get("partOf", _part_of)))
-        part_of = cast(str, obj.get("partOf", _part_of))
+        part_of = cast(list[dict[str, str]], obj.get("partOf", _part_of))
         constraints = cast(JSONObject, obj.get("constraints", []))
-        # if self.r.entities and label not in self.r.entities:
-        #    return {}, set()
         # todo: should we turn Token into Token0 here?
         tok = Token(
             layer,
@@ -239,18 +227,6 @@ class QueryMaker:
         ):
             conditions = set()
         return joins, conditions
-
-    def _get_part_of(self, part_of: str) -> str:
-        """
-        Return the layer name for the part_of label
-        """
-        layer: str = self.r.label_layer.get(part_of, ("", None))[0]
-        if not self.has_fts:
-            return layer
-        if layer == self.segment:
-            assert self._table is not None
-            return self._table[1]
-        return layer
 
     def _get_label_as(self, select: str) -> str:
         return re.split(" as ", select, flags=re.IGNORECASE)[-1]
@@ -382,10 +358,10 @@ class QueryMaker:
             else:
                 label = f"anonymous_{layer.lower()}_top_{self._n}"
                 self._n += 1
-            part_of = cast(str, obj.get("partOf", ""))
-            assert part_of != label, AttributeError(
-                f"An entity cannot be part of itself ('{label}')"
-            )
+            part_of = cast(list[dict[str, str]], obj.get("partOf", []))
+            assert not any(
+                next(x for x in p.values()) == label for p in part_of
+            ), AttributeError(f"An entity cannot be part of itself ('{label}')")
             low = layer.lower()
             is_segment = low == self.segment.lower()
             is_token = low == self.token.lower()
@@ -396,7 +372,7 @@ class QueryMaker:
 
             layerlang = f"{layer}{self._underlang}".lower()
             llabel = label.lower()
-            if not self._backup_table and (is_document or is_segment or is_token):
+            if not self._backup_table:  # and (is_document or is_segment or is_token):
                 self._backup_table = (layerlang, llabel)
 
             if is_segment or is_document or is_meta or is_above_segment:
@@ -483,10 +459,11 @@ class QueryMaker:
                 min_label: str = self.r.unique_label(f"min_{s.sequence.label}")
                 max_label: str = self.r.unique_label(f"max_{s.sequence.label}")
 
+                s_part_of = s.get_first_stream_part_of()
                 sequence_ranges[s.sequence.label] = (
                     f"{min} as {min_label}",
                     f"{max} as {max_label}",
-                    s.part_of,
+                    s_part_of,
                 )
 
         # Go through all the segments and pick the most constrained one
@@ -501,7 +478,12 @@ class QueryMaker:
             seg_suffixes[lb] = "0"
             n_segment_constraints = len(info.get("constraints", {}))
             n_sequence_length: int = next(
-                (s.sequence.min_length for s in self.sqlsequences if s.part_of == lb), 0
+                (
+                    s.sequence.min_length
+                    for s in self.sqlsequences
+                    if s.get_first_stream_part_of() == lb
+                ),
+                0,
             )
             if self._table and n_sequence_length < n_sequence_length_max:
                 continue
@@ -661,11 +643,7 @@ class QueryMaker:
             additional_from: str = last_table
             if last_cte:
                 # make sure to reach the last state of the last CTE!
-                orderby: str = "" if last_cte.no_transition else f" ORDER BY ordercol"
-                final_states: str = ",".join(
-                    [str(x) for x in last_cte.get_final_states()]
-                )
-                additional_from = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({final_states}){orderby}) {last_table}"
+                additional_from = last_cte.get_gather_in(last_table)
 
             additional_ctes += f"""gather AS (
                 SELECT {gather_selects}
@@ -676,10 +654,7 @@ class QueryMaker:
 
         # If there's no sequence range to return, there's no gather table, but we still need to put a constraint on the last state
         elif last_cte:
-            # make sure to reach the last state of the last CTE!
-            orderby = "" if last_cte.no_transition else f" ORDER BY ordercol"
-            final_states = ",".join([str(x) for x in last_cte.get_final_states()])
-            last_table = f"(SELECT * FROM {last_table} WHERE {last_table}.state IN ({final_states}){orderby}) {last_table}"
+            last_table = last_cte.get_gather_in(last_table)
 
         for g, refs in groups.items():
             str_refs: str = ",".join(refs)
@@ -774,7 +749,10 @@ class QueryMaker:
         base: str = f"{schema_prefix}{table} {label}".lower()
 
         prefilters: set[str] = {
-            p for s in self.sqlsequences for p in s.prefilters() if s.part_of == label
+            p
+            for s in self.sqlsequences
+            for p in s.prefilters()
+            if s.get_first_stream_part_of() == label
         }
         if self.has_fts and prefilters:
             batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
@@ -830,17 +808,12 @@ class QueryMaker:
         """
         Process an object in the query larger than token unit that directly contains tokens
         """
-        part_of_label: str = cast(str, obj.get("partOf", ""))
-        part_of_layer: str = self.r.label_layer.get(part_of_label, ("", None))[0]
-        if not part_of_layer:
+        if not obj.get("partOf", None):
             return None
         is_negative = obj.get("quantor", "") == "NOT EXISTS"
         if not is_negative:
             select = f"{label}.{layer}_id as {label}"
             self.selects.add(select.lower())
-        lab: str = part_of_label
-        # if part_of_layer.lower() == self.segment.lower() and self.has_fts:
-        #     lab = self._seg_has_char_range()
         join: str = f"{self.schema}.{layer}{self._underlang} {label}".lower()
         if join not in self.joins:
             self.joins[join] = None
@@ -854,7 +827,7 @@ class QueryMaker:
             quantor=cast(str | None, obj.get("quantor", None)),
             label_layer=self.r.label_layer,
             entities=self.r.entities,
-            part_of=lab,
+            part_of=cast(list[dict[str, str]], obj.get("partOf", [])),
             set_objects=self.r.set_objects,
             n=self._n,
         )
@@ -893,17 +866,9 @@ class QueryMaker:
         # if is_meta:
         #     self.handle_meta(label, layer, contains)
         constraints = cast(JSONObject, obj.get("constraints", {}))
-        part_of: str = cast(str, obj.get("partOf", ""))
-        # part_of_layer = self.r.label_layer.get(part_of, ("", ""))[0]
-        # if self.has_fts:
-        #     if part_of_layer.lower() == self.segment.lower():
-        #         part_of = self._seg_has_char_range()
-        #     elif (
-        #         layer.lower() == self.segment.lower()
-        #         and self._table  # Only use has_char_range if constraint on main segment table (could be another segment)
-        #         and label == self._table[1]
-        #     ):
-        #         label = self._seg_has_char_range()
+        part_of: list[dict[str, str]] = cast(
+            list[dict[str, str]], obj.get("partOf", [])
+        )
         conn_obj: Constraints | None
         if constraints or part_of:
             conn_obj = _get_constraints(

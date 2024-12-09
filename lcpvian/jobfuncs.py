@@ -16,9 +16,9 @@ from sqlalchemy.sql import text
 from rq.connections import get_current_connection
 from rq.job import get_current_job, Job
 
-from .api import refresh_config
 from .configure import CorpusTemplate
 from .impo import Importer
+from .project import refresh_config
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
 from .utils import _get_sent_ids
 

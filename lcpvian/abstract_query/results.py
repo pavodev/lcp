@@ -1,6 +1,8 @@
 from typing import Any, cast
 
-from .constraint import _get_constraints, Constraints, process_set
+import re
+
+from .constraint import _get_constraints, Constraint, Constraints, process_set
 from .sequence import SQLSequence
 from .sequence_members import Sequence
 from .typed import (
@@ -13,6 +15,7 @@ from .typed import (
     JSON,
     Attribs,
     Details,
+    RefInfo,
 )
 from .utils import (
     Config,
@@ -27,9 +30,11 @@ from .utils import (
     _parse_repetition,
 )
 
+# TODO: add a count(DISTINCT resX.*) on each plain result table
+# this way FE can detect differences and warn user about it
 COUNTER = f"""
     res0 AS (SELECT 0::int2 AS rstype,
-      jsonb_build_array(count(*))
+      jsonb_build_array(count(match_list.*))
        FROM match_list)
 
 """
@@ -133,7 +138,8 @@ class ResultsMaker:
         """
         Build the results section of the postgres query
         """
-        strings = [COUNTER]
+        # strings = [COUNTER]
+        strings = []
         attribs = []
 
         made: str
@@ -191,17 +197,17 @@ class ResultsMaker:
                     self.r.entities.add(cast(str, c).lower())
                 # for s in cast(list[str], coll.get("space", [])):
                 #    self.r.entities.add(s)
-            elif "resultsAnalysis" in cast(JSONObject, result):
-                stat = cast(JSONObject, result["resultsAnalysis"])
-                attr = cast(list[str | dict], stat.get("attributes", []))
-                for a in attr:
-                    if not isinstance(a, dict) or not "attribute" in a:
-                        continue
-                    lab: str = cast(dict, a)["attribute"].split(".", 1)[0].lower()
-                    assert lab in legal_refs, ReferenceError(
-                        f"Label {lab} cannot be referenced (is not declared or scope-bound)"
-                    )
-                    self.r.entities.add(lab)
+            # elif "resultsAnalysis" in cast(JSONObject, result):
+            #     stat = cast(JSONObject, result["resultsAnalysis"])
+            #     attr = cast(list[str | dict], stat.get("attributes", []))
+            #     for a in attr:
+            #         if not isinstance(a, dict) or "attribute" not in a:
+            #             continue
+            #         lab: str = cast(dict, a)["attribute"].split(".", 1)[0].lower()
+            #         assert lab in legal_refs, ReferenceError(
+            #             f"Label {lab} cannot be referenced (is not declared or scope-bound)"
+            #         )
+            #         self.r.entities.add(lab)
 
         kind: str
         r: JSON
@@ -230,6 +236,7 @@ class ResultsMaker:
             strings.append(made)
             attribs.append(meta)
 
+        strings.append(COUNTER)
         self.r.meta_json = {"result_sets": attribs}
         self.r.needed_results = "\n , ".join(strings)
         return self.r
@@ -382,95 +389,95 @@ class ResultsMaker:
         Process a stats request
         """
         attributes = cast(list[str | dict], result["attributes"])
-        for att in attributes:
-            if not isinstance(att, dict) or "attribute" not in att:
-                continue
-            att_str = cast(dict, att)["attribute"]
-            lab = att_str.replace(".", "_").lower().strip()
-            split_att = att_str.split(".")
-            shortest = split_att[0]
-            shortest = self._label_mapping.get(shortest, shortest)
-            field = split_att[1]
-            layer, _ = self.r.label_layer[shortest]
-            layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
-            table = _get_table(layer, self.config, self.batch, self.lang)
-            # Join shortest table
-            all_layer_names = cast(dict[str, Any], self.config.get("layer", {})).keys()
-            shortest_layer = self.r.label_layer.get(shortest, ("", {}))[0]
-            shortest_table = f"{self.schema}.{table} {shortest}".lower()
-            self.r.joins[shortest_table] = (
-                None if shortest_layer in all_layer_names else True
-            )
-            # Proceed
-            is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
-            is_chained = len(split_att) > 2
-            conf_layer_info: dict[str, Any] = cast(
-                dict[str, Any], self.conf_layer[layer]
-            )
-            attrs = conf_layer_info["attributes"]
-            mapping: dict[str, Any] = _get_mapping(
-                layer, self.config, self.batch, self.lang
-            )
-            attrib_table = (
-                mapping.get("attributes", {}).get(field, {}).get("name", field)
-            )
-            if is_chained:
-                pre_att = f"{shortest}_{field}"
-                sub_field = split_att[2]
-                if is_meta:
-                    line = f"{pre_att}.meta -> '{field}' ->> '{sub_field}' AS {lab}"
-                else:
-                    line = f"{pre_att}.{field} ->> '{sub_field}' AS {lab}"
-                self.r.selects.add(line)
-                field_info = (
-                    cast(dict[str, Any], self.config["layer"])
-                    .get(shortest_layer, {})
-                    .get("attributes", {})
-                    .get(field, {})
-                )
-                field_mapping = (
-                    _get_mapping(
-                        shortest_layer, self.config, self.batch, self.lang or ""
-                    )
-                    .get("attributes", {})
-                    .get(field, {})
-                )
-                field_is_global = "ref" in field_info
-                if field_is_global:
-                    field_key = field_mapping.get("key", field)
-                    field_table = field_mapping.get(
-                        "name", f"global_attributes_{field}"
-                    )
-                    field_formed_table = (
-                        f"{self.schema}.{field_table.lower()} {pre_att}"
-                    )
-                    field_formed_condition = (
-                        f"{shortest}.{field_key}_id = {pre_att}.{field_key}_id"
-                    )
-                    if field_formed_table not in self.r.joins:
-                        self.r.joins[field_formed_table] = True
-                        self.r.conditions.add(field_formed_condition)
-            elif is_meta:
-                line = f"{shortest}.meta ->> '{field}' AS {lab}"
-                self.r.selects.add(line)
-            elif attrs[field].get("type", "") == "text" or "ref" in attrs[field]:
-                formed_join = f"{self.schema}.{attrib_table} {lab}"
-                self.r.joins[formed_join.lower()] = True
-                formed_join_cond = f"{lab}.{field}_id = {shortest}.{field}_id"
-                self.r.conditions.add(formed_join_cond.lower())
-                line = f"{lab}.{field} AS {lab}"
-                self.r.selects.add(line)
-            else:
-                line = f"{shortest}.{attrib_table} AS {lab}"
-                self.r.selects.add(line)
-            self.r.entities.add(lab)
+        # for att in attributes:
+        #     if not isinstance(att, dict) or "attribute" not in att:
+        #         continue
+        #     att_str = cast(dict, att)["attribute"]
+        #     lab = att_str.replace(".", "_").lower().strip()
+        #     split_att = att_str.split(".")
+        #     shortest = split_att[0]
+        #     shortest = self._label_mapping.get(shortest, shortest)
+        #     field = split_att[1]
+        #     layer, _ = self.r.label_layer[shortest]
+        #     layer_attrs = self.conf.config["layer"][layer].get("attributes", {})
+        #     table = _get_table(layer, self.config, self.batch, self.lang)
+        #     # Join shortest table
+        #     all_layer_names = cast(dict[str, Any], self.config.get("layer", {})).keys()
+        #     shortest_layer = self.r.label_layer.get(shortest, ("", {}))[0]
+        #     shortest_table = f"{self.schema}.{table} {shortest}".lower()
+        #     self.r.joins[shortest_table] = (
+        #         None if shortest_layer in all_layer_names else True
+        #     )
+        #     # Proceed
+        #     is_meta = field not in layer_attrs and field in layer_attrs.get("meta", {})
+        #     is_chained = len(split_att) > 2
+        #     conf_layer_info: dict[str, Any] = cast(
+        #         dict[str, Any], self.conf_layer[layer]
+        #     )
+        #     attrs = conf_layer_info["attributes"]
+        #     mapping: dict[str, Any] = _get_mapping(
+        #         layer, self.config, self.batch, self.lang
+        #     )
+        #     attrib_table = (
+        #         mapping.get("attributes", {}).get(field, {}).get("name", field)
+        #     )
+        #     if is_chained:
+        #         pre_att = f"{shortest}_{field}"
+        #         sub_field = split_att[2]
+        #         if is_meta:
+        #             line = f"{pre_att}.meta -> '{field}' ->> '{sub_field}' AS {lab}"
+        #         else:
+        #             line = f"{pre_att}.{field} ->> '{sub_field}' AS {lab}"
+        #         self.r.selects.add(line)
+        #         field_info = (
+        #             cast(dict[str, Any], self.config["layer"])
+        #             .get(shortest_layer, {})
+        #             .get("attributes", {})
+        #             .get(field, {})
+        #         )
+        #         field_mapping = (
+        #             _get_mapping(
+        #                 shortest_layer, self.config, self.batch, self.lang or ""
+        #             )
+        #             .get("attributes", {})
+        #             .get(field, {})
+        #         )
+        #         field_is_global = "ref" in field_info
+        #         if field_is_global:
+        #             field_key = field_mapping.get("key", field)
+        #             field_table = field_mapping.get(
+        #                 "name", f"global_attributes_{field}"
+        #             )
+        #             field_formed_table = (
+        #                 f"{self.schema}.{field_table.lower()} {pre_att}"
+        #             )
+        #             field_formed_condition = (
+        #                 f"{shortest}.{field_key}_id = {pre_att}.{field_key}_id"
+        #             )
+        #             if field_formed_table not in self.r.joins:
+        #                 self.r.joins[field_formed_table] = True
+        #                 self.r.conditions.add(field_formed_condition)
+        #     elif is_meta:
+        #         line = f"{shortest}.meta ->> '{field}' AS {lab}"
+        #         self.r.selects.add(line)
+        #     elif attrs[field].get("type", "") == "text" or "ref" in attrs[field]:
+        #         formed_join = f"{self.schema}.{attrib_table} {lab}"
+        #         self.r.joins[formed_join.lower()] = True
+        #         formed_join_cond = f"{lab}.{field}_id = {shortest}.{field}_id"
+        #         self.r.conditions.add(formed_join_cond.lower())
+        #         line = f"{lab}.{field} AS {lab}"
+        #         self.r.selects.add(line)
+        #     else:
+        #         line = f"{shortest}.{attrib_table} AS {lab}"
+        #         self.r.selects.add(line)
+        #     self.r.entities.add(lab)
 
         functions = cast(list[str], result["functions"])
         filt = cast(JSONObject, result.get("filter", {}))
         made, meta, filter_meta = self._stat_analysis(
             i,
             varname,
-            [a.get("attribute", "") for a in attributes if isinstance(a, dict)],
+            [a for a in attributes if isinstance(a, dict)],
             functions,
             filt,
         )
@@ -595,7 +602,7 @@ WHERE {entity}.char_range && contained_token.char_range
         )
 
         out = f"""
-            res{i} AS ( SELECT
+            res{i} AS ( SELECT DISTINCT
             {i}::int2 AS rstype,
             jsonb_build_array({context}, jsonb_build_array({ents_form}) {select_extra})
         FROM
@@ -738,7 +745,7 @@ WHERE {entity}.char_range && contained_token.char_range
         self,
         i: int,
         label: str,
-        attributes: list[str],
+        attributes: list[dict[str, Any]],
         functions: list[str],
         filt: JSONObject,
     ) -> tuple[str, ResultMetadata, list[dict[str, Any]]]:
@@ -756,11 +763,40 @@ WHERE {entity}.char_range && contained_token.char_range
         else:
             jcounts = " "
         funcstr = " , ".join(functions)
-        fixed: list[str] = []
+        parsed_attributes: list[tuple[str, RefInfo]] = []
         for att in attributes:
-            fix = att.replace(".", "_")
-            fixed.append(fix)
-        nodes = " , ".join(fixed)
+            constraint: Constraint = Constraint(
+                att,
+                "=",  # placeholder,
+                att,  # placeholder
+                "",  # placeholder
+                "",  # placeholder
+                self.conf,
+                "",  # placeholder
+                self.r.label_layer,
+            )
+            # fix = att.replace(".", "_")
+            ref, ref_info = constraint.get_sql_expr(att)
+            for formed_table, formed_conditions in constraint._joins.items():
+                self.r.joins[formed_table] = True
+                conds: set = set()
+                if isinstance(formed_conditions, set):
+                    conds = formed_conditions
+                else:
+                    conds.add(formed_conditions)
+                for c in conds:
+                    if not isinstance(c, str):
+                        continue
+                    self.r.conditions.add(c)
+            for condition in constraint._conditions:
+                self.r.conditions.add(condition)
+            alias = (ref_info.get("meta") or {}).get("str", ref)
+            alias = re.sub("[^a-zA-Z0-9_]", "_", alias)
+            alias = alias.lstrip("_").rstrip("_")
+            self.r.selects.add(f"{ref} AS {alias}")
+            self.r.entities.add(alias)
+            parsed_attributes.append((alias, ref_info))
+        nodes = " , ".join(p for p, _ in parsed_attributes)
         wheres, filter_meta = self._process_filters(filt)
         out = f"""
             res{i} AS ( SELECT
@@ -777,11 +813,14 @@ WHERE {entity}.char_range && contained_token.char_range
                 ) x {wheres} )
         """
         attribs: Attribs = []
-        for att in attributes:
-            lab, feat = att.split(".", 1)
-            lay = self.r.label_layer[lab][0]
+        # for att in attributes:
+        for attr, info in parsed_attributes:
+            # lab, feat = att.split(".", 1)
+            # lay = self.r.label_layer[lab][0]
+            lab = attr.split(".")[-1]
+            lay = info.get("layer", self.r.label_layer.get(lab, ("", None))[0])
             typed = f"{lay}.{lab}"
-            attribs.append({"name": att, "type": typed})
+            attribs.append({"name": attr, "type": typed})
         for func in functions:
             attribs.append({"name": func, "type": "aggregrate"})
         meta: ResultMetadata = {
@@ -821,7 +860,7 @@ WHERE {entity}.char_range && contained_token.char_range
             n=self._n,
             label_layer=self.r.label_layer,
             entities=self.r.entities,
-            part_of=cast(str | None, rest.get("partOf", None)),
+            part_of=cast(list[dict[str, str]], rest.get("partOf", [])),
             set_objects=self.r.set_objects,
             allow_any=True,
         )
@@ -979,15 +1018,27 @@ WHERE {entity}.char_range && contained_token.char_range
                 "",
             )
             # Now go through the chain of center's "partOf"s and choose the highest parent segment
-            part_of: str = cast(str, token_meta[1].get("partOf", ""))
-            while part_of and part_of in self.r.label_layer:
-                parent_meta = self.r.label_layer[part_of]
-                if parent_meta[0].lower() == self.segment.lower():
-                    depth = cast(int, parent_meta[1].get("_depth", 999))
-                    if depth < seg_depth:
-                        seg_lab = part_of
-                        seg_depth = depth
-                part_of = cast(str, parent_meta[1].get("partOf", ""))
+            part_ofs: list[dict[str, str]] = cast(
+                list[dict[str, str]], token_meta[1].get("partOf", [])
+            )
+            while True:
+                if not part_ofs:
+                    break
+                new_part_ofs: list[dict[str, str]] = []
+                for part in part_ofs:
+                    part_of = next(x for x in part.values())
+                    if part_of not in self.r.label_layer:
+                        continue
+                    parent_meta = self.r.label_layer[part_of]
+                    if parent_meta[0].lower() == self.segment.lower():
+                        depth = cast(int, parent_meta[1].get("_depth", 999))
+                        if depth < seg_depth:
+                            seg_lab = part_of
+                            seg_depth = depth
+                    new_part_ofs += cast(
+                        list[dict[str, str]], parent_meta[1].get("partOf", [])
+                    )
+                part_ofs = new_part_ofs
 
         token_id = f"{self.token}_id"
         segment_id = f"{self.segment}_id"

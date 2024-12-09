@@ -228,7 +228,9 @@ def _query(
 
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
-    if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
+    if job.meta["total_results_so_far"] >= first_job.meta.get(
+        "total_results_so_far", 0
+    ):
         first_job.meta["latest_stats_message"] = msg_id
 
     if "_sent_jobs" not in first_job.meta:
@@ -451,7 +453,7 @@ def _sentences(
         status = "partial"
 
     if status == "finished" and more_data:
-        more_data = base.meta["total_results_so_far"] >= total_requested
+        more_data = base.meta.get("total_results_so_far", 0) >= total_requested
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:

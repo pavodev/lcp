@@ -198,6 +198,7 @@ async def query(
     request: web.Request,
     manual: JSONObject | None = None,
     app: web.Application | None = None,
+    api: bool = False,
 ) -> web.Response:
     """
     Main query endpoint: generate and queue up corpus queries
@@ -228,7 +229,15 @@ async def query(
         qi = await QueryIteration.from_manual(manual, app)
     else:
         # request is from the frontend, most likely a new query...
-        qi = await QueryIteration.from_request(request)
+        request_data = await request.json()
+        app = request.app
+        if api:
+            request_data["room"] = "api"
+            corpus_id: int = request_data.get("corpora", [0])[0]
+            request_data["to_export"] = request_data.get(
+                "to_export", {"format": "dump", "config": app["config"][str(corpus_id)]}
+            )
+        qi = await QueryIteration.from_request(request_data, app, api=api)
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
@@ -244,6 +253,8 @@ async def query(
                 ready_to_export = len(qi.done_batches) == len(
                     qi.all_batches
                 ) or qi.to_export.get("preview")
+                print("all batches", qi.all_batches)
+                print("done batches", qi.done_batches)
                 if ready_to_export:
                     await export(qi.app, qi.to_export, qi.first_job)
                 # elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):

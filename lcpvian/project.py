@@ -2,9 +2,18 @@
 project.py: endpoints for project management
 """
 
+import os
 from aiohttp import web
 
+try:
+    from aiohttp import ClientSession
+except ImportError:
+    from aiohttp.client import ClientSession
+
 from .authenticate import Authentication
+from .typed import JSONObject
+
+AIO_PORT = os.getenv("AIO_PORT", 9090)
 
 
 async def project_create(request: web.Request) -> web.Response:
@@ -77,3 +86,15 @@ async def project_users_invitation_remove(request: web.Request) -> web.Response:
     invitation_id: str = request.match_info["invitation"]
     res = await authenticator.project_users_invitation_remove(request, invitation_id)
     return web.json_response(res)
+
+
+async def refresh_config() -> JSONObject:
+    """
+    Helper to force a refresh of the configuration
+    """
+    url = f"http://localhost:{AIO_PORT}/config"
+    headers: JSONObject = {}
+    async with ClientSession() as session:
+        async with session.post(url, headers=headers) as resp:
+            result: JSONObject = await resp.json()
+            return result

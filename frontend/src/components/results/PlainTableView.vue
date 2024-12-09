@@ -22,6 +22,8 @@
           v-for="(item, resultIndex) in results"
           :key="`tr-results-${resultIndex}`"
           :data-index="resultIndex"
+          @mousemove="hoverResultLine(resultIndex)"
+          @mouseleave="hoverResultLine(null)"
         >
           <td scope="row" class="results">
             <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
@@ -170,7 +172,16 @@
                 <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
                   <tr v-if="allowedMetaColums[layer].includes(meta_key)">
                     <td>{{ meta_key }}</td>
-                    <td v-html="meta_render(meta_value)"></td>
+                    <td v-if="(corpora.corpus.layer[layer].attributes[meta_key]||{}).type == 'image'">
+                      <span
+                        data-bs-toggle="modal"
+                        :data-bs-target="`#imageModal${randInt}`"
+                        @click="showImage(meta_value, layer)"
+                        v-html="meta_value"
+                      >
+                      </span>
+                    </td>
+                    <td v-else v-html="meta_render(meta_value, layer, meta_key)"></td>
                   </tr>
                 </template>
               </table>
@@ -206,6 +217,46 @@
                 :languages="languages"
                 :key="modalIndex"
                 v-if="modalVisible"
+              />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button
+              type="button"
+              class="btn btn-secondary"
+              data-bs-dismiss="modal"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div
+      class="modal fade modal-xl"
+      :id="`imageModal${randInt}`"
+      tabindex="-1"
+      aria-labelledby="imageModalLabel"
+      aria-hidden="true"
+    >
+      <div class="modal-dialog modal-full">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="imageModalLabel">Image Viewer</h5>
+            <button
+              type="button"
+              class="btn-close"
+              data-bs-dismiss="modal"
+              aria-label="Close"
+            ></button>
+          </div>
+          <div class="modal-body text-start">
+            <div class="modal-body-content">
+              <ImageViewer
+                :src="image.src"
+                :name="image.name"
+                :boxes="image.boxes"
+                v-if="image"
               />
             </div>
           </div>
@@ -363,8 +414,9 @@ span.action-button:hover {
 </style>
 
 <script>
-import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
+import ImageViewer from "@/components/ImageViewer.vue";
 import PaginationComponent from "@/components/PaginationComponent.vue";
+import ResultsDetailsModalView from "@/components/results/DetailsModalView.vue";
 import { useNotificationStore } from "@/stores/notificationStore";
 import Utils from "@/utils.js";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
@@ -405,7 +457,7 @@ class TokenToDisplay {
 
 export default {
   name: "ResultsPlainTableView",
-  emits: ["updatePage"],
+  emits: ["updatePage", "hoverResultLine"],
   props: [
     "data",
     "sentences",
@@ -445,9 +497,11 @@ export default {
       groups: this.data ? this.getGroups(this.data[0], true) : [],
       randInt: Math.floor(Math.random() * 1000),
       playIndex: -1,
+      image: null
     };
   },
   components: {
+    ImageViewer,
     ResultsDetailsModalView,
     PaginationComponent,
     FontAwesomeIcon
@@ -518,6 +572,43 @@ export default {
     showModal(index) {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
       this.modalVisible = true;
+    },
+    showImage(filename, imageLayer) {
+      const boxes = [];
+      const colors = ["green","blue","orange","pink","brown"];
+      let image_offset = [];
+      let color = 1;
+      for (let [layer, props] of Object.entries(this.currentMeta||{})) {
+        if (imageLayer && imageLayer == layer) {
+          image_offset = props.xy_box.slice(0,2);
+          continue;
+        }
+        if (!this.corpora.corpus.layer[layer].anchoring.location)
+          continue;
+        if (!props.xy_box)
+          continue;
+        boxes.push([...props.xy_box, colors[color % colors.length]]);
+        color++;
+      }
+      for (let n = 0; image_offset.length && n < boxes.length; n++) {
+        boxes[n][0] -= image_offset[0];
+        boxes[n][1] -= image_offset[1];
+        boxes[n][2] -= image_offset[0];
+        boxes[n][3] -= image_offset[1];
+      }
+      this.image = {
+        name: filename.replace(/\.[^.]+$/,""),
+        src: this.baseMediaUrl + filename,
+        boxes: boxes
+      };
+    },
+    hoverResultLine(resultIndex) {
+      let line = null;
+      if (resultIndex !== null) {
+        const adjustedIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
+        line = this.data[adjustedIndex]
+      }
+      this.$emit("hoverResultLine", line);
     },
     updatePage(currentPage) {
       this.currentPage = currentPage;

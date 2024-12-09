@@ -1,6 +1,22 @@
 from typing import Any
-
+from lark import Lark
 from lark.lexer import Token
+
+import os
+import re
+
+PARSER_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "parser"))
+PARSER_FILES = [os.path.join(PARSER_PATH, f) for f in sorted(os.listdir(PARSER_PATH))]
+
+cqp_grammar_fn: str = next(
+    (f for f in PARSER_FILES if re.match(r".*cqp[^/]*\.lark$", f)), ""
+)
+assert os.path.isfile(
+    cqp_grammar_fn
+), f"Could not find a valid CQP lark file in the current directory"
+cqp_grammar: str = open(cqp_grammar_fn).read()
+
+cqp_parser = Lark(cqp_grammar, parser="earley", start="top")
 
 
 def get_leaf_value(node: Any) -> str:
@@ -88,28 +104,19 @@ def process_brackets(node: Any) -> dict:
         if at == "word":
             at = "form"  # hack
         value: str = next(c for c in query.children if isinstance(c, Token)).value
-        comparison_type: str = (
-            "stringComparison"
-            if nget(query, "modifier")
-            and get_leaf_value(nget(query, "modifier")) == "%l"
-            else "regexComparison"
-        )
-        if comparison_type == "regexComparison":
-            value = f"/^{value[1:-1]}$/"
+        right: dict[str, Any] = {"regex": {"pattern": value[1:-1]}}
+        if nget(query, "modifier") and get_leaf_value(nget(query, "modifier")) == "%l":
+            right = {"string": value[1:-1]}
         return {
-            "comparison": {
-                "left": {"entity": at},
-                "operator": op,
-                comparison_type: value,
-            }
+            "comparison": {"left": {"reference": at}, "comparator": op, "right": right}
         }
 
     elif section:
         processed_section: dict
         if nget(section, "not_"):
             processed_section = {
-                "logicalOpUnary": {
-                    "operator": "NOT",
+                "logicalExpression": {
+                    "unaryOperator": "NOT",
                     "args": [process_brackets(section)],
                 }
             }
@@ -120,8 +127,8 @@ def process_brackets(node: Any) -> dict:
             disj: Any = nget(vp, "or_")
             operator: str = "OR" if disj else "AND"
             return {
-                "logicalOpNAry": {
-                    "operator": operator,
+                "logicalExpression": {
+                    "naryOperator": operator,
                     "args": [processed_section, process_brackets(vp)],
                 }
             }
@@ -131,11 +138,11 @@ def process_brackets(node: Any) -> dict:
     return {}
 
 
-def process_node(
-    node: Any, members: list, conf: dict[str, Any] = {"token": "Token"}
-) -> None:
+def process_node(node: Any, members: list, conf: dict[str, Any] = {}) -> None:
 
-    token: dict[str, Any] = {"unit": {"layer": conf["token"]}}
+    token_layer: str = conf.get("firstClass", {}).get("token", "Token")
+
+    token: dict[str, Any] = {"unit": {"layer": token_layer}}
     range: list[int] = [1, 1]
     label: Any = nget(node, "label")
     quantifier: Any = None
@@ -181,13 +188,14 @@ def process_node(
 
         if string_node:
             comp: str = get_leaf_value(string_node)
-            comp = f"/^{comp[1:-1]}$/"  # replace "s with /s
+            # comp = f"/^{comp[1:-1]}$/"  # replace "s with /s
+            comp = comp[1:-1]
             token["unit"]["constraints"] = [
                 {
                     "comparison": {
-                        "left": {"entity": "form"},
-                        "operator": "=",
-                        "regexComparison": comp,
+                        "left": {"reference": "form"},
+                        "comparator": "=",
+                        "right": {"regex": {"pattern": comp}},
                     }
                 }
             ]
@@ -219,14 +227,18 @@ def process_node(
             )
 
 
-# cqp is a Lark tree
-def cqp_to_json(cqp: Any, conf: dict[str, Any] | None = None) -> dict:
+def cqp_to_json(cqp: str, conf: dict[str, Any] = {}) -> dict:
+    """
+    Take a CQP string and generate just the sequence (or single token) part
+    """
+
+    cqp_parsed: Any = cqp_parser.parse(cqp)
 
     members: list = []
-    nodes = cqp.children[0].children  # expr > _
+    nodes = cqp_parsed.children[0].children  # expr > _
 
     for n in nodes:
-        process_node(n, members)
+        process_node(n, members, conf=conf)
 
     out: dict = {}
     if len(members) == 1:
@@ -235,3 +247,29 @@ def cqp_to_json(cqp: Any, conf: dict[str, Any] | None = None) -> dict:
         out = {"sequence": {"members": members}}
 
     return out
+
+
+def full_cqp_to_json(cqp: str, conf: dict[str, Any] = {}):
+    """
+    Take a CQP string and generate the query+result JSON
+    """
+    query_json = cqp_to_json(cqp, conf)
+
+    seg_layer: str = conf.get("firstClass", {}).get("segment", "Segment")
+    seg_label = "s"
+
+    label = "match"
+    obj_label = "sequence" if "sequence" in query_json else "unit"
+    obj = query_json[obj_label]
+    obj["label"] = label
+    obj["partOf"] = [{"partOfStream": seg_label}]
+
+    res = {
+        "label": "matches",
+        "resultsPlain": {"context": ["s"], "entities": ["match"]},
+    }
+
+    return {
+        "query": [{"unit": {"layer": seg_layer, "label": seg_label}}, {obj_label: obj}],
+        "results": [res],
+    }

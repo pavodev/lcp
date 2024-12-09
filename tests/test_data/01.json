@@ -24,13 +24,21 @@
     {
       "unit": {
         "layer": "Segment",
-        "partOf": "d",
+        "partOf": [
+          {
+            "partOfStream": "d"
+          }
+        ],
         "label": "s"
       }
     },
     {
       "sequence": {
-        "partOf": "s",
+        "partOf": [
+          {
+            "partOfStream": "s"
+          }
+        ],
         "label": "seq",
         "members": [
           {

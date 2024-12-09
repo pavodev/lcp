@@ -107,7 +107,7 @@ class Member:
                         "repetition": {"min": "0", "max": str_max},
                         "members": obj["sequence"].get("members", []),
                         "label": obj["sequence"].get("label"),
-                        "partOf": obj["sequence"].get("partOf", ""),
+                        "partOf": obj["sequence"].get("partOf", []),
                     }
                 }
                 optional_sequence: Sequence = Sequence(

@@ -8,10 +8,10 @@ WITH RECURSIVE fixed_parts AS
      (SELECT Segment_id
       FROM sparcling1.fts_vector_enrest vec
       WHERE vec.vector @@ E' 3VERB <1>  3DET <1> ( 3NOUN &  6NP)') AS fts_vector_s
-   CROSS JOIN sparcling1.token_enrest t1
    CROSS JOIN sparcling1.session_en e
    CROSS JOIN sparcling1.session_alignment e_aligned
    CROSS JOIN sparcling1.segment_enrest s
+   CROSS JOIN sparcling1.token_enrest t1
    CROSS JOIN sparcling1.token_enrest t2
    CROSS JOIN sparcling1.token_enrest t3
    CROSS JOIN sparcling1.lemma_en t1_lemma
@@ -43,13 +43,9 @@ WITH RECURSIVE fixed_parts AS
           gather.t2 AS t2,
           gather.t3 AS t3
    FROM gather),
-               res0 AS
-  (SELECT 0::int2 AS rstype,
-          jsonb_build_array(count(*))
-   FROM match_list) ,
                res1 AS
-  (SELECT 1::int2 AS rstype,
-          jsonb_build_array(s, jsonb_build_array(t1, t2, t3))
+  (SELECT DISTINCT 1::int2 AS rstype,
+                   jsonb_build_array(s, jsonb_build_array(t1, t2, t3))
    FROM match_list) ,
                res2 AS
   (SELECT 2::int2 AS rstype,
@@ -58,7 +54,11 @@ WITH RECURSIVE fixed_parts AS
      (SELECT t1_lemma ,
              count(*) AS frequency
       FROM match_list
-      GROUP BY t1_lemma) x)
+      GROUP BY t1_lemma) x) ,
+               res0 AS
+  (SELECT 0::int2 AS rstype,
+          jsonb_build_array(count(match_list.*))
+   FROM match_list)
 SELECT *
 FROM res0
 UNION ALL
@@ -67,4 +67,3 @@ FROM res1
 UNION ALL
 SELECT *
 FROM res2 ;
-

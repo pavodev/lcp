@@ -2,6 +2,7 @@
 api.py: tools used on the command line for showing corpora, running queries etc.
 """
 
+import asyncio
 import json
 import os
 
@@ -10,10 +11,16 @@ try:
 except ImportError:
     from aiohttp.client import ClientSession
 
+from aiohttp import web
+from rq.job import Job
+
+from .query import query as submit_query
 from .typed import JSONObject
+from .utils import Timer
 
 
 AIO_PORT = os.getenv("AIO_PORT", 9090)
+QUERY_TIMEOUT = os.getenv("QUERY_TIMEOUT", 1000)
 
 
 async def corpora(app_type: str = "all") -> JSONObject:
@@ -72,13 +79,54 @@ async def query(corpus: int, query: str) -> None:
                     return None
 
 
-async def refresh_config() -> JSONObject:
-    """
-    Helper to force a refresh of the configuration
-    """
-    url = f"http://localhost:{AIO_PORT}/config"
-    headers: JSONObject = {}
-    async with ClientSession() as session:
-        async with session.post(url, headers=headers) as resp:
-            result: JSONObject = await resp.json()
-            return result
+async def api_query(request: web.Request) -> web.Response:
+    res = await submit_query(request, api=True)
+    res_json = json.loads(res.text)
+    job_id = res_json.get("job", "")
+    try:
+        finish_job_timer = Timer(QUERY_TIMEOUT)
+        while True:
+            assert not finish_job_timer.elapsed(), TimeoutError(
+                "Could not complete the query in time"
+            )
+            if Job.fetch(job_id, request.app["redis"]).is_finished:
+                break
+            await asyncio.sleep(5)
+
+        export_job_timer = Timer(QUERY_TIMEOUT)
+        while True:
+            assert not export_job_timer.elapsed(), TimeoutError(
+                "Could not run export job in time"
+            )
+            export_job = next(
+                (
+                    j
+                    for j in [
+                        Job.fetch(jid, request.app["redis"])
+                        for jid in request.app[
+                            "background"
+                        ].started_job_registry.get_job_ids()
+                    ]
+                    + [
+                        Job.fetch(jid, request.app["redis"])
+                        for jid in request.app[
+                            "background"
+                        ].finished_job_registry.get_job_ids()
+                    ]
+                    if job_id in j.args
+                ),
+                None,
+            )
+            if export_job and export_job.is_finished:
+                break
+            await asyncio.sleep(5)
+
+        res_str = ""
+        with open(export_job.args[0], "r") as export_file:
+            while t := export_file.read():
+                res_str += t
+
+    except TimeoutError as err:
+        return web.json_response({"error": err.strerror, "status": 408})
+
+    return web.json_response({"results": res_str})
