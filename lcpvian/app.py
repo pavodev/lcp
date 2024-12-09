@@ -28,6 +28,16 @@ from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 from rq.registry import FailedJobRegistry
 
+# We should load env before importing anything else
+from .utils import (
+    TRUES,
+    FALSES,
+    LCPApplication,
+    handle_timeout,
+    load_env,
+)
+load_env()
+
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
@@ -48,18 +58,9 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import (
-    TRUES,
-    FALSES,
-    LCPApplication,
-    handle_timeout,
-    load_env,
-)
 from .lama import handle_lama_error
 from .video import video
 
-
-load_env()
 
 # this is all just a way to find out if utils (and therefore the codebase) is a c extension
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
