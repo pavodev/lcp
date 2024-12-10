@@ -645,7 +645,7 @@ class CTProcessor:
                     attr,
                     [
                         Column(norm_col, "int", primary_key=True),
-                        Column(attr, TYPES_MAP.get("dict", "dict"), unique=True),
+                        Column(attr, TYPES_MAP.get("dict", "jsonb"), unique=True),
                     ],
                     parent=entity_name.lower(),
                 )
