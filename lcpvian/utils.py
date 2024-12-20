@@ -20,6 +20,7 @@ from datetime import date, datetime
 from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq.registry import FinishedJobRegistry
 
 from aiohttp import web
 
@@ -600,6 +601,41 @@ def _get_associated_query_job(
         depends_on = depends_on[-1]
     depended = Job.fetch(depends_on, connection=connection)
     return depended
+
+
+def _get_all_jobs_from_hash(
+    hash: str,
+    connection: "RedisConnection[bytes]",
+) -> tuple[list[Job], list[Job], list[Job]]:
+    """
+    Helper to get all the query, sent and meta jobs from a hash
+    """
+    query_jobs: list[Job] = []
+    sent_jobs: list[Job] = []
+    meta_jobs: list[Job] = []
+
+    finished_jobs = [
+        Job.fetch(jid, connection=connection)
+        for registry in [
+            FinishedJobRegistry(name=x, connection=connection)
+            for x in ("query", "background")
+        ]
+        for jid in registry.get_job_ids()
+    ]
+    for j in finished_jobs:
+        j_kwargs = cast(dict, j.kwargs)
+        if j_kwargs.get("first_job") != hash and j.id != hash:
+            continue
+        if j_kwargs.get("meta_query"):
+            meta_jobs.append(j)
+        elif j_kwargs.get("sentences_query"):
+            sent_jobs.append(j)
+        else:
+            query_jobs.append(j)
+    query_jobs_sorted = sorted(
+        query_jobs, key=lambda j: len(cast(dict, j.kwargs).get("done_batches", []))
+    )
+    return (query_jobs_sorted, sent_jobs, meta_jobs)
 
 
 def _sanitize_corpus_name(corpus_name: str) -> str:
