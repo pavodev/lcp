@@ -14,7 +14,7 @@ except ImportError:
 from aiohttp import web
 from rq.job import Job
 
-from .export_xml import export
+from .exporter_xml import ExporterXml
 from .query import query as submit_query
 from .typed import JSONObject
 from .utils import Timer
@@ -84,7 +84,9 @@ async def api_query(request: web.Request) -> web.Response:
     req_json = await request.json()
     if hash := req_json.get("export", ""):
         config = request.app["config"]
-        await export(hash, request.app["redis"], config)
+        # await export(hash, request.app["redis"], config)
+        exporter = ExporterXml(hash, request.app["redis"], config)
+        await exporter.export()
         return web.json_response({"status": 200, "message": "export complete"})
     res = await submit_query(request, api=True)
     res_json = json.loads(res.text)

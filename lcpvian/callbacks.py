@@ -30,6 +30,8 @@ from .convert import (
     _apply_filters,
     _get_all_sents,
 )
+from .exporter import Exporter
+from .exporter_xml import ExporterXml
 from .typed import (
     BaseArgs,
     Batch,
@@ -834,7 +836,18 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
-    if job.args and isinstance(job.args[0], str) and os.path.exists(job.args[0]):
+    job_args = cast(list, job.args)
+    if len(job_args) < 3:
+        return None
+    hash, _, format = job_args
+    assert format in ("dump", "xml"), TypeError(
+        f"Export format {format} is not supported"
+    )
+    exporter_class = Exporter
+    if format == "xml":
+        exporter_class = ExporterXml
+    filename = exporter_class.get_dl_path_from_hash(hash)
+    if filename and os.path.exists(filename):
         j_kwargs: dict = cast(dict, job.kwargs)
         dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
         user = j_kwargs.get("user", dep_kwargs.get("user", ""))
@@ -846,7 +859,8 @@ def _export_complete(
                 "room": room,
                 "action": "export_link",
                 "msg_id": msg_id,
-                "fn": os.path.basename(job.args[0]),
+                "format": format,
+                "hash": hash,
             }
             _publish_msg(connection, jso, msg_id)
     return None

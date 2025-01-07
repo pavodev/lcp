@@ -457,20 +457,12 @@ async def _handle_query(
             await export(app, to_export, tjk.get("first_job", ""))
 
 
-async def _ait(self: WSMessage) -> WSMessage:
-    """
-    Just a hack to fix aiohttp websocket response
-    """
-    return self
-
-
 async def sock(request: web.Request) -> web.WebSocketResponse:
     """
     Socket has to handle incoming messages, but also send a message when
     queries have finished processing
     """
     ws = web.WebSocketResponse(autoping=True, heartbeat=17)
-    # setattr(ws, "__aiter__", _ait)
 
     await ws.prepare(request)
 

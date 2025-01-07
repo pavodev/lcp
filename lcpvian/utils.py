@@ -884,13 +884,6 @@ def _publish_msg(
     return None
 
 
-def results_dir_for_corpus(config: Any) -> str:
-    dir = os.path.join(RESULTS_DIR, config.get("schema_path", "anonymous"))
-    if not os.path.exists(dir):
-        os.mkdir(dir)
-    return dir
-
-
 def hasher(arg):
     str_arg = json.dumps(arg)
     return md5(str_arg.encode("utf-8")).digest().hex()

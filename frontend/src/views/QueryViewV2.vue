@@ -710,6 +710,25 @@
               Launch export
             </button> -->
           </div>
+          <div class="modal-body text-start">
+            <label class="form-label">Pseudo-XML</label>
+            <button
+              type="button"
+              @click="exportResults('xml', /*download=*/true, /*preview=*/true)"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Download preview
+            </button>
+            <!-- <button
+              type="button"
+              @click="exportResults('plain')"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Launch export
+            </button> -->
+          </div>
           <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
             <label class="form-label">Swissdox</label>
             <button
@@ -1502,8 +1521,7 @@ export default {
         } else if (data["action"] == "export_link") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
-          const {schema_path} = this.selectedCorpora.corpus;
-          useCorpusStore().fetchExport(schema_path, data.fn);
+          useCorpusStore().fetchExport(data.hash, data.format);
           useNotificationStore().add({
             type: "success",
             text: "Initiated export download"
@@ -1709,7 +1727,8 @@ export default {
       const to_export = {};
       to_export.format = {
         'plain':'dump',
-        'swissdox':'swissdox'
+        'swissdox':'swissdox',
+        'xml': 'xml'
       }[format];
       to_export.preview = preview;
       to_export.download = download;

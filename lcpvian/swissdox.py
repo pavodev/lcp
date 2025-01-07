@@ -67,7 +67,7 @@ async def export_swissdox(
     **kwargs,
 ) -> Job:
     """
-    Schedule jobs to fetch all the prepared segments and named entities associated of the matched documents
+    Schedule jobs to fetch all the prepared segments and named entities associated with the matched documents
     Return a job depending on the former to execute _swissdox_export (see jobfuncs)
     """
     # conn = app["redis"]
