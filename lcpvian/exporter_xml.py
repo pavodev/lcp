@@ -49,53 +49,80 @@ class ExporterXml(Exporter):
             return
 
         with open(os.path.join(xml_folder, "_kwic.xml"), "w") as output:
-            for info in kwic_info:
-                if (n := info.get("res_index", 0)) <= 0:
-                    continue
-                name: str = info.get("name", "")
-                typ: str = info.get("type", "")
-                info_attrs: list[dict] = info.get("attributes", [])
-                output.write(f"\n<result type='{typ}' name='{name}'>")
+            # for info in kwic_info:
+            #     if (n := info.get("res_index", 0)) <= 0:
+            #         continue
+            #     name: str = info.get("name", "")
+            #     typ: str = info.get("type", "")
+            #     info_attrs: list[dict] = info.get("attributes", [])
+            #     output.write(f"\n<result type='{typ}' name='{name}'>")
 
-                for query_job in self._query_jobs:
-                    sentence_job: Job = next(
-                        j
-                        for j in self._sentence_jobs
-                        if cast(dict, j.kwargs).get("depends_on") == query_job.id
-                    )
-                    for result_n, result in query_job.result:
-                        if result_n != n:
-                            continue
-                        sentence_id = result[0]
-                        sid, s_offset, s_tokens = next(
-                            r for r in sentence_job.result if str(r[0]) == sentence_id
-                        )
-                        output.write(f"\n    <u id='{sid}'>")
-                        for n_token, token in enumerate(s_tokens):
-                            v = token[0]
-                            token_id = s_offset + n_token
-                            str_args = [
-                                f"arg_{ta_n}={xmlattr(ta_v)}"
-                                for ta_n, ta_v in enumerate(token)
-                                if ta_n > 0
-                            ]
-                            str_args.append(f"id='{token_id}'")
-                            if (
-                                n_attr := next(
-                                    (
-                                        match_n
-                                        for match_n, match_id in enumerate(result[1])
-                                        if match_id == token_id
-                                    ),
-                                    None,
-                                )
-                            ) is not None:
-                                label = info_attrs[1]["data"][n_attr].get(
-                                    "name", f"match_{n_attr}"
-                                )
-                                str_args.append(f"match_label={xmlattr(label)}")
-                            output.write(f"\n        <w {' '.join(str_args)}>{v}</w>")
-                        output.write(f"\n    </u>")
+            #     for query_job in self._query_jobs:
+            #         sentence_job: Job = next(
+            #             j
+            #             for j in self._sentence_jobs
+            #             if cast(dict, j.kwargs).get("depends_on") == query_job.id
+            #         )
+            #         for result_n, result in query_job.result:
+            #             if result_n != n:
+            #                 continue
+            #             sentence_id = result[0]
+            #             sid, s_offset, s_tokens = next(
+            #                 r for r in sentence_job.result if str(r[0]) == sentence_id
+            #             )
+            #             output.write(f"\n    <u id='{sid}'>")
+            #             for n_token, token in enumerate(s_tokens):
+            #                 v = token[0]
+            #                 token_id = s_offset + n_token
+            #                 str_args = [
+            #                     f"arg_{ta_n}={xmlattr(ta_v)}"
+            #                     for ta_n, ta_v in enumerate(token)
+            #                     if ta_n > 0
+            #                 ]
+            #                 str_args.append(f"id='{token_id}'")
+            #                 if (
+            #                     n_attr := next(
+            #                         (
+            #                             match_n
+            #                             for match_n, match_id in enumerate(result[1])
+            #                             if match_id == token_id
+            #                         ),
+            #                         None,
+            #                     )
+            #                 ) is not None:
+            #                     label = info_attrs[1]["data"][n_attr].get(
+            #                         "name", f"match_{n_attr}"
+            #                     )
+            #                     str_args.append(f"match_label={xmlattr(label)}")
+            #                 output.write(f"\n        <w {' '.join(str_args)}>{v}</w>")
+            #             output.write(f"\n    </u>")
+            #     output.write(f"\n</result>")
+            last_kwic_name = ""
+            for kwic_line in self.kwic_lines():
+                name, segment, tokens = (
+                    kwic_line.name,
+                    kwic_line.segment,
+                    kwic_line.tokens,
+                )
+                if name != last_kwic_name:
+                    if last_kwic_name:
+                        output.write(f"\n</result>")
+                    output.write(f"\n<result type='plain' name='{name}'>")
+                    last_kwic_name = name
+
+                output.write(f"\n    <u id='{segment.id}'>")
+                n_match = 0
+                for token in tokens:
+                    str_args = [
+                        f"{ta_n}={xmlattr(ta_v)}"
+                        for ta_n, ta_v in token.attributes.items()
+                    ]
+                    str_args.append(f"id='{token.id}'")
+                    if token.match_label:
+                        str_args.append(f"match_label={xmlattr(token.match_label)}")
+                    output.write(f"\n        <w {' '.join(str_args)}>{token.form}</w>")
+                output.write(f"\n    </u>")
+            if last_kwic_name:
                 output.write(f"\n</result>")
 
     async def non_kwic(self) -> None:

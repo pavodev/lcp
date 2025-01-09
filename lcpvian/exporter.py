@@ -2,6 +2,7 @@ import json
 import os
 
 from asyncio import sleep
+from collections.abc import Generator
 from redis import Redis as RedisConnection
 from rq.job import Job
 from typing import Any, cast
@@ -150,6 +151,37 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
+class Token:
+    """
+    Private class representing a token
+    """
+
+    id: int
+    form: str
+    match_label: str
+    attributes: dict[str, Any]
+
+
+class Segment:
+    """
+    Private class representing a segment
+    """
+
+    id: int
+
+
+class KwicLine:
+    """
+    A KWIC line has tokens (including hits) and is attached to a segment
+    It has a name (specified by the query)
+    """
+
+    tokens: list[Token]
+    segment: Segment
+    meta: dict[str, Any]
+    name: str
+
+
 class Exporter:
 
     def __init__(
@@ -186,6 +218,72 @@ class Exporter:
                 {**r, "res_index": n} for n, r in enumerate(results_info, start=1)
             ]
         return self._results_info
+
+    def kwic_lines(self) -> Generator[KwicLine, None, None]:
+        kwic_info = [r for r in self.results_info if r.get("type") == "plain"]
+        for info in kwic_info:
+            if (n := info.get("res_index", 0)) <= 0:
+                continue
+            name: str = info.get("name", "")
+            info_attrs: list[dict] = info.get("attributes", [])
+
+            for query_job in self._query_jobs:
+                sentence_job: Job = next(
+                    j
+                    for j in self._sentence_jobs
+                    if cast(dict, j.kwargs).get("depends_on") == query_job.id
+                )
+                for result_n, result in query_job.result:
+                    if result_n != n:
+                        continue
+                    sentence_id = result[0]
+                    sid, s_offset, s_tokens = next(
+                        r for r in sentence_job.result if str(r[0]) == sentence_id
+                    )
+                    segment: Segment = Segment(**{"sid": sid})
+                    tokens: list[Token] = []
+                    for n_token, token in enumerate(s_tokens):
+                        v = token[0]
+                        token_id = s_offset + n_token
+                        token_args = {
+                            f"arg_{ta_n}": ta_v
+                            for ta_n, ta_v in enumerate(token)
+                            if ta_n > 0
+                        }
+                        token_args["id"] = token_id
+                        match_label = ""
+                        if (
+                            n_attr := next(
+                                (
+                                    match_n
+                                    for match_n, match_id in enumerate(result[1])
+                                    if match_id == token_id
+                                ),
+                                None,
+                            )
+                        ) is not None:
+                            match_label = info_attrs[1]["data"][n_attr].get(
+                                "name", f"match_{n_attr}"
+                            )
+
+                        tokens.append(
+                            Token(
+                                **{
+                                    "id": token_id,
+                                    "form": v,
+                                    "match_label": match_label,
+                                    "attributes": token_args,
+                                }
+                            )
+                        )
+                    yield KwicLine(
+                        **{
+                            "segment": segment,
+                            "tokens": tokens,
+                            "meta": {},
+                            "name": name,
+                        }
+                    )
 
     async def kwic(self) -> None:
         # Write KWIC results
