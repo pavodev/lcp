@@ -17,13 +17,22 @@ EXPORT_TTL = 5000
 # See at the bottom for the definition of the class Export
 
 
-async def exporter(hash: str, config: dict[str, Any], format: str, **kwargs) -> None:
-    connection = get_current_connection()
+def get_exporter_class(format: str) -> type[Exporter]:
+    assert format in ("dump", "xml"), TypeError(
+        f"The export format {format} is not supported"
+    )
     exp_class = Exporter
     if format == "xml":
         exp_class = ExporterXml
-    x = exp_class(hash, connection, config)
-    await x.export()
+    return exp_class
+
+
+async def exporter(
+    hash: str, config: dict[str, Any], format: str, partition: str = "", **kwargs
+) -> None:
+    connection = get_current_connection()
+    exp_class = get_exporter_class(format)
+    await exp_class(hash, connection, config, partition).export()
 
 
 async def export(app: web.Application, payload: JSONObject, first_job_id: str) -> Job:
@@ -63,24 +72,30 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             },
         )
     else:
-        assert export_format in ("dump", "xml"), TypeError(
-            f"The export format {export_format} is not supported"
-        )
         rest: dict[str, Any] = {}
         if depends_on:
             print("Scheduled dump export depending on", depends_on)
             rest = {"depends_on": depends_on}
+        hash: str = first_job.id
+        exporter_class = get_exporter_class(cast(str, export_format))
+        filename: str = exporter_class.get_dl_path_from_hash(hash)
+        partition: str = ""
+        languages: list[str] = cast(dict, first_job.kwargs).get("languages", [])
+        partitions: dict = cast(dict, payload["config"]).get("partitions", {})
+        if languages and languages[0] in partitions.get("values", []):
+            partition = languages[0]
         job = app["background"].enqueue(
             exporter,
             on_success=Callback(_export_complete, EXPORT_TTL),
             on_failure=Callback(_general_failure, EXPORT_TTL),
             result_ttl=EXPORT_TTL,
             job_timeout=EXPORT_TTL,
-            args=(first_job.id, corpus_conf, export_format),
+            args=(hash, corpus_conf, export_format, partition),
             kwargs={
                 "download": payload.get("download", False),
                 "room": room,
                 "user": user,
+                "filename": filename,
             },
             **rest,
         )
@@ -110,12 +125,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 async def download_export(request: web.Request) -> web.FileResponse:
     hash = request.match_info["hash"]
     format = request.match_info["format"]
-    assert format in ("dump", "xml"), TypeError(
-        f"Exports of type {format} are not supported"
-    )
-    exporter_class = Exporter
-    if format == "xml":
-        exporter_class = ExporterXml
+    exporter_class = get_exporter_class(format)
     filename = exporter_class.get_dl_path_from_hash(hash)
     assert os.path.exists(filename), FileNotFoundError("Could not find the export file")
     return web.FileResponse(filename)

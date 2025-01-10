@@ -515,7 +515,7 @@ def _row_to_value(
     layer = corpus_template.get("layer", {})
     fc = corpus_template.get("firstClass", {})
     tok = fc.get("token", "")
-    cols = layer.get(tok, {}).get("attributes", {})
+    cols = [str(k) for k in layer.get(tok, {}).get("attributes", {}).keys()]
 
     projects: list[str] = corpus_template.get("projects", [])
     if not projects:
@@ -862,10 +862,12 @@ def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     redis_shared_url = os.getenv(
         "REDIS_SHARED_URL", os.getenv("REDIS_URL", "redis://localhost:6379")
     )
-    if redis_shared_db_index < 0:
-        return
 
-    full_url = f"{redis_shared_url}/{redis_shared_db_index}"
+    full_url = (
+        redis_shared_url
+        if redis_shared_db_index < 0
+        else f"{redis_shared_url}/{redis_shared_db_index}"
+    )
     shared_connection = RedisConnection.from_url(full_url)
     _publish_msg(shared_connection, message, msg_id)
 

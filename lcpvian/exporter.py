@@ -3,6 +3,7 @@ import os
 
 from asyncio import sleep
 from collections.abc import Generator
+from dataclasses import dataclass
 from redis import Redis as RedisConnection
 from rq.job import Job
 from typing import Any, cast
@@ -151,6 +152,7 @@ async def kwic(jobs: list[Job], resp: Any, config):
         resp.write(buffer)
 
 
+@dataclass()
 class Token:
     """
     Private class representing a token
@@ -162,6 +164,7 @@ class Token:
     attributes: dict[str, Any]
 
 
+@dataclass()
 class Segment:
     """
     Private class representing a segment
@@ -170,6 +173,7 @@ class Segment:
     id: int
 
 
+@dataclass()
 class KwicLine:
     """
     A KWIC line has tokens (including hits) and is attached to a segment
@@ -185,10 +189,19 @@ class KwicLine:
 class Exporter:
 
     def __init__(
-        self, hash: str, connection: "RedisConnection[bytes]", config: dict
+        self,
+        hash: str,
+        connection: "RedisConnection[bytes]",
+        config: dict,
+        partition: str = "",
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
+        seg_layer: str = self._config["segment"]
+        seg_mapping: dict[str, Any] = self._config["mapping"]["layer"][seg_layer]
+        if "partitions" in seg_mapping and partition in seg_mapping["partitions"]:
+            seg_mapping = seg_mapping["partitions"][partition]
+        self._column_headers = seg_mapping["prepared"]["columnHeaders"]
         query_jobs, sent_jobs, meta_jobs = _get_all_jobs_from_hash(hash, connection)
         self._connection = connection
         self._query_jobs: list[Job] = query_jobs
@@ -227,6 +240,7 @@ class Exporter:
             name: str = info.get("name", "")
             info_attrs: list[dict] = info.get("attributes", [])
 
+            counter = 0
             for query_job in self._query_jobs:
                 sentence_job: Job = next(
                     j
@@ -236,21 +250,22 @@ class Exporter:
                 for result_n, result in query_job.result:
                     if result_n != n:
                         continue
+                    if counter >= query_job.meta["total_results_requested"]:
+                        break
                     sentence_id = result[0]
                     sid, s_offset, s_tokens = next(
                         r for r in sentence_job.result if str(r[0]) == sentence_id
                     )
-                    segment: Segment = Segment(**{"sid": sid})
+                    segment: Segment = Segment(**{"id": sid})
                     tokens: list[Token] = []
                     for n_token, token in enumerate(s_tokens):
                         v = token[0]
                         token_id = s_offset + n_token
                         token_args = {
-                            f"arg_{ta_n}": ta_v
+                            self._column_headers[ta_n]: ta_v
                             for ta_n, ta_v in enumerate(token)
                             if ta_n > 0
                         }
-                        token_args["id"] = token_id
                         match_label = ""
                         if (
                             n_attr := next(
@@ -276,8 +291,9 @@ class Exporter:
                                 }
                             )
                         )
+                    counter = counter + 1
                     yield KwicLine(
-                        **{
+                        **{  # type: ignore
                             "segment": segment,
                             "tokens": tokens,
                             "meta": {},

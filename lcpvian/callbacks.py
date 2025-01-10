@@ -30,8 +30,6 @@ from .convert import (
     _apply_filters,
     _get_all_sents,
 )
-from .exporter import Exporter
-from .exporter_xml import ExporterXml
 from .typed import (
     BaseArgs,
     Batch,
@@ -836,23 +834,18 @@ def _export_complete(
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
-    job_args = cast(list, job.args)
+    job_args: list = cast(list, job.args)
+    j_kwargs: dict = cast(dict, job.kwargs)
     if len(job_args) < 3:
+        # Swissdox
         return None
-    hash, _, format = job_args
-    assert format in ("dump", "xml"), TypeError(
-        f"Export format {format} is not supported"
-    )
-    exporter_class = Exporter
-    if format == "xml":
-        exporter_class = ExporterXml
-    filename = exporter_class.get_dl_path_from_hash(hash)
+    hash, _, format, _ = job_args
+    filename = j_kwargs.get("filename")
     if filename and os.path.exists(filename):
-        j_kwargs: dict = cast(dict, job.kwargs)
         dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
         user = j_kwargs.get("user", dep_kwargs.get("user", ""))
         room = j_kwargs.get("room", dep_kwargs.get("room", ""))
-        if user and room and cast(dict, job.kwargs).get("download", False):
+        if user and room and j_kwargs.get("download", False):
             msg_id = str(uuid4())
             jso: dict[str, Any] = {
                 "user": user,

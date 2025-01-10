@@ -84,7 +84,7 @@ async def api_query(request: web.Request) -> web.Response:
     req_json = await request.json()
     if hash := req_json.get("export", ""):
         config = request.app["config"]
-        # await export(hash, request.app["redis"], config)
+        # Need to handle partitions
         exporter = ExporterXml(hash, request.app["redis"], config)
         await exporter.export()
         return web.json_response({"status": 200, "message": "export complete"})
