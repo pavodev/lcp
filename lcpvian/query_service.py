@@ -60,6 +60,7 @@ from .typed import (
 )
 from .utils import (
     _default_tracks,
+    _get_all_jobs_from_hash,
     _format_config_query,
     _set_config,
     hasher,
@@ -98,9 +99,20 @@ class QueryService:
         jso = self.app["redis"].get(msg)
         if jso is None:
             return False
+        query_jobs_from_hash = _get_all_jobs_from_hash(job.id, self.app["redis"])[0]
+        if not query_jobs_from_hash:
+            return False
+        latest_job_in_cache = query_jobs_from_hash[-1]
+        status = (
+            "satisfied"
+            if latest_job_in_cache.meta.get("total_results_so_far", 0)
+            > kwargs.get("total_results_requested", 0)
+            else "partial"
+        )
         payload: JSONObject = json.loads(jso)
         payload["user"] = kwargs.get("user", "")
         payload["room"] = kwargs.get("room", "")
+        payload["status"] = status
         # we may have to apply the latest post-processes...
         pps = cast(
             dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
@@ -127,7 +139,6 @@ class QueryService:
         }
 
         for msg in sent_and_meta_msgs:
-            # print(f"Retrieving sentences message: {msg}")
             print(f"Retrieving sentences or metadata message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
@@ -138,6 +149,7 @@ class QueryService:
             payload["room"] = kwargs.get("room", "")
             payload["no_update_progress"] = True
             payload["no_restart"] = True
+            payload["status"] = status
             self.app["redis"].expire(msg, self.query_ttl)
             task = self.app["aredis"].publish(
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
@@ -199,13 +211,11 @@ class QueryService:
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
-                if is_first and not kwargs["full"]:
-                    success = await self.send_all_data(job, **kwargs)
+                if not kwargs["full"]:
+                    job_for_send_all_data = job if is_first else first_job
+                    success = await self.send_all_data(job_for_send_all_data, **kwargs)
                     if success:
                         return job, None
-                if not kwargs["full"]:
-                    success = await self.send_all_data(first_job, **kwargs)
-                if not kwargs["full"]:
                     _query(
                         job,
                         self.app["redis"],
@@ -505,7 +515,8 @@ class QueryService:
                 results: list[RawSent] = []
                 for sj in all_sent_ids:
                     sent_job = Job.fetch(sj, connection=self.app["redis"])
-                    results += sent_job.result
+                    if sent_job.result:
+                        results += sent_job.result
                     if len(results) >= trr:
                         break
                 _sentences(job, self.app["redis"], results, **kwa)

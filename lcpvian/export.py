@@ -43,7 +43,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     export_format = payload.get("format", "")
     room = payload.get("room", "")
     user = payload.get("user", "")
-    print("All batches done! Ready to start exporting")
+    print("Ready to start exporting")
     corpus_conf = payload.get("config", {})
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
     first_job = Job.fetch(first_job_id, connection=app["redis"])

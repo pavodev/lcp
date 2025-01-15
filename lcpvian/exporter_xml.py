@@ -6,6 +6,7 @@ from typing import Any, cast
 from xml.sax.saxutils import escape, quoteattr
 
 from .exporter import Exporter
+from .utils import sanitize_xml_attribute_name
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
@@ -14,11 +15,6 @@ def xmlattr(val: str) -> str:
     if not val:
         return "''"
     return quoteattr(str(val))
-
-
-# TODO:
-#   - the generic Export class has generators that yield plain results, stats/collocs, and meta
-#   - create sub-Export classes for each format, including XML
 
 
 class ExporterXml(Exporter):
@@ -69,7 +65,7 @@ class ExporterXml(Exporter):
                 output.write(f"\n    <u id='{segment.id}'>")
                 for token in tokens:
                     str_args = [
-                        f"{ta_n}={xmlattr(ta_v)}"
+                        f"{sanitize_xml_attribute_name(ta_n)}={xmlattr(ta_v)}"
                         for ta_n, ta_v in token.attributes.items()
                     ]
                     str_args.append(f"id='{token.id}'")
@@ -127,7 +123,25 @@ class ExporterXml(Exporter):
 
         with open(results_filpath, "w") as output:
             output.write('<?xml version="1.0" encoding="utf_8"?>')
-            output.write(f"\n<results>")
+            requested, delivered = self.n_results
+            output.write(
+                f"""
+<results
+    requested={xmlattr(str(requested))}
+    delivered={xmlattr(str(delivered))}
+    projected={xmlattr(self.info['projected'])}
+    coverage={xmlattr(self.info['percentage'])}
+>
+    <meta>
+        <submitted-at>{self.info['submitted_at']}</submitted-at>
+        <completed-at>{self.info['completed_at']}</completed-at>
+        <query>{self.info['query']}</query>
+    </meta>
+    <corpus>
+        <name>{self.info['name']}</name>
+        <word-count>{self.info['word_count']}</word-count>
+    </corpus>"""
+            )
             kwic_filename = os.path.join(xml_folder, "_kwic.xml")
             non_kwic_filename = os.path.join(xml_folder, "_non_kwic.xml")
             if os.path.exists(kwic_filename):

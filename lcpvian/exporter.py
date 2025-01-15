@@ -208,6 +208,7 @@ class Exporter:
         self._sentence_jobs: list[Job] = sent_jobs
         self._meta_jobs: list[Job] = meta_jobs
         self._results_info: list[dict[str, Any]] = []
+        self._info: dict[str, Any] = {}
 
     @staticmethod
     def get_dl_path_from_hash(hash: str) -> str:
@@ -219,6 +220,39 @@ class Exporter:
             os.mkdir(dump_folder)
         filepath = os.path.join(dump_folder, "results.tsv")
         return filepath
+
+    @property
+    def n_results(self) -> tuple[int, int]:
+        last_job = self._query_jobs[-1]
+        requested = last_job.meta.get("total_results_requested", -1)
+        delivered = last_job.meta.get("total_results_so_far", -1)
+        return (requested, delivered)
+
+    @property
+    def info(self) -> dict[str, Any]:
+        if not self._info:
+            self._info = {}
+            last_job = self._query_jobs[-1]
+            lj_meta = cast(dict, last_job.meta)
+            lj_payload = cast(dict, lj_meta.get("payload", {}))
+            # lj_kwargs = cast(dict, last_job.kwargs)
+            self._info["name"] = self._config["meta"].get(
+                "name", self._config["shortname"]
+            )
+            self._info["word_count"] = lj_payload["word_count"]
+            self._info["percentage"] = (
+                sum(x[3] for x in lj_payload["done_batches"]) / lj_payload["word_count"]
+            )
+            self._info["projected"] = lj_payload["projected_results"]
+            self._info["query"] = lj_payload["jso"]
+            self._info["submitted_at"] = str(self._query_jobs[0].enqueued_at)
+            completed_at = self._query_jobs[-1].ended_at
+            if self._sentence_jobs:
+                completed_at = self._sentence_jobs[-1].ended_at
+            if self._meta_jobs:
+                completed_at = self._meta_jobs[-1].ended_at
+            self._info["completed_at"] = str(completed_at)
+        return self._info
 
     @property
     def results_info(self) -> list[dict[str, Any]]:
@@ -242,20 +276,22 @@ class Exporter:
 
             counter = 0
             for query_job in self._query_jobs:
-                sentence_job: Job = next(
-                    j
-                    for j in self._sentence_jobs
-                    if cast(dict, j.kwargs).get("depends_on") == query_job.id
-                )
                 for result_n, result in query_job.result:
                     if result_n != n:
                         continue
                     if counter >= query_job.meta["total_results_requested"]:
                         break
                     sentence_id = result[0]
-                    sid, s_offset, s_tokens = next(
-                        r for r in sentence_job.result if str(r[0]) == sentence_id
-                    )
+                    try:
+                        sid, s_offset, s_tokens = next(
+                            r
+                            for sj in self._sentence_jobs
+                            for r in sj.result
+                            if str(r[0]) == sentence_id
+                        )
+                    except:
+                        print("sentence missing for a kwic match")
+                        continue
                     segment: Segment = Segment(**{"id": sid})
                     tokens: list[Token] = []
                     for n_token, token in enumerate(s_tokens):

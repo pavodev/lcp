@@ -76,6 +76,11 @@ async def _process_message(
     payload: JSONObject = json.loads(raw)
     payload["user"] = data.get("user", payload.get("user", ""))
     payload["room"] = data.get("room", payload.get("room", ""))
+    payload["to_export"] = data.get("to_export", payload.get("to_export", ""))
+    payload["status"] = data.get("status", payload.get("status", ""))
+    payload["total_results_requested"] = data.get(
+        "total_results_requested", payload.get("total_results_requested", 0)
+    )
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
@@ -195,6 +200,14 @@ async def _handle_message(
     user = cast(str, payload.get("user", ""))
     room = cast(str, payload.get("room", ""))
     action = payload.get("action", "")
+    status = payload.get("status", "")
+    do_full = payload.get("full") and status != "finished"
+    job: Job | None = (
+        Job.fetch(cast(str, payload["first_job"]), connection=app["redis"])
+        if "first_job" in payload
+        else None
+    )
+    to_export = job.meta.get("to_export", {}) if job else {}
     simples = (
         "fetch_queries",
         "store_query",
@@ -242,13 +255,14 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    can_send = payload.get("can_send", True)
+    can_send = payload.get("can_send", True) and not to_export
 
     sent_allowed = action in ("sentences", "meta") and can_send
     to_submit: None | Coroutine[None, None, web.Response] = None
 
     if (
-        action in ("sentences", "meta")
+        (status == "partial" or do_full)
+        and action in ("sentences", "meta")
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):
@@ -260,13 +274,16 @@ async def _handle_message(
         for drop in drops:
             payload.pop(drop, None)
 
+    if to_export and action == "query_result" and status in ("satisfied", "finished"):
+        await export(app, cast(JSONObject, to_export), cast(str, payload["first_job"]))
+
     if action in simples or sent_allowed:
         send_sents = not payload.get("full") and (
             action == "sentences"
             and len(cast(Results, payload["result"])) > 2
             or action == "meta"
         )
-        if action in simples or send_sents:
+        if not to_export and action in simples or send_sents:
             await push_msg(
                 app["websockets"],
                 room,
@@ -315,6 +332,7 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
+        payload["can_send"] = can_send
         await _handle_query(app, payload, user, room)
 
     if to_submit is not None:
@@ -390,6 +408,7 @@ async def _handle_query(
                 "config": cast(dict[str, Any], app["config"]).get(
                     str(cast(list[int], payload["current_batch"])[0]), {}
                 ),
+                "total_results_requested": payload.get("total_results_requested", 200),
             }
         to_submit = query(None, manual=payload, app=app)
 
@@ -446,15 +465,6 @@ async def _handle_query(
 
     if to_submit is not None:
         await to_submit
-
-    if to_export := cast(dict, the_job.kwargs).get(
-        "to_export", the_job.meta.get("to_export")
-    ):
-        tjk = cast(dict, the_job.kwargs)
-        done_batches = cast(list, tjk.get("done_batches", []))
-        all_batches = cast(list, tjk.get("all_batches", []))
-        if len(done_batches) + 1 == len(all_batches) or status == "satisfied":
-            await export(app, to_export, tjk.get("first_job", ""))
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:

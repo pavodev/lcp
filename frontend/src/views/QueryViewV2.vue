@@ -711,7 +711,7 @@
             </button> -->
           </div>
           <div class="modal-body text-start">
-            <label class="form-label">Pseudo-XML</label>
+            <label class="form-label">XML</label>
             <button
               type="button"
               @click="exportResults('xml', /*download=*/true, /*preview=*/true)"
@@ -1733,7 +1733,8 @@ export default {
       to_export.preview = preview;
       to_export.download = download;
       let full = !preview;
-      this.submit(null, true, false, /*full=*/full, /*to_export=*/to_export);
+      let resume = full; // If not a full query, no need to resume the query: we already have the necessary results
+      this.submit(null, /*resumeQuery=*/resume, /*cleanResults=*/false, /*full=*/full, /*to_export=*/to_export);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
@@ -1747,7 +1748,7 @@ export default {
     ) {
       if (!localStorage.getItem("dontShowResultsNotif"))
         this.showResultsNotification = true;
-      if (resumeQuery == false) {
+      if (!to_export && resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
         this.nResults = this.pageSize * 2; // We want load 2 pages at first

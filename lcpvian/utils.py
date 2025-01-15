@@ -234,6 +234,22 @@ def setup() -> None:
         )
 
 
+def sanitize_xml_attribute_name(name):
+    # Replace invalid characters with an underscore
+    # Invalid characters include anything that is not a valid XML character
+    name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
+
+    # Ensure name starts with a letter or underscore
+    if name and not name[0].isalpha() and name[0] != "_":
+        name = "_" + name  # Prepend an underscore if it starts with a digit
+
+    # Additional rule: XML names cannot be a vs reserved name ('xml' in any case)
+    if name.lower() == "xml":
+        name = "xml_attr"  # Change if it conflicts with reserved name
+
+    return name
+
+
 def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
     """
     auth decorator, still wip

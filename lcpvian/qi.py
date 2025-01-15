@@ -99,7 +99,6 @@ class QueryIteration:
     query_depends: list[str] = field(default_factory=list)
     dep_chain: list[str] = field(default_factory=list)
     post_processes: dict[int, Any] = field(default_factory=dict)
-    to_export: dict[str, Any] = field(default_factory=dict)
 
     def make_query(self) -> None:
         """
@@ -204,9 +203,6 @@ class QueryIteration:
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
 
-        to_export: dict = request_data.get("to_export", {})
-        preview = to_export.get("preview", False)
-
         user: str = "api" if api else request_data.get("user", "")
         room: str = "api" if api else request_data.get("room", "")
 
@@ -222,7 +218,7 @@ class QueryIteration:
             "languages": set(langs),
             "full": request_data.get("full", False),
             "query": request_data["query"],
-            "resume": request_data.get("resume", False) and not preview,
+            "resume": request_data.get("resume", False),  # and not preview,
             "total_results_requested": total_requested,
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
@@ -232,15 +228,6 @@ class QueryIteration:
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
         }
-        if to_export:
-            details["to_export"] = {
-                "format": str(to_export.get("format", "")),
-                "preview": to_export.get("preview", False),
-                "download": to_export.get("download", False),
-                "config": app["config"][str(corpora_to_use[0])],
-                "user": user,
-                "room": room,
-            }
         made: Self = cls(**details)
         made.get_word_count()
         return made
@@ -276,9 +263,8 @@ class QueryIteration:
         """
         job: Job
         # if self.offset > 0 and not self.full and not self.resume:
-        preview: bool = self.to_export.get("preview", False)
         load_more_from_cache: bool = self.resume and self.offset > 0
-        if preview or load_more_from_cache:
+        if load_more_from_cache:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
@@ -319,7 +305,6 @@ class QueryIteration:
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
-            to_export=self.to_export,
         )
 
         queue = "query" if not self.full else "background"
@@ -499,7 +484,6 @@ class QueryIteration:
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
-            "to_export": manual.get("to_export", kwargs.get("to_export", {})),
         }
         return cls(**details)
 
