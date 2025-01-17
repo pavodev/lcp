@@ -273,8 +273,7 @@ class QueryIteration:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
-            if load_more_from_cache:
-                self.submit_sents(query_started=True)
+            self.submit_sents(query_started=True)
             return job, False
 
         parent: str | None = None

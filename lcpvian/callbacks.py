@@ -493,6 +493,7 @@ def _sentences(
 
     action = "sentences"
 
+    _sign_payload(submit_payload, kwargs)
     jso = {
         "result": to_send,
         "status": status,
