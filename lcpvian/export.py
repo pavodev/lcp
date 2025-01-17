@@ -32,7 +32,10 @@ async def exporter(
 ) -> None:
     connection = get_current_connection()
     exp_class = get_exporter_class(format)
-    await exp_class(hash, connection, config, partition).export()
+    total_requested = kwargs.get("total_results_requested", 200)
+    await exp_class(
+        hash, connection, config, partition, total_results_requested=total_requested
+    ).export()
 
 
 async def export(app: web.Application, payload: JSONObject, first_job_id: str) -> Job:
@@ -96,6 +99,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 "room": room,
                 "user": user,
                 "filename": filename,
+                "total_results_requested": payload.get("total_results_requested", 200),
             },
             **rest,
         )

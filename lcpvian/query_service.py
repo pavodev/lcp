@@ -63,6 +63,7 @@ from .utils import (
     _get_all_jobs_from_hash,
     _format_config_query,
     _set_config,
+    _sign_payload,
     hasher,
     PUBSUB_CHANNEL,
     CustomEncoder,
@@ -110,8 +111,7 @@ class QueryService:
             else "partial"
         )
         payload: JSONObject = json.loads(jso)
-        payload["user"] = kwargs.get("user", "")
-        payload["room"] = kwargs.get("room", "")
+        _sign_payload(payload, kwargs)
         payload["status"] = status
         # we may have to apply the latest post-processes...
         pps = cast(
@@ -145,8 +145,7 @@ class QueryService:
                 failed = True
                 continue
             payload = json.loads(jso)
-            payload["user"] = kwargs.get("user", "")
-            payload["room"] = kwargs.get("room", "")
+            _sign_payload(payload, kwargs)
             payload["no_update_progress"] = True
             payload["no_restart"] = True
             payload["status"] = status
@@ -222,6 +221,7 @@ class QueryService:
                         job.result,
                         user=kwargs.get("user", ""),
                         room=kwargs.get("room", ""),
+                        to_export=kwargs.get("to_export", {}),
                         full=kwargs["full"],
                         post_processes=kwargs["post_processes"],
                         current_kwic_lines=kwargs["current_kwic_lines"],
@@ -476,11 +476,9 @@ class QueryService:
                 print("Meta found in redis memory. Retrieving...")
                 kwa = {
                     "full": kwargs.get("full", False),
-                    "user": kwargs.get("user", ""),
-                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": kwargs.get("total_results_requested", 0),
                 }
+                _sign_payload(kwa, kwargs)
                 _meta(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
         except NoSuchJobError:
@@ -504,11 +502,9 @@ class QueryService:
                 trr = kwargs.get("total_results_requested", 0)
                 kwa = {
                     "full": kwargs.get("full", False),
-                    "user": kwargs.get("user", ""),
-                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": trr,
                 }
+                _sign_payload(kwa, cast(JSONObject, kwargs))
                 first_job_id = cast(dict, job.kwargs)["first_job"]
                 first_job = Job.fetch(first_job_id, connection=self.app["redis"])
                 all_sent_ids = first_job.meta.get("_sent_jobs", [])

@@ -52,6 +52,8 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
+    SentJob,
+    QueryArgs,
     Websockets,
 )
 
@@ -868,6 +870,26 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     if total_requested > 0:
         return total_requested
     return -1
+
+
+def _sign_payload(
+    payload: dict[str, Any] | JSONObject | SentJob,
+    kwargs: dict[str, Any] | QueryArgs | SentJob,
+) -> None:
+    user = kwargs.get("user")
+    room = kwargs.get("room")
+    total_requested = kwargs.get("total_results_requested")
+    to_export = kwargs.get("to_export")
+    if user:
+        payload["user"] = user
+    if room:
+        payload["room"] = room
+    if total_requested:
+        payload["total_results_requested"] = cast(int, total_requested)
+    if to_export:
+        payload["to_export"] = to_export
+    else:
+        payload.pop("to_export", None)
 
 
 def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:

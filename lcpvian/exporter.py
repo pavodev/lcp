@@ -194,9 +194,11 @@ class Exporter:
         connection: "RedisConnection[bytes]",
         config: dict,
         partition: str = "",
+        total_results_requested: int = 200,
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
+        self._total_results_requested = total_results_requested
         seg_layer: str = self._config["segment"]
         seg_mapping: dict[str, Any] = self._config["mapping"]["layer"][seg_layer]
         if "partitions" in seg_mapping and partition in seg_mapping["partitions"]:
@@ -222,11 +224,10 @@ class Exporter:
         return filepath
 
     @property
-    def n_results(self) -> tuple[int, int]:
+    def n_results(self) -> int:
         last_job = self._query_jobs[-1]
-        requested = last_job.meta.get("total_results_requested", -1)
         delivered = last_job.meta.get("total_results_so_far", -1)
-        return (requested, delivered)
+        return delivered
 
     @property
     def info(self) -> dict[str, Any]:
@@ -268,6 +269,7 @@ class Exporter:
 
     def kwic_lines(self) -> Generator[KwicLine, None, None]:
         kwic_info = [r for r in self.results_info if r.get("type") == "plain"]
+        total_results_requested = self._total_results_requested
         for info in kwic_info:
             if (n := info.get("res_index", 0)) <= 0:
                 continue
@@ -279,7 +281,7 @@ class Exporter:
                 for result_n, result in query_job.result:
                     if result_n != n:
                         continue
-                    if counter >= query_job.meta["total_results_requested"]:
+                    if counter >= total_results_requested:
                         break
                     sentence_id = result[0]
                     try:
@@ -290,7 +292,10 @@ class Exporter:
                             if str(r[0]) == sentence_id
                         )
                     except:
-                        print("sentence missing for a kwic match")
+                        print(
+                            "sentence missing for a kwic match",
+                            counter,
+                        )
                         continue
                     segment: Segment = Segment(**{"id": sid})
                     tokens: list[Token] = []

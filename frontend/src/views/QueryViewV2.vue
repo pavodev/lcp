@@ -409,7 +409,7 @@
                         aria-valuemin="0"
                         aria-valuemax="100"
                       >
-                        {{ percentageDone.toFixed(2) }}%
+                        {{ (percentageDone || 0.0).toFixed(2) }}%
                       </div>
                     </div>
                   </div>
@@ -720,6 +720,12 @@
             >
               Download preview
             </button>
+            <input
+              type="text"
+              class="form-control"
+              id="nExport"
+              v-model="nExport"
+            />
             <!-- <button
               type="button"
               @click="exportResults('plain')"
@@ -951,6 +957,7 @@ export default {
       currentResults: 0,
       selectedLanguages: ["en"],
       queryName: "",
+      nExport: 200,
       currentTab: "dqd",
       simultaneousMode: false,
       percentageDone: 0,
@@ -1779,7 +1786,11 @@ export default {
       }
       if (to_export) {
         data["to_export"] = to_export;
+        this.nExport = Number((String(this.nExport) || "200").replace(/\D/,''));
+        if (isNaN(this.nExport)) this.nExport = 200;
+        data["total_results_requested"] = this.nExport;
       }
+      console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
         this.loading = true;

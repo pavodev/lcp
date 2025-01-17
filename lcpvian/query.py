@@ -223,7 +223,6 @@ async def query(
     one at a time. This is experimental, it will probably remain unused.
     """
     qi: QueryIteration | web.Response
-    to_export: dict = {}
     # Turn request or manual dict into a QueryIteration object
     if manual is not None and isinstance(app, web.Application):
         # 'request' comes from sock.py, it is a non-first iteration
@@ -232,17 +231,11 @@ async def query(
         # request is from the frontend, most likely a new query...
         request_data = await request.json()
         app = request.app
-        to_export = request_data.get("to_export", {})
         if api:
             request_data["room"] = "api"
-            corpus_id: int = request_data.get("corpora", [0])[0]
-            to_export = to_export or {
-                "format": "dump",
-                "config": app["config"][str(corpus_id)],
+            request_data["to_export"] = request_data.get("to_export") or {
+                "format": "dump"
             }
-            to_export["total_results_requested"] = request_data.get(
-                "total_results_requested", 200
-            )
         qi = await QueryIteration.from_request(request_data, app, api=api)
 
     # prepare for query iterations (just one if not simultaneous mode)
@@ -255,24 +248,6 @@ async def query(
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
-            else:
-                first_job = (
-                    Job.fetch(qi.first_job, connection=app["redis"])
-                    if qi.first_job
-                    else cast(Job, qi.job)
-                )
-                if to_export:
-                    if to_export:
-                        to_export["config"] = qi.config[str(qi.corpora[0])]
-                        to_export["total_results_requested"] = (
-                            qi.total_results_requested
-                        )
-                        to_export["user"] = qi.user
-                        to_export["room"] = qi.room
-                    first_job.meta["to_export"] = to_export
-                else:
-                    first_job.meta.pop("to_export", "")
-                first_job.save_meta()
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)

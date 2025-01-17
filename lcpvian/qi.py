@@ -99,6 +99,7 @@ class QueryIteration:
     query_depends: list[str] = field(default_factory=list)
     dep_chain: list[str] = field(default_factory=list)
     post_processes: dict[int, Any] = field(default_factory=dict)
+    to_export: dict[str, Any] = field(default_factory=dict)
 
     def make_query(self) -> None:
         """
@@ -205,6 +206,9 @@ class QueryIteration:
 
         user: str = "api" if api else request_data.get("user", "")
         room: str = "api" if api else request_data.get("room", "")
+        to_export = request_data.get("to_export")
+        if to_export:
+            to_export["total_results_requested"] = total_requested
 
         details = {
             "corpora": corpora_to_use,
@@ -227,6 +231,7 @@ class QueryIteration:
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
+            "to_export": to_export,
         }
         made: Self = cls(**details)
         made.get_word_count()
@@ -306,6 +311,8 @@ class QueryIteration:
             word_count=self.word_count,
             parent=parent,
         )
+        if self.to_export:
+            query_kwargs["to_export"] = self.to_export
 
         queue = "query" if not self.full else "background"
 
@@ -354,6 +361,8 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
+        if self.to_export:
+            kwargs["to_export"] = json.dumps(self.to_export)
         queue = "query" if not self.full else "background"
         qs = self.app["query_service"]
         sents_jobs: list[str] = qs.sentences(
@@ -484,6 +493,7 @@ class QueryIteration:
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
+            "to_export": manual.get("to_export", {}),
         }
         return cls(**details)
 
@@ -569,6 +579,8 @@ class QueryIteration:
             "room": self.room or "",
             "info": info,
         }
+        if self.to_export:
+            msg["to_export"] = json.dumps(self.to_export)
         err = f"Error: {info} ({self.user}/{self.room})"
         # alert everyone possible about this problem:
         print(f"{err}: {info}")

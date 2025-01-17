@@ -25,8 +25,9 @@ class ExporterXml(Exporter):
         connection: "RedisConnection[bytes]",
         config: dict,
         partition: str = "",
+        total_results_requested: int = 200,
     ) -> None:
-        super().__init__(hash, connection, config, partition)
+        super().__init__(hash, connection, config, partition, total_results_requested)
 
     @staticmethod
     def get_dl_path_from_hash(hash: str) -> str:
@@ -123,14 +124,15 @@ class ExporterXml(Exporter):
 
         with open(results_filpath, "w") as output:
             output.write('<?xml version="1.0" encoding="utf_8"?>')
-            requested, delivered = self.n_results
+            delivered = self.n_results
             output.write(
                 f"""
 <results
-    requested={xmlattr(str(requested))}
-    delivered={xmlattr(str(delivered))}
+    n={xmlattr(str(min(delivered, self._total_results_requested)))}
+    requested={xmlattr(str(self._total_results_requested))}
+    found-so-far={xmlattr(str(delivered))}
     projected={xmlattr(self.info['projected'])}
-    coverage={xmlattr(self.info['percentage'])}
+    corpus-coverage={xmlattr(100 * self.info['percentage'])}
 >
     <meta>
         <submitted-at>{self.info['submitted_at']}</submitted-at>

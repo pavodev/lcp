@@ -84,6 +84,7 @@ async def api_query(request: web.Request) -> web.Response:
     req_json = await request.json()
     if hash := req_json.get("export", ""):
         config = request.app["config"]
+        # TODO: always run a query first with the desired number of results
         # Need to handle partitions
         exporter = ExporterXml(hash, request.app["redis"], config)
         await exporter.export()

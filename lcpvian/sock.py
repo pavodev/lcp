@@ -46,7 +46,7 @@ from .utils import push_msg
 from .validate import validate
 
 from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
+from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config, _sign_payload
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -74,13 +74,12 @@ async def _process_message(
     if not raw:
         return None
     payload: JSONObject = json.loads(raw)
-    payload["user"] = data.get("user", payload.get("user", ""))
-    payload["room"] = data.get("room", payload.get("room", ""))
-    payload["to_export"] = data.get("to_export", payload.get("to_export", ""))
+    if "user" in data or "room" in data:
+        # If the incoming data contains fresher information than from redis memory,
+        # (as determined by the presence of a user/room in data)
+        # then sign the payload with the information contained in data
+        _sign_payload(payload, data)
     payload["status"] = data.get("status", payload.get("status", ""))
-    payload["total_results_requested"] = data.get(
-        "total_results_requested", payload.get("total_results_requested", 0)
-    )
     if not payload or not isinstance(payload, dict):
         return
     await _handle_message(payload, channel, app)
@@ -202,12 +201,7 @@ async def _handle_message(
     action = payload.get("action", "")
     status = payload.get("status", "")
     do_full = payload.get("full") and status != "finished"
-    job: Job | None = (
-        Job.fetch(cast(str, payload["first_job"]), connection=app["redis"])
-        if "first_job" in payload
-        else None
-    )
-    to_export = job.meta.get("to_export", {}) if job else {}
+    to_export = payload.get("to_export")
     simples = (
         "fetch_queries",
         "store_query",
@@ -275,7 +269,14 @@ async def _handle_message(
             payload.pop(drop, None)
 
     if to_export and action == "query_result" and status in ("satisfied", "finished"):
-        await export(app, cast(JSONObject, to_export), cast(str, payload["first_job"]))
+        export_obj: Any = to_export
+        if isinstance(export_obj, str):
+            export_obj = json.loads(cast(str, to_export))
+        export_obj["user"] = user
+        export_obj["room"] = room
+        corpus_id: str = str(cast(list, payload["current_batch"])[0])
+        export_obj["config"] = app["config"][corpus_id]
+        await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
 
     if action in simples or sent_allowed:
         send_sents = not payload.get("full") and (
@@ -400,16 +401,6 @@ async def _handle_query(
         and not payload.get("no_restart")
     ):
         payload["config"] = app["config"]
-        if room == "api":
-            payload["to_export"] = {
-                "room": "api",
-                "user": "api",
-                "format": "dump",
-                "config": cast(dict[str, Any], app["config"]).get(
-                    str(cast(list[int], payload["current_batch"])[0]), {}
-                ),
-                "total_results_requested": payload.get("total_results_requested", 200),
-            }
         to_submit = query(None, manual=payload, app=app)
 
     if do_full:
@@ -453,6 +444,7 @@ async def _handle_query(
             "batches_done",
             "simultaneous",
             "consoleSQL",
+            "to_export",
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
         await push_msg(
