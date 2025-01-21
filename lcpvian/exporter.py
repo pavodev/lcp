@@ -61,97 +61,6 @@ def _format_kwic(
     return (kwic_name, sid, matching_entities, tokens, annotations)
 
 
-async def kwic(jobs: list[Job], resp: Any, config):
-    sentence_jobs = []
-    meta_jobs = []
-    for j in jobs:
-        j_kwargs = cast(dict, j.kwargs)
-        if not j_kwargs.get("sentences_query"):
-            continue
-        if j_kwargs.get("meta_query"):
-            meta_jobs.append(j)
-        else:
-            sentence_jobs.append(j)
-    query_jobs = [j for j in jobs if j not in sentence_jobs and j not in meta_jobs]
-
-    buffer: str = ""
-    for j in query_jobs:
-        j_kwargs = cast(dict, j.kwargs)
-        if "current_batch" not in j_kwargs:
-            continue
-        segment_mapping = config["mapping"]["layer"][config["segment"]]
-        columns: list = []
-        if "partitions" in segment_mapping and "languages" in j_kwargs:
-            lg = j_kwargs["languages"][0]
-            columns = segment_mapping["partitions"].get(lg)["prepared"]["columnHeaders"]
-        else:
-            columns = segment_mapping["prepared"]["columnHeaders"]
-
-        sentences: dict[str, tuple] = {}
-        for sentence_job in sentence_jobs:
-            if sentence_job.kwargs.get("depends_on") != j.id:
-                continue
-            if not sentence_job or not sentence_job.result:
-                continue
-            for row in sentence_job.result:
-                uuid: str = str(row[0])
-                first_token_id = row[1]
-                tokens = row[2]
-                annotations = []
-                if len(row) > 3:
-                    annotations = row[3]
-                sentences[uuid] = (first_token_id, tokens, annotations)
-
-        formatted_meta: dict[str, Any] = {}
-        for meta_job in meta_jobs:
-            if meta_job.kwargs.get("depends_on") == j.id:
-                continue
-            if not meta_job:
-                continue
-            result = meta_job.result or []
-            incoming_meta: dict[str, Any] = cast(
-                dict[str, Any],
-                format_meta_lines(meta_job.kwargs.get("meta_query"), result),
-            )
-            formatted_meta.update(incoming_meta)
-
-        meta = j_kwargs.get("meta_json", {}).get("result_sets", [])
-        kwic_indices = [n + 1 for n, o in enumerate(meta) if o.get("type") == "plain"]
-
-        for n_type, args in j.result:
-            # We're only handling kwic results here
-            if n_type not in kwic_indices:
-                continue
-            try:
-                kwic_name, sid, matching_entities, tokens, annotations = _format_kwic(
-                    args, columns, sentences, meta[n_type - 1], config=config
-                )
-                data = {
-                    "sid": sid,
-                    "matches": matching_entities,
-                    "segment": tokens,
-                    "annotations": annotations,
-                }
-                if sid in formatted_meta:
-                    # TODO: check frame_range in meta here + return frame_range from _format_kwic to compute time?
-                    data["meta"] = formatted_meta[sid]
-                line: str = "\t".join(
-                    [str(n_type), "plain", kwic_name, json.dumps(data)]
-                )
-            except Exception as err:
-                print("Issue with _format_kwic when exporting", err)
-                # Because queries for prepared segments only fetch what's needed for previewing purposes,
-                # queries with lots of matches can only output a small subset of lines
-                continue
-            if len(f"{buffer}{line}\n") > CHUNKS:
-                resp.write(buffer)
-                await sleep(0.01)  # Give the machine some time to breathe!
-                buffer = ""
-            buffer += f"{line}\n"
-    if buffer:
-        resp.write(buffer)
-
-
 @dataclass()
 class Token:
     """
@@ -195,10 +104,12 @@ class Exporter:
         config: dict,
         partition: str = "",
         total_results_requested: int = 200,
+        offset: int = 0,
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
         self._total_results_requested = total_results_requested
+        self._offset = offset
         seg_layer: str = self._config["segment"]
         seg_mapping: dict[str, Any] = self._config["mapping"]["layer"][seg_layer]
         if "partitions" in seg_mapping and partition in seg_mapping["partitions"]:
@@ -281,7 +192,7 @@ class Exporter:
                 for result_n, result in query_job.result:
                     if result_n != n:
                         continue
-                    if counter >= total_results_requested:
+                    if counter >= self._offset + total_results_requested:
                         break
                     sentence_id = result[0]
                     try:
@@ -333,6 +244,8 @@ class Exporter:
                             )
                         )
                     counter = counter + 1
+                    if counter < self._offset:
+                        continue
                     yield KwicLine(
                         **{  # type: ignore
                             "segment": segment,
@@ -343,12 +256,100 @@ class Exporter:
                     )
 
     async def kwic(self) -> None:
+        buffer: str = ""
+        for j in self._query_jobs:
+            j_kwargs = cast(dict, j.kwargs)
+            if "current_batch" not in j_kwargs:
+                continue
+            segment_mapping = self._config["mapping"]["layer"][self._config["segment"]]
+            columns: list = []
+            if "partitions" in segment_mapping and "languages" in j_kwargs:
+                lg = j_kwargs["languages"][0]
+                columns = segment_mapping["partitions"].get(lg)["prepared"][
+                    "columnHeaders"
+                ]
+            else:
+                columns = segment_mapping["prepared"]["columnHeaders"]
+
+            sentences: dict[str, tuple] = {}
+            for sentence_job in self._sentence_jobs:
+                if cast(dict, sentence_job.kwargs).get("depends_on") != j.id:
+                    continue
+                if not sentence_job or not sentence_job.result:
+                    continue
+                for row in sentence_job.result:
+                    uuid: str = str(row[0])
+                    first_token_id = row[1]
+                    tokens = row[2]
+                    annotations = []
+                    if len(row) > 3:
+                        annotations = row[3]
+                    sentences[uuid] = (first_token_id, tokens, annotations)
+
+            formatted_meta: dict[str, Any] = {}
+            for meta_job in self._meta_jobs:
+                mjk = cast(dict, meta_job.kwargs)
+                if mjk.get("depends_on") == j.id:
+                    continue
+                if not meta_job:
+                    continue
+                result = meta_job.result or []
+                incoming_meta: dict[str, Any] = cast(
+                    dict[str, Any],
+                    format_meta_lines(cast(str, mjk.get("meta_query")), result),
+                )
+                formatted_meta.update(incoming_meta)
+
+            meta = j_kwargs.get("meta_json", {}).get("result_sets", [])
+            kwic_indices = [
+                n + 1 for n, o in enumerate(meta) if o.get("type") == "plain"
+            ]
+
+            for n_type, args in j.result:
+                # We're only handling kwic results here
+                if n_type not in kwic_indices:
+                    continue
+                try:
+                    kwic_name, sid, matching_entities, tokens, annotations = (
+                        _format_kwic(
+                            args,
+                            columns,
+                            sentences,
+                            meta[n_type - 1],
+                            config=self._config,
+                        )
+                    )
+                    data = {
+                        "sid": sid,
+                        "matches": matching_entities,
+                        "segment": tokens,
+                        "annotations": annotations,
+                    }
+                    if sid in formatted_meta:
+                        # TODO: check frame_range in meta here + return frame_range from _format_kwic to compute time?
+                        data["meta"] = formatted_meta[sid]
+                    line: str = "\t".join(
+                        [str(n_type), "plain", kwic_name, json.dumps(data)]
+                    )
+                except Exception as err:
+                    print("Issue with _format_kwic when exporting", err)
+                    # Because queries for prepared segments only fetch what's needed for previewing purposes,
+                    # queries with lots of matches can only output a small subset of lines
+                    continue
+                if len(f"{buffer}{line}\n") > CHUNKS:
+                    self._output.write(buffer)
+                    await sleep(0.01)  # Give the machine some time to breathe!
+                    buffer = ""
+                buffer += f"{line}\n"
+        if buffer:
+            self._output.write(buffer)
+
         # Write KWIC results
-        await kwic(
-            [*self._query_jobs, *self._sentence_jobs, *self._meta_jobs],
-            self._output,
-            self._config,
-        )
+        # await kwic(
+        #     [*self._query_jobs, *self._sentence_jobs, *self._meta_jobs],
+        #     self._output,
+        #     self._config,
+        # )
 
     async def non_kwic(self) -> None:
         job = self._query_jobs[0]
@@ -394,11 +395,7 @@ class Exporter:
         meta = cast(dict, first_job.kwargs).get("meta_json", {}).get("result_sets", {})
         # Write KWIC results
         if next((m for m in meta if m.get("type") == "plain"), None):
-            await kwic(
-                [*self._query_jobs, *self._sentence_jobs, *self._meta_jobs],
-                self._output,
-                self._config,
-            )
+            await self.kwic()
 
         # Write non-KWIC results
         for n_type, data in (

@@ -234,7 +234,7 @@ async def query(
         if api:
             request_data["room"] = "api"
             request_data["to_export"] = request_data.get("to_export") or {
-                "format": "dump"
+                "format": "xml"
             }
         qi = await QueryIteration.from_request(request_data, app, api=api)
 

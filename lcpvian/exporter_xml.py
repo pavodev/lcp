@@ -26,8 +26,11 @@ class ExporterXml(Exporter):
         config: dict,
         partition: str = "",
         total_results_requested: int = 200,
+        offset: int = 0,
     ) -> None:
-        super().__init__(hash, connection, config, partition, total_results_requested)
+        super().__init__(
+            hash, connection, config, partition, total_results_requested, offset
+        )
 
     @staticmethod
     def get_dl_path_from_hash(hash: str) -> str:

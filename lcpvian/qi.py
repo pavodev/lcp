@@ -209,6 +209,8 @@ class QueryIteration:
         to_export = request_data.get("to_export")
         if to_export:
             to_export["total_results_requested"] = total_requested
+            if "offset" in request_data:
+                to_export["offset"] = request_data["offset"]
 
         details = {
             "corpora": corpora_to_use,
@@ -567,6 +569,9 @@ class QueryIteration:
         if reached_kwic_limit and not self.full:
             info = "Could not create query: hit kwic limit"
             action = "kwic_limit"
+        # elif self.to_export:
+        #     self.resume = False
+        #     await self.submit_query()
         else:
             info = "Could not create query: no batches"
             action = "no_batch"

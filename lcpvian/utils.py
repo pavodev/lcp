@@ -879,6 +879,7 @@ def _sign_payload(
     user = kwargs.get("user")
     room = kwargs.get("room")
     total_requested = kwargs.get("total_results_requested")
+    offset = kwargs.get("offset")
     to_export = kwargs.get("to_export")
     if user:
         payload["user"] = user
@@ -886,6 +887,8 @@ def _sign_payload(
         payload["room"] = room
     if total_requested:
         payload["total_results_requested"] = cast(int, total_requested)
+    if offset:
+        payload["offset"] = cast(int, offset)
     if to_export:
         payload["to_export"] = to_export
     else:

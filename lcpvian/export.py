@@ -33,8 +33,14 @@ async def exporter(
     connection = get_current_connection()
     exp_class = get_exporter_class(format)
     total_requested = kwargs.get("total_results_requested", 200)
+    offset = kwargs.get("offset", 0)
     await exp_class(
-        hash, connection, config, partition, total_results_requested=total_requested
+        hash,
+        connection,
+        config,
+        partition,
+        total_results_requested=total_requested,
+        offset=offset,
     ).export()
 
 
@@ -100,6 +106,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 "user": user,
                 "filename": filename,
                 "total_results_requested": payload.get("total_results_requested", 200),
+                "offset": payload.get("offset", 0),
             },
             **rest,
         )

@@ -102,38 +102,39 @@ async def api_query(request: web.Request) -> web.Response:
                 break
             await asyncio.sleep(5)
 
-        export_job_timer = Timer(QUERY_TIMEOUT)
-        while True:
-            assert not export_job_timer.elapsed(), TimeoutError(
-                "Could not run export job in time"
-            )
-            export_job = next(
-                (
-                    j
-                    for j in [
-                        Job.fetch(jid, request.app["redis"])
-                        for jid in request.app[
-                            "background"
-                        ].started_job_registry.get_job_ids()
-                    ]
-                    + [
-                        Job.fetch(jid, request.app["redis"])
-                        for jid in request.app[
-                            "background"
-                        ].finished_job_registry.get_job_ids()
-                    ]
-                    if job_id in j.args
-                ),
-                None,
-            )
-            if export_job and export_job.is_finished:
-                break
-            await asyncio.sleep(5)
+        # export_job_timer = Timer(QUERY_TIMEOUT)
+        # while True:
+        #     assert not export_job_timer.elapsed(), TimeoutError(
+        #         "Could not run export job in time"
+        #     )
+        #     export_job = next(
+        #         (
+        #             j
+        #             for j in [
+        #                 Job.fetch(jid, request.app["redis"])
+        #                 for jid in request.app[
+        #                     "background"
+        #                 ].started_job_registry.get_job_ids()
+        #             ]
+        #             + [
+        #                 Job.fetch(jid, request.app["redis"])
+        #                 for jid in request.app[
+        #                     "background"
+        #                 ].finished_job_registry.get_job_ids()
+        #             ]
+        #             if job_id in j.args
+        #         ),
+        #         None,
+        #     )
+        #     if export_job and export_job.is_finished:
+        #         break
+        #     await asyncio.sleep(5)
 
-        res_str = ""
-        with open(export_job.args[0], "r") as export_file:
-            while t := export_file.read():
-                res_str += t
+        # res_str = ""
+        # with open(export_job.args[0], "r") as export_file:
+        #     while t := export_file.read():
+        #         res_str += t
+        res_str = str(Job.fetch(job_id, request.app["redis"]).result)
 
     except TimeoutError as err:
         return web.json_response({"error": err.strerror, "status": 408})
