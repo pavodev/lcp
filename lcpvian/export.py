@@ -49,7 +49,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     Schedule job(s) to export data to storage
     Called in sock.py after the last batch was queried
     """
-    export_format = payload.get("format", "")
+    export_format = cast(str, payload.get("format", ""))
     room = payload.get("room", "")
     user = payload.get("user", "")
     print("Ready to start exporting")
@@ -86,8 +86,6 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             print("Scheduled dump export depending on", depends_on)
             rest = {"depends_on": depends_on}
         hash: str = first_job.id
-        exporter_class = get_exporter_class(cast(str, export_format))
-        filename: str = exporter_class.get_dl_path_from_hash(hash)
         partition: str = ""
         languages: list[str] = cast(dict, first_job.kwargs).get("languages", [])
         partitions: dict = cast(dict, payload["config"]).get("partitions", {})
@@ -104,7 +102,6 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
                 "download": payload.get("download", False),
                 "room": room,
                 "user": user,
-                "filename": filename,
                 "total_results_requested": payload.get("total_results_requested", 200),
                 "offset": payload.get("offset", 0),
             },
@@ -136,7 +133,9 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 async def download_export(request: web.Request) -> web.FileResponse:
     hash = request.match_info["hash"]
     format = request.match_info["format"]
+    offset = cast(int, request.match_info["offset"])
+    requested = cast(int, request.match_info["total_results_requested"])
     exporter_class = get_exporter_class(format)
-    filename = exporter_class.get_dl_path_from_hash(hash)
-    assert os.path.exists(filename), FileNotFoundError("Could not find the export file")
-    return web.FileResponse(filename)
+    filepath = exporter_class.get_dl_path_from_hash(hash, offset, requested)
+    assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
+    return web.FileResponse(filepath)

@@ -61,6 +61,7 @@ from .typed import (
 from .utils import (
     _default_tracks,
     _get_all_jobs_from_hash,
+    _get_status,
     _format_config_query,
     _set_config,
     _sign_payload,
@@ -104,6 +105,7 @@ class QueryService:
         if not query_jobs_from_hash:
             return False
         latest_job_in_cache = query_jobs_from_hash[-1]
+
         status = (
             "satisfied"
             if latest_job_in_cache.meta.get("total_results_so_far", 0)
@@ -112,6 +114,16 @@ class QueryService:
         )
         payload: JSONObject = json.loads(jso)
         _sign_payload(payload, kwargs)
+        total_requested = cast(int, payload.get("total_results_requested", 0))
+        status = _get_status(
+            cast(int, payload.get("total_results_so_far", 0)),
+            done_batches=cast(list, payload.get("done_batches")),
+            all_batches=cast(list, payload.get("all_batches")),
+            total_results_requested=total_requested,
+            search_all=cast(bool, payload.get("search_all", False)),
+            full=cast(bool, payload.get("full", False)),
+            time_so_far=cast(float, payload.get("total_duration", 0)),
+        )
         payload["status"] = status
         # we may have to apply the latest post-processes...
         pps = cast(

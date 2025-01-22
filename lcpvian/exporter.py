@@ -124,7 +124,7 @@ class Exporter:
         self._info: dict[str, Any] = {}
 
     @staticmethod
-    def get_dl_path_from_hash(hash: str) -> str:
+    def get_dl_path_from_hash(hash: str, offset: int = 0, requested: int = 0) -> str:
         hash_folder = os.path.join(RESULTS_DIR, hash)
         if not os.path.exists(hash_folder):
             os.mkdir(hash_folder)
@@ -371,7 +371,9 @@ class Exporter:
                 )
 
     async def export(self, filepath: str = "") -> None:
-        filepath = Exporter.get_dl_path_from_hash(self._hash)
+        filepath = Exporter.get_dl_path_from_hash(
+            self._hash, self._offset, self._total_results_requested
+        )
 
         self._output = open(filepath, "w")
 

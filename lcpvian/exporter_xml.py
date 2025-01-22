@@ -33,26 +33,34 @@ class ExporterXml(Exporter):
         )
 
     @staticmethod
-    def get_dl_path_from_hash(hash: str) -> str:
+    def get_dl_path_from_hash(hash: str, offset: int = 0, requested: int = 0) -> str:
         hash_folder = os.path.join(RESULTS_DIR, hash)
         if not os.path.exists(hash_folder):
             os.mkdir(hash_folder)
         xml_folder = os.path.join(hash_folder, "xml")
         if not os.path.exists(xml_folder):
             os.mkdir(xml_folder)
-        filepath = os.path.join(xml_folder, "results.xml")
+        offset_folder = os.path.join(xml_folder, str(offset))
+        if not os.path.exists(offset_folder):
+            os.mkdir(offset_folder)
+        requested_folder = os.path.join(offset_folder, str(requested))
+        if not os.path.exists(requested_folder):
+            os.mkdir(requested_folder)
+        filepath = os.path.join(requested_folder, "results.xml")
         return filepath
 
     async def kwic(self) -> None:
-        first_job = self._query_jobs[0]
-        xml_folder = os.path.join(RESULTS_DIR, first_job.id, "xml")
+        filepath = ExporterXml.get_dl_path_from_hash(
+            self._hash, self._offset, self._total_results_requested
+        )
+        folder = os.path.dirname(filepath)
 
         kwic_info = [r for r in self.results_info if r.get("type") == "plain"]
 
         if not kwic_info:
             return
 
-        with open(os.path.join(xml_folder, "_kwic.xml"), "w") as output:
+        with open(os.path.join(folder, "_kwic.xml"), "w") as output:
             last_kwic_name = ""
             for kwic_line in self.kwic_lines():
                 name, segment, tokens = (
@@ -98,8 +106,11 @@ class ExporterXml(Exporter):
         if not non_kwic_info:
             return
 
-        xml_folder = os.path.join(RESULTS_DIR, hash, "xml")
-        with open(os.path.join(xml_folder, "_non_kwic.xml"), "w") as output:
+        filename = ExporterXml.get_dl_path_from_hash(
+            self._hash, self._offset, self._total_results_requested
+        )
+        folder = os.path.dirname(filename)
+        with open(os.path.join(folder, "_non_kwic.xml"), "w") as output:
             for info in non_kwic_info:
                 if (n := info.get("res_index", 0)) <= 0:
                     continue
@@ -119,8 +130,10 @@ class ExporterXml(Exporter):
                 output.write(f"\n</result>")
 
     async def export(self, filepath: str = "") -> None:
-        results_filpath = ExporterXml.get_dl_path_from_hash(self._hash)
-        xml_folder = os.path.dirname(results_filpath)
+        results_filpath = ExporterXml.get_dl_path_from_hash(
+            self._hash, self._offset, self._total_results_requested
+        )
+        folder = os.path.dirname(results_filpath)
 
         await self.kwic()
         await self.non_kwic()
@@ -135,7 +148,7 @@ class ExporterXml(Exporter):
     requested={xmlattr(str(self._total_results_requested))}
     found-so-far={xmlattr(str(delivered))}
     projected={xmlattr(self.info['projected'])}
-    corpus-coverage={xmlattr(100 * self.info['percentage'])}
+    corpus-coverage={xmlattr(round(100.0 * self.info['percentage'],2))}
 >
     <meta>
         <submitted-at>{self.info['submitted_at']}</submitted-at>
@@ -147,8 +160,8 @@ class ExporterXml(Exporter):
         <word-count>{self.info['word_count']}</word-count>
     </corpus>"""
             )
-            kwic_filename = os.path.join(xml_folder, "_kwic.xml")
-            non_kwic_filename = os.path.join(xml_folder, "_non_kwic.xml")
+            kwic_filename = os.path.join(folder, "_kwic.xml")
+            non_kwic_filename = os.path.join(folder, "_non_kwic.xml")
             if os.path.exists(kwic_filename):
                 with open(kwic_filename, "r") as input:
                     while line := input.readline():

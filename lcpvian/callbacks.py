@@ -840,22 +840,24 @@ def _export_complete(
         # Swissdox
         return None
     hash, _, format, _ = job_args
-    filename = j_kwargs.get("filename")
-    if filename and os.path.exists(filename):
-        dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
-        user = j_kwargs.get("user", dep_kwargs.get("user", ""))
-        room = j_kwargs.get("room", dep_kwargs.get("room", ""))
-        if user and room and j_kwargs.get("download", False):
-            msg_id = str(uuid4())
-            jso: dict[str, Any] = {
-                "user": user,
-                "room": room,
-                "action": "export_link",
-                "msg_id": msg_id,
-                "format": format,
-                "hash": hash,
-            }
-            _publish_msg(connection, jso, msg_id)
+    dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
+    user = j_kwargs.get("user", dep_kwargs.get("user", ""))
+    room = j_kwargs.get("room", dep_kwargs.get("room", ""))
+    offset: int = cast(int, j_kwargs.get("offset", 0))
+    requested: int = cast(int, j_kwargs.get("total_results_requested", 0))
+    if user and room and j_kwargs.get("download", False):
+        msg_id = str(uuid4())
+        jso: dict[str, Any] = {
+            "user": user,
+            "room": room,
+            "action": "export_link",
+            "msg_id": msg_id,
+            "format": format,
+            "hash": hash,
+            "offset": offset,
+            "total_results_requested": requested,
+        }
+        _publish_msg(connection, jso, msg_id)
     return None
 
 
