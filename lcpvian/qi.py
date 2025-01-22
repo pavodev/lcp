@@ -52,6 +52,7 @@ from .typed import Batch, JSONObject, Query, Results
 from .utils import _determine_language, push_msg, _meta_query
 
 QI_KWARGS = dict(kw_only=True, slots=True)
+DEFAULT_MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
 
 
 @dataclass(**QI_KWARGS)
@@ -204,6 +205,8 @@ class QueryIteration:
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
 
+        full = request_data.get("full", False)
+
         user: str = "api" if api else request_data.get("user", "")
         room: str = "api" if api else request_data.get("room", "")
         to_export = request_data.get("to_export")
@@ -222,9 +225,9 @@ class QueryIteration:
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
             "languages": set(langs),
-            "full": request_data.get("full", False),
+            "full": full,
             "query": request_data["query"],
-            "resume": request_data.get("resume", False),  # and not preview,
+            "resume": request_data.get("resume", False),
             "total_results_requested": total_requested,
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
@@ -238,6 +241,16 @@ class QueryIteration:
         made: Self = cls(**details)
         made.get_word_count()
         return made
+
+    def get_queue(self) -> str:
+        if (
+            self.full
+            or self.to_export
+            or self.total_results_requested >= DEFAULT_MAX_KWIC_LINES
+        ):
+            return "background"
+        else:
+            return "queue"
 
     def get_word_count(self) -> None:
         """
@@ -315,7 +328,7 @@ class QueryIteration:
         if self.to_export:
             query_kwargs["to_export"] = self.to_export
 
-        queue = "query" if not self.full else "background"
+        queue = self.get_queue()
 
         do_sents: bool | None
         job, do_sents = await self.app["query_service"].query(
@@ -364,7 +377,7 @@ class QueryIteration:
         )
         if self.to_export:
             kwargs["to_export"] = json.dumps(self.to_export)
-        queue = "query" if not self.full else "background"
+        queue = self.get_queue()
         qs = self.app["query_service"]
         sents_jobs: list[str] = qs.sentences(
             self.sents_query(),
@@ -564,7 +577,7 @@ class QueryIteration:
         """
         What we do when there is no available batch
         """
-        max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+        max_kwic = DEFAULT_MAX_KWIC_LINES
         reached_kwic_limit = self.current_kwic_lines >= max_kwic
         if reached_kwic_limit and not self.full:
             info = "Could not create query: hit kwic limit"
