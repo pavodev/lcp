@@ -184,7 +184,9 @@ def _query(
         if not show_total:
             projected_results = -1
         perc_words = total_words_processed_so_far * 100.0 / job_kwargs["word_count"]
-        perc_matches = min(total_found, total_requested) * 100.0 / total_requested
+        perc_matches = (
+            min(total_found, total_requested) * 100.0 / (total_requested or total_found)
+        )
         if search_all:
             perc_matches = time_perc
         job.meta["percentage_done"] = round(perc_matches, 3)
@@ -284,7 +286,7 @@ def _query(
             "remaining": time_remaining,
         }
     )
-    _sign_payload(jso, kwargs)
+    _sign_payload(jso, cast(QueryArgs, kwargs))
 
     if job_kwargs["debug"] and job_kwargs["sql"]:
         jso["sql"] = job_kwargs["sql"]

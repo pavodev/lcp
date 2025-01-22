@@ -166,7 +166,7 @@ async def _query_iteration(
     if (
         qi.current_batch is not None
         and qi.job is not None
-        and do_sents is not None
+        and do_sents
         and not qi.resume
     ):
         print(f"\nNow querying: {schema_table} ... {query_job.id}")

@@ -27,31 +27,40 @@ class ExporterXml(Exporter):
         partition: str = "",
         total_results_requested: int = 200,
         offset: int = 0,
+        full: bool = False,
     ) -> None:
         super().__init__(
-            hash, connection, config, partition, total_results_requested, offset
+            hash, connection, config, partition, total_results_requested, offset, full
         )
 
     @staticmethod
-    def get_dl_path_from_hash(hash: str, offset: int = 0, requested: int = 0) -> str:
+    def get_dl_path_from_hash(
+        hash: str, offset: int = 0, requested: int = 0, full: bool = False
+    ) -> str:
+        filename = "results.xml"
         hash_folder = os.path.join(RESULTS_DIR, hash)
         if not os.path.exists(hash_folder):
             os.mkdir(hash_folder)
         xml_folder = os.path.join(hash_folder, "xml")
         if not os.path.exists(xml_folder):
             os.mkdir(xml_folder)
+        if full:
+            full_folder = os.path.join(xml_folder, "full")
+            if not os.path.exists(full_folder):
+                os.mkdir(full_folder)
+            return os.path.join(full_folder, filename)
         offset_folder = os.path.join(xml_folder, str(offset))
         if not os.path.exists(offset_folder):
             os.mkdir(offset_folder)
         requested_folder = os.path.join(offset_folder, str(requested))
         if not os.path.exists(requested_folder):
             os.mkdir(requested_folder)
-        filepath = os.path.join(requested_folder, "results.xml")
+        filepath = os.path.join(requested_folder, filename)
         return filepath
 
     async def kwic(self) -> None:
         filepath = ExporterXml.get_dl_path_from_hash(
-            self._hash, self._offset, self._total_results_requested
+            self._hash, self._offset, self._total_results_requested, self._full
         )
         folder = os.path.dirname(filepath)
 
@@ -107,7 +116,7 @@ class ExporterXml(Exporter):
             return
 
         filename = ExporterXml.get_dl_path_from_hash(
-            self._hash, self._offset, self._total_results_requested
+            self._hash, self._offset, self._total_results_requested, self._full
         )
         folder = os.path.dirname(filename)
         with open(os.path.join(folder, "_non_kwic.xml"), "w") as output:
@@ -131,7 +140,7 @@ class ExporterXml(Exporter):
 
     async def export(self, filepath: str = "") -> None:
         results_filpath = ExporterXml.get_dl_path_from_hash(
-            self._hash, self._offset, self._total_results_requested
+            self._hash, self._offset, self._total_results_requested, self._full
         )
         folder = os.path.dirname(results_filpath)
 
@@ -141,11 +150,17 @@ class ExporterXml(Exporter):
         with open(results_filpath, "w") as output:
             output.write('<?xml version="1.0" encoding="utf_8"?>')
             delivered = self.n_results
+            n = str(
+                delivered
+                if self._full
+                else min(delivered, self._total_results_requested)
+            )
+            requested = "full" if self._full else str(self._total_results_requested)
             output.write(
                 f"""
 <results
-    n={xmlattr(str(min(delivered, self._total_results_requested)))}
-    requested={xmlattr(str(self._total_results_requested))}
+    n={xmlattr(n)}
+    requested={xmlattr(requested)}
     found-so-far={xmlattr(str(delivered))}
     projected={xmlattr(self.info['projected'])}
     corpus-coverage={xmlattr(round(100.0 * self.info['percentage'],2))}

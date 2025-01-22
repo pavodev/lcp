@@ -222,23 +222,17 @@ class QueryService:
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
-                if not kwargs["full"]:
-                    job_for_send_all_data = job if is_first else first_job
-                    success = await self.send_all_data(job_for_send_all_data, **kwargs)
-                    if success:
-                        return job, None
-                    _query(
-                        job,
-                        self.app["redis"],
-                        job.result,
-                        user=kwargs.get("user", ""),
-                        room=kwargs.get("room", ""),
-                        to_export=kwargs.get("to_export", {}),
-                        full=kwargs["full"],
-                        post_processes=kwargs["post_processes"],
-                        current_kwic_lines=kwargs["current_kwic_lines"],
-                        from_memory=True,
-                    )
+                job_for_send_all_data = job if is_first else first_job
+                success = await self.send_all_data(job_for_send_all_data, **kwargs)
+                if success:
+                    return job, None
+                query_kwargs = {
+                    "post_processes": kwargs["post_processes"],
+                    "current_kwic_lines": kwargs["current_kwic_lines"],
+                    "from_memory": True,
+                }
+                _sign_payload(query_kwargs, kwargs)
+                _query(job, self.app["redis"], job.result, **query_kwargs)
                 return job, False
         except NoSuchJobError:
             pass

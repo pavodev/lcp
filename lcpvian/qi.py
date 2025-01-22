@@ -209,8 +209,8 @@ class QueryIteration:
         to_export = request_data.get("to_export")
         if to_export:
             to_export["total_results_requested"] = total_requested
-            if "offset" in request_data:
-                to_export["offset"] = request_data["offset"]
+            to_export["offset"] = request_data.get("offset", 0)
+            to_export["full"] = request_data.get("full", False)
 
         details = {
             "corpora": corpora_to_use,
@@ -569,9 +569,6 @@ class QueryIteration:
         if reached_kwic_limit and not self.full:
             info = "Could not create query: hit kwic limit"
             action = "kwic_limit"
-        # elif self.to_export:
-        #     self.resume = False
-        #     await self.submit_query()
         else:
             info = "Could not create query: no batches"
             action = "no_batch"
@@ -583,8 +580,6 @@ class QueryIteration:
             "room": self.room or "",
             "info": info,
         }
-        if self.to_export:
-            msg["to_export"] = json.dumps(self.to_export)
         err = f"Error: {info} ({self.user}/{self.room})"
         # alert everyone possible about this problem:
         print(f"{err}: {info}")

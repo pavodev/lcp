@@ -105,11 +105,13 @@ class Exporter:
         partition: str = "",
         total_results_requested: int = 200,
         offset: int = 0,
+        full: bool = False,
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
         self._total_results_requested = total_results_requested
         self._offset = offset
+        self._full = full
         seg_layer: str = self._config["segment"]
         seg_mapping: dict[str, Any] = self._config["mapping"]["layer"][seg_layer]
         if "partitions" in seg_mapping and partition in seg_mapping["partitions"]:
@@ -124,7 +126,9 @@ class Exporter:
         self._info: dict[str, Any] = {}
 
     @staticmethod
-    def get_dl_path_from_hash(hash: str, offset: int = 0, requested: int = 0) -> str:
+    def get_dl_path_from_hash(
+        hash: str, offset: int = 0, requested: int = 0, full: bool = False
+    ) -> str:
         hash_folder = os.path.join(RESULTS_DIR, hash)
         if not os.path.exists(hash_folder):
             os.mkdir(hash_folder)
@@ -192,7 +196,10 @@ class Exporter:
                 for result_n, result in query_job.result:
                     if result_n != n:
                         continue
-                    if counter >= self._offset + total_results_requested:
+                    if (
+                        not self._full
+                        and counter >= self._offset + total_results_requested
+                    ):
                         break
                     sentence_id = result[0]
                     try:
@@ -244,7 +251,7 @@ class Exporter:
                             )
                         )
                     counter = counter + 1
-                    if counter < self._offset:
+                    if not self._full and counter < self._offset:
                         continue
                     yield KwicLine(
                         **{  # type: ignore
@@ -372,7 +379,7 @@ class Exporter:
 
     async def export(self, filepath: str = "") -> None:
         filepath = Exporter.get_dl_path_from_hash(
-            self._hash, self._offset, self._total_results_requested
+            self._hash, self._offset, self._total_results_requested, self._full
         )
 
         self._output = open(filepath, "w")

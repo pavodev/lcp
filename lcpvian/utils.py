@@ -876,19 +876,18 @@ def _sign_payload(
     payload: dict[str, Any] | JSONObject | SentJob,
     kwargs: dict[str, Any] | QueryArgs | SentJob,
 ) -> None:
-    user = kwargs.get("user")
-    room = kwargs.get("room")
-    total_requested = kwargs.get("total_results_requested")
-    offset = kwargs.get("offset")
     to_export = kwargs.get("to_export")
-    if user:
-        payload["user"] = user
-    if room:
-        payload["room"] = room
-    if total_requested:
-        payload["total_results_requested"] = cast(int, total_requested)
-    if offset:
-        payload["offset"] = cast(int, offset)
+    kwargs_to_payload_keys = (
+        "user",
+        "room",
+        "total_results_requested",
+        "offset",
+        "full",
+    )
+    for k in kwargs_to_payload_keys:
+        if k not in kwargs:
+            continue
+        payload[k] = kwargs[k]  # type: ignore
     if to_export:
         payload["to_export"] = to_export
     else:

@@ -403,7 +403,7 @@ async def _handle_query(
         payload["config"] = app["config"]
         to_submit = query(None, manual=payload, app=app)
 
-    if do_full:
+    if do_full and "progress" in payload:
         prog = cast(dict[str, JSON], payload["progress"])
         await push_msg(
             app["websockets"],

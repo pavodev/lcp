@@ -34,6 +34,7 @@ async def exporter(
     exp_class = get_exporter_class(format)
     total_requested = kwargs.get("total_results_requested", 200)
     offset = kwargs.get("offset", 0)
+    full = kwargs.get("full", False)
     await exp_class(
         hash,
         connection,
@@ -41,6 +42,7 @@ async def exporter(
         partition,
         total_results_requested=total_requested,
         offset=offset,
+        full=full,
     ).export()
 
 
@@ -91,6 +93,10 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
         partitions: dict = cast(dict, payload["config"]).get("partitions", {})
         if languages and languages[0] in partitions.get("values", []):
             partition = languages[0]
+        exclude_from_payload = ("config", "format")
+        exporter_payload = {
+            k: v for k, v in payload.items() if k not in exclude_from_payload
+        }
         job = app["background"].enqueue(
             exporter,
             on_success=Callback(_export_complete, EXPORT_TTL),
@@ -98,13 +104,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             result_ttl=EXPORT_TTL,
             job_timeout=EXPORT_TTL,
             args=(hash, corpus_conf, export_format, partition),
-            kwargs={
-                "download": payload.get("download", False),
-                "room": room,
-                "user": user,
-                "total_results_requested": payload.get("total_results_requested", 200),
-                "offset": payload.get("offset", 0),
-            },
+            kwargs=exporter_payload,
             **rest,
         )
 
@@ -135,7 +135,8 @@ async def download_export(request: web.Request) -> web.FileResponse:
     format = request.match_info["format"]
     offset = cast(int, request.match_info["offset"])
     requested = cast(int, request.match_info["total_results_requested"])
+    full = cast(bool, request.match_info.get("full", False))
     exporter_class = get_exporter_class(format)
-    filepath = exporter_class.get_dl_path_from_hash(hash, offset, requested)
+    filepath = exporter_class.get_dl_path_from_hash(hash, offset, requested, full)
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
     return web.FileResponse(filepath)
