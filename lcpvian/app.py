@@ -139,12 +139,8 @@ async def start_background_tasks(app: web.Application) -> None:
         if instance not in app:
             continue
         listener = f"{instance}_listener"
-        lapp.addkey(
-            listener, Task[None], asyncio.create_task(listen_to_redis(app, instance))
-        )
-    lapp.addkey(
-        "ws_cleanup", Task[None], asyncio.create_task(ws_cleanup(app["websockets"]))
-    )
+        lapp.addkey(listener, Task, asyncio.create_task(listen_to_redis(app, instance)))
+    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -225,7 +221,11 @@ async def create_app(test: bool = False) -> web.Application:
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
-        ("/download_export/{hash}/{format}", "GET", download_export),
+        (
+            "/download_export/{hash}/{format}/{offset}/{total_results_requested}",
+            "GET",
+            download_export,
+        ),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),

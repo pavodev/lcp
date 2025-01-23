@@ -9,7 +9,12 @@ from .exporter import Exporter
 from .exporter_xml import ExporterXml
 from .swissdox import export_swissdox
 from .typed import JSONObject
-from .utils import _determine_language, push_msg
+from .utils import (
+    _determine_language,
+    _get_all_jobs_from_hash,
+    push_msg,
+    format_meta_lines,
+)
 import os
 
 EXPORT_TTL = 5000
@@ -69,18 +74,24 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
         underlang = _determine_language(batch) or ""
         if underlang:
             underlang = f"_{underlang}"
-        job = app["background"].enqueue(
-            export_swissdox,
-            on_failure=Callback(_general_failure, EXPORT_TTL),
-            result_ttl=EXPORT_TTL,
-            job_timeout=EXPORT_TTL,
-            depends_on=depends_on,
-            args=(first_job_id, underlang, corpus_conf),
-            kwargs={
-                "download": payload.get("download", False),
-                "room": room,
-                "user": user,
-            },
+        article_ids: set[str] = set()
+        _, _, meta_jobs = _get_all_jobs_from_hash(first_job_id, app["redis"])
+        for j in meta_jobs:
+            mjk = cast(dict, j.kwargs)
+            segs_to_meta = format_meta_lines(cast(str, mjk.get("meta_query")), j.result)
+            incoming_arids: set[str] = {
+                str(v["Article"]["id"]) for v in cast(dict, segs_to_meta).values()
+            }
+            article_ids = article_ids.union(incoming_arids)
+        conf: dict = cast(dict, corpus_conf)
+        swissdox_kwargs = {
+            "user": user,
+            "room": room,
+            "project_id": str(conf.get("project_id", "all")),
+            "corpus_name": str(conf.get("shortname", "swissdox")),
+        }
+        job = await export_swissdox(
+            app["redis"], [a for a in article_ids], **swissdox_kwargs  # type: ignore
         )
     else:
         rest: dict[str, Any] = {}
@@ -131,12 +142,24 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 
 async def download_export(request: web.Request) -> web.FileResponse:
+    filepath = ""
     hash = request.match_info["hash"]
     format = request.match_info["format"]
-    offset = cast(int, request.match_info["offset"])
-    requested = cast(int, request.match_info["total_results_requested"])
+    offset = request.match_info["offset"]
+    requested = request.match_info["total_results_requested"]
     full = cast(bool, request.match_info.get("full", False))
-    exporter_class = get_exporter_class(format)
-    filepath = exporter_class.get_dl_path_from_hash(hash, offset, requested, full)
+    if format == "swissdox":
+        results_path = str(os.environ.get("RESULTS_PATH", "results"))
+        filepath = os.path.join(results_path, hash, offset, "swissdox.db")
+    else:
+        exporter_class = get_exporter_class(format)
+        filepath = exporter_class.get_dl_path_from_hash(
+            hash, cast(int, offset), cast(int, requested), full
+        )
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
-    return web.FileResponse(filepath)
+    content_disposition = f'attachment; filename="{os.path.basename(filepath)}"'
+    headers = {
+        "content-disposition": content_disposition,
+        "content-length": f"{os.stat(filepath).st_size}",
+    }
+    return web.FileResponse(filepath, headers=headers)

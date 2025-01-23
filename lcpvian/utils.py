@@ -691,6 +691,8 @@ def format_query_params(
 def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
+    if not result:
+        return {}
     # replace this with actual upstream handling of column names
     pre_columns = re.match(META_QUERY_REGEXP, query)
     if not pre_columns:

@@ -250,7 +250,7 @@ class QueryIteration:
         ):
             return "background"
         else:
-            return "queue"
+            return "query"
 
     def get_word_count(self) -> None:
         """

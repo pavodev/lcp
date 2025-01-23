@@ -10,8 +10,10 @@ These callbacks are hooked up as on_success and on_failure kwargs in
 calls to Queue.enqueue in query_service.py
 """
 
+import duckdb
 import json
 import os
+import pandas
 import shutil
 import traceback
 
@@ -828,6 +830,49 @@ def _queries(
             queries.append(dct)
         jso["queries"] = queries
     return _publish_msg(connection, jso, msg_id)
+
+
+def _swissdox_to_db_file(
+    job: Job,
+    connection: RedisConnection,
+    result: list[UserQuery] | None,
+) -> None:
+    print("export complete!")
+    j_kwargs = cast(dict, job.kwargs)
+    project_id = j_kwargs.get("project_id", "swissdox")
+    project_path = os.path.join(os.environ.get("RESULTS_PATH", "results"), project_id)
+    if not os.path.exists(project_path):
+        os.mkdir(project_path)
+    corpus_name = j_kwargs.get("name", "swissdox")
+    path = os.path.join(project_path, corpus_name)
+    if not os.path.exists(path):
+        os.mkdir(path)
+    elif os.path.exists(os.path.join(path, "swissdox.db")):
+        os.remove(os.path.join(path, "swissdox.db"))
+
+    for table_name, index_col, data in job.result:
+        df = pandas.DataFrame.from_dict(data)
+        df.set_index(index_col)
+        con = duckdb.connect(
+            database=os.path.join(path, "swissdox.db"), read_only=False
+        )
+        con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+
+    user = j_kwargs.get("user")
+    room = j_kwargs.get("room")
+    if user and room:
+        msg_id = str(uuid4())
+        jso: dict[str, Any] = {
+            "user": user,
+            "room": room,
+            "action": "export_link",
+            "msg_id": msg_id,
+            "format": "swissdox",
+            "hash": project_id,
+            "offset": corpus_name,
+            "total_results_requested": 200,
+        }
+        _publish_msg(connection, jso, msg_id)
 
 
 def _export_complete(

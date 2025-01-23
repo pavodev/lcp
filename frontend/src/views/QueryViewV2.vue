@@ -695,7 +695,7 @@
             <label class="form-label">Plain format (TSV + JSON)</label>
             <button
               type="button"
-              @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
+              @click="exportResults('plain', /*download=*/true, /*preview=*/false)"
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
@@ -739,8 +739,9 @@
             <label class="form-label">Swissdox</label>
             <button
               type="button"
-              @click="exportResults('swissdox')"
+              @click="exportResults('swissdox', /*download=*/true, /*preview=*/true)"
               class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
               Launch export
             </button>
@@ -1528,7 +1529,7 @@ export default {
         } else if (data["action"] == "export_link") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
-          useCorpusStore().fetchExport(data.hash, data.format);
+          useCorpusStore().fetchExport(data.hash, data.format, data.offset || 0, data.total_results_requested || 200);
           useNotificationStore().add({
             type: "success",
             text: "Initiated export download"
@@ -1741,6 +1742,10 @@ export default {
       to_export.download = download;
       let full = !preview;
       let resume = full; // If not a full query, no need to resume the query: we already have the necessary results
+      if (format == 'swissdox') {
+        resume = false;
+        full = true;
+      }
       this.submit(null, /*resumeQuery=*/resume, /*cleanResults=*/false, /*full=*/full, /*to_export=*/to_export);
     },
     submitFullSearch() {

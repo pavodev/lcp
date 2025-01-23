@@ -144,7 +144,7 @@ upload_kwargs = dict(
     isolation_level="READ COMMITTED",
 )
 if not UPLOAD_POOL:
-    upload_kwargs["pool_class"] = NullPool
+    upload_kwargs["pool_class"] = NullPool  # type: ignore
 
 
 class SQLJob(Job):
