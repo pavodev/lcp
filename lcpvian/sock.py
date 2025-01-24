@@ -68,20 +68,23 @@ async def _process_message(
     if not message.get("data"):
         return
     data = json.loads(cast(bytes, message["data"]))
-    raw: bytes = app["redis"].get(data["msg_id"])
-    if not raw and "shared_redis" in app:
-        raw = app["shared_redis"].get(data["msg_id"])
-    if not raw:
-        return None
-    payload: JSONObject = json.loads(raw)
-    if "user" in data or "room" in data:
-        # If the incoming data contains fresher information than from redis memory,
-        # (as determined by the presence of a user/room in data)
-        # then sign the payload with the information contained in data
-        _sign_payload(payload, data)
-    payload["status"] = data.get("status", payload.get("status", ""))
-    if not payload or not isinstance(payload, dict):
-        return
+    if "msg_id" in data:
+        raw: bytes = app["redis"].get(data["msg_id"])
+        if not raw and "shared_redis" in app:
+            raw = app["shared_redis"].get(data["msg_id"])
+        if not raw:
+            return None
+        payload: JSONObject = json.loads(raw)
+        if "user" in data or "room" in data:
+            # If the incoming data contains fresher information than from redis memory,
+            # (as determined by the presence of a user/room in data)
+            # then sign the payload with the information contained in data
+            _sign_payload(payload, data)
+        payload["status"] = data.get("status", payload.get("status", ""))
+        if not payload or not isinstance(payload, dict):
+            return
+    else:
+        payload = data
     await _handle_message(payload, channel, app)
     return None
 

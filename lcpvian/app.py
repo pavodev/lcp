@@ -17,6 +17,7 @@ from typing import cast, Type
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
+from aiohttp.web import HTTPForbidden
 from aiohttp_catcher import Catcher, catch
 from redis import Redis
 from redis import asyncio as aioredis
@@ -175,15 +176,15 @@ async def create_app(test: bool = False) -> web.Application:
         )
         .and_call(handle_lama_error)
     )
-    # await catcher.add_scenario(
-    #     catch(AuthError)
-    #     .with_status_code(403)
-    #     .and_stringify()
-    #     .with_additional_fields(
-    #         {"message": "Authentication issue..."}
-    #     )
-    #     .and_call(handle_lama_error)
-    # )
+    await catcher.add_scenario(
+        catch(HTTPForbidden)
+        .with_status_code(403)
+        .and_stringify()
+        .with_additional_fields(
+            lambda exc, _: {"reason": exc.reason, "message": exc.text}
+        )
+        .and_call(handle_lama_error)
+    )
 
     app = LCPApplication(middlewares=[catcher.middleware])
     app.addkey("mypy", bool, C_COMPILED)
