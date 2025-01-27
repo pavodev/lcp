@@ -240,7 +240,11 @@ async def query(
         qi = await QueryIteration.from_request(request_data, app, api=api)
         # Check permission
         authenticator = cast(Authentication, app["auth_class"](app))
-        user_data = await authenticator.user_details(request)
+        user_data: dict = {}
+        if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
+            user_data = await authenticator.check_api_key(request)
+        else:
+            user_data = await authenticator.user_details(request)
         app_type = str(request_data.get("appType", "lcp"))
         app_type = (
             "lcp"
