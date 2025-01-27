@@ -1,8 +1,8 @@
 # DQD: the `@` operator
 
-The `@` operator essentially expresses a character-wise containment relation. As such, it can only be applied to entities that are character-aligned, for example tokens or segments (unlike gesture annotations of video corpora that, typically, are not character-aligned).
+The `@` operator expresses a character-wise overlap relation. As such, it can only be applied to entities that are character-aligned, for example tokens or segments (unlike gesture annotations of video corpora that, typically, are not character-aligned).
 
-It is a binary operator: it uses the syntax `x@y`, where `y` is a label referring to the entity that should contain the one being declared by `x`.
+It is a binary operator: it uses the syntax `x@y`, where `x` and `y` are labels referring to entities that should overlap along the character axis. In the particular case where `x` refers to a parent of the annotation unit referred to by `y`, for example a Segment-Token relation, the `@` operator essentially expresses a _containment_ relation.
 
 `x` can be of two types. First, it can be the name of an annotation layer in the corpus. For example, the block below means that the adverb token `t1` should be part of the segment labeled `s`
 
