@@ -149,6 +149,7 @@ class QueryArgs(BaseArgs):
     post_processes: Any
     current_kwic_lines: Any
     from_memory: bool
+    to_export: Any
 
 
 class DocIDArgs(BaseArgs):
@@ -164,3 +165,4 @@ class SentJob(BaseArgs, total=False):
     offset: int
     sentences_query: str
     total_results_requested: int
+    to_export: Any

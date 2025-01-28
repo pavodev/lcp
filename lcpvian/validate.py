@@ -4,7 +4,9 @@ import traceback
 from lark.exceptions import UnexpectedToken
 from typing import cast, Any
 
+from .cqp_to_json import full_cqp_to_json
 from .dqd_parser import convert
+from .textsearch_to_json import textsearch_to_json
 from .typed import JSONObject
 
 
@@ -12,25 +14,36 @@ async def validate(
     user: str | None = None,
     room: str | None = None,
     query: str = "",
+    kind: str = "json",
     query_name: str | None = None,
     **kwargs: dict[str, Any],
 ) -> JSONObject:
     """
     Validate a JSON/DQD query. This is not an endpoint, it is called by sock.py
     """
+    conf: dict[str, Any] = {}
+    if kwargs:
+        conf = cast(dict[str, Any], kwargs).get("config", {}).get(kwargs.get("corpus"))
     result: JSONObject = {}
-    try:
-        json.loads(query)
-        result = {"kind": "json", "valid": True, "action": "validate", "status": 200}
-    except json.JSONDecodeError:
+    if kind == "json":
         try:
-            conf: dict[str, Any] = {}
-            if kwargs:
-                conf = (
-                    cast(dict[str, Any], kwargs)
-                    .get("config", {})
-                    .get(kwargs.get("corpus"))
-                )
+            json.loads(query)
+            result = {
+                "kind": "json",
+                "valid": True,
+                "action": "validate",
+                "status": 200,
+            }
+        except json.JSONDecodeError as e:
+            result = {
+                "kind": "json",
+                "valid": False,
+                "action": "validate",
+                "error": str(e),
+                "status": 400,
+            }
+    elif kind == "dqd":
+        try:
             json_query = convert(query, conf)
             result = {
                 "kind": "dqd",
@@ -72,12 +85,48 @@ async def validate(
                     error_obj["column"] = error_obj.get("end_column", 0)
                     all_errors.append(cast(JSONObject, error_obj))
             result = {
-                "kind": "dqd?",
+                "kind": "dqd",
                 "valid": False,
                 "action": "validate",
                 "error": str(err),
                 "errorList": cast(JSONObject, all_errors),
                 "status": 400,
                 "traceback": tb,
+            }
+    elif kind == "cqp":
+        try:
+            # plain text search
+            result = {
+                "kind": "cqp",
+                "valid": True,
+                "action": "validate",
+                "status": 200,
+            }
+            result["json"] = full_cqp_to_json(query, conf)
+        except Exception as e:
+            result = {
+                "kind": "cqp",
+                "valid": False,
+                "action": "validate",
+                "error": str(e),
+                "status": 400,
+            }
+    elif kind == "text":
+        try:
+            # plain text search
+            result = {
+                "kind": "text",
+                "valid": True,
+                "action": "validate",
+                "status": 200,
+            }
+            result["json"] = textsearch_to_json(query, conf)
+        except Exception as e:
+            result = {
+                "kind": "text",
+                "valid": False,
+                "action": "validate",
+                "error": str(e),
+                "status": 400,
             }
     return result

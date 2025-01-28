@@ -1,4 +1,7 @@
-part_of : "@"label
+part_of_stream : "@" label // skip: label
+part_of_time : "%" label // skip: label
+part_of_location : "&" label // skip: label
+part_of : (part_of_location | part_of_stream | part_of_time)+
 
 operator : OPERATOR
 operand_left : (math | function)

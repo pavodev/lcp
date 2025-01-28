@@ -1,8 +1,52 @@
 {
     "$schema": "http://json-schema.org/draft-04/schema#",
     "$defs": {
+        "partOfStream": {
+            "type": "string",
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
+        },
+        "partOfTime": {
+            "type": "string",
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
+        },
+        "partOfLocation": {
+            "type": "string",
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
+        },
         "partOf": {
-            "$ref": "#/$defs/label"
+            "type": "array",
+            "items": {
+                "anyOf": [
+                    {
+                        "required": [
+                            "partOfLocation"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "partOfStream"
+                        ]
+                    },
+                    {
+                        "required": [
+                            "partOfTime"
+                        ]
+                    }
+                ],
+                "properties": {
+                    "partOfLocation": {
+                        "$ref": "#/$defs/partOfLocation"
+                    },
+                    "partOfStream": {
+                        "$ref": "#/$defs/partOfStream"
+                    },
+                    "partOfTime": {
+                        "$ref": "#/$defs/partOfTime"
+                    }
+                },
+                "type": "object"
+            },
+            "minItems": 1
         },
         "operator": {
             "type": "string",
@@ -82,7 +126,7 @@
                 },
                 {
                     "type": "string",
-                    "pattern": "(-[0-9]+|-?[0-9]+\\.[0-9]+|[0-9]+)"
+                    "pattern": "(-[0-9]+|[0-9]+|-?[0-9]+\\.[0-9]+)"
                 }
             ],
             "properties": {
@@ -155,7 +199,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "((EXISTS(~|\u00ac|!|not )?)|((~|\u00ac|!|not )?ALL))"
+            "pattern": "(((~|\u00ac|!|not )?EXISTS)|((~|\u00ac|!|not )?ALL))"
         },
         "quantification": {
             "type": "object",
@@ -304,23 +348,23 @@
         },
         "label": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
         },
         "entity": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
         },
         "center": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
         },
         "space": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*)"
         },
         "reference": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "layer": {
             "type": "string",
@@ -438,7 +482,7 @@
         },
         "comparator": {
             "type": "string",
-            "pattern": "((=|[><]=?|contain|overlaps)(~|\u00ac|!|not )?)"
+            "pattern": "((~|\u00ac|!|not )?(=|[><]=?|contain|overlaps))"
         },
         "comparison": {
             "type": "object",
@@ -869,7 +913,7 @@
         },
         "resultsCollocationAttribute": {
             "type": "string",
-            "pattern": "((([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?(i|(frequency|minimum|maximum|average|stddev)|contain|overlaps))|[a-z][a-zA-Z0-9_]*|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
+            "pattern": "(((i|(frequency|minimum|maximum|average|stddev)|contain|overlaps)([a-z][a-zA-Z0-9_]*|[A-Z][a-zA-Z0-9_]+)?)|[a-z][a-zA-Z0-9_]*|[a-z][a-zA-Z0-9_]*(\\.([a-zA-Z0-9_]+))+)"
         },
         "query": {
             "type": "array",
@@ -937,6 +981,15 @@
         "results"
     ],
     "skips": {
+        "partOfStream": [
+            "label"
+        ],
+        "partOfTime": [
+            "label"
+        ],
+        "partOfLocation": [
+            "label"
+        ],
         "constraints": [
             "constraint"
         ],

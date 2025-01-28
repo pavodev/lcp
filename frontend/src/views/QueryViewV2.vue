@@ -158,6 +158,19 @@
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
                           <button
+                            class="nav-link"
+                            id="nav-plaintext-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-plaintext"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-plaintext"
+                            aria-selected="false"
+                            @click="currentTab = 'text'"
+                          >
+                            Text
+                          </button>
+                          <button
                             class="nav-link active"
                             id="nav-dqd-tab"
                             data-bs-toggle="tab"
@@ -169,6 +182,19 @@
                             @click="currentTab = 'dqd'"
                           >
                             DQD
+                          </button>
+                          <button
+                            class="nav-link"
+                            id="nav-cqp-tab"
+                            data-bs-toggle="tab"
+                            data-bs-target="#nav-cqp"
+                            type="button"
+                            role="tab"
+                            aria-controls="nav-cqp"
+                            aria-selected="false"
+                            @click="currentTab = 'cqp'"
+                          >
+                            CQP
                           </button>
                           <button
                             class="nav-link"
@@ -201,6 +227,32 @@
                       </nav>
                       <div class="tab-content" id="nav-query-tabContent">
                         <div
+                          class="tab-pane fade pt-3"
+                          id="nav-plaintext"
+                          role="tabpanel"
+                          aria-labelledby="nav-plaintext-tab"
+                        >
+                          <input
+                            class="form-control"
+                            type="text"
+                            placeholder="Query (e.g. a cat)"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="textsearch"
+                            @keyup="$event.key=='Enter' && this.submit()"
+                          />
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
                           class="tab-pane fade show active pt-3"
                           id="nav-dqd"
                           role="tabpanel"
@@ -223,6 +275,31 @@
                             v-if="
                               isQueryValidData && isQueryValidData.valid != true && debug
                             "
+                          >
+                            {{ isQueryValidData.error }}
+                          </p>
+                        </div>
+                        <div
+                          class="tab-pane fade pt-3"
+                          id="nav-cqp"
+                          role="tabpanel"
+                          aria-labelledby="nav-cqp-tab"
+                        >
+                          <textarea
+                            class="form-control query-field"
+                            placeholder="Query (e.g. [word=&quot;hello&quot;])"
+                            :class="
+                              isQueryValidData == null || isQueryValidData.valid == true
+                                ? 'ok'
+                                : 'error'
+                            "
+                            v-model="cqp"
+                            @keyup="$event.key=='Enter' && $event.ctrlKey && this.submit()"
+                          ></textarea>
+                          <!-- <label for="floatingTextarea">Query</label> -->
+                          <p
+                            class="error-text text-danger"
+                            v-if="isQueryValidData && isQueryValidData.valid != true"
                           >
                             {{ isQueryValidData.error }}
                           </p>
@@ -332,7 +409,7 @@
                         aria-valuemin="0"
                         aria-valuemax="100"
                       >
-                        {{ percentageDone.toFixed(2) }}%
+                        {{ (percentageDone || 0.0).toFixed(2) }}%
                       </div>
                     </div>
                   </div>
@@ -618,7 +695,7 @@
             <label class="form-label">Plain format (TSV + JSON)</label>
             <button
               type="button"
-              @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
+              @click="exportResults('plain', /*download=*/true, /*preview=*/false)"
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
@@ -633,12 +710,38 @@
               Launch export
             </button> -->
           </div>
+          <div class="modal-body text-start">
+            <label class="form-label">XML</label>
+            <button
+              type="button"
+              @click="exportResults('xml', /*download=*/true, /*preview=*/true)"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Download preview
+            </button>
+            <input
+              type="text"
+              class="form-control"
+              id="nExport"
+              v-model="nExport"
+            />
+            <!-- <button
+              type="button"
+              @click="exportResults('plain')"
+              class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
+            >
+              Launch export
+            </button> -->
+          </div>
           <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
             <label class="form-label">Swissdox</label>
             <button
               type="button"
-              @click="exportResults('swissdox')"
+              @click="exportResults('swissdox', /*download=*/true, /*preview=*/true)"
               class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
               Launch export
             </button>
@@ -840,6 +943,8 @@ export default {
     return {
       query: "",
       queryDQD: "",
+      textsearch: "",
+      cqp: "",
       defaultQueryDQD: "",
       preselectedCorporaId: this.$route.params.id,
       wsConnected: false,
@@ -853,6 +958,7 @@ export default {
       currentResults: 0,
       selectedLanguages: ["en"],
       queryName: "",
+      nExport: 200,
       currentTab: "dqd",
       simultaneousMode: false,
       percentageDone: 0,
@@ -1028,11 +1134,22 @@ export default {
         this.loading = false;
       }
     },
+    currentTab() {
+      this.validate();
+    },
     query() {
       // console.log("Check is valid")
       if (this.currentTab != "dqd") {
         this.validate();
       }
+    },
+    textsearch() {
+      if (this.currentTab != "text") return;
+      this.validate();
+    },
+    cqp() {
+      if (this.currentTab != "cqp") return;
+      this.validate();
     },
     loading() {
       if (this.loading) {
@@ -1232,7 +1349,7 @@ export default {
             this.selectedLanguages = [this.availableLanguages[0]];
           }
           // console.log("Query validation", data);
-          if (data.kind == "dqd" && data.valid == true) {
+          if (data.kind in {dqd:1, text:1, cqp: 1} && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
@@ -1412,8 +1529,7 @@ export default {
         } else if (data["action"] == "export_link") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
-          const {schema_path} = this.selectedCorpora.corpus;
-          useCorpusStore().fetchExport(schema_path, data.fn);
+          useCorpusStore().fetchExport(data.hash, data.format, data.offset || 0, data.total_results_requested || 200);
           useNotificationStore().add({
             type: "success",
             text: "Initiated export download"
@@ -1619,12 +1735,18 @@ export default {
       const to_export = {};
       to_export.format = {
         'plain':'dump',
-        'swissdox':'swissdox'
+        'swissdox':'swissdox',
+        'xml': 'xml'
       }[format];
       to_export.preview = preview;
       to_export.download = download;
       let full = !preview;
-      this.submit(null, true, false, /*full=*/full, /*to_export=*/to_export);
+      let resume = full; // If not a full query, no need to resume the query: we already have the necessary results
+      if (format == 'swissdox') {
+        resume = false;
+        full = true;
+      }
+      this.submit(null, /*resumeQuery=*/resume, /*cleanResults=*/false, /*full=*/full, /*to_export=*/to_export);
     },
     submitFullSearch() {
       this.submit(null, true, false, true);
@@ -1638,7 +1760,7 @@ export default {
     ) {
       if (!localStorage.getItem("dontShowResultsNotif"))
         this.showResultsNotification = true;
-      if (resumeQuery == false) {
+      if (!to_export && resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
         this.nResults = this.pageSize * 2; // We want load 2 pages at first
@@ -1669,7 +1791,11 @@ export default {
       }
       if (to_export) {
         data["to_export"] = to_export;
+        this.nExport = Number((String(this.nExport) || "200").replace(/\D/,''));
+        if (isNaN(this.nExport)) this.nExport = 200;
+        data["total_results_requested"] = this.nExport;
       }
+      console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
         this.loading = true;
@@ -1707,9 +1833,17 @@ export default {
       });
     },
     validate() {
+      let query = this.query;
+      if (this.currentTab == "text")
+        query = this.textsearch;
+      if (this.currentTab == "dqd")
+        query = this.queryDQD + "\n";
+      if (this.currentTab == "cqp")
+        query = this.cqp;
       useWsStore().sendWSMessage({
         action: "validate",
-        query: this.currentTab == "json" ? this.query : this.queryDQD + "\n",
+        query: query,
+        kind: this.currentTab,
         corpus: this.selectedCorpora.value
       });
     },

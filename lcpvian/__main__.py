@@ -3,16 +3,29 @@ Interface for interacting with lcpvian server
 
 Not compiled to c!
 """
+
 import asyncio
 import json
 import os
 import sys
 
-from .api import corpora, query, refresh_config
+from .api import corpora, query
 from .ddl_gen import main
 from .dqd_parser import cmdline
+from .cqp_to_json import cqp_to_json
+from .project import refresh_config
 
-COMMANDS = {"start", "lcpvian", "worker", "dqd", "ddl", "corpora", "query", "config"}
+COMMANDS = {
+    "start",
+    "lcpvian",
+    "worker",
+    "dqd",
+    "cqp",
+    "ddl",
+    "corpora",
+    "query",
+    "config",
+}
 
 command = next((i for i in reversed(sys.argv) if i in COMMANDS), "lcpvian")
 
@@ -35,6 +48,17 @@ elif command == "dqd":
     print("Parsing DQD...")
 
     cmdline()
+
+elif command == "cqp":
+    print("Parsing CQP...")
+
+    cqp_ar: list[str] = []
+    for i in reversed(sys.argv):
+        if i in COMMANDS:
+            break
+        cqp_ar = [i, *cqp_ar]
+
+    print(cqp_to_json(" ".join(cqp_ar)))
 
 elif command == "ddl":
     print("Creating DDL...")

@@ -1011,6 +1011,7 @@ def _get_constraint(
     """
 
     first_key_in_constraint = next(iter(constraint), "")
+    part_of: list[dict[str, str]] = []
 
     if first_key_in_constraint == "quantification":
         obj: dict[str, Any] = cast(dict, constraint)["quantification"]
@@ -1026,7 +1027,7 @@ def _get_constraint(
         if _layer_contains(conf.config, layer, obj_layer) or all(
             _is_anchored(conf.config, x, "stream") for x in (layer, obj_layer)
         ):
-            part_of = label
+            part_of = [{"partOfStream": label}]
         first_key_in_constraint = next(iter(constraint), "")
 
     unit: dict[str, Any] = cast(dict[str, Any], constraint.get("unit", {}))
@@ -1040,13 +1041,13 @@ def _get_constraint(
         #     unit_label = unit.get("label", "")
         # else:
         #     label_layer[label] = (layer, dict())
-        part_of = unit.get("partOf", "")
+        part_of = cast(list[dict[str, str]], unit.get("partOf", []))
         # Use the parent label as part_of if they are both stream-anchored
         if label != unit_label and (
             _layer_contains(conf.config, layer, unit_layer)
             or all(_is_anchored(conf.config, x, "stream") for x in (layer, unit_layer))
         ):
-            part_of = label
+            part_of = [{"partOfStream": label}]
         args = (
             cast(JSONObject, unit["constraints"]),
             unit_layer,
@@ -1088,7 +1089,7 @@ def _get_constraint(
             prev_label,
             label_layer,
             entities,
-            "",  # no part_of here
+            [],  # no part_of here
             is_set,
             set_objects,
             allow_any,
@@ -1140,7 +1141,7 @@ def _get_constraints(
     prev_label: str | None = None,
     label_layer: LabelLayer = {},
     entities: set[str] | None = None,
-    part_of: str | None = None,
+    part_of: list[dict[str, str]] | None = None,
     is_set: bool = False,
     set_objects: set[str] | None = None,
     allow_any: bool = True,  # False,
@@ -1186,20 +1187,32 @@ def _get_constraints(
 
     references: dict[str, list[str]] = {}
 
-    if part_of:
-        part_of_layer: str = label_layer.get(part_of, ("", None))[0]
+    part_ofs: list[str] = []
+    for part in part_of or []:
+        part_type, part_label = cast(
+            tuple[str, str], next((k, v) for k, v in part.items())
+        )
+        part_of_layer: str = label_layer.get(part_label, ("", None))[0]
         segname = conf.config["segment"].lower()
         is_token = layer.lower() in (conf.config["token"].lower(), conf.batch.lower())
-        if part_of == label:
-            part_of = ""
+        if part_label == label:
+            part_label = ""
         elif (
-            is_token and part_of_layer.lower() == segname
+            part_type == "partOfStream"
+            and is_token
+            and part_of_layer.lower() == segname
         ):  # Use id for token in segment
-            part_of = f"{part_of}.{segname}_id = {label}.{segname}_id"
+            part_ofs.append(f"{part_label}.{segname}_id = {label}.{segname}_id")
         else:
-            references[part_of] = references.get(part_of, []) + ["char_range"]
-            references[label] = references.get(label, []) + ["char_range"]
-            part_of = f"{part_of}.char_range && {label}.char_range"
+            col_name = (
+                "char_range"
+                if part_type == "partOfStream"
+                else ("frame_range" if part_type == "partOfTime" else "xy_box")
+            )
+            references[part_label] = references.get(part_label, []) + [col_name]
+            references[label] = references.get(label, []) + [col_name]
+            part_ofs.append(f"{part_label}.{col_name} && {label}.{col_name}")
+    part_of_str = " AND ".join(part_ofs)
 
     args = cast(list[JSONObject], constraints)
     for arg in sorted(args, key=arg_sort_key):
@@ -1233,7 +1246,7 @@ def _get_constraints(
         quantor,
         label_layer,
         entities,
-        part_of,
+        part_of_str,
         n=n,
         is_set=is_set,
         set_objects=set_objects,
@@ -1287,14 +1300,6 @@ def process_set(
     from_table = batch if lay == token else _get_table(lay, config, batch, lang)
     disallowed = f"{schema}.{lay} {from_label}"
 
-    # if "partOf" in first_unit:
-    #     part_of_label = first_unit["partOf"]
-    #     part_of_layer = r.label_layer.get(part_of_label, [""])[0]
-    #     if part_of_label == "___seglabel___":
-    #         part_of_layer = segment
-    #     if part_of_layer.lower() == segment.lower():
-    #         first_unit["partOf"] = seg_label
-
     conn_obj = _get_constraints(
         first_unit.get("constraints", []),
         first_unit.get("layer", ""),
@@ -1302,7 +1307,7 @@ def process_set(
         conf,
         label_layer=r.label_layer,
         entities=set(),
-        part_of=first_unit.get("partOf", None),
+        part_of=first_unit.get("partOf", []),
         set_objects=r.set_objects,
         n=_n,
         is_set=True,

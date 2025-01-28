@@ -10,8 +10,10 @@ These callbacks are hooked up as on_success and on_failure kwargs in
 calls to Queue.enqueue in query_service.py
 """
 
+import duckdb
 import json
 import os
+import pandas
 import shutil
 import traceback
 
@@ -53,6 +55,7 @@ from .utils import (
     _get_first_job,
     _get_total_requested,
     _decide_can_send,
+    _sign_payload,
     _time_remaining,
     _publish_msg,
     _sharepublish_msg,
@@ -86,6 +89,9 @@ def _query(
     apply post_processes filters and send the result as a WS message.
     """
     job_kwargs = cast(dict, job.kwargs)
+    # When called as a job callback, the kwargs come from the job
+    # when called directly (sents form cache) the kwargs are passed directly
+    kwargs = kwargs or job_kwargs
     table = f"{job_kwargs['current_batch'][1]}.{job_kwargs['current_batch'][2]}"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
     ended_at = cast(datetime, job.ended_at)
@@ -180,7 +186,9 @@ def _query(
         if not show_total:
             projected_results = -1
         perc_words = total_words_processed_so_far * 100.0 / job_kwargs["word_count"]
-        perc_matches = min(total_found, total_requested) * 100.0 / total_requested
+        perc_matches = (
+            min(total_found, total_requested) * 100.0 / (total_requested or total_found)
+        )
         if search_all:
             perc_matches = time_perc
         job.meta["percentage_done"] = round(perc_matches, 3)
@@ -228,7 +236,9 @@ def _query(
 
     if "latest_stats_message" not in first_job.meta:
         first_job.meta["latest_stats_message"] = msg_id
-    if job.meta["total_results_so_far"] >= first_job.meta["total_results_so_far"]:
+    if job.meta["total_results_so_far"] >= first_job.meta.get(
+        "total_results_so_far", 0
+    ):
         first_job.meta["latest_stats_message"] = msg_id
 
     if "_sent_jobs" not in first_job.meta:
@@ -241,9 +251,6 @@ def _query(
     use = perc_words if search_all or is_full else perc_matches
     time_remaining = _time_remaining(status, total_duration, use)
 
-    user = cast(str, kwargs.get("user", job_kwargs["user"]))
-    room = cast(str | None, kwargs.get("room", job_kwargs["room"]))
-
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_kwic_lines = min(max_kwic, total_found)
 
@@ -254,8 +261,6 @@ def _query(
         {
             "result": to_send,
             "full_result": all_res,
-            "user": user,
-            "room": room,
             "status": status,
             "job": job.id,
             "action": action,
@@ -281,9 +286,9 @@ def _query(
             "offset": offset_for_next_time,
             "total_duration": total_duration,
             "remaining": time_remaining,
-            "total_results_requested": total_requested,
         }
     )
+    _sign_payload(jso, cast(QueryArgs, kwargs))
 
     if job_kwargs["debug"] and job_kwargs["sql"]:
         jso["sql"] = job_kwargs["sql"]
@@ -295,8 +300,8 @@ def _query(
             "remaining": time_remaining,
             "first_job": first_job.id,
             "job": job.id,
-            "user": user,
-            "room": room,
+            "user": cast(str, kwargs.get("user", job_kwargs["user"])),
+            "room": cast(str, kwargs.get("room", job_kwargs["room"])),
             "duration": duration,
             "batches_done": batches_done_string,
             "total_duration": total_duration,
@@ -334,6 +339,9 @@ def _meta(
     if not result:
         return None
     job_kwargs = cast(dict[str, Any], job.kwargs)
+    # When called as a job callback, the kwargs come from the job
+    # when called directly (sents form cache) the kwargs are passed directly
+    kwargs = kwargs or cast(SentJob, job_kwargs)
     base = Job.fetch(job_kwargs["first_job"], connection=connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     cb: Batch = cast(dict, depended.kwargs)["current_batch"]
@@ -355,9 +363,7 @@ def _meta(
     base.meta["_meta_jobs"][job.id] = None
     base.save_meta()  # type: ignore
 
-    can_send = not base.meta.get("to_export", False) and (
-        not full or status == "finished"
-    )
+    can_send = not kwargs.get("to_export", False) and (not full or status == "finished")
 
     action = "meta"
 
@@ -365,8 +371,6 @@ def _meta(
         "result": to_send,
         "status": status,
         "action": action,
-        "user": kwargs.get("user", job_kwargs["user"]),
-        "room": kwargs.get("room", job_kwargs["room"]),
         "query": depended.id,
         "can_send": can_send,
         "full": full,
@@ -374,6 +378,7 @@ def _meta(
         "first_job": base.id,
         "msg_id": msg_id,
     }
+    _sign_payload(jso, cast(JSONObject, kwargs))
 
     # # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
@@ -391,10 +396,14 @@ def _sentences(
     Create KWIC data and send via websocket
     """
     job_kwargs: dict = cast(dict, job.kwargs)
+    # When called as a job callback, the kwargs come from the job
+    # when called directly (sents form cache) the kwargs are passed directly
+    kwargs = kwargs or job_kwargs
     total_requested = _get_total_requested(kwargs, job)
     base = Job.fetch(job_kwargs["first_job"], connection=connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     depended_kwargs: dict = cast(dict, depended.kwargs)
+    to_export = kwargs.get("to_export")
     full = cast(bool, kwargs.get("full", job_kwargs.get("full", False)))
     meta_json = depended_kwargs["meta_json"]
     resume = cast(bool, job_kwargs.get("resume", False))
@@ -451,7 +460,7 @@ def _sentences(
         status = "partial"
 
     if status == "finished" and more_data:
-        more_data = base.meta["total_results_so_far"] >= total_requested
+        more_data = base.meta.get("total_results_so_far", 0) >= total_requested
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:
@@ -475,12 +484,9 @@ def _sentences(
     submit_payload = depended.meta["payload"]
     submit_payload["full"] = full
     submit_payload["total_results_requested"] = total_requested
-    submit_payload["to_export"] = depended.meta.get("to_export", {})
 
     # Do not send if this is an "export" query
-    can_send = not base.meta.get("to_export", False) and (
-        not full or status == "finished"
-    )
+    can_send = not to_export and (not full or status == "finished")
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "sent_job_ws_messages" not in base.meta:
@@ -491,6 +497,7 @@ def _sentences(
 
     action = "sentences"
 
+    _sign_payload(submit_payload, kwargs)
     jso = {
         "result": to_send,
         "status": status,
@@ -498,8 +505,6 @@ def _sentences(
         "full": full,
         "more_data_available": more_data,
         "submit_query": submit_payload if submit_query else False,
-        "user": kwargs.get("user", cast(dict, job.kwargs)["user"]),
-        "room": kwargs.get("room", cast(dict, job.kwargs)["room"]),
         "query": depended.id,
         "table": table,
         "first_job": base.id,
@@ -508,6 +513,7 @@ def _sentences(
         "percentage_done": perc_done,
         "percentage_words_done": words_done,
     }
+    _sign_payload(jso, kwargs)
 
     # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
@@ -826,27 +832,79 @@ def _queries(
     return _publish_msg(connection, jso, msg_id)
 
 
+def _swissdox_to_db_file(
+    job: Job,
+    connection: RedisConnection,
+    result: list[UserQuery] | None,
+) -> None:
+    print("export complete!")
+    j_kwargs = cast(dict, job.kwargs)
+    project_id = j_kwargs.get("project_id", "swissdox")
+    project_path = os.path.join(os.environ.get("RESULTS_PATH", "results"), project_id)
+    if not os.path.exists(project_path):
+        os.mkdir(project_path)
+    corpus_name = j_kwargs.get("name", "swissdox")
+    path = os.path.join(project_path, corpus_name)
+    if not os.path.exists(path):
+        os.mkdir(path)
+    elif os.path.exists(os.path.join(path, "swissdox.db")):
+        os.remove(os.path.join(path, "swissdox.db"))
+
+    for table_name, index_col, data in job.result:
+        df = pandas.DataFrame.from_dict(data)
+        df.set_index(index_col)
+        con = duckdb.connect(
+            database=os.path.join(path, "swissdox.db"), read_only=False
+        )
+        con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
+
+    user = j_kwargs.get("user")
+    room = j_kwargs.get("room")
+    if user and room:
+        msg_id = str(uuid4())
+        jso: dict[str, Any] = {
+            "user": user,
+            "room": room,
+            "action": "export_link",
+            "msg_id": msg_id,
+            "format": "swissdox",
+            "hash": project_id,
+            "offset": corpus_name,
+            "total_results_requested": 200,
+        }
+        _publish_msg(connection, jso, msg_id)
+
+
 def _export_complete(
     job: Job,
     connection: RedisConnection,
     result: list[UserQuery] | None,
 ) -> None:
     print("export complete!")
-    if job.args and isinstance(job.args[0], str) and os.path.exists(job.args[0]):
-        j_kwargs: dict = cast(dict, job.kwargs)
-        dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
-        user = j_kwargs.get("user", dep_kwargs.get("user", ""))
-        room = j_kwargs.get("room", dep_kwargs.get("room", ""))
-        if user and room and cast(dict, job.kwargs).get("download", False):
-            msg_id = str(uuid4())
-            jso: dict[str, Any] = {
-                "user": user,
-                "room": room,
-                "action": "export_link",
-                "msg_id": msg_id,
-                "fn": os.path.basename(job.args[0]),
-            }
-            _publish_msg(connection, jso, msg_id)
+    job_args: list = cast(list, job.args)
+    j_kwargs: dict = cast(dict, job.kwargs)
+    if len(job_args) < 3:
+        # Swissdox
+        return None
+    hash, _, format, _ = job_args
+    dep_kwargs: dict = cast(dict, job.dependency.kwargs) if job.dependency else {}
+    user = j_kwargs.get("user", dep_kwargs.get("user", ""))
+    room = j_kwargs.get("room", dep_kwargs.get("room", ""))
+    offset: int = cast(int, j_kwargs.get("offset", 0))
+    requested: int = cast(int, j_kwargs.get("total_results_requested", 0))
+    if user and room and j_kwargs.get("download", False):
+        msg_id = str(uuid4())
+        jso: dict[str, Any] = {
+            "user": user,
+            "room": room,
+            "action": "export_link",
+            "msg_id": msg_id,
+            "format": format,
+            "hash": hash,
+            "offset": offset,
+            "total_results_requested": requested,
+        }
+        _publish_msg(connection, jso, msg_id)
     return None
 
 

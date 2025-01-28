@@ -13,13 +13,14 @@ import shutil
 import traceback
 
 from dotenv import load_dotenv
-from asyncpg import Range
+from asyncpg import Range, Box
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
 from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq.registry import FinishedJobRegistry
 
 from aiohttp import web
 
@@ -51,6 +52,8 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
+    SentJob,
+    QueryArgs,
     Websockets,
 )
 
@@ -180,6 +183,16 @@ class CustomEncoder(json.JSONEncoder):
         return default
 
 
+class Timer:
+    def __init__(self, duration):
+        self._start = datetime.now()
+        self._duration = duration
+
+    def elapsed(self):
+        diff = datetime.now() - self._start
+        return diff.total_seconds() > self._duration
+
+
 def load_env() -> None:
     """
     Load .env from ~/lcp/.env if present, otherwise from current dir/dotenv defaults
@@ -221,6 +234,22 @@ def setup() -> None:
             then run `lcp` and `lcp-worker` commands to start app
             """.strip()
         )
+
+
+def sanitize_xml_attribute_name(name):
+    # Replace invalid characters with an underscore
+    # Invalid characters include anything that is not a valid XML character
+    name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
+
+    # Ensure name starts with a letter or underscore
+    if name and not name[0].isalpha() and name[0] != "_":
+        name = "_" + name  # Prepend an underscore if it starts with a digit
+
+    # Additional rule: XML names cannot be a vs reserved name ('xml' in any case)
+    if name.lower() == "xml":
+        name = "xml_attr"  # Change if it conflicts with reserved name
+
+    return name
 
 
 def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -504,7 +533,7 @@ def _row_to_value(
     layer = corpus_template.get("layer", {})
     fc = corpus_template.get("firstClass", {})
     tok = fc.get("token", "")
-    cols = layer.get(tok, {}).get("attributes", {})
+    cols = [str(k) for k in layer.get(tok, {}).get("attributes", {}).keys()]
 
     projects: list[str] = corpus_template.get("projects", [])
     if not projects:
@@ -592,6 +621,41 @@ def _get_associated_query_job(
     return depended
 
 
+def _get_all_jobs_from_hash(
+    hash: str,
+    connection: "RedisConnection[bytes]",
+) -> tuple[list[Job], list[Job], list[Job]]:
+    """
+    Helper to get all the query, sent and meta jobs from a hash
+    """
+    query_jobs: list[Job] = []
+    sent_jobs: list[Job] = []
+    meta_jobs: list[Job] = []
+
+    finished_jobs = [
+        Job.fetch(jid, connection=connection)
+        for registry in [
+            FinishedJobRegistry(name=x, connection=connection)
+            for x in ("query", "background")
+        ]
+        for jid in registry.get_job_ids()
+    ]
+    for j in finished_jobs:
+        j_kwargs = cast(dict, j.kwargs)
+        if j_kwargs.get("first_job") != hash and j.id != hash:
+            continue
+        if j_kwargs.get("meta_query"):
+            meta_jobs.append(j)
+        elif j_kwargs.get("sentences_query"):
+            sent_jobs.append(j)
+        else:
+            query_jobs.append(j)
+    query_jobs_sorted = sorted(
+        query_jobs, key=lambda j: len(cast(dict, j.kwargs).get("done_batches", []))
+    )
+    return (query_jobs_sorted, sent_jobs, meta_jobs)
+
+
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
@@ -627,6 +691,8 @@ def format_query_params(
 def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
+    if not result:
+        return {}
     # replace this with actual upstream handling of column names
     pre_columns = re.match(META_QUERY_REGEXP, query)
     if not pre_columns:
@@ -661,18 +727,25 @@ def format_meta_lines(
                         continue
                     segment[layer] = {**(segment[layer]), **meta}
                 else:
-                    if isinstance(res[n + 1], dict):
-                        segment[layer][prop] = json.dumps(res[n + 1])
+                    if isinstance(res[n + 1], Range):
+                        segment[layer][prop] = [
+                            cast(Range, res[n + 1]).lower,
+                            cast(Range, res[n + 1]).upper,
+                        ]
+                    elif isinstance(res[n + 1], Box):
+                        segment[layer][prop] = [
+                            cast(Box, res[n + 1]).low.x,
+                            cast(Box, res[n + 1]).low.y,
+                            cast(Box, res[n + 1]).high.x,
+                            cast(Box, res[n + 1]).high.y,
+                        ]
                     elif any(
-                        isinstance(res[n + 1], type)
-                        for type in [int, str, bool, list, tuple, UUID, date]
+                        isinstance(res[n + 1], typ)
+                        for typ in [int, str, bool, list, tuple, UUID, date]
                     ):
                         segment[layer][prop] = str(res[n + 1])
-                    elif isinstance(res[n + 1], Range):
-                        segment[layer][prop] = [
-                            cast(str, res[n + 1]).lower,
-                            cast(str, res[n + 1]).upper,
-                        ]
+                    elif isinstance(res[n + 1], dict):
+                        segment[layer][prop] = json.dumps(res[n + 1])
         segment = {
             layer: props
             for layer, props in segment.items()
@@ -801,6 +874,28 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
+def _sign_payload(
+    payload: dict[str, Any] | JSONObject | SentJob,
+    kwargs: dict[str, Any] | QueryArgs | SentJob,
+) -> None:
+    to_export = kwargs.get("to_export")
+    kwargs_to_payload_keys = (
+        "user",
+        "room",
+        "total_results_requested",
+        "offset",
+        "full",
+    )
+    for k in kwargs_to_payload_keys:
+        if k not in kwargs:
+            continue
+        payload[k] = kwargs[k]  # type: ignore
+    if to_export:
+        payload["to_export"] = to_export
+    else:
+        payload.pop("to_export", None)
+
+
 def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     """
     Connect to the shared redis instance (if it exists) and call _publish_msg on it
@@ -809,10 +904,12 @@ def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     redis_shared_url = os.getenv(
         "REDIS_SHARED_URL", os.getenv("REDIS_URL", "redis://localhost:6379")
     )
-    if redis_shared_db_index < 0:
-        return
 
-    full_url = f"{redis_shared_url}/{redis_shared_db_index}"
+    full_url = (
+        redis_shared_url
+        if redis_shared_db_index < 0
+        else f"{redis_shared_url}/{redis_shared_db_index}"
+    )
     shared_connection = RedisConnection.from_url(full_url)
     _publish_msg(shared_connection, message, msg_id)
 
@@ -829,13 +926,6 @@ def _publish_msg(
     connection.expire(msg_id, MESSAGE_TTL)
     connection.publish(PUBSUB_CHANNEL, json.dumps({"msg_id": msg_id}))
     return None
-
-
-def results_dir_for_corpus(config: Any) -> str:
-    dir = os.path.join(RESULTS_DIR, config.get("schema_path", "anonymous"))
-    if not os.path.exists(dir):
-        os.mkdir(dir)
-    return dir
 
 
 def hasher(arg):
@@ -993,6 +1083,9 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         # And frame_range if applicable
         if _is_time_anchored(current_batch, config, layer):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
+        # And xy_box if applicable
+        if config["layer"].get(layer, {}).get("anchoring", {}).get("location", False):
+            selects.append(f'{char_range_table}."xy_box" AS {layer}_xy_box')
 
     # Add code here to add "media" if dealing with a multimedia corpus
     if has_media:

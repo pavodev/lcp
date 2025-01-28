@@ -21,6 +21,7 @@ TYPES_MAP = {
     "dict": "jsonb",
     "array": "text[]",
     "vector": "main.vector",
+    "image": "text",
 }
 
 
@@ -183,7 +184,7 @@ class DDL:
         self.tabwidth = 8
 
         self.anchoring = {
-            "location": ("2d_coord", "point"),
+            "location": ("xy_box", "box"),
             "stream": ("char_range", "int4range"),
             "time": ("frame_range", "int4range"),
         }
@@ -287,7 +288,7 @@ class Column(DDL):
         """
         if self.constrs.get("primary_key", False):
             return ""
-        elif self.type == "int4range" or self.type == "int8range":
+        elif self.type in ("int4range", "int8range", "point", "box"):
             return self._idx_constr.format("USING gist", self.name)
         elif self.type == "tsvector":
             return self._idx_constr.format("USING rum", self.name)
@@ -644,7 +645,7 @@ class CTProcessor:
                     attr,
                     [
                         Column(norm_col, "int", primary_key=True),
-                        Column(attr, TYPES_MAP.get("dict", "dict"), unique=True),
+                        Column(attr, TYPES_MAP.get("dict", "jsonb"), unique=True),
                     ],
                     parent=entity_name.lower(),
                 )
@@ -678,6 +679,9 @@ class CTProcessor:
 
             elif typ == "number":
                 table_cols.append(Column(attr, "int", nullable=nullable))
+
+            elif typ == "image":
+                table_cols.append(Column(attr, "text", nullable=nullable))
 
             elif typ == "uuid":
                 table_cols.append(Column(attr, "uuid", nullable=nullable))
@@ -921,7 +925,7 @@ class CTProcessor:
         rel_cols = [
             x.name.removesuffix("_id")
             for x in tok_tab.cols
-            if not (x.constrs.get("primary_key") or x.name.endswith("range"))
+            if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
         ]
         mapd["FTSvectorCols"] = {n: rc for n, rc in enumerate(rel_cols, start=1)}
         self.globals.mapping = mapd
@@ -968,7 +972,7 @@ class CTProcessor:
             [
                 x.name
                 for x in token_tbl.cols
-                if not (x.constrs.get("primary_key") or "range" in x.name)
+                if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
             ]
         )
         statement = self.ddl.m_token_freq(tok_tbl, rel_cols, tok_tbl + "0")
@@ -989,7 +993,7 @@ class CTProcessor:
             [
                 x
                 for x in tok_tab.cols
-                if not (x.constrs.get("primary_key") or "range" in x.name)
+                if not (x.constrs.get("primary_key") or x.type in ("int4range", "box"))
             ],
             key=lambda x: x.name,
         )
