@@ -20,39 +20,40 @@
 </template>
 
 <style scoped>
-  /* #timeline-svg {
+/* #timeline-svg {
     margin: 0 10px;
   } */
-  .button-container {
-    margin-left: 178px;
-  }
-  /* .zoom-slider {
+.button-container {
+  margin-left: 178px;
+}
+
+/* .zoom-slider {
     margin-top: 5px;
   } */
-  /*
+/*
   .zoom-button {
     margin-right: 5px;
   } */
 
-  /* .slider-container {
+/* .slider-container {
     margin-top: 10px;
   } */
 
-  * >>> .tooltip-rect {
-    fill: #fffffff0;
-    stroke: #e6e6e6;
-    stroke-width: 1px;
-  }
+*>>>.tooltip-rect {
+  fill: #fffffff0;
+  stroke: #e6e6e6;
+  stroke-width: 1px;
+}
 
-  svg#timeline-svg {
-    cursor: pointer;
-    color: #2c3e50;
-    font-size: 12px;
-  }
+svg#timeline-svg {
+  cursor: pointer;
+  color: #2c3e50;
+  font-size: 12px;
+}
 
-  .mouse-text {
-    background-color: #2c3e50;
-  }
+.mouse-text {
+  background-color: #2c3e50;
+}
 </style>
 
 <script>
@@ -128,31 +129,41 @@ export default {
     }
   },
   watch: {
-    hoveredResult(){
+    hoveredResult() {
       console.log("hoveredResult", this.hoveredResult);
-      if (this.hoveredResult && this.hoveredResult instanceof Array && this.hoveredResult.length>2)
+      if (this.hoveredResult && this.hoveredResult instanceof Array && this.hoveredResult.length > 2)
         console.log("frame range of hovered line", [...this.hoveredResult[2]]);
     },
-    playerIsPlaying(){
+    playerIsPlaying() {
       playerState = this.playerIsPlaying;
       // console.log("playerState", playerState);
     },
-    playerCurrentTime(){
+    playerCurrentTime() {
       this.updateCurrentPosition(this.playerCurrentTime)
     },
-    zoomValue(){
-      const verticalLine = svg.selectAll(".vertical-line");
-      const xPosition = verticalLine.attr("x1");
-      const scale = this.zoomValue;
-      svg.transition().call(zoom.scaleTo, parseFloat(scale), [xPosition, 0]);
-    }
+    zoomValue() {
+      const transform = d3.zoomTransform(svg.node());
+      const currentScale = transform.k;
+      const scaleRatio = this.zoomValue / currentScale;
+
+      // Get the center of the visible timeline
+      const svgBounds = svg.node().getBoundingClientRect();
+      const svgCenterX = (svgBounds.width / 2 - transform.x) / currentScale;
+
+      // Apply the zoom while keeping the center in place
+      svg.transition().call(zoom.scaleBy, scaleRatio, [svgCenterX, 0]);
+    },
   },
   methods: {
     zoomIn() {
-      this.zoomValue = Math.min(parseFloat(this.zoomValue) + 1, MAX_ZOOM_LEVEL);
+      if (this.zoomValue < MAX_ZOOM_LEVEL) {
+        this.zoomValue = Math.min(this.zoomValue + 1, MAX_ZOOM_LEVEL);
+      }
     },
     zoomOut() {
-      this.zoomValue = Math.max(parseFloat(this.zoomValue) - 1, 1);
+      if (this.zoomValue > 1) {
+        this.zoomValue = Math.max(this.zoomValue - 1, 1);
+      }
     },
     updateCurrentPosition(time) {
       this.currentTime = time;
@@ -257,7 +268,7 @@ export default {
       .attr("x", "180")
       .attr("y", "40")
       .attr("width", width - padding)
-      .attr("height", totalHeight+40)
+      .attr("height", totalHeight + 40)
 
     // Create a single group for all bars
     const barsGroup = svg.append("g").attr("clip-path", "url(#myClip)");
@@ -481,15 +492,15 @@ export default {
           .style('opacity', '1');
 
         const hovering = barAndTextGroups
-          .filter( function () {
+          .filter(function () {
             const rect = this.querySelector("rect");
-            const {x, y, width, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
-            return x<=mouseOverX && Number(x)+Number(width)>=mouseOverX && y<=mouseOverY && Number(y)+Number(height)>=mouseOverY;
-          } );
+            const { x, y, width, height } = Object.fromEntries([...rect.attributes].map(v => [v.name, v.value]));
+            return x <= mouseOverX && Number(x) + Number(width) >= mouseOverX && y <= mouseOverY && Number(y) + Number(height) >= mouseOverY;
+          });
         if ([...hovering].length && [...hovering][0] != hoveringAnnotation) {
           hoveringAnnotation = [...hovering][0];
           const rect = hoveringAnnotation.querySelector("rect");
-          const {x, y, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
+          const { x, y, height } = Object.fromEntries([...rect.attributes].map(v => [v.name, v.value]));
           const event = {
             x: Number(x),
             y: Number(y) + Number(height),
@@ -515,9 +526,9 @@ export default {
           .text(Utils.secondsToTime(originalValue, true));
       });
 
-      this.zoomValue = 20;
+    this.zoomValue = 20;
 
-      this.updateCurrentPosition(this.defaultCurrentTime);
+    this.updateCurrentPosition(this.defaultCurrentTime);
   },
 };
 </script>
