@@ -89,6 +89,13 @@ async def api_query(request: web.Request) -> web.Response:
         exporter = ExporterXml(hash, request.app["redis"], config)
         await exporter.export()
         return web.json_response({"status": 200, "message": "export complete"})
+    if not all(
+        h in ("X-API-Key", "X-API-Secret") if h.startswith("X-") else True
+        for h in request.headers
+    ):
+        raise web.HTTPForbidden(
+            text="API authenticated access only allowed via key-secret pair"
+        )
     res = await submit_query(request, api=True)
     res_json = json.loads(res.text)
     job_id = res_json.get("job", "")
