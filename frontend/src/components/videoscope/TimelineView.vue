@@ -10,6 +10,14 @@
         <FontAwesomeIcon :icon="['fas', 'magnifying-glass-plus']" class="me-1" />
         Zoom In
       </button>
+      <button class="btn btn-primary btn-sm me-1" @click="resetZoom">
+        <FontAwesomeIcon :icon="['fas', 'rotate-left']" class="me-1" />
+        Reset default
+      </button>
+      <button class="btn btn-primary btn-sm me-1" @click="fitZoom">
+        <FontAwesomeIcon :icon="['fas', 'arrows-left-right-to-line']" class="me-1" />
+        Fit content
+      </button>
     </div>
     <!--
     <div class="slider-container">
@@ -20,39 +28,40 @@
 </template>
 
 <style scoped>
-  /* #timeline-svg {
+/* #timeline-svg {
     margin: 0 10px;
   } */
-  .button-container {
-    margin-left: 178px;
-  }
-  /* .zoom-slider {
+.button-container {
+  margin-left: 178px;
+}
+
+/* .zoom-slider {
     margin-top: 5px;
   } */
-  /*
+/*
   .zoom-button {
     margin-right: 5px;
   } */
 
-  /* .slider-container {
+/* .slider-container {
     margin-top: 10px;
   } */
 
-  * >>> .tooltip-rect {
-    fill: #fffffff0;
-    stroke: #e6e6e6;
-    stroke-width: 1px;
-  }
+*>>>.tooltip-rect {
+  fill: #fffffff0;
+  stroke: #e6e6e6;
+  stroke-width: 1px;
+}
 
-  svg#timeline-svg {
-    cursor: pointer;
-    color: #2c3e50;
-    font-size: 12px;
-  }
+svg#timeline-svg {
+  cursor: pointer;
+  color: #2c3e50;
+  font-size: 12px;
+}
 
-  .mouse-text {
-    background-color: #2c3e50;
-  }
+.mouse-text {
+  background-color: #2c3e50;
+}
 </style>
 
 <script>
@@ -60,6 +69,7 @@ import * as d3 from 'd3'
 
 import Utils from "@/utils.js";
 
+// Global variables
 let svg = null;
 let zoom;
 let linearScale = null;
@@ -70,51 +80,7 @@ const padding = 180;
 const width = document.body.clientWidth - 20;
 const paddingBeforeTimeline = 40;
 const MAX_ZOOM_LEVEL = 100
-
-// Function to update the vertical timeline
-function updateVerticalLine(xPosition) {
-  const verticalLine = svg.selectAll(".vertical-line");
-  verticalLine.attr("x1", xPosition).attr("x2", xPosition);
-
-  const rightBoundary = width - paddingBeforeTimeline;
-
-  // Hide vertical line
-  // console.log("PLB", playButton.checked)
-  if (xPosition > rightBoundary) {
-    if (playerState) {
-      moveRight()
-    }
-    else {
-      verticalLine.attr("opacity", 0);
-    }
-  }
-  else if (xPosition < padding) {
-    verticalLine.attr("opacity", 0);
-  }
-  else {
-    verticalLine.attr("opacity", 1);
-  }
-}
-
-function moveRight() {
-  const currentTransform = d3.zoomTransform(svg.node());
-  const newXScale = currentTransform.rescaleX(linearScale);
-
-  // Get the width of the visible range
-  const visibleWidth = newXScale.range()[1] - newXScale.range()[0];
-
-  // Get the width of the entire data range
-  const totalWidth = newXScale.domain()[1] - newXScale.domain()[0];
-
-  // Calculate the amount to move the graph to the right (one width)
-  const moveAmount = totalWidth - visibleWidth;
-
-  // Calculate the new translation along the x-axis
-  const newTx = currentTransform.x + moveAmount;
-
-  // Update the zoom transform with the new translation
-  svg.call(zoom.transform, d3.zoomIdentity.translate(newTx, currentTransform.y).scale(currentTransform.k));
-}
+const DEFAULT_ZOOM_LEVEL = 20;
 
 export default {
   name: "TimelineView",
@@ -128,26 +94,45 @@ export default {
     }
   },
   watch: {
-    hoveredResult(){
+    hoveredResult() {
       console.log("hoveredResult", this.hoveredResult);
-      if (this.hoveredResult && this.hoveredResult instanceof Array && this.hoveredResult.length>2)
+      if (this.hoveredResult && this.hoveredResult instanceof Array && this.hoveredResult.length > 2)
         console.log("frame range of hovered line", [...this.hoveredResult[2]]);
     },
-    playerIsPlaying(){
+    playerIsPlaying() {
       playerState = this.playerIsPlaying;
       // console.log("playerState", playerState);
     },
-    playerCurrentTime(){
+    playerCurrentTime() {
       this.updateCurrentPosition(this.playerCurrentTime)
     },
-    zoomValue(){
-      const verticalLine = svg.selectAll(".vertical-line");
-      const xPosition = verticalLine.attr("x1");
-      const scale = this.zoomValue;
-      svg.transition().call(zoom.scaleTo, parseFloat(scale), [xPosition, 0]);
-    }
+    zoomValue() {
+      const transform = d3.zoomTransform(svg.node());
+      const currentScale = transform.k;
+      const scaleRatio = this.zoomValue / currentScale;
+      let xPosition = 0;
+
+      if (!this.playerIsPlaying) {
+        // Zoom relative to the position of the vertical line
+        const verticalLine = svg.selectAll(".vertical-line");
+        xPosition = verticalLine.attr("x1");
+      } else {
+        // Zoom relative to the center of the timeline
+        const svgBounds = svg.node().getBoundingClientRect();
+        xPosition = (svgBounds.width / 2 - transform.x) / currentScale;
+      }
+
+      // Apply the zoom while keeping the center in place
+      svg.transition().call(zoom.scaleBy, scaleRatio, [xPosition, 0]);
+    },
   },
   methods: {
+    resetZoom() {
+      this.zoomValue = DEFAULT_ZOOM_LEVEL;
+    },
+    fitZoom() {
+      this.zoomValue = 1;
+    },
     zoomIn() {
       this.zoomValue = Math.min(parseFloat(this.zoomValue) + 1, MAX_ZOOM_LEVEL);
     },
@@ -157,8 +142,45 @@ export default {
     updateCurrentPosition(time) {
       this.currentTime = time;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
-      updateVerticalLine(newXScale(this.currentTime));
+      this.updateVerticalLine(newXScale(this.currentTime));
     },
+    // Function to update the vertical timeline
+    updateVerticalLine(xPosition) {
+      const verticalLine = svg.selectAll(".vertical-line");
+
+      // Get the current transform and the domain [domainStart, domainEnd] after zoom
+      const transform = d3.zoomTransform(svg.node());
+      const newXScale = transform.rescaleX(linearScale);
+      const [domainStart, domainEnd] = newXScale.domain();
+
+      // If the global currentTime is in the visible domain, show the line; otherwise hide it
+      const inDomain = (this.currentTime >= domainStart && this.currentTime <= domainEnd);
+
+      verticalLine
+        .attr("x1", xPosition)
+        .attr("x2", xPosition)
+        .attr("opacity", inDomain ? 1 : 0);
+    },
+
+    moveRight() {
+      const currentTransform = d3.zoomTransform(svg.node());
+      const newXScale = currentTransform.rescaleX(linearScale);
+
+      // Get the width of the visible range
+      const visibleWidth = newXScale.range()[1] - newXScale.range()[0];
+
+      // Get the width of the entire data range
+      const totalWidth = newXScale.domain()[1] - newXScale.domain()[0];
+
+      // Calculate the amount to move the graph to the right (one width)
+      const moveAmount = totalWidth - visibleWidth;
+
+      // Calculate the new translation along the x-axis
+      const newTx = currentTransform.x + moveAmount;
+
+      // Update the zoom transform with the new translation
+      svg.call(zoom.transform, d3.zoomIdentity.translate(newTx, currentTransform.y).scale(currentTransform.k));
+    }
   },
   mounted() {
 
@@ -257,7 +279,7 @@ export default {
       .attr("x", "180")
       .attr("y", "40")
       .attr("width", width - padding)
-      .attr("height", totalHeight+40)
+      .attr("height", totalHeight + 40);
 
     // Create a single group for all bars
     const barsGroup = svg.append("g").attr("clip-path", "url(#myClip)");
@@ -315,6 +337,35 @@ export default {
       .tickPadding(tickPadding);
     xAxisGroup.call(xAxis);
 
+
+    // Zoom event handler
+    const zoomed = (event) => {
+      // if (event.sourceEvent && event.sourceEvent.type === "wheel") {
+      //   return true;
+      // }
+      const { transform } = event;
+      const newXScale = transform.rescaleX(linearScale);
+      xAxis.scale(newXScale);
+      xAxisGroup.call(xAxis);
+
+      // Update the bars
+      barsGroup
+        .selectAll("rect")
+        .attr("x", (d) => newXScale(d.x1))
+        .attr("width", (d) => newXScale(d.x2) - newXScale(d.x1));
+
+      // Update the text
+      barsGroup.selectAll("text").attr("x", (d) => newXScale(d.x1) + 5);
+
+      // Update the vertical line
+      // const sliderValue = parseFloat(d3.select("#vertical-slider").node().value);
+      const verticalLineX = newXScale(this.currentTime);
+
+      // console.log("zoomed -> currentTime:", this.currentTime, " new domain:", newXScale.domain());
+
+      this.updateVerticalLine(verticalLineX);
+    }
+
     // Create zoom behavior
     zoom = d3
       .zoom()
@@ -338,31 +389,6 @@ export default {
     //   }
     //   return null
     // });
-
-    // Zoom event handler
-    function zoomed(event) {
-      // if (event.sourceEvent && event.sourceEvent.type === "wheel") {
-      //   return true;
-      // }
-      const { transform } = event;
-      const newXScale = transform.rescaleX(linearScale);
-      xAxis.scale(newXScale);
-      xAxisGroup.call(xAxis);
-
-      // Update the bars
-      barsGroup
-        .selectAll("rect")
-        .attr("x", (d) => newXScale(d.x1))
-        .attr("width", (d) => newXScale(d.x2) - newXScale(d.x1));
-
-      // Update the text
-      barsGroup.selectAll("text").attr("x", (d) => newXScale(d.x1) + 5);
-
-      // Update the vertical line
-      // const sliderValue = parseFloat(d3.select("#vertical-slider").node().value);
-      const verticalLineX = newXScale(currentTime);
-      updateVerticalLine(verticalLineX);
-    }
 
     // Zoom control event handlers
     // const zoomInButton = document.getElementById("zoom-in");
@@ -459,7 +485,7 @@ export default {
         const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
         this.$emit("updateTime", originalValue);
         // this.verticalSlider.value = originalValue
-        updateVerticalLine(newXScale(originalValue));
+        this.updateVerticalLine(newXScale(originalValue));
       })
       .on('mouseout', function () {
         // on mouse out hide line, circles and text
@@ -481,15 +507,15 @@ export default {
           .style('opacity', '1');
 
         const hovering = barAndTextGroups
-          .filter( function () {
+          .filter(function () {
             const rect = this.querySelector("rect");
-            const {x, y, width, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
-            return x<=mouseOverX && Number(x)+Number(width)>=mouseOverX && y<=mouseOverY && Number(y)+Number(height)>=mouseOverY;
-          } );
+            const { x, y, width, height } = Object.fromEntries([...rect.attributes].map(v => [v.name, v.value]));
+            return x <= mouseOverX && Number(x) + Number(width) >= mouseOverX && y <= mouseOverY && Number(y) + Number(height) >= mouseOverY;
+          });
         if ([...hovering].length && [...hovering][0] != hoveringAnnotation) {
           hoveringAnnotation = [...hovering][0];
           const rect = hoveringAnnotation.querySelector("rect");
-          const {x, y, height} = Object.fromEntries([...rect.attributes].map(v=>[v.name,v.value]));
+          const { x, y, height } = Object.fromEntries([...rect.attributes].map(v => [v.name, v.value]));
           const event = {
             x: Number(x),
             y: Number(y) + Number(height),
@@ -515,9 +541,9 @@ export default {
           .text(Utils.secondsToTime(originalValue, true));
       });
 
-      this.zoomValue = 20;
+    this.zoomValue = DEFAULT_ZOOM_LEVEL;
 
-      this.updateCurrentPosition(this.defaultCurrentTime);
+    this.updateCurrentPosition(this.defaultCurrentTime);
   },
 };
 </script>

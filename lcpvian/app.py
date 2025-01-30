@@ -17,6 +17,7 @@ from typing import cast, Type
 
 from aiohttp import WSCloseCode, web
 from aiohttp.client_exceptions import ClientConnectorError
+from aiohttp.web import HTTPForbidden
 from aiohttp_catcher import Catcher, catch
 from redis import Redis
 from redis import asyncio as aioredis
@@ -28,6 +29,17 @@ from rq.exceptions import AbandonedJobError, NoSuchJobError
 from rq.queue import Queue
 from rq.registry import FailedJobRegistry
 
+# We should load env before importing anything else
+from .utils import (
+    TRUES,
+    FALSES,
+    LCPApplication,
+    handle_timeout,
+    load_env,
+)
+
+load_env()
+
 from .check_file_permissions import check_file_permissions
 from .configure import CorpusConfig
 from .corpora import corpora
@@ -35,6 +47,7 @@ from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
 
+from .api import api_query
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -47,18 +60,9 @@ from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
-from .utils import (
-    TRUES,
-    FALSES,
-    LCPApplication,
-    handle_timeout,
-    load_env,
-)
 from .lama import handle_lama_error
 from .video import video
 
-
-load_env()
 
 # this is all just a way to find out if utils (and therefore the codebase) is a c extension
 _LOADER = importlib.import_module(handle_timeout.__module__).__loader__
@@ -136,12 +140,8 @@ async def start_background_tasks(app: web.Application) -> None:
         if instance not in app:
             continue
         listener = f"{instance}_listener"
-        lapp.addkey(
-            listener, Task[None], asyncio.create_task(listen_to_redis(app, instance))
-        )
-    lapp.addkey(
-        "ws_cleanup", Task[None], asyncio.create_task(ws_cleanup(app["websockets"]))
-    )
+        lapp.addkey(listener, Task, asyncio.create_task(listen_to_redis(app, instance)))
+    lapp.addkey("ws_cleanup", Task, asyncio.create_task(ws_cleanup(app["websockets"])))
 
 
 async def cleanup_background_tasks(app: web.Application) -> None:
@@ -176,15 +176,15 @@ async def create_app(test: bool = False) -> web.Application:
         )
         .and_call(handle_lama_error)
     )
-    # await catcher.add_scenario(
-    #     catch(AuthError)
-    #     .with_status_code(403)
-    #     .and_stringify()
-    #     .with_additional_fields(
-    #         {"message": "Authentication issue..."}
-    #     )
-    #     .and_call(handle_lama_error)
-    # )
+    await catcher.add_scenario(
+        catch(HTTPForbidden)
+        .with_status_code(403)
+        .and_stringify()
+        .with_additional_fields(
+            lambda exc, _: {"reason": exc.reason, "message": exc.text}
+        )
+        .and_call(handle_lama_error)
+    )
 
     app = LCPApplication(middlewares=[catcher.middleware])
     app.addkey("mypy", bool, C_COMPILED)
@@ -214,6 +214,7 @@ async def create_app(test: bool = False) -> web.Application:
     # app["auth"] = Authenticator(app)
 
     endpoints: list[tuple[str, str, Endpoint]] = [
+        ("/api/{corpus}/", "POST", api_query),
         ("/check-file-permissions", "GET", check_file_permissions),
         ("/config", "POST", refresh_config),
         ("/corpora", "POST", corpora),
@@ -221,7 +222,11 @@ async def create_app(test: bool = False) -> web.Application:
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
-        ("/download_export/{schema_path}/{fn}", "GET", download_export),
+        (
+            "/download_export/{hash}/{format}/{offset}/{total_results_requested}",
+            "GET",
+            download_export,
+        ),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),

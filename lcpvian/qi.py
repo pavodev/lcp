@@ -52,6 +52,7 @@ from .typed import Batch, JSONObject, Query, Results
 from .utils import _determine_language, push_msg, _meta_query
 
 QI_KWARGS = dict(kw_only=True, slots=True)
+DEFAULT_MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
 
 
 @dataclass(**QI_KWARGS)
@@ -170,7 +171,9 @@ class QueryIteration:
         return sorted(out, key=lambda x: x[-1])
 
     @classmethod
-    async def from_request(cls, request: web.Request) -> Self:
+    async def from_request(
+        cls, request_data: dict, app: Application, api: bool = False
+    ) -> Self:
         """
         The first time we encounter the data, it's an aiohttp request
 
@@ -178,7 +181,8 @@ class QueryIteration:
 
         Also used when query is resumed, or when user does `Search entire corpus`
         """
-        request_data = await request.json()
+        # request_data = await request.json()
+        # app = request.app
         corp = request_data.get("corpora", [])
         if not isinstance(corp, list):
             corp = [corp]
@@ -192,33 +196,38 @@ class QueryIteration:
         total_results_so_far = 0
         needed = total_requested
         if previous:
-            prev = Job.fetch(previous, connection=request.app["redis"])
+            prev = Job.fetch(previous, connection=app["redis"])
             prev_kwargs: dict[str, Any] = cast(dict[str, Any], prev.kwargs)
             first_job_id = prev_kwargs.get("first_job") or previous
             total_duration = prev_kwargs.get("total_duration", 0.0)
             total_results_so_far = prev.meta.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
         sim = request_data.get("simultaneous", False)
-        all_batches = cls._get_query_batches(
-            corpora_to_use, request.app["config"], languages
-        )
+        all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
 
-        to_export: dict = request_data.get("to_export", {})
-        preview = to_export.get("preview", False)
+        full = request_data.get("full", False)
+
+        user: str = "api" if api else request_data.get("user", "")
+        room: str = "api" if api else request_data.get("room", "")
+        to_export = request_data.get("to_export")
+        if to_export:
+            to_export["total_results_requested"] = total_requested
+            to_export["offset"] = request_data.get("offset", 0)
+            to_export["full"] = request_data.get("full", False)
 
         details = {
             "corpora": corpora_to_use,
-            "user": request_data["user"],
-            "app": request.app,
-            "room": request_data["room"],
-            "config": request.app["config"],
+            "user": user,
+            "app": app,
+            "room": room,
+            "config": app["config"],
             "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
             "languages": set(langs),
-            "full": request_data.get("full", False),
+            "full": full,
             "query": request_data["query"],
-            "resume": request_data.get("resume", False) and not preview,
+            "resume": request_data.get("resume", False),
             "total_results_requested": total_requested,
             "needed": needed,
             "current_kwic_lines": request_data.get("current_kwic_lines", 0),
@@ -227,19 +236,21 @@ class QueryIteration:
             "total_results_so_far": total_results_so_far,
             "simultaneous": str(uuid4()) if sim else "",
             "previous": previous,
+            "to_export": to_export,
         }
-        if to_export:
-            details["to_export"] = {
-                "format": str(to_export.get("format", "")),
-                "preview": to_export.get("preview", False),
-                "download": to_export.get("download", False),
-                "config": request.app["config"][str(corpora_to_use[0])],
-                "user": request_data.get("user", ""),
-                "room": request_data.get("room", ""),
-            }
         made: Self = cls(**details)
         made.get_word_count()
         return made
+
+    def get_queue(self) -> str:
+        if (
+            self.full
+            or self.to_export
+            or self.total_results_requested >= DEFAULT_MAX_KWIC_LINES
+        ):
+            return "background"
+        else:
+            return "query"
 
     def get_word_count(self) -> None:
         """
@@ -272,14 +283,12 @@ class QueryIteration:
         """
         job: Job
         # if self.offset > 0 and not self.full and not self.resume:
-        preview: bool = self.to_export.get("preview", False)
         load_more_from_cache: bool = self.resume and self.offset > 0
-        if preview or load_more_from_cache:
+        if load_more_from_cache:
             job = Job.fetch(self.previous, connection=self.app["redis"])
             self.job = job
             self.job_id = job.id
-            if load_more_from_cache:
-                self.submit_sents(query_started=True)
+            self.submit_sents(query_started=True)
             return job, False
 
         parent: str | None = None
@@ -315,10 +324,11 @@ class QueryIteration:
             meta_json=self.meta,
             word_count=self.word_count,
             parent=parent,
-            to_export=self.to_export,
         )
+        if self.to_export:
+            query_kwargs["to_export"] = self.to_export
 
-        queue = "query" if not self.full else "background"
+        queue = self.get_queue()
 
         do_sents: bool | None
         job, do_sents = await self.app["query_service"].query(
@@ -365,7 +375,9 @@ class QueryIteration:
             needed=needed,
             total_results_requested=self.total_results_requested,
         )
-        queue = "query" if not self.full else "background"
+        if self.to_export:
+            kwargs["to_export"] = json.dumps(self.to_export)
+        queue = self.get_queue()
         qs = self.app["query_service"]
         sents_jobs: list[str] = qs.sentences(
             self.sents_query(),
@@ -495,7 +507,7 @@ class QueryIteration:
             "total_results_so_far": tot_so_far,
             "languages": set(cast(list[str], manual["languages"])),
             "done_batches": done_batches,
-            "to_export": manual.get("to_export", kwargs.get("to_export", {})),
+            "to_export": manual.get("to_export", {}),
         }
         return cls(**details)
 
@@ -565,7 +577,7 @@ class QueryIteration:
         """
         What we do when there is no available batch
         """
-        max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+        max_kwic = DEFAULT_MAX_KWIC_LINES
         reached_kwic_limit = self.current_kwic_lines >= max_kwic
         if reached_kwic_limit and not self.full:
             info = "Could not create query: hit kwic limit"

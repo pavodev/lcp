@@ -31,7 +31,7 @@ class Layer(TypedDict, total=False):
     attributes: dict[str, Attribute | dict[str, Attribute]]
     anchoring: NotRequired[dict[str, bool]]
     values: NotRequired[list[str]]
-    partOf: NotRequired[str]
+    partOf: NotRequired[list[dict[str, str]]]
 
 
 class FirstClass(TypedDict, total=False):

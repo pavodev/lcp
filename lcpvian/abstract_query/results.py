@@ -860,7 +860,7 @@ WHERE {entity}.char_range && contained_token.char_range
             n=self._n,
             label_layer=self.r.label_layer,
             entities=self.r.entities,
-            part_of=cast(str | None, rest.get("partOf", None)),
+            part_of=cast(list[dict[str, str]], rest.get("partOf", [])),
             set_objects=self.r.set_objects,
             allow_any=True,
         )
@@ -1018,15 +1018,27 @@ WHERE {entity}.char_range && contained_token.char_range
                 "",
             )
             # Now go through the chain of center's "partOf"s and choose the highest parent segment
-            part_of: str = cast(str, token_meta[1].get("partOf", ""))
-            while part_of and part_of in self.r.label_layer:
-                parent_meta = self.r.label_layer[part_of]
-                if parent_meta[0].lower() == self.segment.lower():
-                    depth = cast(int, parent_meta[1].get("_depth", 999))
-                    if depth < seg_depth:
-                        seg_lab = part_of
-                        seg_depth = depth
-                part_of = cast(str, parent_meta[1].get("partOf", ""))
+            part_ofs: list[dict[str, str]] = cast(
+                list[dict[str, str]], token_meta[1].get("partOf", [])
+            )
+            while True:
+                if not part_ofs:
+                    break
+                new_part_ofs: list[dict[str, str]] = []
+                for part in part_ofs:
+                    part_of = next(x for x in part.values())
+                    if part_of not in self.r.label_layer:
+                        continue
+                    parent_meta = self.r.label_layer[part_of]
+                    if parent_meta[0].lower() == self.segment.lower():
+                        depth = cast(int, parent_meta[1].get("_depth", 999))
+                        if depth < seg_depth:
+                            seg_lab = part_of
+                            seg_depth = depth
+                    new_part_ofs += cast(
+                        list[dict[str, str]], parent_meta[1].get("partOf", [])
+                    )
+                part_ofs = new_part_ofs
 
         token_id = f"{self.token}_id"
         segment_id = f"{self.segment}_id"

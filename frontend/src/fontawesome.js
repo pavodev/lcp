@@ -3,6 +3,7 @@ import { library } from '@fortawesome/fontawesome-svg-core';
 import {
   faArrowDown,
   faArrowUp,
+  faArrowsLeftRightToLine,
   faBackward,
   faBackwardStep,
   faBarcode,
@@ -34,6 +35,7 @@ import {
   faPlay,
   faPlus,
   faPowerOff,
+  faRotateLeft,
   faTable,
   faTrash,
   faUser,
@@ -51,6 +53,7 @@ import {
 
 library.add(faArrowDown);
 library.add(faArrowUp);
+library.add(faArrowsLeftRightToLine);
 library.add(faBackward);
 library.add(faBackwardStep);
 library.add(faBarcode);
@@ -82,6 +85,7 @@ library.add(faPause);
 library.add(faPlay);
 library.add(faPlus);
 library.add(faPowerOff);
+library.add(faRotateLeft);
 library.add(faTable);
 library.add(faTrash);
 library.add(faUser);

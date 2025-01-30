@@ -629,6 +629,7 @@
               type="button"
               @click="exportResults('swissdox')"
               class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
               Launch export
             </button>
