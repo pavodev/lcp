@@ -73,7 +73,7 @@ import Utils from "@/utils.js";
 let svg = null;
 let zoom;
 let linearScale = null;
-let currentTime = 0;
+// eslint-disable-next-line
 let playerState = false;
 let hoveringAnnotation = null;
 const padding = 180;
