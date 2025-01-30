@@ -11,11 +11,11 @@
         Zoom In
       </button>
       <button class="btn btn-primary btn-sm me-1" @click="resetZoom">
-        <FontAwesomeIcon :icon="['fas', 'arrow-rotate-left']" class="me-1" />
-        Reset
+        <FontAwesomeIcon :icon="['fas', 'rotate-left']" class="me-1" />
+        Reset default
       </button>
       <button class="btn btn-primary btn-sm me-1" @click="fitZoom">
-        <FontAwesomeIcon :icon="['fas', 'arrow-rotate-left']" class="me-1" />
+        <FontAwesomeIcon :icon="['fas', 'arrows-left-right-to-line']" class="me-1" />
         Fit content
       </button>
     </div>
