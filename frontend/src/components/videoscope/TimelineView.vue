@@ -160,6 +160,12 @@ export default {
         .attr("x1", xPosition)
         .attr("x2", xPosition)
         .attr("opacity", inDomain ? 1 : 0);
+
+      if (this.currentTime > domainEnd) {
+        if (playerState) {
+          this.moveRight();
+        }
+      }
     },
 
     moveRight() {
