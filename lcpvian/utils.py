@@ -61,6 +61,8 @@ RESULTS_DIR = os.getenv("RESULTS", "results")
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
+PSQL_NAMEDATALEN = int(os.getenv("PSQL_NAMEDATALEN", 64))
+
 TRUES = {"true", "1", "y", "yes"}
 FALSES = {"", "0", "null", "none"}
 
@@ -664,7 +666,19 @@ def _sanitize_corpus_name(corpus_name: str) -> str:
 
 def _schema_from_corpus_name(corpus_name: str, project_id: str) -> str:
     tmp_name = _sanitize_corpus_name(corpus_name)
-    return tmp_name + "_" + re.sub("-", "", re.sub(r"_+", "_", project_id))
+    while (
+        len(tmp_name) > 1
+        and len(
+            str.encode(
+                schema_name := re.sub(
+                    "-", "", re.sub(r"_+", "_", tmp_name + "_" + project_id)
+                )
+            )
+        )
+        > PSQL_NAMEDATALEN - 5  # Leave some room for the version suffix
+    ):
+        tmp_name = tmp_name[0:-1]
+    return schema_name
 
 
 def format_query_params(
