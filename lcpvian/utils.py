@@ -660,6 +660,29 @@ def _get_all_jobs_from_hash(
     return (query_jobs_sorted, sent_jobs, meta_jobs)
 
 
+def _get_prep_segment(
+    segment_id: str, sentence_jobs: list[Job], first_job: Job
+) -> tuple[str, int, list]:
+    try:
+        sid, s_offset, s_tokens = next(
+            r for sj in sentence_jobs for r in sj.result if str(r[0]) == segment_id
+        )
+    except:
+        sid, s_offset, s_tokens = next(
+            (si, so, st)
+            for msg_id in first_job.meta.get("sent_job_ws_messages", {})
+            for si, (so, st) in cast(
+                dict,
+                json.loads(first_job.connection.get(msg_id) or b"{}"),
+            )
+            .get("result", {})
+            .get("-1", {})
+            .items()
+            if str(si) == segment_id
+        )
+    return (sid, s_offset, s_tokens)
+
+
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
