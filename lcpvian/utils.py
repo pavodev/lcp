@@ -634,12 +634,14 @@ def _get_all_jobs_from_hash(
     sent_jobs: list[Job] = []
     meta_jobs: list[Job] = []
 
+    main_job = Job.fetch(hash, connection=connection)
     finished_jobs = [
         Job.fetch(jid, connection=connection)
         for registry in [
             FinishedJobRegistry(name=x, connection=connection)
             for x in ("query", "background")
         ]
+        + [main_job.finished_job_registry]
         for jid in registry.get_job_ids()
     ]
     for j in finished_jobs:

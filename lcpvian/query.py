@@ -27,7 +27,6 @@ from aiohttp import web
 from rq.job import Job
 
 from .authenticate import Authentication
-from .export import export
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
