@@ -1,0 +1,1 @@
+/home/liri-js/ownCloud/LiRI/LCP/Swissdox@LCP/definite_swissdox_import_files/scripts/export_content.sql
