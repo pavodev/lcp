@@ -166,11 +166,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 async def download_export(request: web.Request) -> web.FileResponse:
     filepath = ""
-    hash = request.match_info["hash"]
-    format = request.match_info["format"]
-    offset = request.match_info["offset"]
-    requested = request.match_info["total_results_requested"]
-    full = cast(bool, request.match_info.get("full", False))
+    hash = request.rel_url.query["hash"]
+    format = request.rel_url.query["format"]
+    offset = request.rel_url.query.get("offset", "0")
+    requested = request.rel_url.query.get("requested", "0")
+    full = cast(bool, request.rel_url.query.get("full", False))
     if format == "swissdox":
         results_path = str(os.environ.get("RESULTS_PATH", "results"))
         filepath = os.path.join(results_path, hash, offset, "swissdox.db")
@@ -180,6 +180,7 @@ async def download_export(request: web.Request) -> web.FileResponse:
             hash, cast(int, offset), cast(int, requested), full
         )
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
+    # TODO: check user access to file
     content_disposition = f'attachment; filename="{os.path.basename(filepath)}"'
     headers = {
         "content-disposition": content_disposition,

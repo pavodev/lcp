@@ -1529,7 +1529,13 @@ export default {
         } else if (data["action"] == "export_link") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
-          useCorpusStore().fetchExport(data.hash, data.format, data.offset || 0, data.total_results_requested || 200);
+          const info = {
+            hash: data.hash,
+            format: data.format,
+            offset: data.offset || 0,
+            requested: data.total_results_requested || 200
+          };
+          useCorpusStore().fetchExport(info);
           useNotificationStore().add({
             type: "success",
             text: "Initiated export download"
