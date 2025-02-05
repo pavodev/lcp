@@ -104,7 +104,7 @@ def process_brackets(node: Any) -> dict:
         if at == "word":
             at = "form"  # hack
         value: str = next(c for c in query.children if isinstance(c, Token)).value
-        right: dict[str, Any] = {"regex": {"pattern": value[1:-1]}}
+        right: dict[str, Any] = {"regex": {"pattern": "^" + value[1:-1] + "$"}}
         if nget(query, "modifier") and get_leaf_value(nget(query, "modifier")) == "%l":
             right = {"string": value[1:-1]}
         return {

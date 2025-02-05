@@ -908,6 +908,25 @@ def _export_complete(
     return None
 
 
+def _export_notifs(
+    job: Job,
+    connection: RedisConnection,
+    result: list | None,
+) -> None:
+    j_kwargs: dict = cast(dict, job.kwargs)
+    user = j_kwargs.get("user", "")
+    if user:
+        msg_id = str(uuid4())
+        jso: dict[str, Any] = {
+            "user": user,
+            "action": "export_notifs",
+            "msg_id": msg_id,
+            "exports": result,
+        }
+        _publish_msg(connection, jso, msg_id)
+    return None
+
+
 def _config(
     job: Job,
     connection: RedisConnection,

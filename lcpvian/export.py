@@ -150,6 +150,8 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             "room": room,
             "user": user,
             "action": "started_export",
+            "format": export_format,
+            "hash": hash,
             "job_id": str(job.id),
         },
     )

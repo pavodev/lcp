@@ -1536,10 +1536,10 @@ export default {
             requested: data.total_results_requested || 200
           };
           useCorpusStore().fetchExport(info);
-          useNotificationStore().add({
-            type: "success",
-            text: "Initiated export download"
-          });
+          // useNotificationStore().add({
+          //   type: "success",
+          //   text: "Initiated export download"
+          // });
         } else if (data["action"] === "document_ids") {
           useWsStore().addMessageForPlayer(data)
           // console.log("AASAS", data)
@@ -1644,12 +1644,12 @@ export default {
             this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
             this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
           }
-        } else if (data["action"] === "started_export") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "success",
-            text: "Started the export process...",
-          });
+        // } else if (data["action"] === "started_export") {
+        //   this.loading = false;
+        //   useNotificationStore().add({
+        //     type: "success",
+        //     text: "Started the export process...",
+        //   });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {

@@ -35,6 +35,7 @@ from .callbacks import (
     _config,
     _document,
     _document_ids,
+    _export_notifs,
     _general_failure,
     _upload_failure,
     _meta,
@@ -561,6 +562,27 @@ class QueryService:
             job_timeout=self.timeout,
             args=(query,),
             kwargs=opts,
+        )
+        return job
+
+    async def get_export_notifs(self, user_id: str) -> Job:
+        """
+        Get initial app configuration JSON
+        """
+        job: Job
+
+        assert isinstance(user_id, str) and ";" not in user_id and "'" not in user_id
+
+        query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
+
+        job = self.app["internal"].enqueue(
+            _db_query,
+            on_success=Callback(_export_notifs, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query,),
+            kwargs={"user": user_id},
         )
         return job
 
