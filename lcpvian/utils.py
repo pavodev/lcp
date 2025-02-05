@@ -913,6 +913,20 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
+def _get_query_args(connection: RedisConnection, hash: str) -> list[QueryArgs]:
+    qas_json = connection.get(f"query_args_{hash}")
+    qas = json.loads(qas_json) if qas_json else []
+    return qas
+
+
+def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+    hash = qi_args.get("hash", "")
+    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
+    if not next((x for x in all_query_args if x == qi_args), None):
+        all_query_args.append(qi_args)
+    connection.set(f"query_args_{hash}", json.dumps(all_query_args))
+
+
 def _sign_payload(
     payload: dict[str, Any] | JSONObject | SentJob,
     kwargs: dict[str, Any] | QueryArgs | SentJob,

@@ -61,7 +61,6 @@ from .typed import (
 )
 from .utils import (
     _default_tracks,
-    _get_all_jobs_from_hash,
     _get_status,
     _format_config_query,
     _set_config,
@@ -559,15 +558,20 @@ class QueryService:
         )
         return job
 
-    async def get_export_notifs(self, user_id: str) -> Job:
+    async def get_export_notifs(self, user_id: str = "", hash: str = "") -> Job:
         """
         Get initial app configuration JSON
         """
         job: Job
 
-        assert isinstance(user_id, str) and ";" not in user_id and "'" not in user_id
-
-        query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
+        query: str
+        # TODO: better check on symbols (use pgsql)
+        if user_id:
+            assert ";" not in user_id and "'" not in user_id
+            query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
+        elif hash:
+            assert ";" not in hash and "'" not in hash
+            query = f"SELECT * FROM main.exports WHERE hash = '{hash}';"
 
         job = self.app["internal"].enqueue(
             _db_query,
@@ -576,7 +580,7 @@ class QueryService:
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query,),
-            kwargs={"user": user_id},
+            kwargs={"user": user_id, "hash": hash},
         )
         return job
 

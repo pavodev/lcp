@@ -30,7 +30,7 @@ from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import ensure_authorised, push_msg
+from .utils import _set_query_args, ensure_authorised, push_msg
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -282,10 +282,16 @@ async def query(
     out: Iteration
 
     try:
+        set_qi_args = False
         for it in range(iterations):
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
+            # Set qi_args on the first non-manual request
+            if not manual and not set_qi_args:
+                qi_args = qi.get_query_args()
+                _set_query_args(app["redis"], qi_args)
+                set_qi_args = True
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)

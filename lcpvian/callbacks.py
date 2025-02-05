@@ -915,6 +915,7 @@ def _export_notifs(
 ) -> None:
     j_kwargs: dict = cast(dict, job.kwargs)
     user = j_kwargs.get("user", "")
+    hash = j_kwargs.get("hash", "")
     if user:
         msg_id = str(uuid4())
         jso: dict[str, Any] = {
@@ -924,6 +925,8 @@ def _export_notifs(
             "exports": result,
         }
         _publish_msg(connection, jso, msg_id)
+    elif hash:
+        pass
     return None
 
 

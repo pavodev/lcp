@@ -294,16 +294,6 @@ async def create_app(test: bool = False) -> web.Application:
                 retry=retry_policy,
             ),
         )
-        app.addkey(
-            "ashared_aredis",
-            aioredis.Redis,
-            aioredis.Redis.from_url(
-                shared_redis_url,
-                health_check_interval=10,
-                retry_on_error=[ConnectionError],
-                retry=async_retry_policy,
-            ),
-        )
 
     redis = cast(web.Application, app)["redis"]
 
