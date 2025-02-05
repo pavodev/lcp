@@ -11,7 +11,7 @@
               @click="fetch(notif.dl_info)"
               class="download"
             >[ ready ]</span>
-            <span v-else>[ {{ notif.dl_info.status }} ]</span>
+            <span v-else-if="notif.dl_info">[ {{ notif.dl_info.status }} ]</span>
         </div>
     </div>
   </template>

@@ -100,19 +100,10 @@ class QueryService:
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
+
         if jso is None:
             return False
-        query_jobs_from_hash = _get_all_jobs_from_hash(job.id, self.app["redis"])[0]
-        if not query_jobs_from_hash:
-            return False
-        latest_job_in_cache = query_jobs_from_hash[-1]
 
-        status = (
-            "satisfied"
-            if latest_job_in_cache.meta.get("total_results_so_far", 0)
-            > kwargs.get("total_results_requested", 0)
-            else "partial"
-        )
         payload: JSONObject = json.loads(jso)
         _sign_payload(payload, kwargs)
         total_requested = cast(int, payload.get("total_results_requested", 0))
@@ -125,7 +116,10 @@ class QueryService:
             full=cast(bool, payload.get("full", False)),
             time_so_far=cast(float, payload.get("total_duration", 0)),
         )
+        if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
+            status = "finished"
         payload["status"] = status
+
         # we may have to apply the latest post-processes...
         pps = cast(
             dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
