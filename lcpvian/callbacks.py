@@ -49,6 +49,8 @@ from .typed import (
 from .utils import (
     CustomEncoder,
     Interrupted,
+    _get_query_info,
+    _update_query_info,
     _get_status,
     _row_to_value,
     _get_associated_query_job,
@@ -88,40 +90,42 @@ def _query(
     the aggregated results that are calculated during this callback. Then we
     apply post_processes filters and send the result as a WS message.
     """
+    query_info = _get_query_info(connection, job=job)
     job_kwargs = cast(dict, job.kwargs)
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
     kwargs = kwargs or job_kwargs
-    table = f"{job_kwargs['current_batch'][1]}.{job_kwargs['current_batch'][2]}"
+    _, schema, table, *_ = query_info["current_batch"]
+    table = f"{schema}.{table}"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
     ended_at = cast(datetime, job.ended_at)
     started_at = cast(datetime, job.started_at)
     duration: float = round((ended_at - started_at).total_seconds(), 3)
-    total_duration = round(job_kwargs.get("total_duration", 0.0) + duration, 3)
+    total_duration = round(query_info.get("total_duration", 0.0) + duration, 3)
     duration_string = f"Duration ({table}): {duration} :: {total_duration}"
 
     from_memory = kwargs.get("from_memory", False)
-    meta_json: QueryMeta = cast(QueryMeta, job_kwargs.get("meta_json"))
+    meta_json: QueryMeta = cast(QueryMeta, query_info.get("meta_json"))
     existing_results: Results = {0: meta_json}
-    post_processes = kwargs.get("post_processes", job_kwargs.get("post_processes", {}))
-    is_base = not bool(job_kwargs.get("first_job"))
-    total_before_now = job_kwargs["total_results_so_far"]
-    done_part = job_kwargs["done_batches"]
+    post_processes = query_info.get("post_processes", {})
+    is_base = not bool(query_info.get("first_job", False))
+    total_before_now = query_info["total_results_so_far"]
+    done_part = query_info["done_batches"]
     is_full = kwargs.get("full", job_kwargs["full"])
     first_job = _get_first_job(job, connection)
-    stored = first_job.meta.get("progress_info", {})
-    existing_results = first_job.meta.get("all_non_kwic_results", existing_results)
+    stored = query_info.get("progress_info", {})
+    existing_results = query_info.get("all_non_kwic_results", existing_results)
     total_requested = cast(
         int,
         kwargs.get("total_results_requested", job_kwargs["total_results_requested"]),
     )
-    just_finished = tuple(job_kwargs["current_batch"])
+    just_finished = tuple(query_info["current_batch"])
 
     # if from memory, we had this result cached, we just need to apply filters
     if from_memory:
         all_res = existing_results
         to_send = _apply_filters(all_res, post_processes)
-        n_res = stored["total_results_so_far"]
+        n_res = query_info["total_results_so_far"]
         search_all = stored["search_all"]
         show_total = stored["show_total"]
     # if not cached, we do all the aggregation and filtering of previous+current result
@@ -134,7 +138,7 @@ def _query(
             just_finished,
             done_part,
         )
-        first_job.meta["all_non_kwic_results"] = all_res
+        query_info["all_non_kwic_results"] = all_res
 
     # right now, when a job has no kwic element, we query all batches and only stop
     # if a time limit is reached. so the progress bar can reflect the amount of time used
@@ -143,12 +147,6 @@ def _query(
         time_perc = total_duration * 100.0 / allowed_time
 
     total_found = total_before_now + n_res if show_total else -1
-
-    offset_for_next_time = 0
-    if total_before_now + n_res > total_requested:
-        offset_for_next_time = total_requested - total_before_now
-
-    job.meta["offset_for_next_time"] = offset_for_next_time
 
     done_part.append(just_finished)
     status = _get_status(
@@ -160,12 +158,12 @@ def _query(
         full=job_kwargs.get("full", False),
         time_so_far=total_duration,
     )
-    job.meta["_status"] = status
+    query_info["_status"] = status
+    query_info["total_results_so_far"] = total_found
     job.meta["results_this_batch"] = n_res
     job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
     job.meta["_total_duration"] = total_duration
-    job.meta["total_results_so_far"] = total_found
 
     batches_done_string = f"{len(done_part)}/{len(job_kwargs['all_batches'])}"
 
@@ -177,12 +175,12 @@ def _query(
         perc_matches = 100.0
         if search_all:
             perc_matches = time_perc
-        job.meta["percentage_done"] = 100.0
+        query_info["percentage_done"] = 100.0
     elif status in {"partial", "satisfied", "overtime"}:
-        done_batches = job_kwargs["done_batches"]
+        done_batches = query_info["done_batches"]
         total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
         proportion_that_matches = total_found / total_words_processed_so_far
-        projected_results = int(job_kwargs["word_count"] * proportion_that_matches)
+        projected_results = int(query_info["word_count"] * proportion_that_matches)
         if not show_total:
             projected_results = -1
         perc_words = total_words_processed_so_far * 100.0 / job_kwargs["word_count"]
@@ -191,16 +189,16 @@ def _query(
         )
         if search_all:
             perc_matches = time_perc
-        job.meta["percentage_done"] = round(perc_matches, 3)
+        query_info["percentage_done"] = round(perc_matches, 3)
     if from_memory:
-        projected_results = stored["projected_results"]
-        perc_matches = stored["percentage_done"]
-        perc_words = stored["percentage_words_done"]
-        total_found = stored["total_results_so_far"]
-        n_res = stored["batch_matches"]
-        batches_done_string = stored["batches_done_string"]
-        status = stored["status"]
-        total_duration = stored["total_duration"]
+        projected_results = query_info["projected_results"]
+        perc_matches = query_info["percentage_done"]
+        perc_words = query_info["percentage_words_done"]
+        total_found = query_info["total_results_so_far"]
+        n_res = query_info["batch_matches"]
+        batches_done_string = query_info["batches_done_string"]
+        status = query_info["status"]
+        total_duration = query_info["total_duration"]
 
     progress_info = {
         "projected_results": projected_results,
@@ -216,11 +214,11 @@ def _query(
     }
 
     # so we do not override newer data with older data?
-    info: dict[str, str | bool | int | float] = first_job.meta.get("progress_info", {})
+    info: dict[str, str | bool | int | float] = query_info.get("progress_info", {})
     latest_total = cast(int, info.get("total_results_so_far", -1))
     is_latest = not info or total_found > latest_total
     if is_latest:
-        first_job.meta["progress_info"] = progress_info
+        query_info["progress_info"] = progress_info
 
     # can_send controls whether or not the FE gets a message with the stats...
     can_send = _decide_can_send(status, is_full, is_base, from_memory)
@@ -234,19 +232,14 @@ def _query(
     if do_full:
         can_send = False
 
-    if "latest_stats_message" not in first_job.meta:
-        first_job.meta["latest_stats_message"] = msg_id
-    if job.meta["total_results_so_far"] >= first_job.meta.get(
-        "total_results_so_far", 0
-    ):
-        first_job.meta["latest_stats_message"] = msg_id
+    query_info["latest_stats_message"] = msg_id
 
-    if "_sent_jobs" not in first_job.meta:
-        first_job.meta["_sent_jobs"] = {}
-    if "_meta_jobs" not in first_job.meta:
-        first_job.meta["_meta_jobs"] = {}
+    if "_sent_jobs" not in query_info:
+        query_info["_sent_jobs"] = {}
+    if "_meta_jobs" not in query_info:
+        query_info["_meta_jobs"] = {}
 
-    first_job.save_meta()  # type: ignore
+    _update_query_info(connection, job=job, info=query_info)
 
     use = perc_words if search_all or is_full else perc_matches
     time_remaining = _time_remaining(status, total_duration, use)
@@ -255,6 +248,12 @@ def _query(
     current_kwic_lines = min(max_kwic, total_found)
 
     action = "query_result"
+
+    offset_for_next_time = 0
+    if total_found > total_requested:
+        offset_for_next_time = total_requested - total_before_now
+
+    job.meta["offset_for_next_time"] = offset_for_next_time
 
     jso = dict(**job_kwargs)
     jso.update(
@@ -290,9 +289,9 @@ def _query(
     )
     _sign_payload(jso, cast(QueryArgs, kwargs))
 
-    if job_kwargs["debug"] and job_kwargs["sql"]:
+    if query_info["debug"] and query_info["sql"]:
         jso["sql"] = job_kwargs["sql"]
-    if job_kwargs["sql"]:
+    if query_info["sql"]:
         jso["consoleSQL"] = job_kwargs["sql"]
 
     if is_full and status != "finished":
@@ -300,8 +299,8 @@ def _query(
             "remaining": time_remaining,
             "first_job": first_job.id,
             "job": job.id,
-            "user": cast(str, kwargs.get("user", job_kwargs["user"])),
-            "room": cast(str, kwargs.get("room", job_kwargs["room"])),
+            "user": cast(str, kwargs.get("user", job_kwargs.get("user", ""))),
+            "room": cast(str, kwargs.get("room", job_kwargs.get("room", ""))),
             "duration": duration,
             "batches_done": batches_done_string,
             "total_duration": total_duration,

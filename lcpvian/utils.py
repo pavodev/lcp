@@ -343,6 +343,36 @@ def _get_status(
     return "partial"
 
 
+def _get_query_info(
+    connection: RedisConnection, hash: str = "", job: Job | None = None
+) -> dict[str, Any]:
+    if hash:
+        job = Job.fetch(hash, connection)
+    if job:
+        job = _get_first_job(job, connection)
+    if not job:
+        return {}
+    return job.meta
+
+
+def _update_query_info(
+    connection: RedisConnection,
+    hash: str = "",
+    job: Job | None = None,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    if hash:
+        job = Job.fetch(hash, connection)
+    if job:
+        job = _get_first_job(job, connection)
+    if not job:
+        return {}
+    for k, v in info.items():
+        job.meta[k] = v
+    job.save_meta()
+    return job.meta
+
+
 async def sem_coro(
     semaphore: asyncio.Semaphore, coro: Awaitable[list[tuple[int | str | bool]]]
 ) -> list[tuple[int | str | bool]]:
@@ -924,7 +954,11 @@ def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
     all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
     if not next((x for x in all_query_args if x == qi_args), None):
         all_query_args.append(qi_args)
-    connection.set(f"query_args_{hash}", json.dumps(all_query_args))
+    qa_key = f"query_args_{hash}"
+    connection.set(qa_key, json.dumps(all_query_args))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
 
 
 def _sign_payload(

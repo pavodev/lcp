@@ -49,7 +49,13 @@ from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
 from .typed import Batch, JSONObject, Query, QueryArgs, Results
-from .utils import _determine_language, push_msg, _meta_query, hasher
+from .utils import (
+    _determine_language,
+    push_msg,
+    _meta_query,
+    hasher,
+    _update_query_info,
+)
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 DEFAULT_MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
@@ -285,6 +291,33 @@ class QueryIteration:
         qi_args["hash"] = hasher(self.sql)
         return qi_args
 
+    def update_query_info(self) -> dict[str, Any]:
+        info: dict[str, Any] = {
+            "original_query": self.query,
+            "done_batches": self.done_batches,
+            "all_batches": self.all_batches,
+            "current_batch": self.current_batch,
+            "total_results_so_far": self.total_results_so_far,
+            "corpora": self.corpora,
+            "existing_results": self.existing_results,
+            "sentences": self.sentences,
+            "page_size": self.page_size,
+            "post_processes": self.post_processes,
+            "debug": self.app["_debug"],
+            "languages": list(self.languages),
+            "simultaneous": self.simultaneous,
+            "total_duration": self.total_duration,
+            "current_kwic_lines": self.current_kwic_lines,
+            "dqd": self.dqd,
+            "first_job": self.first_job,
+            "jso": self.jso,
+            "sql": self.sql,
+            "meta_json": self.meta,
+            "word_count": self.word_count,
+        }
+        hash = hasher(self.sql)
+        return _update_query_info(self.app["redis"], hash=hash, info=info)
+
     async def submit_query(self) -> tuple[Job, bool | None]:
         """
         Helper to submit a query job to the Query Service
@@ -297,44 +330,20 @@ class QueryIteration:
             self.job = job
             self.job_id = job.id
             self.submit_sents(query_started=True)
+            self.update_query_info()
             return job, False
 
         parent: str | None = None
         parent = self.job_id if self.job is not None else None
 
         query_kwargs = dict(
-            original_query=self.query,
-            user=self.user,
-            room=self.room,
             needed=self.needed,
             total_results_requested=self.total_results_requested,
-            done_batches=self.done_batches,
-            all_batches=self.all_batches,
-            current_batch=self.current_batch,
-            total_results_so_far=self.total_results_so_far,
-            corpora=self.corpora,
-            existing_results=self.existing_results,
-            sentences=self.sentences,
-            page_size=self.page_size,
-            post_processes=self.post_processes,
-            debug=self.app["_debug"],
             resume=self.resume,
-            languages=list(self.languages),
-            simultaneous=self.simultaneous,
             full=self.full,
-            total_duration=self.total_duration,
-            current_kwic_lines=self.current_kwic_lines,
-            dqd=self.dqd,
-            first_job=self.first_job,
-            jso=self.jso,
-            sql=self.sql,
             offset=self.offset,
-            meta_json=self.meta,
-            word_count=self.word_count,
             parent=parent,
         )
-        if self.to_export:
-            query_kwargs["to_export"] = self.to_export
 
         queue = self.get_queue()
 
@@ -344,6 +353,7 @@ class QueryIteration:
         )
         self.job = job
         self.job_id = job.id
+        self.update_query_info()
         if not self.first_job:
             self.first_job = job.id
         return job, do_sents
