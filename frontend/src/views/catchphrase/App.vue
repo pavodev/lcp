@@ -62,6 +62,11 @@
                 #{{ appVersion }}
               </span>
             </li>
+            <li class="nav-item export">
+              <!-- <FontAwesomeIcon :icon="['fas', 'gauge']" class="me-2" /> -->
+               <a class="nav-link">(XP)</a>
+              <ExportView />
+            </li>
             <li class="nav-item">
               <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
                 <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
@@ -101,6 +106,7 @@ import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
+import ExportView from "@/components/ExportView.vue";
 import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
@@ -128,6 +134,7 @@ export default {
     },
   },
   components: {
+    ExportView,
     LoadingView,
     NotificationView,
     FooterView,
@@ -151,5 +158,8 @@ export default {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
+}
+.export:hover #exportMonitor {
+  display: flex !important;
 }
 </style>

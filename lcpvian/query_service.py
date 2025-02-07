@@ -35,6 +35,7 @@ from .callbacks import (
     _config,
     _document,
     _document_ids,
+    _export_notifs,
     _general_failure,
     _upload_failure,
     _meta,
@@ -60,7 +61,6 @@ from .typed import (
 )
 from .utils import (
     _default_tracks,
-    _get_all_jobs_from_hash,
     _get_status,
     _format_config_query,
     _set_config,
@@ -99,19 +99,10 @@ class QueryService:
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
+
         if jso is None:
             return False
-        query_jobs_from_hash = _get_all_jobs_from_hash(job.id, self.app["redis"])[0]
-        if not query_jobs_from_hash:
-            return False
-        latest_job_in_cache = query_jobs_from_hash[-1]
 
-        status = (
-            "satisfied"
-            if latest_job_in_cache.meta.get("total_results_so_far", 0)
-            > kwargs.get("total_results_requested", 0)
-            else "partial"
-        )
         payload: JSONObject = json.loads(jso)
         _sign_payload(payload, kwargs)
         total_requested = cast(int, payload.get("total_results_requested", 0))
@@ -124,7 +115,10 @@ class QueryService:
             full=cast(bool, payload.get("full", False)),
             time_so_far=cast(float, payload.get("total_duration", 0)),
         )
+        if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
+            status = "finished"
         payload["status"] = status
+
         # we may have to apply the latest post-processes...
         pps = cast(
             dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
@@ -561,6 +555,32 @@ class QueryService:
             job_timeout=self.timeout,
             args=(query,),
             kwargs=opts,
+        )
+        return job
+
+    async def get_export_notifs(self, user_id: str = "", hash: str = "") -> Job:
+        """
+        Get initial app configuration JSON
+        """
+        job: Job
+
+        query: str
+        # TODO: better check on symbols (use pgsql)
+        if user_id:
+            assert ";" not in user_id and "'" not in user_id
+            query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
+        elif hash:
+            assert ";" not in hash and "'" not in hash
+            query = f"SELECT * FROM main.exports WHERE hash = '{hash}';"
+
+        job = self.app["internal"].enqueue(
+            _db_query,
+            on_success=Callback(_export_notifs, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query,),
+            kwargs={"user": user_id, "hash": hash},
         )
         return job
 
