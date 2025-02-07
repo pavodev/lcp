@@ -152,7 +152,7 @@ def _query(
     status = _get_status(
         total_found,
         done_batches=done_part,
-        all_batches=job_kwargs["all_batches"],
+        all_batches=query_info["all_batches"],
         total_results_requested=total_requested,
         search_all=search_all,
         full=job_kwargs.get("full", False),
@@ -165,7 +165,7 @@ def _query(
     job.meta["_search_all"] = search_all
     job.meta["_total_duration"] = total_duration
 
-    batches_done_string = f"{len(done_part)}/{len(job_kwargs['all_batches'])}"
+    batches_done_string = f"{len(done_part)}/{len(query_info['all_batches'])}"
 
     # in these next conditions we basically build the progress information
     # for a query, based on its status and batch metadata.
@@ -183,7 +183,7 @@ def _query(
         projected_results = int(query_info["word_count"] * proportion_that_matches)
         if not show_total:
             projected_results = -1
-        perc_words = total_words_processed_so_far * 100.0 / job_kwargs["word_count"]
+        perc_words = total_words_processed_so_far * 100.0 / query_info["word_count"]
         perc_matches = (
             min(total_found, total_requested) * 100.0 / (total_requested or total_found)
         )
@@ -290,9 +290,9 @@ def _query(
     _sign_payload(jso, cast(QueryArgs, kwargs))
 
     if query_info["debug"] and query_info["sql"]:
-        jso["sql"] = job_kwargs["sql"]
+        jso["sql"] = query_info["sql"]
     if query_info["sql"]:
-        jso["consoleSQL"] = job_kwargs["sql"]
+        jso["consoleSQL"] = query_info["sql"]
 
     if is_full and status != "finished":
         jso["progress"] = {
@@ -341,9 +341,10 @@ def _meta(
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
     kwargs = kwargs or cast(SentJob, job_kwargs)
-    base = Job.fetch(job_kwargs["first_job"], connection=connection)
+    base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
-    cb: Batch = cast(dict, depended.kwargs)["current_batch"]
+    query_info = _get_query_info(connection, job=depended)
+    cb: Batch = query_info["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
     full = cast(
@@ -351,7 +352,7 @@ def _meta(
     )
     status = depended.meta["_status"]
 
-    to_send = {"-2": format_meta_lines(job_kwargs.get("meta_query", ""), result)}
+    to_send = {"-2": format_meta_lines(query_info.get("meta_query", ""), result)}
     if not to_send["-2"]:
         return None
 
@@ -399,25 +400,24 @@ def _sentences(
     # when called directly (sents form cache) the kwargs are passed directly
     kwargs = kwargs or job_kwargs
     total_requested = _get_total_requested(kwargs, job)
-    base = Job.fetch(job_kwargs["first_job"], connection=connection)
+    base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     depended_kwargs: dict = cast(dict, depended.kwargs)
+    query_info = _get_query_info(connection, job=depended)
     to_export = kwargs.get("to_export")
     full = cast(bool, kwargs.get("full", job_kwargs.get("full", False)))
-    meta_json = depended_kwargs["meta_json"]
+    meta_json = query_info["meta_json"]
     resume = cast(bool, job_kwargs.get("resume", False))
     offset = cast(int, job_kwargs.get("offset", 0) if resume else -1)
     prev_offset = cast(int, depended.meta.get("latest_offset", -1))
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
-    current_lines = cast(
-        int, kwargs.get("current_kwic_lines", job_kwargs["current_kwic_lines"])
-    )
+    current_lines = query_info["current_kwic_lines"]
 
     if prev_offset > offset:  # and not kwargs.get("from_memory"):
         offset = prev_offset if resume else -1
     total_to_get = job_kwargs.get("needed", total_requested)
 
-    cb: Batch = depended_kwargs["current_batch"]
+    cb: Batch = query_info["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
     status = depended.meta["_status"]
@@ -459,7 +459,7 @@ def _sentences(
         status = "partial"
 
     if status == "finished" and more_data:
-        more_data = base.meta.get("total_results_so_far", 0) >= total_requested
+        more_data = query_info.get("total_results_so_far", 0) >= total_requested
 
     # if to_send contains only {0: meta, -1: sentences} or less
     if len(to_send) < 3 and not submit_query:

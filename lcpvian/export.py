@@ -13,6 +13,7 @@ from .typed import JSONObject
 from .utils import (
     _determine_language,
     _get_all_jobs_from_hash,
+    _get_query_info,
     push_msg,
     format_meta_lines,
 )
@@ -95,16 +96,18 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     depends_on.append(init_export_job.id)
 
     job: Job
+    query_info = _get_query_info(app["redis"], hash=hash)
     if export_format == "swissdox":
-        batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
+        _, _, batch, *_ = query_info.get("current_batch", ["", "", ""])
         underlang = _determine_language(batch) or ""
         if underlang:
             underlang = f"_{underlang}"
         article_ids: set[str] = set()
         _, _, meta_jobs = _get_all_jobs_from_hash(first_job_id, app["redis"])
         for j in meta_jobs:
-            mjk = cast(dict, j.kwargs)
-            segs_to_meta = format_meta_lines(cast(str, mjk.get("meta_query")), j.result)
+            segs_to_meta = format_meta_lines(
+                cast(str, query_info.get("meta_query")), j.result
+            )
             incoming_arids: set[str] = {
                 str(v["Article"]["id"]) for v in cast(dict, segs_to_meta).values()
             }

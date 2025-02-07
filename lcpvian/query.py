@@ -30,7 +30,7 @@ from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import _set_query_args, ensure_authorised, push_msg
+from .utils import _set_query_args, ensure_authorised, push_msg, _get_query_info
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -46,10 +46,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    pjkwargs = cast(dict, prev_job.kwargs)
-    dones = cast(list[tuple[int, str, str, int]], pjkwargs["done_batches"])
+    query_info = _get_query_info(qi.app["redis"], job=prev_job)
+    dones = cast(list[tuple[int, str, str, int]], query_info["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
-    so_far = cast(int, prev_job.meta["total_results_so_far"])
+    so_far = cast(int, query_info["total_results_so_far"])
     tot_req = qi.total_results_requested
     prev_total = qi.current_kwic_lines
 
@@ -63,7 +63,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
 
-    prev = cast(Batch, tuple(pjkwargs["current_batch"]))
+    prev = cast(Batch, tuple(query_info["current_batch"]))
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)

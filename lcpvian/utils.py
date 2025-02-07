@@ -614,8 +614,8 @@ def _get_sent_ids(
         return out
     prev_results = job.result
     seg_ids: set[str | int] = set()
-    kwargs: dict = cast(dict, job.kwargs)
-    rs = kwargs.get("meta_json", {})["result_sets"]
+    query_info = _get_query_info(conn, job=job)
+    rs = query_info.get("meta_json", {}).get("result_sets", [])
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
     to_use: int = next((int(i[0]) for i in prev_results if int(i[0]) in kwics), -2)

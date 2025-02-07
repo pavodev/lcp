@@ -55,6 +55,7 @@ from .utils import (
     _meta_query,
     hasher,
     _update_query_info,
+    _get_query_info,
 )
 
 QI_KWARGS = dict(kw_only=True, slots=True)
@@ -205,8 +206,9 @@ class QueryIteration:
             prev = Job.fetch(previous, connection=app["redis"])
             prev_kwargs: dict[str, Any] = cast(dict[str, Any], prev.kwargs)
             first_job_id = prev_kwargs.get("first_job") or previous
-            total_duration = prev_kwargs.get("total_duration", 0.0)
-            total_results_so_far = prev.meta.get("total_results_so_far", 0)
+            query_info = _get_query_info(connection=app["redis"], job=prev)
+            total_duration = query_info.get("total_duration", 0.0)
+            total_results_so_far = query_info.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
@@ -283,12 +285,17 @@ class QueryIteration:
         self.word_count = total
         return None
 
+    def qi_param_from_info(self, param: str) -> Any:
+        translation = {"original_query": "query", "meta_json": "meta"}
+        return getattr(self, translation.get(param, param))
+
     def get_query_args(self) -> QueryArgs:
         query_args_keys = QueryArgs.__required_keys__.union(QueryArgs.__optional_keys__)
         qi_args = QueryArgs(
-            **{k: getattr(self, k) for k in query_args_keys if k != "hash"}  # type: ignore
+            **{k: self.qi_param_from_info(k) for k in query_args_keys if k not in ("hash", "debug`")}  # type: ignore
         )
         qi_args["hash"] = hasher(self.sql)
+        qi_args["debug"] = self.app["_debug"]
         return qi_args
 
     def update_query_info(self) -> dict[str, Any]:

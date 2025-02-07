@@ -8,7 +8,12 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 from typing import Any, cast
 
-from .utils import _get_all_jobs_from_hash, _get_prep_segment, format_meta_lines
+from .utils import (
+    _get_all_jobs_from_hash,
+    _get_prep_segment,
+    format_meta_lines,
+    _get_query_info,
+)
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
@@ -109,6 +114,7 @@ class Exporter:
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
+        self._query_info = _get_query_info(connection, hash=hash)
         self._total_results_requested = total_results_requested
         self._offset = offset
         self._full = full
@@ -262,13 +268,12 @@ class Exporter:
     async def kwic(self) -> None:
         buffer: str = ""
         for j in self._query_jobs:
-            j_kwargs = cast(dict, j.kwargs)
-            if "current_batch" not in j_kwargs:
+            if "current_batch" not in self._query_info:
                 continue
             segment_mapping = self._config["mapping"]["layer"][self._config["segment"]]
             columns: list = []
-            if "partitions" in segment_mapping and "languages" in j_kwargs:
-                lg = j_kwargs["languages"][0]
+            if "partitions" in segment_mapping and "languages" in self._query_info:
+                lg = self._query_info["languages"][0]
                 columns = segment_mapping["partitions"].get(lg)["prepared"][
                     "columnHeaders"
                 ]
@@ -304,7 +309,7 @@ class Exporter:
                 )
                 formatted_meta.update(incoming_meta)
 
-            meta = j_kwargs.get("meta_json", {}).get("result_sets", [])
+            meta = self._query_info.get("meta_json", {}).get("result_sets", [])
             kwic_indices = [
                 n + 1 for n, o in enumerate(meta) if o.get("type") == "plain"
             ]
