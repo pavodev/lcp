@@ -1,1 +1,5 @@
-/home/liri-js/ownCloud/LiRI/LCP/Swissdox@LCP/definite_swissdox_import_files/scripts/export_content.sql
+COPY (
+	SELECT content_id, content
+	FROM core.content
+	WHERE substr(content_id::text, 1, 3) = '@'
+) TO STDOUT
