@@ -143,6 +143,7 @@ export default {
       this.currentTime = time;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
       this.updateVerticalLine(newXScale(this.currentTime));
+      this.center();
     },
     // Function to update the vertical timeline
     updateVerticalLine(xPosition) {
@@ -151,11 +152,16 @@ export default {
       // Get the current transform and the domain [domainStart, domainEnd] after zoom
       const transform = d3.zoomTransform(svg.node());
       const newXScale = transform.rescaleX(linearScale);
-      const [domainStart, domainEnd] = newXScale.domain();
+      let [domainStart, domainEnd] = newXScale.domain();
+      domainStart = Math.max(0, domainStart.toFixed(3));
+
+      // console.log('Position data:', domainStart, this.currentTime, domainEnd, xPosition);
+      console.log(`Position data / start: ${domainStart}, current: ${this.currentTime}, end: ${domainEnd}, new position: ${xPosition}`);
 
       // If the global currentTime is in the visible domain, show the line; otherwise hide it
       const inDomain = (this.currentTime >= domainStart && this.currentTime <= domainEnd);
 
+      console.log('IN DOMAIN? ', inDomain)
       verticalLine
         .attr("x1", xPosition)
         .attr("x2", xPosition)
@@ -167,8 +173,77 @@ export default {
         }
       }
     },
+    center() {
+      // Get the current transform and the current SVG dimensions.
+  const currentTransform = d3.zoomTransform(svg.node());
+  const svgBounds = svg.node().getBoundingClientRect();
+  const svgWidth = svgBounds.width; // use the current rendered width
 
+  // Create a scale based on the current transform.
+  const newXScale = currentTransform.rescaleX(linearScale);
+
+  // Compute the pixel position (under the current transform) for the current time.
+  const currentX = newXScale(this.currentTime);
+
+  // Compute the visible area in pixels.
+  // (Assuming your clip area starts at "padding" and extends to (svgWidth - paddingBeforeTimeline))
+  const visibleWidth = svgWidth - padding - paddingBeforeTimeline;
+  const centerPixel = padding + visibleWidth / 2;
+
+  // Compute how much (in pixels) we want to shift the timeline so that currentX becomes centered.
+  let dx = centerPixel - currentX;
+  let desiredX = currentTransform.x + dx;
+
+  // --- Left Boundary Clamp ---
+  // Under your base linearScale, data value 0 maps to "padding".
+  // With a transform, the left edge appears at: currentTransform.x + currentTransform.k * padding.
+  // We want to keep that ≤ padding.
+  // Rearranging gives:
+  //    currentTransform.x ≤ padding - currentTransform.k * padding = padding * (1 - currentTransform.k)
+  const minAllowedX = padding * (1 - currentTransform.k);
+  desiredX = Math.min(desiredX, minAllowedX);
+
+  // --- Right Boundary Clamp ---
+  // The right edge of your content (data value = this.mediaDuration) maps to:
+  //   linearScale(this.mediaDuration)
+  // With the transform it’s at: currentTransform.x + currentTransform.k * linearScale(this.mediaDuration)
+  // We want that to be exactly at the right visible boundary:
+  //   svgWidth - paddingBeforeTimeline
+  // Solving for the x translation gives:
+  //   desiredX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration)
+  const maxAllowedX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration);
+  desiredX = Math.max(desiredX, maxAllowedX);
+
+  // Build the new transform with the clamped translation.
+  const newTransform = d3.zoomIdentity
+    .translate(desiredX, currentTransform.y)
+    .scale(currentTransform.k);
+
+  // Apply the new transform with a smooth transition.
+  svg.transition().call(zoom.transform, newTransform);
+    },
+    moveLeft() {
+      console.log('MOVING LEFT');
+      const currentTransform = d3.zoomTransform(svg.node());
+      const newXScale = currentTransform.rescaleX(linearScale);
+
+      // Get the width of the visible range
+      const visibleWidth = newXScale.range()[1] - newXScale.range()[0];
+
+      // Get the width of the entire data range
+      const totalWidth = newXScale.domain()[1] - newXScale.domain()[0];
+
+      // Calculate the amount to move the graph to the right (one width)
+      const moveAmount = totalWidth - visibleWidth;
+
+      // Calculate the new translation along the x-axis
+      const newTx = currentTransform.x - moveAmount;
+
+      // Update the zoom transform with the new translation
+      svg.call(zoom.transform, d3.zoomIdentity.translate(newTx, currentTransform.y).scale(currentTransform.k));
+    },
     moveRight() {
+      console.log('MOVING RIGHT');
       const currentTransform = d3.zoomTransform(svg.node());
       const newXScale = currentTransform.rescaleX(linearScale);
 
@@ -378,11 +453,11 @@ export default {
       .scaleExtent([1, 75])
       .translateExtent([
         [padding, -Infinity],
-        [width - padding, Infinity],
+        [width, Infinity],
       ])
       .extent([
         [padding, 0],
-        [width - padding, height],
+        [width, height],
       ])
       .on("zoom", zoomed);
 
@@ -487,7 +562,8 @@ export default {
       .on('click', () => {
         const transform = d3.zoomTransform(svg.node());
         const clickX = transform.invertX(d3.pointer(event)[0]);
-        const originalValue = linearScale.invert(clickX);
+        let originalValue = linearScale.invert(clickX);
+        originalValue = Math.max(0, Math.min(originalValue, this.mediaDuration)); // Don't accept values outside the media duration
         const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
         this.$emit("updateTime", originalValue);
         // this.verticalSlider.value = originalValue

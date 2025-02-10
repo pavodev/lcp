@@ -15,6 +15,7 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
 import "@/assets/style.css";
 import "@/assets/multiselect.css";
+import "@/assets/datepicker.css";
 
 const pinia = createPinia();
 
