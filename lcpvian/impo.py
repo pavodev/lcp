@@ -240,16 +240,20 @@ class Importer:
                 data = await f.read(chunk)
                 if not data or not data.strip():
                     return None
-                await raw.cursor()._connection.copy_to_table(
-                    table,
-                    source=BytesIO(data),
-                    schema_name=schema,
-                    columns=columns,
-                    delimiter="\t",
-                    quote="\b",
-                    format="csv",
-                    timeout=self.upload_timeout,
-                )
+                try:
+                    await raw.cursor()._connection.copy_to_table(
+                        table,
+                        source=BytesIO(data),
+                        schema_name=schema,
+                        columns=columns,
+                        delimiter="\t",
+                        quote="\b",
+                        format="csv",
+                        timeout=self.upload_timeout,
+                    )
+                except Exception as e:
+                    print(f"Failed to copy table {table} with columns {columns}")
+                    raise e
             self.update_progress(f":progress:{len(data)}:{tot}:{base}:")
         return None
 
@@ -290,16 +294,22 @@ class Importer:
                 for start, chunk in positions:
                     await f.seek(start)
                     data = await f.read(chunk)
-                    await raw.cursor()._connection.copy_to_table(
-                        table.name,
-                        source=BytesIO(data),
-                        schema_name=self.schema,
-                        columns=table.columns,
-                        delimiter="\t",
-                        quote="\b",
-                        format="csv",
-                        timeout=self.upload_timeout,
-                    )
+                    try:
+                        await raw.cursor()._connection.copy_to_table(
+                            table.name,
+                            source=BytesIO(data),
+                            schema_name=self.schema,
+                            columns=table.columns,
+                            delimiter="\t",
+                            quote="\b",
+                            format="csv",
+                            timeout=self.upload_timeout,
+                        )
+                    except Exception as e:
+                        print(
+                            f"Failed to copy table {table.name} with columns {table.columns}"
+                        )
+                        raise e
                     sz = len(data)
                     self.update_progress(f":progress:{sz}:{tot}:{base}:")
         return None

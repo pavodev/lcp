@@ -1148,11 +1148,11 @@ export default {
           this.percentageDone = this.WSDataResults.percentage_done;
           const {schema_path} = this.selectedCorpora.corpus;
           useCorpusStore().fetchExport(schema_path, data.fn);
-          useNotificationStore().add({
-            type: "success",
-            text: "Initiated export download"
-          });
-        }else if (data["action"] === "stopped") {
+          // useNotificationStore().add({
+          //   type: "success",
+          //   text: "Initiated export download"
+          // });
+        } else if (data["action"] === "stopped") {
           if (data["n"]) {
             console.log("queries stopped", data);
             useNotificationStore().add({
@@ -1240,12 +1240,12 @@ export default {
             this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
             this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
           }
-        } else if (data["action"] === "started_export") {
-          this.loading = false;
-          useNotificationStore().add({
-            type: "success",
-            text: "Started the export process...",
-          });
+        // } else if (data["action"] === "started_export") {
+        //   this.loading = false;
+        //   useNotificationStore().add({
+        //     type: "success",
+        //     text: "Started the export process...",
+        //   });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {

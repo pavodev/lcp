@@ -43,6 +43,27 @@ CREATE TABLE main.inprogress_corpus (
 );
 
 
+CREATE TYPE main.export_status AS ENUM (
+   'querying'
+ , 'failed'
+ , 'exporting'
+ , 'ready'
+);
+
+CREATE TABLE main.exports (
+   query_hash        text                 NOT NULL
+ , status            main.export_status   NOT NULL
+ , message           text
+ , user_id           text
+ , format            text                 NOT NULL
+ , n_offset          int                  NOT NULL
+ , requested         int                  NOT NULL
+ , delivered         int                  NOT NULL
+ , created_at        timestamptz          NOT NULL DEFAULT now()
+ , modified_at       timestamptz          NOT NULL DEFAULT now()
+);
+CREATE INDEX ON main.exports user_id;
+CREATE INDEX ON main.exports query_hash;
 
 -- global ENUM types
 CREATE TYPE main.udep AS ENUM (
@@ -432,6 +453,7 @@ CREATE TYPE main.upos AS ENUM (
 GRANT SELECT
    ON main.corpus
     , main.inprogress_corpus
+    , main.exports
    TO lcp_production_maintenance
     , lcp_production_monitoring
     , lcp_production_importer

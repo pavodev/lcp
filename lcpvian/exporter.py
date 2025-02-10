@@ -8,7 +8,7 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 from typing import Any, cast
 
-from .utils import _get_all_jobs_from_hash, format_meta_lines
+from .utils import _get_all_jobs_from_hash, _get_prep_segment, format_meta_lines
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
@@ -79,7 +79,7 @@ class Segment:
     Private class representing a segment
     """
 
-    id: int
+    id: str
 
 
 @dataclass()
@@ -156,9 +156,9 @@ class Exporter:
                 "name", self._config["shortname"]
             )
             self._info["word_count"] = lj_payload["word_count"]
-            self._info["percentage"] = (
-                sum(x[3] for x in lj_payload["done_batches"]) / lj_payload["word_count"]
-            )
+            self._info["percentage"] = sum(
+                x[3] for x in lj_payload["done_batches"]
+            ) / sum(x[3] for x in lj_payload["all_batches"])
             self._info["projected"] = lj_payload["projected_results"]
             self._info["query"] = lj_payload["jso"]
             self._info["submitted_at"] = str(self._query_jobs[0].enqueued_at)
@@ -203,11 +203,8 @@ class Exporter:
                         break
                     sentence_id = result[0]
                     try:
-                        sid, s_offset, s_tokens = next(
-                            r
-                            for sj in self._sentence_jobs
-                            for r in sj.result
-                            if str(r[0]) == sentence_id
+                        sid, s_offset, s_tokens = _get_prep_segment(
+                            sentence_id, self._sentence_jobs, self._query_jobs[0]
                         )
                     except:
                         print(

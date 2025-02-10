@@ -61,6 +61,8 @@ RESULTS_DIR = os.getenv("RESULTS", "results")
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
 
+PSQL_NAMEDATALEN = int(os.getenv("PSQL_NAMEDATALEN", 64))
+
 TRUES = {"true", "1", "y", "yes"}
 FALSES = {"", "0", "null", "none"}
 
@@ -632,12 +634,14 @@ def _get_all_jobs_from_hash(
     sent_jobs: list[Job] = []
     meta_jobs: list[Job] = []
 
+    main_job = Job.fetch(hash, connection=connection)
     finished_jobs = [
         Job.fetch(jid, connection=connection)
         for registry in [
             FinishedJobRegistry(name=x, connection=connection)
             for x in ("query", "background")
         ]
+        + [main_job.finished_job_registry]
         for jid in registry.get_job_ids()
     ]
     for j in finished_jobs:
@@ -656,6 +660,29 @@ def _get_all_jobs_from_hash(
     return (query_jobs_sorted, sent_jobs, meta_jobs)
 
 
+def _get_prep_segment(
+    segment_id: str, sentence_jobs: list[Job], first_job: Job
+) -> tuple[str, int, list]:
+    try:
+        sid, s_offset, s_tokens = next(
+            r for sj in sentence_jobs for r in sj.result if str(r[0]) == segment_id
+        )
+    except:
+        sid, s_offset, s_tokens = next(
+            (si, so, st)
+            for msg_id in first_job.meta.get("sent_job_ws_messages", {})
+            for si, (so, st) in cast(
+                dict,
+                json.loads(first_job.connection.get(msg_id) or b"{}"),
+            )
+            .get("result", {})
+            .get("-1", {})
+            .items()
+            if str(si) == segment_id
+        )
+    return (sid, s_offset, s_tokens)
+
+
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
@@ -664,7 +691,19 @@ def _sanitize_corpus_name(corpus_name: str) -> str:
 
 def _schema_from_corpus_name(corpus_name: str, project_id: str) -> str:
     tmp_name = _sanitize_corpus_name(corpus_name)
-    return tmp_name + "_" + re.sub("-", "", re.sub(r"_+", "_", project_id))
+    while (
+        len(tmp_name) > 1
+        and len(
+            str.encode(
+                schema_name := re.sub(
+                    "-", "", re.sub(r"_+", "_", tmp_name + "_" + project_id)
+                )
+            )
+        )
+        > PSQL_NAMEDATALEN - 5  # Leave some room for the version suffix
+    ):
+        tmp_name = tmp_name[0:-1]
+    return schema_name
 
 
 def format_query_params(
@@ -872,6 +911,20 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     if total_requested > 0:
         return total_requested
     return -1
+
+
+def _get_query_args(connection: RedisConnection, hash: str) -> list[QueryArgs]:
+    qas_json = connection.get(f"query_args_{hash}")
+    qas = json.loads(qas_json) if qas_json else []
+    return qas
+
+
+def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+    hash = qi_args.get("hash", "")
+    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
+    if not next((x for x in all_query_args if x == qi_args), None):
+        all_query_args.append(qi_args)
+    connection.set(f"query_args_{hash}", json.dumps(all_query_args))
 
 
 def _sign_payload(
