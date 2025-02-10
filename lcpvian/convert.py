@@ -186,10 +186,11 @@ def _combine_e(
     Get the combined E value for collocation
     """
     assert current is not None and done is not None
-    if not done:
+    done_minus_current = [x for x in done if x != current]
+    if not done_minus_current:
         return this_time_e
     current_size: int = current[-1]
-    done_size = sum(d[-1] for d in done if d != current)
+    done_size = sum(d[-1] for d in done_minus_current if d != current)
     prop = this_time_e * current_size
     done_prop = e_so_far * done_size
     return (prop + done_prop) / (current_size + done_size)

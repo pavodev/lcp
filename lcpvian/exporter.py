@@ -161,12 +161,12 @@ class Exporter:
             self._info["name"] = self._config["meta"].get(
                 "name", self._config["shortname"]
             )
-            self._info["word_count"] = lj_payload["word_count"]
+            self._info["word_count"] = self._query_info["word_count"]
             self._info["percentage"] = sum(
-                x[3] for x in lj_payload["done_batches"]
-            ) / sum(x[3] for x in lj_payload["all_batches"])
+                x[3] for x in self._query_info["done_batches"]
+            ) / sum(x[3] for x in self._query_info["all_batches"])
             self._info["projected"] = lj_payload["projected_results"]
-            self._info["query"] = lj_payload["jso"]
+            self._info["query"] = self._query_info["jso"]
             self._info["submitted_at"] = str(self._query_jobs[0].enqueued_at)
             completed_at = self._query_jobs[-1].ended_at
             if self._sentence_jobs:

@@ -110,7 +110,7 @@ ResultsValue: TypeAlias = ResultSents | QueryMeta | Analysis
 
 # all the results put together into a single object
 Results: TypeAlias = dict[
-    int,  # -1 is sentences, 0 is metadata, more is kwic/freq/collocates
+    int,  # -2 is above-hit data, -1 is sentences, 0 is results metadata, more is kwic/freq/collocates
     ResultsValue,
 ]
 
@@ -157,27 +157,7 @@ class QueryArgs(BaseArgs):
     to_export: Any
     total_results_requested: int
     offset: int
-    original_query: str
-    done_batches: list[Batch]
-    all_batches: list[Batch]
-    current_batch: Batch
-    total_results_so_far: int
-    corpora: list[int]
-    existing_results: Results
-    sentences: bool
-    page_size: int
-    post_processes: dict[int, Any]
-    debug: bool
-    languages: list[str]
-    simultaneous: str
-    total_duration: float
-    current_kwic_lines: int
-    dqd: str
-    first_job: str
-    jso: Query
-    sql: str
-    meta_json: dict[str, list[JSONObject]]
-    word_count: int
+    status: str
 
 
 class DocIDArgs(BaseArgs):

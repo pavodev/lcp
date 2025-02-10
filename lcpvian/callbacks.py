@@ -17,7 +17,6 @@ import pandas
 import shutil
 import traceback
 
-from datetime import datetime
 from types import TracebackType
 from typing import Any, Unpack, cast
 from uuid import uuid4
@@ -49,6 +48,7 @@ from .typed import (
 from .utils import (
     CustomEncoder,
     Interrupted,
+    _get_query_args,
     _get_query_info,
     _update_query_info,
     _get_status,
@@ -91,35 +91,28 @@ def _query(
     apply post_processes filters and send the result as a WS message.
     """
     query_info = _get_query_info(connection, job=job)
-    job_kwargs = cast(dict, job.kwargs)
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
-    kwargs = kwargs or job_kwargs
     _, schema, table, *_ = query_info["current_batch"]
     table = f"{schema}.{table}"
-    allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
-    ended_at = cast(datetime, job.ended_at)
-    started_at = cast(datetime, job.started_at)
-    duration: float = round((ended_at - started_at).total_seconds(), 3)
-    total_duration = round(query_info.get("total_duration", 0.0) + duration, 3)
-    duration_string = f"Duration ({table}): {duration} :: {total_duration}"
 
-    from_memory = kwargs.get("from_memory", False)
     meta_json: QueryMeta = cast(QueryMeta, query_info.get("meta_json"))
     existing_results: Results = {0: meta_json}
     post_processes = query_info.get("post_processes", {})
-    is_base = not bool(query_info.get("first_job", False))
     total_before_now = query_info["total_results_so_far"]
     done_part = query_info["done_batches"]
-    is_full = kwargs.get("full", job_kwargs["full"])
     first_job = _get_first_job(job, connection)
     stored = query_info.get("progress_info", {})
-    existing_results = query_info.get("all_non_kwic_results", existing_results)
-    total_requested = cast(
-        int,
-        kwargs.get("total_results_requested", job_kwargs["total_results_requested"]),
-    )
+    duration: float = round((job.ended_at - job.started_at).total_seconds(), 3)  # type: ignore
+    total_duration = round(query_info.get("total_duration", 0.0) + duration, 3)
     just_finished = tuple(query_info["current_batch"])
+    done_part.append(just_finished)
+    query_info["done_batches"] = done_part
+    query_info["total_duration"] = total_duration
+    _update_query_info(connection, job=job, info=query_info)
+
+    from_memory = query_info.get("from_memory", False)
+    existing_results = query_info.get("all_non_kwic_results", existing_results)
 
     # if from memory, we had this result cached, we just need to apply filters
     if from_memory:
@@ -142,75 +135,19 @@ def _query(
 
     # right now, when a job has no kwic element, we query all batches and only stop
     # if a time limit is reached. so the progress bar can reflect the amount of time used
-    time_perc = 0.0
-    if allowed_time > 0.0 and search_all:
-        time_perc = total_duration * 100.0 / allowed_time
 
     total_found = total_before_now + n_res if show_total else -1
-
-    done_part.append(just_finished)
-    status = _get_status(
-        total_found,
-        done_batches=done_part,
-        all_batches=query_info["all_batches"],
-        total_results_requested=total_requested,
-        search_all=search_all,
-        full=job_kwargs.get("full", False),
-        time_so_far=total_duration,
-    )
-    query_info["_status"] = status
     query_info["total_results_so_far"] = total_found
+    _update_query_info(connection, job=job, info=query_info)
+
     job.meta["results_this_batch"] = n_res
-    job.meta["total_results_requested"] = total_requested  # todo: can't this change!?
     job.meta["_search_all"] = search_all
     job.meta["_total_duration"] = total_duration
 
-    batches_done_string = f"{len(done_part)}/{len(query_info['all_batches'])}"
-
-    # in these next conditions we basically build the progress information
-    # for a query, based on its status and batch metadata.
-    if status == "finished":
-        projected_results = total_found if show_total else -1
-        perc_words = 100.0
-        perc_matches = 100.0
-        if search_all:
-            perc_matches = time_perc
-        query_info["percentage_done"] = 100.0
-    elif status in {"partial", "satisfied", "overtime"}:
-        done_batches = query_info["done_batches"]
-        total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
-        proportion_that_matches = total_found / total_words_processed_so_far
-        projected_results = int(query_info["word_count"] * proportion_that_matches)
-        if not show_total:
-            projected_results = -1
-        perc_words = total_words_processed_so_far * 100.0 / query_info["word_count"]
-        perc_matches = (
-            min(total_found, total_requested) * 100.0 / (total_requested or total_found)
-        )
-        if search_all:
-            perc_matches = time_perc
-        query_info["percentage_done"] = round(perc_matches, 3)
-    if from_memory:
-        projected_results = query_info["projected_results"]
-        perc_matches = query_info["percentage_done"]
-        perc_words = query_info["percentage_words_done"]
-        total_found = query_info["total_results_so_far"]
-        n_res = query_info["batch_matches"]
-        batches_done_string = query_info["batches_done_string"]
-        status = query_info["status"]
-        total_duration = query_info["total_duration"]
-
     progress_info = {
-        "projected_results": projected_results,
-        "percentage_done": round(perc_matches, 3),
-        "percentage_words_done": round(perc_words, 3),
-        "total_results_so_far": total_found,
         "batch_matches": n_res,
         "show_total": show_total,
         "search_all": search_all,
-        "batches_done_string": batches_done_string,
-        "total_duration": total_duration,
-        "status": status,
     }
 
     # so we do not override newer data with older data?
@@ -220,17 +157,7 @@ def _query(
     if is_latest:
         query_info["progress_info"] = progress_info
 
-    # can_send controls whether or not the FE gets a message with the stats...
-    can_send = _decide_can_send(status, is_full, is_base, from_memory)
-
     msg_id = str(uuid4())  # todo: hash instead?
-
-    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
-
-    # todo: this should no longer happen, as we send a progress update message instead?
-    do_full = is_full and status != "finished"
-    if do_full:
-        can_send = False
 
     query_info["latest_stats_message"] = msg_id
 
@@ -241,87 +168,32 @@ def _query(
 
     _update_query_info(connection, job=job, info=query_info)
 
-    use = perc_words if search_all or is_full else perc_matches
-    time_remaining = _time_remaining(status, total_duration, use)
-
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_kwic_lines = min(max_kwic, total_found)
 
     action = "query_result"
 
-    offset_for_next_time = 0
-    if total_found > total_requested:
-        offset_for_next_time = total_requested - total_before_now
-
-    job.meta["offset_for_next_time"] = offset_for_next_time
-
-    jso = dict(**job_kwargs)
-    jso.update(
-        {
-            "result": to_send,
-            "full_result": all_res,
-            "status": status,
-            "job": job.id,
-            "action": action,
-            "projected_results": projected_results,
-            "percentage_done": round(perc_matches, 3),
-            "percentage_words_done": round(perc_words, 3),
-            "from_memory": from_memory,
-            "duration_string": duration_string,
-            "total_results_so_far": total_found,
-            "table": table,
-            "first_job": first_job.id,
-            "post_processes": post_processes,
-            "search_all": search_all,
-            "batches_done": batches_done_string,
-            "batch_matches": n_res,
-            "full": is_full,
-            "can_send": can_send,
-            "done_batches": done_part,
-            "current_kwic_lines": current_kwic_lines,
-            "msg_id": msg_id,
-            "resume": False,
-            "duration": duration,
-            "offset": offset_for_next_time,
-            "total_duration": total_duration,
-            "remaining": time_remaining,
-        }
-    )
-    _sign_payload(jso, cast(QueryArgs, kwargs))
-
-    if query_info["debug"] and query_info["sql"]:
-        jso["sql"] = query_info["sql"]
-    if query_info["sql"]:
-        jso["consoleSQL"] = query_info["sql"]
-
-    if is_full and status != "finished":
-        jso["progress"] = {
-            "remaining": time_remaining,
-            "first_job": first_job.id,
-            "job": job.id,
-            "user": cast(str, kwargs.get("user", job_kwargs.get("user", ""))),
-            "room": cast(str, kwargs.get("room", job_kwargs.get("room", ""))),
-            "duration": duration,
-            "batches_done": batches_done_string,
-            "total_duration": total_duration,
-            "projected_results": projected_results,
-            "percentage_done": round(perc_matches, 3),
-            "percentage_words_done": round(perc_words, 3),
-            "total_results_so_far": total_found,
-            "action": "background_job_progress",
-        }
-
-    job.meta["payload"] = jso
-    job.save_meta()  # type: ignore
+    jso = {
+        "result": to_send,
+        "full_result": all_res,
+        "job": job.id,
+        "action": action,
+        "from_memory": from_memory,
+        "total_results_so_far": total_found,
+        "table": table,
+        "first_job": first_job.id,
+        "post_processes": post_processes,
+        "search_all": search_all,
+        "batch_matches": n_res,
+        "done_batches": done_part,
+        "current_kwic_lines": current_kwic_lines,
+        "msg_id": msg_id,
+        "resume": False,
+        "duration": duration,
+        "total_duration": total_duration,
+    }
 
     dumped = json.dumps(jso, cls=CustomEncoder)
-
-    # todo: just update progress here, but do not send the rest
-    if use_cache and not can_send and False:
-        if not connection.get(msg_id):
-            connection.set(msg_id, dumped)
-        connection.expire(msg_id, MESSAGE_TTL)
-        return None
 
     return _publish_msg(connection, dumped, msg_id)
 
@@ -344,17 +216,22 @@ def _meta(
     base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     query_info = _get_query_info(connection, job=depended)
-    cb: Batch = query_info["current_batch"]
-    table = f"{cb[1]}.{cb[2]}"
+    try:
+        cb: Batch = query_info["current_batch"]
+        table = f"{cb[1]}.{cb[2]}"
+    except:
+        import pdb
+
+        pdb.set_trace()
+
+    to_send = {"-2": format_meta_lines(query_info.get("meta_query", ""), result)}
+    if not to_send["-2"]:
+        return None
 
     full = cast(
         bool, kwargs.get("full", job_kwargs.get("full", base.kwargs.get("full", False)))  # type: ignore
     )
     status = depended.meta["_status"]
-
-    to_send = {"-2": format_meta_lines(query_info.get("meta_query", ""), result)}
-    if not to_send["-2"]:
-        return None
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "meta_job_ws_messages" not in base.meta:
@@ -402,7 +279,6 @@ def _sentences(
     total_requested = _get_total_requested(kwargs, job)
     base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
-    depended_kwargs: dict = cast(dict, depended.kwargs)
     query_info = _get_query_info(connection, job=depended)
     to_export = kwargs.get("to_export")
     full = cast(bool, kwargs.get("full", job_kwargs.get("full", False)))
@@ -516,13 +392,6 @@ def _sentences(
 
     # todo: just update progress here, but do not send the rest
     dumped = json.dumps(jso, cls=CustomEncoder)
-
-    # if use_cache and not can_send:
-    #     if not connection.get(msg_id):
-    #         connection.set(msg_id, dumped)
-    #     connection.expire(msg_id, MESSAGE_TTL)
-    #     print("not returning sentences because searching whole corpus")
-    #     return
 
     job.save_meta()  # type: ignore
 

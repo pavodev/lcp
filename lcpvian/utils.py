@@ -312,13 +312,14 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
 
 
 def _get_status(
-    n_results: int,
-    total_results_requested: int,
-    done_batches: list[Batch],
-    all_batches: list[Batch],
+    query_info: dict,
+    query_args: QueryArgs,
+    # n_results: int,
+    # total_results_requested: int,
+    # done_batches: list[Batch],
+    # all_batches: list[Batch],
     search_all: bool = False,
-    full: bool = False,
-    time_so_far: float = 0.0,
+    # time_so_far: float = 0.0,
 ) -> str:
     """
     Is a query finished, or do we need to do another iteration?
@@ -328,6 +329,13 @@ def _get_status(
         partial: currently fewer than total_results_requested
         satisfied: >= total_results_requested
     """
+    n_results = query_info.get("total_results_so_far", 0)
+    done_batches = query_info.get("done_batches", [])
+    all_batches = query_info.get("all_batches", [])
+    time_so_far = query_info.get("total_duration", 0.0)
+    total_results_requested = query_args.get("total_results_requested", 0)
+    full = query_args.get("full", False)
+
     if len(done_batches) == len(all_batches):
         return "finished"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
@@ -369,6 +377,7 @@ def _update_query_info(
         return {}
     for k, v in info.items():
         job.meta[k] = v
+    job.meta["hash"] = hash
     job.save_meta()
     return job.meta
 
@@ -930,6 +939,73 @@ def _decide_can_send(
     return False
 
 
+def _get_progress(job: Job, query_info: dict, query_args: QueryArgs) -> dict:
+    allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
+    do_full = query_args.get("full", False)
+    status = _get_status(query_info, query_args)
+    total_requested = query_args["total_results_requested"]
+    total_found = query_info["total_results_so_far"]
+    done_batches = query_info["done_batches"]
+    total_words_processed_so_far = sum([x[-1] for x in query_info["done_batches"]]) or 1
+    use = total_words_processed_so_far * 100.0 / query_info["word_count"]
+    total_duration = query_info.get("total_duration", 0.0)
+    time_remaining = _time_remaining(status, total_duration, use)
+    ended_at = cast(datetime, job.ended_at)
+    started_at = cast(datetime, job.started_at)
+    duration: float = round((ended_at - started_at).total_seconds(), 3)
+    time_perc = 0.0
+    if allowed_time > 0.0 and do_full:
+        time_perc = total_duration * 100.0 / allowed_time
+    batches_done_string = f"{len(done_batches)}/{len(query_info['all_batches'])}"
+    total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
+    proportion_that_matches = total_found / total_words_processed_so_far
+    projected_results = int(query_info["word_count"] * proportion_that_matches)
+    if status == "finished":
+        projected_results = total_found if do_full else -1
+        perc_words = 100.0
+        perc_matches = 100.0
+        if do_full:
+            perc_matches = time_perc
+        query_info["percentage_done"] = 100.0
+    elif status in {"partial", "satisfied", "overtime"}:
+        done_batches = query_info["done_batches"]
+        total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
+        proportion_that_matches = total_found / total_words_processed_so_far
+        projected_results = int(query_info["word_count"] * proportion_that_matches)
+        if not do_full:
+            projected_results = -1
+        perc_words = total_words_processed_so_far * 100.0 / query_info["word_count"]
+        perc_matches = (
+            min(total_found, total_requested) * 100.0 / (total_requested or total_found)
+        )
+        if do_full:
+            perc_matches = time_perc
+        query_info["percentage_done"] = round(perc_matches, 3)
+    if query_args.get("from_memory"):
+        projected_results = query_info["projected_results"]
+        perc_matches = query_info["percentage_done"]
+        perc_words = query_info["percentage_words_done"]
+        total_found = query_info["total_results_so_far"]
+        batches_done_string = query_info["batches_done_string"]
+        status = query_info["status"]
+        total_duration = query_info["total_duration"]
+    return {
+        "remaining": time_remaining,
+        "job": job.id,
+        "first_job": query_info.get("hash", ""),
+        "user": query_args.get("user", ""),
+        "room": query_args.get("room", ""),
+        "duration": duration,
+        "batches_done": batches_done_string,
+        "total_duration": total_duration,
+        "projected_results": projected_results,
+        "percentage_done": round(perc_matches, 3),
+        "percentage_words_done": round(perc_words, 3),
+        "total_results_so_far": total_found,
+        "action": "background_job_progress",
+    }
+
+
 def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     """
     Helper to find the total requested -- remove this after cleanup ideally
@@ -955,6 +1031,22 @@ def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
     if not next((x for x in all_query_args if x == qi_args), None):
         all_query_args.append(qi_args)
     qa_key = f"query_args_{hash}"
+    connection.set(qa_key, json.dumps(all_query_args))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
+
+
+def _delete_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+    hash = qi_args.get("hash", "")
+    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
+    if not all_query_args:
+        return
+    all_query_args = [x for x in all_query_args if x != qi_args]
+    qa_key = f"query_args_{hash}"
+    if not all_query_args:
+        connection.delete(qa_key)
+        return
     connection.set(qa_key, json.dumps(all_query_args))
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
     whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))

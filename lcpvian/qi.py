@@ -77,7 +77,7 @@ class QueryIteration:
     total_results_requested: int
     needed: int
     page_size: int
-    languages: set[str]
+    languages: list[str]
     simultaneous: str
     sentences: bool
     app: Application
@@ -153,7 +153,7 @@ class QueryIteration:
     def _get_query_batches(
         corpora: list[int],
         config: dict[str, CorpusConfig],
-        languages: set[str],
+        languages: list[str],
     ) -> list[Batch]:
         """
         Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -194,8 +194,7 @@ class QueryIteration:
         if not isinstance(corp, list):
             corp = [corp]
         corpora_to_use = [int(i) for i in corp]
-        langs = [i.strip() for i in request_data.get("languages", ["en"])]
-        languages = set(langs)
+        languages = [i.strip() for i in request_data.get("languages", ["en"])]
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
         first_job_id = ""
@@ -232,7 +231,7 @@ class QueryIteration:
             "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
-            "languages": set(langs),
+            "languages": languages,
             "full": full,
             "query": request_data["query"],
             "resume": request_data.get("resume", False),
@@ -292,13 +291,16 @@ class QueryIteration:
     def get_query_args(self) -> QueryArgs:
         query_args_keys = QueryArgs.__required_keys__.union(QueryArgs.__optional_keys__)
         qi_args = QueryArgs(
-            **{k: self.qi_param_from_info(k) for k in query_args_keys if k not in ("hash", "debug`")}  # type: ignore
+            **{k: self.qi_param_from_info(k) for k in query_args_keys if k not in ("hash", "status")}  # type: ignore
         )
         qi_args["hash"] = hasher(self.sql)
-        qi_args["debug"] = self.app["_debug"]
         return qi_args
 
     def update_query_info(self) -> dict[str, Any]:
+        """
+        Sets/update the query's info in the first job's meta
+        These values should not include offset, number requested, user, etc.
+        """
         info: dict[str, Any] = {
             "original_query": self.query,
             "done_batches": self.done_batches,
@@ -481,22 +483,25 @@ class QueryIteration:
         job_id = cast(str, manual["job"])
         job = Job.fetch(job_id, connection=app["redis"])
 
+        query_info = _get_query_info(app["redis"], job=job)
+
         done_batches = [
-            tuple(i) for i in cast(list[Sequence[str | int]], manual["done_batches"])
+            tuple(i)
+            for i in cast(list[Sequence[str | int]], query_info["done_batches"])
         ]
-        cur = cast(Sequence[int | str], manual["current_batch"])
+        cur = cast(Sequence[int | str], query_info["current_batch"])
         # sorry about this:
         current: Batch = (int(cur[0]), str(cur[1]), str(cur[2]), int(cur[3]))
         if current not in done_batches:
             done_batches.append(current)
         all_batches = [
-            tuple(i) for i in cast(list[Sequence[int | str]], manual["all_batches"])
+            tuple(i) for i in cast(list[Sequence[int | str]], query_info["all_batches"])
         ]
 
-        corpora_to_use = cast(list[int], manual["corpora"])
+        corpora_to_use = cast(list[int], query_info["corpora"])
 
         tot_req = cast(int, manual["total_results_requested"])
-        tot_so_far = cast(int, manual["total_results_so_far"])
+        tot_so_far = cast(int, query_info["total_results_so_far"])
         needed = tot_req - tot_so_far if tot_req > 0 else -1
         from_memory = manual.get("from_memory", False)
         sentences = manual.get("sentences", True)
@@ -505,32 +510,32 @@ class QueryIteration:
 
         details = {
             "corpora": corpora_to_use,
-            "existing_results": manual.get("full_result", manual["result"]),
+            "existing_results": manual.get("full_result", {}),
             "user": manual["user"],
             "room": manual["room"],
             "job": job,
             "app": app,
-            "jso": kwargs["jso"],
+            "jso": query_info["jso"],
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
-            "word_count": manual["word_count"],
-            "simultaneous": manual.get("simultaneous", ""),
+            "word_count": query_info["word_count"],
+            "simultaneous": query_info.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),
             "page_size": kwargs.get("page_size", 20),
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
-            "query": kwargs["original_query"],
+            "query": query_info["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
             "offset": manual["offset"],
             "total_duration": manual["total_duration"],
             "all_batches": all_batches,
-            "current_kwic_lines": manual["current_kwic_lines"],
+            "current_kwic_lines": query_info["current_kwic_lines"],
             "total_results_so_far": tot_so_far,
-            "languages": set(cast(list[str], manual["languages"])),
+            "languages": cast(list, query_info["languages"]),
             "done_batches": done_batches,
             "to_export": manual.get("to_export", {}),
         }

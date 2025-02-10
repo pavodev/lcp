@@ -23,6 +23,7 @@ import os
 import traceback
 
 from collections.abc import Coroutine
+from datetime import datetime
 from typing import Any, Sized, cast
 
 try:
@@ -46,7 +47,18 @@ from .utils import push_msg
 from .validate import validate
 
 from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config, _sign_payload
+from .utils import (
+    PUBSUB_CHANNEL,
+    _filter_corpora,
+    _set_config,
+    _sign_payload,
+    _get_query_info,
+    _get_query_args,
+    _get_first_job,
+    _get_status,
+    _decide_can_send,
+    _get_progress,
+)
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -394,7 +406,6 @@ async def _handle_query(
     Our subscribe listener has picked up a message, and it's about
     a query iteration. Create a websocket message to send to correct frontends
     """
-    status = cast(str, payload.get("status", "unknown"))
     job = cast(str, payload["job"])
     the_job = Job.fetch(job, connection=app["redis"])
     job_status = the_job.get_status(refresh=True)
@@ -404,80 +415,106 @@ async def _handle_query(
         print(f"Query was stopped: {job} -- preventing update")
         return
 
-    _print_status_message(payload, status)
+    first_job = _get_first_job(the_job, app["redis"])
+    is_base = first_job.id == the_job.id
+    query_args = _get_query_args(app["redis"], first_job.id)
+    query_info = _get_query_info(app["redis"], job=first_job)
+    for qa in query_args:
+        status = _get_status(query_info, qa)
 
-    to_submit: None | Coroutine[None, None, web.Response] = None
-    can_send = payload["can_send"]
-    # todo: this should no longer happen, as we send a progress update message instead?
-    do_full = payload.get("full") and payload.get("status") != "finished"
-    if do_full:
-        can_send = False
+        to_send = {k: v for k, v in payload.items()}
+        _sign_payload(to_send, kwargs=qa)
 
-    if (
-        (status == "partial" or do_full)
-        and job_status not in ("stopped", "canceled")
-        and job not in app["canceled"]
-        and not payload.get("simultaneous")
-        and not payload.get("from_memory")
-        and not payload.get("no_restart")
-    ):
-        payload["config"] = app["config"]
-        to_submit = query(None, manual=payload, app=app)
-
-    if do_full and "progress" in payload:
-        prog = cast(dict[str, JSON], payload["progress"])
-        await push_msg(
-            app["websockets"],
-            room,
-            prog,
-            skip=None,
-            just=(room, user),
+        to_submit: None | Coroutine[None, None, web.Response] = None
+        is_full = qa.get("full", False)
+        can_send = _decide_can_send(
+            status, is_full, is_base, qa.get("from_memory", False)
         )
+        # todo: this should no longer happen, as we send a progress update message instead?
+        do_full = is_full and status != "finished"
+        if do_full:
+            can_send = False
 
-    if not can_send:
-        print("Not sending WS message!")
-    else:
-        keys = [
-            "result",
-            "job",
-            "action",
-            "user",
-            "room",
-            "n_users",
-            "status",
-            "word_count",
-            "full",
-            "first_job",
-            "table",
-            "total_duration",
-            "jso",
-            "from_memory",
-            "batch_matches",
-            "offset",
-            "current_kwic_lines",
-            "total_results_so_far",
-            "percentage_done",
-            "percentage_words_done",
-            "total_duration",
-            "duration",
-            "total_results_requested",
-            "projected_results",
-            "batches_done",
-            "simultaneous",
-            "consoleSQL",
-            "to_export",
-        ]
-        payload = {k: v for k, v in payload.items() if k in keys}
-        await push_msg(
-            app["websockets"],
-            room,
-            payload,
-            skip=None,
-            just=(room, user),
-        )
+        total_so_far = query_info.get("total_results_so_far", 0)
+        if (
+            (status == "partial" or do_full)
+            and job_status not in ("stopped", "canceled")
+            and job not in app["canceled"]
+            and not qa.get("simultaneous")
+            and not qa.get("from_memory")
+            and not qa.get("no_restart")
+        ):
+            # TODO: create the manual request parameters from query_args + query_info + payload
+            to_send["config"] = app["config"]
+            total_requested = qa.get("total_results_requested", 0)
+            offset = qa.get("offset", 0)
+            offset_for_next_time = 0
+            if total_so_far > (offset + total_requested):
+                offset_for_next_time = offset + total_requested
+            to_send["offset"] = offset_for_next_time
+            to_submit = query(None, manual=to_send, app=app)
 
-    if to_submit is not None:
-        await to_submit
+        progress = _get_progress(the_job, query_info, qa)
+        try:
+            _print_status_message(progress, status)
+        except:
+            print("status message", progress, status)
+
+        if do_full and status != "finished":  # and no export?
+            # Send updates to FE
+            prog = cast(dict[str, JSON], progress)
+            await push_msg(
+                app["websockets"],
+                room,
+                prog,
+                skip=None,
+                just=(room, user),
+            )
+
+        if not can_send:
+            print("Not sending WS message!")
+        else:
+            keys = [
+                "result",
+                "job",
+                "action",
+                "user",
+                "room",
+                "n_users",
+                "status",
+                "word_count",
+                "full",
+                "first_job",
+                "table",
+                "total_duration",
+                "jso",
+                "from_memory",
+                "batch_matches",
+                "offset",
+                "current_kwic_lines",
+                "total_results_so_far",
+                "percentage_done",
+                "percentage_words_done",
+                "total_duration",
+                "duration",
+                "total_results_requested",
+                "projected_results",
+                "batches_done",
+                "simultaneous",
+                "consoleSQL",
+                "to_export",
+            ]
+            payload = {k: v for k, v in payload.items() if k in keys}
+            await push_msg(
+                app["websockets"],
+                room,
+                payload,
+                skip=None,
+                just=(room, user),
+            )
+
+        if to_submit is not None:
+            await to_submit
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:
