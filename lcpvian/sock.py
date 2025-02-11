@@ -46,7 +46,7 @@ from .query_service import QueryService
 from .utils import push_msg
 from .validate import validate
 
-from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
+from .typed import JSON, JSONObject, QueryArgs, RedisMessage, Results, Websockets
 from .utils import (
     PUBSUB_CHANNEL,
     _filter_corpora,
@@ -367,7 +367,7 @@ async def _handle_message(
 
     if action == "query_result":
         payload["can_send"] = can_send
-        await _handle_query(app, payload, user, room)
+        await _handle_query(app, payload)
 
     if to_submit is not None:
         await to_submit
@@ -399,8 +399,6 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
 async def _handle_query(
     app: web.Application,
     payload: JSONObject,
-    user: str,
-    room: str,
 ) -> None:
     """
     Our subscribe listener has picked up a message, and it's about
@@ -419,40 +417,45 @@ async def _handle_query(
     is_base = first_job.id == the_job.id
     query_args = _get_query_args(app["redis"], first_job.id)
     query_info = _get_query_info(app["redis"], job=first_job)
+
+    total_so_far = query_info.get("total_results_so_far", 0)
+
+    greediest_qa: QueryArgs | dict = {}
+    to_submit: None | Coroutine[None, None, web.Response] = None
     for qa in query_args:
+
+        user: str = qa.get("user", "")
+        room: str = cast(str, qa.get("room", "") or "")
+
         status = _get_status(query_info, qa)
 
         to_send = {k: v for k, v in payload.items()}
         _sign_payload(to_send, kwargs=qa)
 
-        to_submit: None | Coroutine[None, None, web.Response] = None
         is_full = qa.get("full", False)
         can_send = _decide_can_send(
             status, is_full, is_base, qa.get("from_memory", False)
         )
         # todo: this should no longer happen, as we send a progress update message instead?
-        do_full = is_full and status != "finished"
-        if do_full:
-            can_send = False
-
-        total_so_far = query_info.get("total_results_so_far", 0)
         if (
-            (status == "partial" or do_full)
+            (status == "partial" or (is_full and status != "finished"))
             and job_status not in ("stopped", "canceled")
             and job not in app["canceled"]
             and not qa.get("simultaneous")
             and not qa.get("from_memory")
             and not qa.get("no_restart")
         ):
+            can_send = False
             # TODO: create the manual request parameters from query_args + query_info + payload
             to_send["config"] = app["config"]
             total_requested = qa.get("total_results_requested", 0)
             offset = qa.get("offset", 0)
-            offset_for_next_time = 0
-            if total_so_far > (offset + total_requested):
-                offset_for_next_time = offset + total_requested
-            to_send["offset"] = offset_for_next_time
-            to_submit = query(None, manual=to_send, app=app)
+            this_upper_bound = total_requested + offset
+            if is_full or this_upper_bound > greediest_qa.get(
+                "total_results_requested", 0
+            ) + greediest_qa.get("offset", 0):
+                greediest_qa = qa
+            to_send["offset"] = total_requested
 
         progress = _get_progress(the_job, query_info, qa)
         try:
@@ -460,7 +463,7 @@ async def _handle_query(
         except:
             print("status message", progress, status)
 
-        if do_full and status != "finished":  # and no export?
+        if is_full and status != "finished":  # and no export?
             # Send updates to FE
             prog = cast(dict[str, JSON], progress)
             await push_msg(
@@ -504,17 +507,27 @@ async def _handle_query(
                 "consoleSQL",
                 "to_export",
             ]
-            payload = {k: v for k, v in payload.items() if k in keys}
+            ws_payload = {k: v for k, v in to_send.items() if k in keys}
             await push_msg(
                 app["websockets"],
                 room,
-                payload,
+                ws_payload,
                 skip=None,
                 just=(room, user),
             )
-
-        if to_submit is not None:
-            await to_submit
+        # end of query_args iteration
+    if greediest_qa.get("full", False) or total_so_far < greediest_qa.get(
+        "total_results_requested", 0
+    ) + greediest_qa.get("offset", 0):
+        manual = {k: v for k, v in payload.items()}
+        manual["offset"] = greediest_qa.get("offset", 0)
+        manual["total_results_requested"] = greediest_qa.get(
+            "total_results_requested", 200
+        )
+        manual["full"] = greediest_qa.get("full", False)
+        to_submit = query(None, manual=manual, app=app)
+    if to_submit is not None:
+        await to_submit
 
 
 async def sock(request: web.Request) -> web.WebSocketResponse:

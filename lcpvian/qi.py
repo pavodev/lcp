@@ -69,7 +69,7 @@ class QueryIteration:
     """
 
     config: dict[str, CorpusConfig]
-    user: str
+    user: str | None
     room: str | None
     query: str
     corpora: list[int]
@@ -506,13 +506,11 @@ class QueryIteration:
         from_memory = manual.get("from_memory", False)
         sentences = manual.get("sentences", True)
 
-        kwargs = cast(dict[str, Any], job.kwargs)
-
         details = {
+            "user": "",
+            "room": "",
             "corpora": corpora_to_use,
             "existing_results": manual.get("full_result", {}),
-            "user": manual["user"],
-            "room": manual["room"],
             "job": job,
             "app": app,
             "jso": query_info["jso"],
@@ -523,7 +521,7 @@ class QueryIteration:
             "simultaneous": query_info.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),
-            "page_size": kwargs.get("page_size", 20),
+            "page_size": query_info.get("page_size", 20),
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
@@ -619,7 +617,7 @@ class QueryIteration:
         msg: dict[str, str] = {
             "status": "error",
             "action": action,
-            "user": self.user,
+            "user": self.user or "",
             "room": self.room or "",
             "info": info,
         }
@@ -629,6 +627,6 @@ class QueryIteration:
         # logging.error(err, extra=msg)
         payload = cast(JSONObject, msg)
         room: str = self.room or ""
-        just: tuple[str, str] = (room, self.user)
+        just: tuple[str, str] = (room, self.user or "")
         await push_msg(self.app["websockets"], room, payload, just=just)
         return web.json_response(msg)

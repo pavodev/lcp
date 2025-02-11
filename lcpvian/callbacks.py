@@ -55,6 +55,7 @@ from .utils import (
     _row_to_value,
     _get_associated_query_job,
     _get_first_job,
+    _get_progress,
     _get_total_requested,
     _decide_can_send,
     _sign_payload,
@@ -275,127 +276,112 @@ def _sentences(
     job_kwargs: dict = cast(dict, job.kwargs)
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
-    kwargs = kwargs or job_kwargs
-    total_requested = _get_total_requested(kwargs, job)
     base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     query_info = _get_query_info(connection, job=depended)
-    to_export = kwargs.get("to_export")
-    full = cast(bool, kwargs.get("full", job_kwargs.get("full", False)))
     meta_json = query_info["meta_json"]
-    resume = cast(bool, job_kwargs.get("resume", False))
-    offset = cast(int, job_kwargs.get("offset", 0) if resume else -1)
-    prev_offset = cast(int, depended.meta.get("latest_offset", -1))
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_lines = query_info["current_kwic_lines"]
+    total_so_far = query_info.get("total_results_so_far", 0)
+    _, schema, table = query_info.get("current_batch", ["", "", ""])[2]
+    table = f"{schema}.{table}"
 
-    if prev_offset > offset:  # and not kwargs.get("from_memory"):
-        offset = prev_offset if resume else -1
-    total_to_get = job_kwargs.get("needed", total_requested)
+    for qa in _get_query_args(connection, base.id):
 
-    cb: Batch = query_info["current_batch"]
-    table = f"{cb[1]}.{cb[2]}"
+        # in full mode, we need to combine all the sentences into one message when finished
+        get_all_sents = qa.get("full") and _get_status(query_info, qa) == "finished"
+        to_send: Results
 
-    status = depended.meta["_status"]
-    latest_offset = max(offset, 0) + total_to_get
-    depended.meta["latest_offset"] = latest_offset
-    # base.save_meta, which is called later, overwrites depended.save_meta when pointing to the same job
-    if base.id == depended.id:
-        base.meta["latest_offset"] = latest_offset
+        total_requested = qa.get("total_results_requested", 200)
+        total_to_get = qa.get("needed", total_requested)
+        offset = qa.get("offset", 0)
+        full = qa.get("full", False)
 
-    depended.save_meta()  # type: ignore
+        if get_all_sents:
+            to_send = _get_all_sents(
+                job, base, meta_json, max_kwic, current_lines, full, connection
+            )
+        else:
+            to_send = _format_kwics(
+                depended.result,
+                meta_json,
+                result,
+                total_to_get,
+                True,
+                offset,
+                max_kwic,
+                current_lines,
+                full,
+            )
 
-    # in full mode, we need to combine all the sentences into one message when finished
-    get_all_sents = full and status == "finished"
-    to_send: Results
+        more_data = not qa.get("no_more_data", False)
+        submit_query = qa.get("start_query_from_sents", False)
+        if submit_query and more_data:
+            status = "partial"
 
-    if full:
-        current_lines = 0
+        if status == "finished" and more_data:
+            more_data = total_so_far >= total_requested
 
-    if get_all_sents:
-        to_send = _get_all_sents(
-            job, base, meta_json, max_kwic, current_lines, full, connection
-        )
-    else:
-        to_send = _format_kwics(
-            depended.result,
-            meta_json,
-            result,
-            total_to_get,
-            True,
-            offset,
-            max_kwic,
-            current_lines,
-            full,
-        )
+        # if to_send contains only {0: meta, -1: sentences} or less
+        if len(to_send) < 3 and not submit_query:
+            print(f"No results found for {table} kwic -- skipping WS message")
+            return None
 
-    more_data = not job_kwargs["no_more_data"]
-    submit_query = job_kwargs["start_query_from_sents"]
-    if submit_query and more_data:
-        status = "partial"
+        # if we previously sent a warning about there being too much data, stop here
+        if base.meta.get("been_warned"):
+            print("Processed too much data -- skipping WS message")
+            return None
 
-    if status == "finished" and more_data:
-        more_data = query_info.get("total_results_so_far", 0) >= total_requested
+        use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
 
-    # if to_send contains only {0: meta, -1: sentences} or less
-    if len(to_send) < 3 and not submit_query:
-        print(f"No results found for {table} kwic -- skipping WS message")
-        return None
+        if not use_cache:
+            perc_done = query_info.get("percentage_done", 0.0)
+            words_done = query_info.get("percentage_words_done", 0.0)
+        else:
+            progress = _get_progress(job, query_info, qa)
+            perc_done = progress.get("percentage_done", 0.0)
+            words_done = progress.get("progress_info", 0.0)
 
-    # if we previously sent a warning about there being too much data, stop here
-    if base.meta.get("been_warned"):
-        print("Processed too much data -- skipping WS message")
-        return None
+        submit_payload = {k: v for k, v in query_info.items()}
+        submit_payload.update({k: v for k, v in qa.items()})
 
-    use_cache = os.getenv("USE_CACHE", "true").lower() in TRUES
+        # Do not send if this is an "export" query
+        can_send = not qa.get("to_export") and (not full or status == "finished")
 
-    if not use_cache:
-        perc_done = depended.meta["payload"]["percentage_done"]
-        words_done = depended.meta["payload"]["percentage_words_done"]
-    else:
-        perc_done = base.meta["progress_info"]["percentage_done"]
-        words_done = base.meta["progress_info"]["percentage_words_done"]
+        msg_id = str(uuid4())  # todo: hash instead!
+        if "sent_job_ws_messages" not in base.meta:
+            query_info["sent_job_ws_messages"] = {}
+        query_info["sent_job_ws_messages"][msg_id] = None
+        query_info["_sent_jobs"][job.id] = None
+        _update_query_info(connection, job=job, info=query_info)
 
-    submit_payload = depended.meta["payload"]
-    submit_payload["full"] = full
-    submit_payload["total_results_requested"] = total_requested
+        action = "sentences"
 
-    # Do not send if this is an "export" query
-    can_send = not to_export and (not full or status == "finished")
+        jso = {
+            "result": to_send,
+            "status": status,
+            "action": action,
+            "full": full,
+            "more_data_available": more_data,
+            "submit_query": submit_payload if submit_query else False,
+            "query": depended.id,
+            "table": table,
+            "first_job": base.id,
+            "msg_id": msg_id,
+            "can_send": can_send,
+            "percentage_done": perc_done,
+            "percentage_words_done": words_done,
+        }
+        _sign_payload(submit_payload, qa)
 
-    msg_id = str(uuid4())  # todo: hash instead!
-    if "sent_job_ws_messages" not in base.meta:
-        base.meta["sent_job_ws_messages"] = {}
-    base.meta["sent_job_ws_messages"][msg_id] = None
-    base.meta["_sent_jobs"][job.id] = None
-    base.save_meta()  # type: ignore
+        # todo: just update progress here, but do not send the rest
+        dumped = json.dumps(jso, cls=CustomEncoder)
 
-    action = "sentences"
+        job.save_meta()  # type: ignore
 
-    _sign_payload(submit_payload, kwargs)
-    jso = {
-        "result": to_send,
-        "status": status,
-        "action": action,
-        "full": full,
-        "more_data_available": more_data,
-        "submit_query": submit_payload if submit_query else False,
-        "query": depended.id,
-        "table": table,
-        "first_job": base.id,
-        "msg_id": msg_id,
-        "can_send": can_send,
-        "percentage_done": perc_done,
-        "percentage_words_done": words_done,
-    }
-    _sign_payload(jso, kwargs)
+        _publish_msg(connection, dumped, msg_id)
 
-    # todo: just update progress here, but do not send the rest
-    dumped = json.dumps(jso, cls=CustomEncoder)
-
-    job.save_meta()  # type: ignore
-
-    return _publish_msg(connection, dumped, msg_id)
+    return
 
 
 def _document(

@@ -157,6 +157,9 @@ class QueryArgs(BaseArgs):
     to_export: Any
     total_results_requested: int
     offset: int
+    needed: int
+    no_more_data: bool
+    start_query_from_sents: bool
     status: str
 
 

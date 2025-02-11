@@ -301,7 +301,7 @@ async def query(
             "action": "query_error",
             "type": str(type(err)),
             "traceback": tb,
-            "user": qi.user,
+            "user": qi.user or "",
             "room": qi.room or "",
             "info": f"Could not create query: {str(err)}",
         }
