@@ -243,7 +243,7 @@
           </div>
         </div>
       </div>
-      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()">
+      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()" @mouseleave="_annotationLeave">
         <div v-for="(entry, index) in timelineEntry" :key=index>
           <div class="header" v-html=entry[0]></div>
           <div v-html=entry[1]></div>
@@ -904,7 +904,7 @@ export default {
     },
     onSocketMessage(data) {
       // let data = JSON.parse(event.data);
-      console.log("SOC", data)
+      // console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
           this.documentData = data.document;
