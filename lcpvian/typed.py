@@ -146,9 +146,8 @@ class BaseArgs(TypedDict, total=False):
 
 class QueryArgs(BaseArgs):
     """
-    The request-specific arguments/parameters associated with a corpus query
-    Multiple users can request the same corpus query but with different args,
-    like offset, requested, full, export, etc.
+    The request-specific arguments associated with a corpus query (offset, to_export)
+    These are never updated after the request has been submitted
     """
 
     hash: str
@@ -157,6 +156,14 @@ class QueryArgs(BaseArgs):
     to_export: Any
     total_results_requested: int
     offset: int
+
+
+class RequestInfo(QueryArgs):
+    """
+    The request-specific info associated with a corpus query (offset, status)
+    These can be updated after the request has been submitted
+    """
+
     needed: int
     no_more_data: bool
     start_query_from_sents: bool

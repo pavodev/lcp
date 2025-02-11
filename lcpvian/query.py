@@ -30,7 +30,7 @@ from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import _set_query_args, ensure_authorised, push_msg, _get_query_info
+from .utils import _set_request_info, ensure_authorised, push_msg, _get_query_info
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -261,7 +261,7 @@ async def query(
                 "status": "403",
                 "error": "Forbidden",
                 "action": "query_error",
-                "user": qi.user,
+                "user": qi.user or "",
                 "room": qi.room or "",
                 "info": "Attempted access to an unauthorized corpus",
             }
@@ -271,7 +271,7 @@ async def query(
             logging.error(msg, extra=fail)
             payload = cast(JSONObject, fail)
             room: str = qi.room or ""
-            just: tuple[str, str] = (room, qi.user)
+            just: tuple[str, str] = (room, qi.user or "")
             await push_msg(qi.app["websockets"], room, payload, just=just)
             print("pushed message")
             raise web.HTTPForbidden(text=msg)
@@ -289,8 +289,8 @@ async def query(
                 return qi
             # Set qi_args on the first non-manual request
             if not manual and not set_qi_args:
-                qi_args = qi.get_query_args()
-                _set_query_args(app["redis"], qi_args)
+                qi_args = qi.get_request_info()
+                _set_request_info(app["redis"], qi_args)
                 set_qi_args = True
             http_response.append(qi.job_info)
     except Exception as err:
@@ -311,7 +311,7 @@ async def query(
         logging.error(msg, extra=fail)
         payload = cast(JSONObject, fail)
         room = qi.room or ""
-        just = (room, qi.user)
+        just = (room, qi.user or "")
         await push_msg(qi.app["websockets"], room, payload, just=just)
         return web.json_response(fail)
 

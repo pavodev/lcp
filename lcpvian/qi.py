@@ -48,7 +48,7 @@ from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
-from .typed import Batch, JSONObject, Query, QueryArgs, Results
+from .typed import Batch, JSONObject, Query, RequestInfo, Results
 from .utils import (
     _determine_language,
     push_msg,
@@ -286,12 +286,14 @@ class QueryIteration:
 
     def qi_param_from_info(self, param: str) -> Any:
         translation = {"original_query": "query", "meta_json": "meta"}
-        return getattr(self, translation.get(param, param))
+        return getattr(self, translation.get(param, param), "")
 
-    def get_query_args(self) -> QueryArgs:
-        query_args_keys = QueryArgs.__required_keys__.union(QueryArgs.__optional_keys__)
-        qi_args = QueryArgs(
-            **{k: self.qi_param_from_info(k) for k in query_args_keys if k not in ("hash", "status")}  # type: ignore
+    def get_request_info(self) -> RequestInfo:
+        request_info_keys = RequestInfo.__required_keys__.union(
+            RequestInfo.__optional_keys__
+        )
+        qi_args = RequestInfo(
+            **{k: self.qi_param_from_info(k) for k in request_info_keys if k not in ("hash",)}  # type: ignore
         )
         qi_args["hash"] = hasher(self.sql)
         return qi_args

@@ -53,7 +53,7 @@ from .utils import (
     _set_config,
     _sign_payload,
     _get_query_info,
-    _get_query_args,
+    _get_request_info,
     _get_first_job,
     _get_status,
     _decide_can_send,
@@ -415,49 +415,49 @@ async def _handle_query(
 
     first_job = _get_first_job(the_job, app["redis"])
     is_base = first_job.id == the_job.id
-    query_args = _get_query_args(app["redis"], first_job.id)
+    request_info = _get_request_info(app["redis"], first_job.id)
     query_info = _get_query_info(app["redis"], job=first_job)
 
     total_so_far = query_info.get("total_results_so_far", 0)
 
     greediest_qa: QueryArgs | dict = {}
     to_submit: None | Coroutine[None, None, web.Response] = None
-    for qa in query_args:
+    for ri in request_info:
 
-        user: str = qa.get("user", "")
-        room: str = cast(str, qa.get("room", "") or "")
+        user: str = ri.get("user", "")
+        room: str = cast(str, ri.get("room", "") or "")
 
-        status = _get_status(query_info, qa)
+        status = _get_status(query_info, ri)
 
         to_send = {k: v for k, v in payload.items()}
-        _sign_payload(to_send, kwargs=qa)
+        _sign_payload(to_send, kwargs=ri)
 
-        is_full = qa.get("full", False)
+        is_full = ri.get("full", False)
         can_send = _decide_can_send(
-            status, is_full, is_base, qa.get("from_memory", False)
+            status, is_full, is_base, ri.get("from_memory", False)
         )
         # todo: this should no longer happen, as we send a progress update message instead?
         if (
             (status == "partial" or (is_full and status != "finished"))
             and job_status not in ("stopped", "canceled")
             and job not in app["canceled"]
-            and not qa.get("simultaneous")
-            and not qa.get("from_memory")
-            and not qa.get("no_restart")
+            and not ri.get("simultaneous")
+            and not ri.get("from_memory")
+            and not ri.get("no_restart")
         ):
             can_send = False
-            # TODO: create the manual request parameters from query_args + query_info + payload
+            # TODO: create the manual request parameters from request_info + query_info + payload
             to_send["config"] = app["config"]
-            total_requested = qa.get("total_results_requested", 0)
-            offset = qa.get("offset", 0)
+            total_requested = ri.get("total_results_requested", 0)
+            offset = ri.get("offset", 0)
             this_upper_bound = total_requested + offset
             if is_full or this_upper_bound > greediest_qa.get(
                 "total_results_requested", 0
             ) + greediest_qa.get("offset", 0):
-                greediest_qa = qa
+                greediest_qa = ri
             to_send["offset"] = total_requested
 
-        progress = _get_progress(the_job, query_info, qa)
+        progress = _get_progress(the_job, query_info, ri)
         try:
             _print_status_message(progress, status)
         except:
@@ -515,7 +515,7 @@ async def _handle_query(
                 skip=None,
                 just=(room, user),
             )
-        # end of query_args iteration
+        # end of request_info iteration
     if greediest_qa.get("full", False) or total_so_far < greediest_qa.get(
         "total_results_requested", 0
     ) + greediest_qa.get("offset", 0):

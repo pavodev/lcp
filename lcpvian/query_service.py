@@ -62,8 +62,8 @@ from .typed import (
 from .utils import (
     _default_tracks,
     _get_status,
-    _delete_query_args,
-    _get_query_args,
+    _delete_request_info,
+    _get_request_info,
     _get_query_info,
     _format_config_query,
     _set_config,
@@ -111,11 +111,11 @@ class QueryService:
         _sign_payload(payload, kwargs)
 
         success = False
-        for query_args in _get_query_args(self.app["redis"], query_info["hash"]):
+        for request_info in _get_request_info(self.app["redis"], query_info["hash"]):
             status = _get_status(
                 query_info,
-                query_args,
-                search_all=cast(bool, query_args.get("search_all", False)),
+                request_info,
+                search_all=cast(bool, request_info.get("search_all", False)),
             )
             if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
                 status = "finished"
@@ -135,7 +135,7 @@ class QueryService:
                 payload["result"] = cast(JSONObject, filtered)
             payload["no_restart"] = True
             self.app["redis"].expire(msg, self.query_ttl)
-            _sign_payload(payload, query_args)
+            _sign_payload(payload, request_info)
             strung: str = json.dumps(payload, cls=CustomEncoder)
 
             failed = False
@@ -155,7 +155,7 @@ class QueryService:
                     failed = True
                     continue
                 payload = json.loads(jso)
-                _sign_payload(payload, query_args)
+                _sign_payload(payload, request_info)
                 payload["no_update_progress"] = True
                 payload["no_restart"] = True
                 payload["status"] = status
@@ -171,7 +171,7 @@ class QueryService:
                 for task in tasks:
                     await task
                 if status in ("finished", "satisfied"):
-                    _delete_query_args(self.app["connection"], query_args)
+                    _delete_request_info(self.app["connection"], request_info)
 
         return success
 

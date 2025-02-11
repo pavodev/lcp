@@ -313,7 +313,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
 
 def _get_status(
     query_info: dict,
-    query_args: QueryArgs,
+    request_info: QueryArgs,
     # n_results: int,
     # total_results_requested: int,
     # done_batches: list[Batch],
@@ -333,8 +333,8 @@ def _get_status(
     done_batches = query_info.get("done_batches", [])
     all_batches = query_info.get("all_batches", [])
     time_so_far = query_info.get("total_duration", 0.0)
-    total_results_requested = query_args.get("total_results_requested", 0)
-    full = query_args.get("full", False)
+    total_results_requested = request_info.get("total_results_requested", 0)
+    full = request_info.get("full", False)
 
     if len(done_batches) == len(all_batches):
         return "finished"
@@ -939,11 +939,11 @@ def _decide_can_send(
     return False
 
 
-def _get_progress(job: Job, query_info: dict, query_args: QueryArgs) -> dict:
+def _get_progress(job: Job, query_info: dict, request_info: QueryArgs) -> dict:
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
-    do_full = query_args.get("full", False)
-    status = _get_status(query_info, query_args)
-    total_requested = query_args["total_results_requested"]
+    do_full = request_info.get("full", False)
+    status = _get_status(query_info, request_info)
+    total_requested = request_info["total_results_requested"]
     total_found = query_info["total_results_so_far"]
     done_batches = query_info["done_batches"]
     total_words_processed_so_far = sum([x[-1] for x in query_info["done_batches"]]) or 1
@@ -981,7 +981,7 @@ def _get_progress(job: Job, query_info: dict, query_args: QueryArgs) -> dict:
         if do_full:
             perc_matches = time_perc
         query_info["percentage_done"] = round(perc_matches, 3)
-    if query_args.get("from_memory"):
+    if request_info.get("from_memory"):
         projected_results = query_info["projected_results"]
         perc_matches = query_info["percentage_done"]
         perc_words = query_info["percentage_words_done"]
@@ -993,8 +993,8 @@ def _get_progress(job: Job, query_info: dict, query_args: QueryArgs) -> dict:
         "remaining": time_remaining,
         "job": job.id,
         "first_job": query_info.get("hash", ""),
-        "user": query_args.get("user", ""),
-        "room": query_args.get("room", ""),
+        "user": request_info.get("user", ""),
+        "room": request_info.get("room", ""),
         "duration": duration,
         "batches_done": batches_done_string,
         "total_duration": total_duration,
@@ -1019,35 +1019,35 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _get_query_args(connection: RedisConnection, hash: str) -> list[QueryArgs]:
-    qas_json = connection.get(f"query_args_{hash}")
+def _get_request_info(connection: RedisConnection, hash: str) -> list[QueryArgs]:
+    qas_json = connection.get(f"request_info_{hash}")
     qas = json.loads(qas_json) if qas_json else []
     return qas
 
 
-def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+def _set_request_info(connection: RedisConnection, qi_args: QueryArgs) -> None:
     hash = qi_args.get("hash", "")
-    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
-    if not next((x for x in all_query_args if x == qi_args), None):
-        all_query_args.append(qi_args)
-    qa_key = f"query_args_{hash}"
-    connection.set(qa_key, json.dumps(all_query_args))
+    all_request_info: list[QueryArgs] = _get_request_info(connection, hash)
+    if not next((x for x in all_request_info if x == qi_args), None):
+        all_request_info.append(qi_args)
+    qa_key = f"request_info_{hash}"
+    connection.set(qa_key, json.dumps(all_request_info))
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
     whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
     connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
 
 
-def _delete_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+def _delete_request_info(connection: RedisConnection, qi_args: QueryArgs) -> None:
     hash = qi_args.get("hash", "")
-    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
-    if not all_query_args:
+    all_request_info: list[QueryArgs] = _get_request_info(connection, hash)
+    if not all_request_info:
         return
-    all_query_args = [x for x in all_query_args if x != qi_args]
-    qa_key = f"query_args_{hash}"
-    if not all_query_args:
+    all_request_info = [x for x in all_request_info if x != qi_args]
+    qa_key = f"request_info_{hash}"
+    if not all_request_info:
         connection.delete(qa_key)
         return
-    connection.set(qa_key, json.dumps(all_query_args))
+    connection.set(qa_key, json.dumps(all_request_info))
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
     whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
     connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)

@@ -48,7 +48,7 @@ from .typed import (
 from .utils import (
     CustomEncoder,
     Interrupted,
-    _get_query_args,
+    _get_request_info,
     _get_query_info,
     _update_query_info,
     _get_status,
@@ -286,16 +286,16 @@ def _sentences(
     _, schema, table = query_info.get("current_batch", ["", "", ""])[2]
     table = f"{schema}.{table}"
 
-    for qa in _get_query_args(connection, base.id):
+    for ri in _get_request_info(connection, base.id):
 
         # in full mode, we need to combine all the sentences into one message when finished
-        get_all_sents = qa.get("full") and _get_status(query_info, qa) == "finished"
+        get_all_sents = ri.get("full") and _get_status(query_info, ri) == "finished"
         to_send: Results
 
-        total_requested = qa.get("total_results_requested", 200)
-        total_to_get = qa.get("needed", total_requested)
-        offset = qa.get("offset", 0)
-        full = qa.get("full", False)
+        total_requested = ri.get("total_results_requested", 200)
+        total_to_get = cast(int, ri.get("needed", total_requested))
+        offset = ri.get("offset", 0)
+        full = ri.get("full", False)
 
         if get_all_sents:
             to_send = _get_all_sents(
@@ -314,8 +314,8 @@ def _sentences(
                 full,
             )
 
-        more_data = not qa.get("no_more_data", False)
-        submit_query = qa.get("start_query_from_sents", False)
+        more_data = not ri.get("no_more_data", False)
+        submit_query = ri.get("start_query_from_sents", False)
         if submit_query and more_data:
             status = "partial"
 
@@ -338,15 +338,15 @@ def _sentences(
             perc_done = query_info.get("percentage_done", 0.0)
             words_done = query_info.get("percentage_words_done", 0.0)
         else:
-            progress = _get_progress(job, query_info, qa)
+            progress = _get_progress(job, query_info, ri)
             perc_done = progress.get("percentage_done", 0.0)
             words_done = progress.get("progress_info", 0.0)
 
         submit_payload = {k: v for k, v in query_info.items()}
-        submit_payload.update({k: v for k, v in qa.items()})
+        submit_payload.update({k: v for k, v in ri.items()})
 
         # Do not send if this is an "export" query
-        can_send = not qa.get("to_export") and (not full or status == "finished")
+        can_send = not ri.get("to_export") and (not full or status == "finished")
 
         msg_id = str(uuid4())  # todo: hash instead!
         if "sent_job_ws_messages" not in base.meta:
@@ -372,7 +372,7 @@ def _sentences(
             "percentage_done": perc_done,
             "percentage_words_done": words_done,
         }
-        _sign_payload(submit_payload, qa)
+        _sign_payload(submit_payload, ri)
 
         # todo: just update progress here, but do not send the rest
         dumped = json.dumps(jso, cls=CustomEncoder)
