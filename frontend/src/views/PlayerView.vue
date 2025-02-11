@@ -904,7 +904,7 @@ export default {
     },
     onSocketMessage(data) {
       // let data = JSON.parse(event.data);
-      // console.log("SOC", data)
+      console.log("SOC", data)
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "document") {
           this.documentData = data.document;

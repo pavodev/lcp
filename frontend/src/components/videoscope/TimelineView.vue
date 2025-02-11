@@ -143,7 +143,9 @@ export default {
       this.currentTime = time;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
       this.updateVerticalLine(newXScale(this.currentTime));
-      this.center();
+      if(!this.playerIsPlaying){
+        this.center();
+      }
     },
     // Function to update the vertical timeline
     updateVerticalLine(xPosition) {
