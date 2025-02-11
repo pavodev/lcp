@@ -326,6 +326,7 @@
         ref="timelinePopin"
         v-if="timelineEntry"
         :style="_getTimelinePopinXY()"
+        @mouseleave="_annotationLeave"
       >
         <div
           v-for="(entry, index) in timelineEntry"
