@@ -108,7 +108,6 @@ class QueryService:
 
         query_info = _get_query_info(self.app["redis"], job=job)
         payload: JSONObject = json.loads(jso)
-        _sign_payload(payload, kwargs)
 
         success = False
         for request_info in _get_request_info(self.app["redis"], query_info["hash"]):
@@ -122,15 +121,12 @@ class QueryService:
             payload["status"] = status
 
             # we may have to apply the latest post-processes...
-            pps = cast(
-                dict[int, Any],
-                query_info["post_processes"] or payload["post_processes"],
-            )
+            pps = cast(dict[int, Any], query_info.get("post_processes", {}))
             # json serialises the Results keys to strings, so we have to convert
             # them back into int for the Results object to be correctly typed:
             full_res = cast(dict[str, ResultsValue], payload["full_result"])
             res = cast(Results, {int(k): v for k, v in full_res.items()})
-            if pps and pps != cast(dict[int, Any], payload["post_processes"]):
+            if pps:
                 filtered = _apply_filters(res, pps)
                 payload["result"] = cast(JSONObject, filtered)
             payload["no_restart"] = True
@@ -144,8 +140,8 @@ class QueryService:
             ]
 
             sent_and_meta_msgs = {
-                **job.meta.get("sent_job_ws_messages", {}),
-                **job.meta.get("meta_job_ws_messages", {}),
+                **query_info.get("sent_job_ws_messages", {}),
+                **query_info.get("meta_job_ws_messages", {}),
             }
 
             for msg in sent_and_meta_msgs:
@@ -223,6 +219,7 @@ class QueryService:
             first_job = Job.fetch(first_job_id, connection=self.app["redis"])
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
+            print(f"FOUND JOB IN CACHE: {str(job.id)} FOR {hashed}")
             if job.get_status() == "finished":
                 job_for_send_all_data = job if is_first else first_job
                 success = await self.send_all_data(job_for_send_all_data, **kwargs)

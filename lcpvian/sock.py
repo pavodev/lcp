@@ -264,9 +264,6 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    can_send = payload.get("can_send", True) and not to_export
-
-    sent_allowed = action in ("sentences", "meta") and can_send
     to_submit: None | Coroutine[None, None, web.Response] = None
 
     if (
@@ -293,13 +290,10 @@ async def _handle_message(
         export_obj["config"] = app["config"][corpus_id]
         await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
 
-    if action in simples or sent_allowed:
-        send_sents = not payload.get("full") and (
-            action == "sentences"
-            and len(cast(Results, payload["result"])) > 2
-            or action == "meta"
-        )
-        if not to_export and action in simples or send_sents:
+    if action in simples or action in ("sentences", "meta"):
+        if not payload.get("full") and (
+            action != "sentences" or len(cast(Results, payload["result"])) > 2
+        ):
             await push_msg(
                 app["websockets"],
                 room,
@@ -366,7 +360,6 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
-        payload["can_send"] = can_send
         await _handle_query(app, payload)
 
     if to_submit is not None:

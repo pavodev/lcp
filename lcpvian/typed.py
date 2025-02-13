@@ -168,6 +168,10 @@ class RequestInfo(QueryArgs):
     no_more_data: bool
     start_query_from_sents: bool
     status: str
+    percentage_done: float
+    percentage_words_done: float
+    progress_info: dict
+    been_warned: bool
 
 
 class DocIDArgs(BaseArgs):

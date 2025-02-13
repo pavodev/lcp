@@ -20,6 +20,7 @@ from datetime import date, datetime
 from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq.exceptions import NoSuchJobError
 from rq.registry import FinishedJobRegistry
 
 from aiohttp import web
@@ -53,7 +54,7 @@ from .typed import (
     JSONObject,
     MainCorpus,
     SentJob,
-    QueryArgs,
+    RequestInfo,
     Websockets,
 )
 
@@ -313,7 +314,7 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
 
 def _get_status(
     query_info: dict,
-    request_info: QueryArgs,
+    request_info: RequestInfo,
     # n_results: int,
     # total_results_requested: int,
     # done_batches: list[Batch],
@@ -354,13 +355,13 @@ def _get_status(
 def _get_query_info(
     connection: RedisConnection, hash: str = "", job: Job | None = None
 ) -> dict[str, Any]:
-    if hash:
-        job = Job.fetch(hash, connection)
     if job:
         job = _get_first_job(job, connection)
-    if not job:
-        return {}
-    return job.meta
+    if not hash and job:
+        hash = job.id
+    qi_key = f"query_info_{hash}"
+    query_info = json.loads(connection.get(qi_key) or "{}")
+    return query_info
 
 
 def _update_query_info(
@@ -369,17 +370,18 @@ def _update_query_info(
     job: Job | None = None,
     info: dict[str, Any] = {},
 ) -> dict[str, Any]:
-    if hash:
-        job = Job.fetch(hash, connection)
     if job:
         job = _get_first_job(job, connection)
-    if not job:
-        return {}
+    if not hash and job:
+        hash = job.id
+    qi_key = f"query_info_{hash}"
+    query_info = json.loads(connection.get(qi_key) or "{}")
     for k, v in info.items():
-        job.meta[k] = v
-    job.meta["hash"] = hash
-    job.save_meta()
-    return job.meta
+        query_info[k] = v
+    query_info["hash"] = hash
+    connection.set(qi_key, json.dumps(query_info))
+    connection.expire(qi_key, MESSAGE_TTL)
+    return query_info
 
 
 async def sem_coro(
@@ -905,7 +907,10 @@ def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
     first_job = job
     first_job_id_from_kwargs = cast(dict, job.kwargs).get("first_job")
     if first_job_id_from_kwargs:
-        first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
+        try:
+            first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
+        except NoSuchJobError:
+            pass
     return first_job
 
 
@@ -939,7 +944,7 @@ def _decide_can_send(
     return False
 
 
-def _get_progress(job: Job, query_info: dict, request_info: QueryArgs) -> dict:
+def _get_progress(job: Job, query_info: dict, request_info: RequestInfo) -> dict:
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
     do_full = request_info.get("full", False)
     status = _get_status(query_info, request_info)
@@ -1019,15 +1024,15 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _get_request_info(connection: RedisConnection, hash: str) -> list[QueryArgs]:
+def _get_request_info(connection: RedisConnection, hash: str) -> list[RequestInfo]:
     qas_json = connection.get(f"request_info_{hash}")
     qas = json.loads(qas_json) if qas_json else []
     return qas
 
 
-def _set_request_info(connection: RedisConnection, qi_args: QueryArgs) -> None:
+def _set_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:
     hash = qi_args.get("hash", "")
-    all_request_info: list[QueryArgs] = _get_request_info(connection, hash)
+    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
     if not next((x for x in all_request_info if x == qi_args), None):
         all_request_info.append(qi_args)
     qa_key = f"request_info_{hash}"
@@ -1037,15 +1042,16 @@ def _set_request_info(connection: RedisConnection, qi_args: QueryArgs) -> None:
     connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
 
 
-def _delete_request_info(connection: RedisConnection, qi_args: QueryArgs) -> None:
+def _delete_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:
     hash = qi_args.get("hash", "")
-    all_request_info: list[QueryArgs] = _get_request_info(connection, hash)
+    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
     if not all_request_info:
         return
     all_request_info = [x for x in all_request_info if x != qi_args]
     qa_key = f"request_info_{hash}"
     if not all_request_info:
         connection.delete(qa_key)
+        _update_query_info(connection, hash=hash, info={"running": False})
         return
     connection.set(qa_key, json.dumps(all_request_info))
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
@@ -1055,7 +1061,7 @@ def _delete_request_info(connection: RedisConnection, qi_args: QueryArgs) -> Non
 
 def _sign_payload(
     payload: dict[str, Any] | JSONObject | SentJob,
-    kwargs: dict[str, Any] | QueryArgs | SentJob,
+    kwargs: dict[str, Any] | RequestInfo | SentJob,
 ) -> None:
     to_export = kwargs.get("to_export")
     kwargs_to_payload_keys = (

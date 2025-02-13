@@ -273,7 +273,7 @@ def _format_kwics(
 
 def _get_all_sents(
     job: Job,
-    base: Job,
+    query_info: dict,
     meta_json: QueryMeta,
     max_kwic: int,
     current_lines: int,
@@ -287,7 +287,7 @@ def _get_all_sents(
     out: Results = {0: meta_json, -1: sen}
     is_first = True
     got: Results
-    for jid in base.meta["_sent_jobs"]:
+    for jid in query_info["_sent_jobs"]:
         j = job if job.id == jid else Job.fetch(jid, connection=connection)
         jk = cast(dict, j.kwargs)
         dep = _get_associated_query_job(jk["depends_on"], connection)

@@ -214,34 +214,23 @@ def _meta(
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
     kwargs = kwargs or cast(SentJob, job_kwargs)
-    base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     query_info = _get_query_info(connection, job=depended)
-    try:
-        cb: Batch = query_info["current_batch"]
-        table = f"{cb[1]}.{cb[2]}"
-    except:
-        import pdb
-
-        pdb.set_trace()
+    cb: Batch = query_info["current_batch"]
+    table = f"{cb[1]}.{cb[2]}"
 
     to_send = {"-2": format_meta_lines(query_info.get("meta_query", ""), result)}
     if not to_send["-2"]:
         return None
 
-    full = cast(
-        bool, kwargs.get("full", job_kwargs.get("full", base.kwargs.get("full", False)))  # type: ignore
-    )
     status = depended.meta["_status"]
 
     msg_id = str(uuid4())  # todo: hash instead!
-    if "meta_job_ws_messages" not in base.meta:
-        base.meta["meta_job_ws_messages"] = {}
-    base.meta["meta_job_ws_messages"][msg_id] = None
-    base.meta["_meta_jobs"][job.id] = None
-    base.save_meta()  # type: ignore
-
-    can_send = not kwargs.get("to_export", False) and (not full or status == "finished")
+    if "meta_job_ws_messages" not in query_info:
+        query_info["meta_job_ws_messages"] = {}
+    query_info["meta_job_ws_messages"][msg_id] = None
+    query_info["_meta_jobs"][job.id] = None
+    _update_query_info(connection, job=depended, info=query_info)
 
     action = "meta"
 
@@ -250,10 +239,8 @@ def _meta(
         "status": status,
         "action": action,
         "query": depended.id,
-        "can_send": can_send,
-        "full": full,
         "table": table,
-        "first_job": base.id,
+        "first_job": query_info["hash"],
         "msg_id": msg_id,
     }
     _sign_payload(jso, cast(JSONObject, kwargs))
@@ -276,17 +263,16 @@ def _sentences(
     job_kwargs: dict = cast(dict, job.kwargs)
     # When called as a job callback, the kwargs come from the job
     # when called directly (sents form cache) the kwargs are passed directly
-    base = _get_first_job(job, connection)
     depended = _get_associated_query_job(job_kwargs["depends_on"], connection)
     query_info = _get_query_info(connection, job=depended)
     meta_json = query_info["meta_json"]
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
     current_lines = query_info["current_kwic_lines"]
     total_so_far = query_info.get("total_results_so_far", 0)
-    _, schema, table = query_info.get("current_batch", ["", "", ""])[2]
+    _, schema, table, *_ = query_info.get("current_batch", ["", "", ""])[2]
     table = f"{schema}.{table}"
 
-    for ri in _get_request_info(connection, base.id):
+    for ri in _get_request_info(connection, query_info["hash"]):
 
         # in full mode, we need to combine all the sentences into one message when finished
         get_all_sents = ri.get("full") and _get_status(query_info, ri) == "finished"
@@ -299,7 +285,7 @@ def _sentences(
 
         if get_all_sents:
             to_send = _get_all_sents(
-                job, base, meta_json, max_kwic, current_lines, full, connection
+                job, query_info, meta_json, max_kwic, current_lines, full, connection
             )
         else:
             to_send = _format_kwics(
@@ -313,6 +299,8 @@ def _sentences(
                 current_lines,
                 full,
             )
+
+        status = _get_status(query_info, ri)
 
         more_data = not ri.get("no_more_data", False)
         submit_query = ri.get("start_query_from_sents", False)
@@ -328,7 +316,7 @@ def _sentences(
             return None
 
         # if we previously sent a warning about there being too much data, stop here
-        if base.meta.get("been_warned"):
+        if ri.get("been_warned"):
             print("Processed too much data -- skipping WS message")
             return None
 
@@ -349,7 +337,7 @@ def _sentences(
         can_send = not ri.get("to_export") and (not full or status == "finished")
 
         msg_id = str(uuid4())  # todo: hash instead!
-        if "sent_job_ws_messages" not in base.meta:
+        if "sent_job_ws_messages" not in query_info:
             query_info["sent_job_ws_messages"] = {}
         query_info["sent_job_ws_messages"][msg_id] = None
         query_info["_sent_jobs"][job.id] = None
@@ -366,13 +354,14 @@ def _sentences(
             "submit_query": submit_payload if submit_query else False,
             "query": depended.id,
             "table": table,
-            "first_job": base.id,
+            "first_job": query_info["hash"],
             "msg_id": msg_id,
             "can_send": can_send,
             "percentage_done": perc_done,
             "percentage_words_done": words_done,
         }
         _sign_payload(submit_payload, ri)
+        _sign_payload(jso, ri)
 
         # todo: just update progress here, but do not send the rest
         dumped = json.dumps(jso, cls=CustomEncoder)

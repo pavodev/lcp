@@ -30,7 +30,13 @@ from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import _set_request_info, ensure_authorised, push_msg, _get_query_info
+from .utils import (
+    _set_request_info,
+    ensure_authorised,
+    push_msg,
+    _get_query_info,
+    _update_query_info,
+)
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -143,6 +149,7 @@ async def _query_iteration(
             return await qi.no_batch()
 
     qi.make_query()
+    qi.set_query_info()
 
     # print query info to terminal for first batch only
     if not it and not qi.job and not qi.resume:
@@ -153,6 +160,9 @@ async def _query_iteration(
 
     # organise and submit query to rq via query service
     query_job, do_sents = await qi.submit_query()
+
+    if not query_job:
+        return qi
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1

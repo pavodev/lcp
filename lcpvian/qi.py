@@ -298,11 +298,18 @@ class QueryIteration:
         qi_args["hash"] = hasher(self.sql)
         return qi_args
 
-    def update_query_info(self) -> dict[str, Any]:
+    def set_query_info(self) -> dict[str, Any]:
         """
         Sets/update the query's info in the first job's meta
         These values should not include offset, number requested, user, etc.
         """
+        hash = hasher(self.sql)
+        _query_info = _get_query_info(self.app["redis"], hash=hash)
+        if _query_info:
+            # Only update the current batch
+            return _update_query_info(
+                self.app["redis"], hash=hash, info={"current_batch": self.current_batch}
+            )
         info: dict[str, Any] = {
             "original_query": self.query,
             "done_batches": self.done_batches,
@@ -326,14 +333,23 @@ class QueryIteration:
             "meta_json": self.meta,
             "word_count": self.word_count,
         }
-        hash = hasher(self.sql)
         return _update_query_info(self.app["redis"], hash=hash, info=info)
 
-    async def submit_query(self) -> tuple[Job, bool | None]:
+    async def submit_query(self) -> tuple[Job | None, bool | None]:
         """
         Helper to submit a query job to the Query Service
         """
         job: Job
+
+        hash = hasher(self.sql)
+        query_info = _get_query_info(self.app["redis"], hash=self.first_job or hash)
+        if query_info.get("running") and hash == query_info.get("hash"):
+            # Do not start a new query stream while one is ongoing
+            return None, None
+        _update_query_info(
+            self.app["redis"], hash=self.first_job or hash, info={"running": True}
+        )
+
         # if self.offset > 0 and not self.full and not self.resume:
         load_more_from_cache: bool = self.resume and self.offset > 0
         if load_more_from_cache:
@@ -341,7 +357,6 @@ class QueryIteration:
             self.job = job
             self.job_id = job.id
             self.submit_sents(query_started=True)
-            self.update_query_info()
             return job, False
 
         parent: str | None = None
@@ -354,6 +369,7 @@ class QueryIteration:
             full=self.full,
             offset=self.offset,
             parent=parent,
+            first_job=self.first_job,
         )
 
         queue = self.get_queue()
@@ -364,7 +380,6 @@ class QueryIteration:
         )
         self.job = job
         self.job_id = job.id
-        self.update_query_info()
         if not self.first_job:
             self.first_job = job.id
         return job, do_sents
