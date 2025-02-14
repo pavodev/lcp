@@ -304,11 +304,14 @@ class QueryIteration:
         These values should not include offset, number requested, user, etc.
         """
         hash = hasher(self.sql)
-        _query_info = _get_query_info(self.app["redis"], hash=hash)
+        qi_hash = self.first_job or hash
+        _query_info = _get_query_info(self.app["redis"], hash=qi_hash)
         if _query_info:
             # Only update the current batch
             return _update_query_info(
-                self.app["redis"], hash=hash, info={"current_batch": self.current_batch}
+                self.app["redis"],
+                hash=qi_hash,
+                info={"current_batch": self.current_batch},
             )
         info: dict[str, Any] = {
             "original_query": self.query,

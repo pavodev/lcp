@@ -99,14 +99,15 @@ class QueryService:
         """
         Get the stored messages related to a query and send them to frontend
         """
-        msg = job.meta["latest_stats_message"]
+        query_info = _get_query_info(self.app["redis"], job=job)
+
+        msg = query_info["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
 
         if jso is None:
             return False
 
-        query_info = _get_query_info(self.app["redis"], job=job)
         payload: JSONObject = json.loads(jso)
 
         success = False

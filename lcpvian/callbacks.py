@@ -101,17 +101,17 @@ def _query(
     existing_results: Results = {0: meta_json}
     post_processes = query_info.get("post_processes", {})
     total_before_now = query_info["total_results_so_far"]
-    done_part = query_info["done_batches"]
+    done_part: list[Batch] = query_info["done_batches"]
     first_job = _get_first_job(job, connection)
     stored = query_info.get("progress_info", {})
     duration: float = round((job.ended_at - job.started_at).total_seconds(), 3)  # type: ignore
     total_duration = round(query_info.get("total_duration", 0.0) + duration, 3)
     just_finished = tuple(query_info["current_batch"])
-    done_part.append(just_finished)
+    if just_finished not in done_part:
+        done_part.append(just_finished)
     query_info["done_batches"] = done_part
     query_info["total_duration"] = total_duration
     _update_query_info(connection, job=job, info=query_info)
-
     from_memory = query_info.get("from_memory", False)
     existing_results = query_info.get("all_non_kwic_results", existing_results)
 
@@ -186,7 +186,7 @@ def _query(
         "post_processes": post_processes,
         "search_all": search_all,
         "batch_matches": n_res,
-        "done_batches": done_part,
+        "done_batches": query_info["done_batches"],
         "current_kwic_lines": current_kwic_lines,
         "msg_id": msg_id,
         "resume": False,
