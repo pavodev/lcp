@@ -172,6 +172,7 @@ class RequestInfo(QueryArgs):
     percentage_words_done: float
     progress_info: dict
     been_warned: bool
+    msg_ids: list[str]  # all the msg_id's sent through publish_msg/push_msg
 
 
 class DocIDArgs(BaseArgs):

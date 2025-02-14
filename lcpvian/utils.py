@@ -54,6 +54,7 @@ from .typed import (
     JSONObject,
     MainCorpus,
     SentJob,
+    QueryArgs,
     RequestInfo,
     Websockets,
 )
@@ -676,6 +677,7 @@ def _get_all_jobs_from_hash(
     meta_jobs: list[Job] = []
 
     main_job = Job.fetch(hash, connection=connection)
+    query_info = _get_query_info(connection, job=main_job)
     finished_jobs = [
         Job.fetch(jid, connection=connection)
         for registry in [
@@ -1030,16 +1032,49 @@ def _get_request_info(connection: RedisConnection, hash: str) -> list[RequestInf
     return qas
 
 
-def _set_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:
-    hash = qi_args.get("hash", "")
+def _set_request_info(connection: RedisConnection, request_info: RequestInfo) -> None:
+    hash = request_info.get("hash", "")
     all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
-    if not next((x for x in all_request_info if x == qi_args), None):
-        all_request_info.append(qi_args)
+    if not next((x for x in all_request_info if x == request_info), None):
+        all_request_info.append(request_info)
     qa_key = f"request_info_{hash}"
     connection.set(qa_key, json.dumps(all_request_info))
     timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
     whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
-    connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
+    connection.expire(
+        qa_key,
+        (
+            whole_corpus_timeout
+            if any(x.get("full") for x in all_request_info)
+            else timeout
+        ),
+    )
+
+
+def _update_request_info(
+    connection: RedisConnection, request_info: RequestInfo, new_info: RequestInfo
+) -> RequestInfo:
+    forbidden_keys = QueryArgs.__optional_keys__.union(QueryArgs.__required_keys__)
+    all_ris = _get_request_info(connection, request_info["hash"])
+    ret_ri: RequestInfo
+    for ri in all_ris:
+        if ri != request_info:
+            continue
+        ret_ri = ri
+        for k, v in new_info.items():
+            assert (
+                k not in forbidden_keys
+            ), f"Cannot change {k} in a request info after it's been created"
+            ri[k] = v  # type: ignore
+    qa_key = f"request_info_{hash}"
+    connection.set(qa_key, json.dumps(all_ris))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(
+        qa_key,
+        (whole_corpus_timeout if any(x.get("full") for x in all_ris) else timeout),
+    )
+    return ret_ri
 
 
 def _delete_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:

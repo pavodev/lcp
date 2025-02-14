@@ -180,9 +180,7 @@ class Exporter:
     def results_info(self) -> list[dict[str, Any]]:
         if not self._results_info:
             job = self._query_jobs[0]
-            results_info = (
-                cast(dict, job.kwargs).get("meta_json", {}).get("result_sets", [])
-            )
+            results_info = self._query_info.get("meta_json", {}).get("result_sets", [])
             self._results_info = [
                 {**r, "res_index": n} for n, r in enumerate(results_info, start=1)
             ]
@@ -361,9 +359,8 @@ class Exporter:
         # )
 
     async def non_kwic(self) -> None:
-        job = self._query_jobs[0]
-        meta = cast(dict, job.kwargs).get("meta_json", {}).get("result_sets", {})
-        for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+        meta = self._query_info.get("meta_json", {}).get("result_sets", {})
+        for n_type, data in self._query_info.get("all_non_kwic_results", {}).items():
             if n_type in (0, -1):
                 continue
             info: dict = meta[n_type - 1]
@@ -403,15 +400,13 @@ class Exporter:
             + f"\n"
         )
 
-        meta = cast(dict, first_job.kwargs).get("meta_json", {}).get("result_sets", {})
+        meta = self._query_info.get("meta_json", {}).get("result_sets", {})
         # Write KWIC results
         if next((m for m in meta if m.get("type") == "plain"), None):
             await self.kwic()
 
         # Write non-KWIC results
-        for n_type, data in (
-            cast(dict, first_job.meta).get("all_non_kwic_results", {}).items()
-        ):
+        for n_type, data in self._query_info.get("all_non_kwic_results", {}).items():
             if n_type in (0, -1):
                 continue
             info: dict = meta[n_type - 1]

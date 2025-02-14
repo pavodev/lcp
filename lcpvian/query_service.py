@@ -65,6 +65,7 @@ from .utils import (
     _delete_request_info,
     _get_request_info,
     _get_query_info,
+    _update_query_info,
     _format_config_query,
     _set_config,
     _sign_payload,
@@ -110,7 +111,7 @@ class QueryService:
 
         payload: JSONObject = json.loads(jso)
 
-        success = False
+        success = True
         for request_info in _get_request_info(self.app["redis"], query_info["hash"]):
             status = _get_status(
                 query_info,
@@ -125,7 +126,7 @@ class QueryService:
             pps = cast(dict[int, Any], query_info.get("post_processes", {}))
             # json serialises the Results keys to strings, so we have to convert
             # them back into int for the Results object to be correctly typed:
-            full_res = cast(dict[str, ResultsValue], payload["full_result"])
+            full_res = cast(dict[str, ResultsValue], query_info["all_non_kwic_results"])
             res = cast(Results, {int(k): v for k, v in full_res.items()})
             if pps:
                 filtered = _apply_filters(res, pps)
@@ -167,9 +168,11 @@ class QueryService:
             else:
                 for task in tasks:
                     await task
-                if status in ("finished", "satisfied"):
-                    _delete_request_info(self.app["connection"], request_info)
+                # if status in ("finished", "satisfied"):
+                #     _delete_request_info(self.app["connection"], request_info)
 
+        if success:
+            _update_query_info(self.app["redis"], job=job, info={"running": False})
         return success
 
     async def query(

@@ -438,7 +438,6 @@ async def _handle_query(
             and not ri.get("from_memory")
             and not ri.get("no_restart")
         ):
-            can_send = False
             # TODO: create the manual request parameters from request_info + query_info + payload
             to_send["config"] = app["config"]
             total_requested = ri.get("total_results_requested", 0)

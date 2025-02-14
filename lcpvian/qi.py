@@ -88,7 +88,7 @@ class QueryIteration:
     total_duration: float = 0.0
     done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
-    existing_results: Results = field(default_factory=dict)
+    all_non_kwic_results: Results = field(default_factory=dict)
     job: Job | None = None
     job_id: str = ""
     from_memory: bool = False
@@ -320,7 +320,7 @@ class QueryIteration:
             "current_batch": self.current_batch,
             "total_results_so_far": self.total_results_so_far,
             "corpora": self.corpora,
-            "existing_results": self.existing_results,
+            "all_non_kwic_results": self.all_non_kwic_results,
             "sentences": self.sentences,
             "page_size": self.page_size,
             "post_processes": self.post_processes,
@@ -530,7 +530,7 @@ class QueryIteration:
             "user": "",
             "room": "",
             "corpora": corpora_to_use,
-            "existing_results": manual.get("full_result", {}),
+            "all_non_kwic_results": manual.get("all_non_kwic_results", {}),
             "job": job,
             "app": app,
             "jso": query_info["jso"],

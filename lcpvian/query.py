@@ -106,7 +106,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
 
 async def _query_iteration(
-    qi: QueryIteration, it: int
+    qi: QueryIteration, it: int, set_request_info: bool
 ) -> QueryIteration | web.Response:
     """
     Oversee the querying of a single batch:
@@ -150,6 +150,9 @@ async def _query_iteration(
 
     qi.make_query()
     qi.set_query_info()
+    if set_request_info:
+        request_info = qi.get_request_info()
+        _set_request_info(qi.app["redis"], request_info)
 
     # print query info to terminal for first batch only
     if not it and not qi.job and not qi.resume:
@@ -292,16 +295,12 @@ async def query(
     out: Iteration
 
     try:
-        set_qi_args = False
+        set_request_info = True if not manual else False
         for it in range(iterations):
-            qi = await _query_iteration(qi, it)
+            qi = await _query_iteration(qi, it, set_request_info)
+            set_request_info = False  # only set it once
             if not isinstance(qi, QueryIteration):
                 return qi
-            # Set qi_args on the first non-manual request
-            if not manual and not set_qi_args:
-                qi_args = qi.get_request_info()
-                _set_request_info(app["redis"], qi_args)
-                set_qi_args = True
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)

@@ -106,7 +106,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
         _, _, meta_jobs = _get_all_jobs_from_hash(first_job_id, app["redis"])
         for j in meta_jobs:
             segs_to_meta = format_meta_lines(
-                cast(str, query_info.get("meta_query")), j.result
+                cast(str, cast(dict, j.kwargs).get("meta_query")), j.result
             )
             incoming_arids: set[str] = {
                 str(v["Article"]["id"]) for v in cast(dict, segs_to_meta).values()

@@ -39,6 +39,7 @@ from .typed import (
     JSONObject,
     MainCorpus,
     QueryArgs,
+    RequestInfo,
     QueryMeta,
     RawSent,
     Results,
@@ -49,6 +50,7 @@ from .utils import (
     CustomEncoder,
     Interrupted,
     _get_request_info,
+    _update_request_info,
     _get_query_info,
     _update_query_info,
     _get_status,
@@ -98,7 +100,7 @@ def _query(
     table = f"{schema}.{table}"
 
     meta_json: QueryMeta = cast(QueryMeta, query_info.get("meta_json"))
-    existing_results: Results = {0: meta_json}
+    all_non_kwic_results: Results = {0: meta_json}
     post_processes = query_info.get("post_processes", {})
     total_before_now = query_info["total_results_so_far"]
     done_part: list[Batch] = query_info["done_batches"]
@@ -113,11 +115,17 @@ def _query(
     query_info["total_duration"] = total_duration
     _update_query_info(connection, job=job, info=query_info)
     from_memory = query_info.get("from_memory", False)
-    existing_results = query_info.get("all_non_kwic_results", existing_results)
+    # Make sure all_non_kwic_results is of type Results: int keys
+    all_non_kwic_results = {
+        int(k): v
+        for k, v in (
+            query_info.get("all_non_kwic_results") or all_non_kwic_results
+        ).items()
+    }
 
     # if from memory, we had this result cached, we just need to apply filters
     if from_memory:
-        all_res = existing_results
+        all_res = all_non_kwic_results
         to_send = _apply_filters(all_res, post_processes)
         n_res = query_info["total_results_so_far"]
         search_all = stored["search_all"]
@@ -126,7 +134,7 @@ def _query(
     else:
         all_res, to_send, n_res, search_all, show_total = _aggregate_results(
             result,
-            existing_results,
+            all_non_kwic_results,
             meta_json,
             post_processes,
             just_finished,
@@ -167,6 +175,12 @@ def _query(
     if "_meta_jobs" not in query_info:
         query_info["_meta_jobs"] = {}
 
+    all_ri_done = all(
+        _get_status(query_info, ri) in ("finished", "satisfied")
+        for ri in _get_request_info(connection, query_info["hash"])
+    )
+    if all_ri_done:
+        query_info["running"] = False
     _update_query_info(connection, job=job, info=query_info)
 
     max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
@@ -176,7 +190,6 @@ def _query(
 
     jso = {
         "result": to_send,
-        "full_result": all_res,
         "job": job.id,
         "action": action,
         "from_memory": from_memory,
@@ -219,11 +232,9 @@ def _meta(
     cb: Batch = query_info["current_batch"]
     table = f"{cb[1]}.{cb[2]}"
 
-    to_send = {"-2": format_meta_lines(query_info.get("meta_query", ""), result)}
+    to_send = {"-2": format_meta_lines(kwargs.get("meta_query", ""), result)}
     if not to_send["-2"]:
         return None
-
-    status = depended.meta["_status"]
 
     msg_id = str(uuid4())  # todo: hash instead!
     if "meta_job_ws_messages" not in query_info:
@@ -234,21 +245,29 @@ def _meta(
 
     action = "meta"
 
-    jso = {
-        "result": to_send,
-        "status": status,
-        "action": action,
-        "query": depended.id,
-        "table": table,
-        "first_job": query_info["hash"],
-        "msg_id": msg_id,
-    }
-    _sign_payload(jso, cast(JSONObject, kwargs))
+    for ri in _get_request_info(connection, query_info["hash"]):
 
-    # # todo: just update progress here, but do not send the rest
-    dumped = json.dumps(jso, cls=CustomEncoder)
+        status = _get_status(query_info, ri)
+        jso = {
+            "result": to_send,
+            "status": status,
+            "action": action,
+            "query": depended.id,
+            "table": table,
+            "first_job": query_info["hash"],
+            "msg_id": msg_id,
+        }
+        _sign_payload(jso, cast(JSONObject, ri))
 
-    return _publish_msg(connection, dumped, msg_id)
+        # # todo: just update progress here, but do not send the rest
+        dumped = json.dumps(jso, cls=CustomEncoder)
+
+        msg_ids = ri.get("msg_ids") or []
+        msg_ids.append(msg_id)
+        _update_request_info(connection, ri, cast(RequestInfo, {"msg_ids": msg_ids}))
+        _publish_msg(connection, dumped, msg_id)
+
+    return
 
 
 def _sentences(
@@ -368,6 +387,9 @@ def _sentences(
 
         job.save_meta()  # type: ignore
 
+        msg_ids = ri.get("msg_ids") or []
+        msg_ids.append(msg_id)
+        _update_request_info(connection, ri, cast(RequestInfo, {"msg_ids": msg_ids}))
         _publish_msg(connection, dumped, msg_id)
 
     return
