@@ -100,7 +100,7 @@ The token layer requires at least three files named `{token}.tsv`, `{token}_form
 
 The segment layer requires one file named `{segment}.tsv`, where `{segment}` is the name associated with `segment` in `firstClass` in the configuration file
 
-`{segment}.tsv` should have at least five columns:
+`{segment}.tsv` should have at least two columns:
  - `{segment}_id` which should be a UUID
  - `char_range` which should report the character-alignment of the segments (see constraints in token above)
 
@@ -110,7 +110,7 @@ The segment layer requires one file named `{segment}.tsv`, where `{segment}` is 
 
 The document layer requires one file named `{document}.tsv`, where `{document}` is the name associated with `document` in `firstClass` in the configuration file
 
-`{document}.tsv` should have at least five columns:
+`{document}.tsv` should have at least two columns:
  - `{document}_id` which should be an incremental integer index
  - `char_range` which should report the character-alignment of the documents (see constraints in token above)
 
