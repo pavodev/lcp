@@ -18,6 +18,7 @@ common-name = Name
 common-email = Email
 common-admin = Admin
 common-active = Active
+common-ready = Ready
 common-invited = Invited
 common-invite = Invite
 common-remove = Remove
@@ -29,6 +30,14 @@ common-match = Match
 common-details = Details
 common-close = Close
 common-copy-clipboard = Copy to clipboard
+common-loading = Loading
+common-loading-data = Loading data ...
+common-previous = Previous
+common-next = Next
+common-select-document = Select document
+common-query-corpus = Query corpus
+common-frame = Frame
+common-time = Time
 common-play-audio = Play audio
 common-play-video = Play video
 common-zoom-out = Zoom Out
@@ -106,3 +115,7 @@ results-kwic-right-context = Right context
 results-image-viewer = Image Viewer
 results-audio-no-support = Your browser does not support the audio element.
 results-plain-filter-placeholder = Filter by
+
+# Footer
+
+footer-report = Report a bug
