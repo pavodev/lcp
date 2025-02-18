@@ -60,7 +60,7 @@
         }}</a>
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-url')}} {{ corpusModal.description }}
+        {{$t('modal-details-description')}} {{ corpusModal.description }}
       </p>
       <span v-if="corpusModal.partitions">
         <p class="word-count" v-if="corpusModal.partitions">
@@ -85,7 +85,7 @@
       <p class="word-count mb-0 mt-2" v-if="license">
         {{ $t('modal-details-license') }}
         <span v-if="license.tag == 'user-defined'">
-          {{ $t('modal-details-user') }} {{ corpusModal.meta.userLicense }}
+          {{ $t('modal-details-user-license') }} {{ corpusModal.meta.userLicense }}
         </span>
         <span v-else>
           <a :href="license.url" target="_blank">
