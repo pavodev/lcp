@@ -6,6 +6,9 @@
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
+
+## --------------- COMMON ---------------
+
 common-user =
     { $count ->
        *[one] User
@@ -28,6 +31,10 @@ common-close = Close
 common-copy-clipboard = Copy to clipboard
 common-play-audio = Play audio
 common-play-video = Play video
+common-zoom-out = Zoom Out
+common-zoom-in = Zoom In
+common-zoom-reset-default = Reset default
+common-zoom-fit-content = Fit content
 
 ## --------------- MENU ---------------
 
