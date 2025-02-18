@@ -6,6 +6,8 @@ platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
 
+## --------------- COMMON ---------------
+
 common-user = { $count ->
  *[one] User
  [other] Users
@@ -28,6 +30,10 @@ common-copy-clipboard = Copy to clipboard
 
 common-play-audio = Play audio
 common-play-video = Play video
+common-zoom-out = Zoom Out
+common-zoom-in = Zoom In
+common-zoom-reset-default = Reset default
+common-zoom-fit-content = Fit content
 
 
 ## --------------- MENU ---------------
@@ -99,3 +105,5 @@ results-kwic-right-context = Right context
 results-image-viewer = Image Viewer
 results-audio-no-support = Your browser does not support the audio element.
 results-plain-filter-placeholder = Filter by
+
+
