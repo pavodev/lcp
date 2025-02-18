@@ -28,6 +28,14 @@ common-match = Match
 common-details = Details
 common-close = Close
 common-copy-clipboard = Copy to clipboard
+common-loading = Loading
+common-loading-data = Loading data ...
+common-previous = Previous
+common-next = Next
+common-select-document = Select document
+common-query-corpus = Query corpus
+common-frame = Frame
+common-time = Time
 
 common-play-audio = Play audio
 common-play-video = Play video

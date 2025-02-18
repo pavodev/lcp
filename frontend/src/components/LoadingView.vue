@@ -1,6 +1,6 @@
 <template>
   <div class="spinner-placeholder" v-if="status == true">
-    Loading
+    {{ $t('common-loading') }}
     <div class="loader quantum-spinner"></div>
   </div>
 </template>
