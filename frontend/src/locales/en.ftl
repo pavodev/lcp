@@ -16,6 +16,7 @@ common-name = Name
 common-email = Email
 common-admin = Admin
 common-active = Active
+common-ready = Ready
 common-invited = Invited
 common-invite = Invite
 common-remove = Remove
@@ -34,7 +35,6 @@ common-zoom-out = Zoom Out
 common-zoom-in = Zoom In
 common-zoom-reset-default = Reset default
 common-zoom-fit-content = Fit content
-
 
 ## --------------- MENU ---------------
 
@@ -106,4 +106,6 @@ results-image-viewer = Image Viewer
 results-audio-no-support = Your browser does not support the audio element.
 results-plain-filter-placeholder = Filter by
 
+# Footer
 
+footer-report = Report a bug
