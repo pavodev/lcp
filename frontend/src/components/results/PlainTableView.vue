@@ -26,13 +26,13 @@
           @mouseleave="hoverResultLine(null)"
         >
           <td scope="row" class="results">
-            <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
+            <span :title="$t('common-copy-clipboard')" @click="copyToClip(item)" class="action-button">
               <FontAwesomeIcon :icon="['fas', 'copy']" />
             </span>
-            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
+            <span :title="$t('common-play-audio')" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
-            <span title="Play video" @click="playVideo(resultIndex)" class="action-button" v-if="showVideo(resultIndex)">
+            <span :title="$t('common-play-video')" @click="playVideo(resultIndex)" class="action-button" v-if="showVideo(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
             <span
@@ -103,7 +103,7 @@
               :data-bs-target="`#detailsModal${randInt}`"
               @click="showModal(resultIndex)"
             >
-              Details
+              {{ $t('details') }}
             </button>
           </td>
           <td :class="['audioplayer','audioplayer-'+resultIndex, playIndex == resultIndex ? 'visible' : '']"></td>
@@ -200,12 +200,12 @@
       <div class="modal-dialog modal-full">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="detailsModalLabel">Details</h5>
+            <h5 class="modal-title" id="detailsModalLabel">{{ $t('common-details') }}</h5>
             <button
               type="button"
               class="btn-close"
               data-bs-dismiss="modal"
-              aria-label="Close"
+              :aria-label="$t('common-close')"
             ></button>
           </div>
           <div class="modal-body text-start">
@@ -226,7 +226,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -242,12 +242,12 @@
       <div class="modal-dialog modal-full">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="imageModalLabel">Image Viewer</h5>
+            <h5 class="modal-title" id="imageModalLabel">{{ $t('results-image-viewer') }}</h5>
             <button
               type="button"
               class="btn-close"
               data-bs-dismiss="modal"
-              aria-label="Close"
+              :aria-label="$t('common-close')"
             ></button>
           </div>
           <div class="modal-body text-start">
@@ -266,7 +266,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -274,7 +274,7 @@
     </div>
     <audio controls ref="audioplayer" class="d-none">
         <source src="" type="audio/mpeg">
-        Your browser does not support the audio element.
+        {{ $t('results-audio-no-support') }}
     </audio>
   </div>
 </template>

@@ -21,6 +21,14 @@ common-key = Key
 common-secret = Secret
 common-help-1 = Your secret will not be visible after closing this window.
 common-help-2 = The secret will be shown just once. Copy the secret to the safe place.
+common-match = Match
+common-details = Details
+common-close = Close
+common-copy-clipboard = Copy to clipboard
+
+common-play-audio = Play audio
+common-play-video = Play video
+
 
 ## --------------- MENU ---------------
 
@@ -79,3 +87,15 @@ modal-project-invite-help = Separate multiple email addresses with a comma.
 modal-project-issued = Issued on
 modal-project-revoke-key = Revoke API Key
 modal-project-create-key = Create API Key
+
+# Results details modal
+
+modal-results-tab-graph = Dependency Graph
+modal-results-tab-tabular = Tabular
+
+# Results components
+
+results-kwic-right-context = Right context
+results-image-viewer = Image Viewer
+results-audio-no-support = Your browser does not support the audio element.
+results-plain-filter-placeholder = Filter by

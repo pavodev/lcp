@@ -20,9 +20,9 @@
             <th scope="col" :class="`header-${groupIndex == 0 ? 'left' : 'form'}`">
               {{ groupIndex == 0 ? "Left context" : "Context" }}
             </th>
-            <th scope="col" class="header-form">Match</th>
+            <th scope="col" class="header-form">{{ $t('common-match') }}</th>
           </template>
-          <th scope="col">Right context</th>
+          <th scope="col">{{ $t('results-kwic-right-context') }}</th>
           <th scope="col">-</th>
         </tr>
       </thead>
@@ -93,7 +93,7 @@
               :data-bs-target="`#detailsModal${randInt}`"
               @click="showModal(resultIndex)"
             >
-              Details
+              {{ $t('common-details') }}
             </button>
           </td>
         </tr>
@@ -150,7 +150,7 @@
       <div class="modal-dialog modal-full">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="detailsModalLabel">Details</h5>
+            <h5 class="modal-title" id="detailsModalLabel">{{ $t('common-details') }}</h5>
             <button
               type="button"
               class="btn-close"
@@ -176,7 +176,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
