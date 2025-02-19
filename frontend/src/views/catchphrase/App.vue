@@ -70,7 +70,7 @@
             <li class="nav-item">
               <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
                 <FontAwesomeIcon :icon="['fas', 'database']" class="me-2" />
-                {{`${$t('platform-general')} ${$t('menu-home')}`}}
+                {{`${$t('platform-general-short')} ${$t('menu-home')}`}}
               </a>
             </li>
             <li class="nav-item">
