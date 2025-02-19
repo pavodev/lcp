@@ -13,6 +13,7 @@ plaftorm-general-description =
  own corpora using a command-line interface.
 platform-general-no-permission = You currently don't have permissions to query this corpus. Please see the corpus description to learn how to gain access.
 platform-general-access-restricted = Access to this corpus is restricted. We need you to log in to evaluate your permissions.
+platform-general-find-corpora = Find Corpora
 platform-general-corpus-edit = Corpus edit
 platform-general-corpus-license = Corpus licence
 platform-general-user-license = Corpus licence: User defined - Check details

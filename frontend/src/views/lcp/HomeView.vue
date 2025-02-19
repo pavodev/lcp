@@ -27,7 +27,7 @@
             <span class="input-group-text" id="basic-addon1">
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass']" />
             </span>
-            <input type="text" class="form-control" v-model="corporaFilter" placeholder="Find Corpora" />
+            <input type="text" class="form-control" v-model="corporaFilter" :placeholder="$t('platform-general-find-corpora')" />
           </div>
           <div v-if="corporaFilter && filterError && filterError.message" class="alert notification alert-danger">
             {{ filterError.message }}
