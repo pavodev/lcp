@@ -2,6 +2,7 @@
 
 ## --------------- GENERAL ---------------
 
+platform-general = LCP
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
