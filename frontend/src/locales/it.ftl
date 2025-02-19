@@ -1,16 +1,18 @@
-# This file contains English translations for the LCP platform.
+# This file contains Italian translations for the LCP platform.
 
 ## --------------- GENERAL ---------------
 
+platform-general = LCP
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
 
-common-user =
-    { $count ->
-       *[one] User
-        [other] Users
-    }
+## --------------- COMMON ---------------
+
+common-user = { $count ->
+ *[one] User
+ [other] Users
+}
 common-name = Name
 common-email = Email
 common-admin = Admin
@@ -35,6 +37,7 @@ common-select-document = Select document
 common-query-corpus = Query corpus
 common-frame = Frame
 common-time = Time
+
 common-play-audio = Play audio
 common-play-video = Play video
 common-zoom-out = Zoom Out
@@ -50,7 +53,6 @@ menu-viewer = Viewer
 menu-manual = Manual
 
 ## --------------- MODALS ---------------
-
 
 # Corpus details modal
 
@@ -79,9 +81,9 @@ modal-meta-user-license = User defined license
 # New/Edit project modal
 
 modal-project-title = Title
-modal-project-title-error =
-    Title is mandatory (min. length is seven letters).
-    Title will be manually checked. Try to be concise and informative.
+modal-project-title-error = 
+ Title is mandatory (min. length is seven letters).
+ Title will be manually checked. Try to be concise and informative.
 modal-project-start-date = Start date
 modal-project-start-date-error = Start date is mandatory.
 modal-project-end-date = End date
