@@ -1,13 +1,10 @@
 # This file contains English translations for the LCP platform.
 
-
 ## --------------- GENERAL ---------------
 
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
-
-## --------------- COMMON ---------------
 
 common-user =
     { $count ->

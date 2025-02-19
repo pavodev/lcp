@@ -11,7 +11,7 @@
           @click="openQueryWithCorpus(corpusModal, 'catchphrase')"
         >
           <FontAwesomeIcon :icon="['fas', 'font']" class="me-2" />
-          <i>catchphrase</i>
+          <i>{{ $t('platform-catchphrase') }}</i>
         </a>
 
         <a
@@ -22,7 +22,7 @@
           v-if="['audio', 'video'].includes(corpusDataType(corpusModal))"
         >
           <FontAwesomeIcon :icon="['fas', 'music']" class="me-2" />
-          <i>soundscript</i>
+          <i>{{ $t('platform-soundscript') }}</i>
         </a>
 
         <a
@@ -33,7 +33,7 @@
           v-if="['video'].includes(corpusDataType(corpusModal))"
         >
           <FontAwesomeIcon :icon="['fas', 'video']" class="me-2" />
-          <i>videoscope</i>
+          <i>{{ $t('platform-videoscope') }}</i>
         </a>
       </div>
       <!-- <p class="author mb-0" v-if="corpusModal.meta.author">
@@ -43,7 +43,7 @@
         {{ corpusModal.meta.corpusDescription }}
       </p>
       <p class="word-count mb-0">
-        Word count:
+        {{$t('modal-details-count')}}
         <b>{{
           calculateSum(
             Object.values(corpusModal.token_counts)
@@ -51,25 +51,25 @@
         }}</b>
       </p>
       <p class="word-count mb-0">
-        Revison: {{ corpusModal.meta.revision }}
+        {{$t('modal-details-revison')}} {{ corpusModal.meta.revision }}
       </p>
       <p class="word-count mb-0">
-        URL:
+        {{$t('modal-details-url')}} 
         <a :href="getURLWithProtocol(corpusModal.meta.url)" target="_blank">{{
           corpusModal.meta.url
         }}</a>
       </p>
       <p class="word-count mb-0">
-        Description: {{ corpusModal.description }}
+        {{$t('modal-details-description')}} {{ corpusModal.description }}
       </p>
       <span v-if="corpusModal.partitions">
         <p class="word-count" v-if="corpusModal.partitions">
-          Partitions: {{ corpusModal.partitions.values.join(", ") }}
+          {{$t('modal-details-partitions')}} {{ corpusModal.partitions.values.join(", ") }}
         </p>
         <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
           <p class="text-bold">{{ partition.toUpperCase() }}</p>
           <p class="word-count">
-            Segments:
+            {{$t('modal-details-segments')}}
             {{
               corpusModal.mapping.layer.Segment.partitions[
                 partition
@@ -83,9 +83,9 @@
         </div>
       </span>
       <p class="word-count mb-0 mt-2" v-if="license">
-        License:
+        {{ $t('modal-details-license') }}
         <span v-if="license.tag == 'user-defined'">
-          User defined: {{ corpusModal.meta.userLicense }}
+          {{ $t('modal-details-user-license') }} {{ corpusModal.meta.userLicense }}
         </span>
         <span v-else>
           <a :href="license.url" target="_blank">

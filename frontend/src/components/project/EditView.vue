@@ -9,18 +9,18 @@
                 data-bs-toggle="tab" data-bs-target="#nav-edit-metadata" type="button" role="tab"
                 ref="navEditMetadataTab" aria-controls="nav-edit-metadata" aria-selected="true"
                 @click="currentTab = 'metadata'">
-                Metadata
+                {{ $t('modal-project-metadata') }}
               </button>
               <button class="nav-link" :class="currentTab == 'permissions' ? 'active' : ''"
                 id="nav-edit-permissions-tab" data-bs-toggle="tab" data-bs-target="#nav-edit-permissions" type="button"
                 role="tab" aria-controls="nav-edit-permissions" aria-selected="true"
                 @click="currentTab = 'permissions'">
-                Permissions
+                {{ $t('modal-project-tab-permissions') }}
               </button>
               <button class="nav-link" :class="currentTab == 'api' ? 'active' : ''" id="nav-edit-api-tab"
                 data-bs-toggle="tab" data-bs-target="#nav-edit-api" type="button" role="tab"
                 aria-controls="nav-edit-api" aria-selected="true" @click="currentTab = 'api'">
-                API
+                {{ $t('modal-project-tab-api') }}
               </button>
             </div>
           </nav>
@@ -29,41 +29,40 @@
               <div class="row">
                 <div class="col-12">
                   <div class="mb-3">
-                    <label for="url" class="form-label">Title</label>
+                    <label for="url" class="form-label">{{ $t('modal-project-title') }}</label>
                     <input type="text" class="form-control" v-model="currentProject.title" id="title"
                       aria-describedby="titleHelp" maxlength="50" />
-                    <div id="titleHelp" v-if="titleState == false" class="form-text text-danger">
-                      Title is mandatory (min. length is seven letters).<br>
-                      Title will be manually checked. Try to be concise and informative.
+                    <div id="titleHelp" v-if="titleState == false" class="form-text text-danger pre-line">
+                      {{ $t('modal-project-title-error') }}
                     </div>
                   </div>
                 </div>
                 <div class="col-4">
                   <div class="mb-3">
-                    <label for="content" class="form-label">Start date</label>
+                    <label for="content" class="form-label">{{ $t('modal-project-start-date') }}</label>
                     <DatePicker v-model:value="currentProject.startDate" id="startDate" class="d-block" />
                     <div id="urlHelp" v-if="startDateState == false" class="form-text text-danger">
-                      Start date is mandatory.
+                      {{ $t('modal-project-start-date-error') }}
                     </div>
                   </div>
                 </div>
                 <div class="col-4">
                   <div class="mb-3">
-                    <label for="content" class="form-label">End date</label>
+                    <label for="content" class="form-label">{{ $t('modal-project-end-date') }}</label>
                     <DatePicker v-model:value="currentProject.finishDate" id="finishDate"
                       :disabled-date="disabledBeforeToday" class="d-block" />
                   </div>
                 </div>
                 <div class="col-12">
                   <div class="mb-3">
-                    <label for="description" class="form-label">Description</label>
-                    <textarea class="form-control" placeholder="Please describe the purpose of your group"
+                    <label for="description" class="form-label">{{ $t('modal-project-description') }}</label>
+                    <textarea class="form-control" :placeholder="$t('modal-project-description-placeholder')"
                       v-model="currentProject.description" id="description" style="height: 100px"></textarea>
                   </div>
                 </div>
                 <div class="col-12">
                   <button class="btn btn-outline-secondary" type="button" id="publicButton" @click="makeDataPublic">
-                    Request to Make Data Public
+                    {{ $t('modal-project-data-public') }}
                   </button>
                   <!-- <label class="form-label me-2">Visibility:</label>
                   <div class="form-check form-check-inline">
@@ -86,14 +85,14 @@
             </div>
             <div class="tab-pane fade" id="nav-edit-permissions" role="tabpanel">
               <div class="alert alert-dark" role="alert">
-                <h4>Users</h4>
+                <h4>{{ $t('common-user', {count: 2}) }}</h4>
                 <table class="table">
                   <thead>
                     <tr>
-                      <th scope="col">Name</th>
-                      <th scope="col">Email</th>
-                      <th scope="col">Admin</th>
-                      <th scope="col">Active</th>
+                      <th scope="col">{{ $t('common-name') }}</th>
+                      <th scope="col">{{ $t('common-email') }}</th>
+                      <th scope="col">{{ $t('common-admin') }}</th>
+                      <th scope="col">{{ $t('common-active') }}</th>
                     </tr>
                   </thead>
                   <tbody v-if="users">
@@ -105,7 +104,7 @@
                           v-if="user.invitedFromEmail && user.email != user.invitedFromEmail"
                           class="small-text"
                         >
-                          (invitation sent to {{ user.invitedFromEmail }})
+                          {{ $t("modal-project-invitation", { email: user.invitedFromEmail}) }}
                         </div>
                       </td>
                       <td>
@@ -135,13 +134,13 @@
                 </table>
               </div>
               <div class="alert alert-dark" role="alert">
-                <h4>Invited users</h4>
+                <h4>{{ $t('modal-project-invited') }}</h4>
                 <table class="table">
                   <thead>
                     <tr>
-                      <th scope="col">Email</th>
-                      <th scope="col">Invited</th>
-                      <th scope="col">Active</th>
+                      <th scope="col">{{ $t('common-email') }}</th>
+                      <th scope="col">{{ $t('common-invited') }}</th>
+                      <th scope="col">{{ $t('common-active') }}</th>
                     </tr>
                   </thead>
                   <tbody v-if="users">
@@ -154,7 +153,7 @@
                             @click="removeInvitation(invitation.id)"
                           >
                             <FontAwesomeIcon :icon="['fas', 'trash']" />
-                            Remove
+                            {{ $t('common-remove') }}
                           </button>
                         </td>
                       </tr>
@@ -163,25 +162,25 @@
               </div>
 
               <div class="mt-5 mb-2">
-                <label for="email" class="form-label">Invite people</label>
+                <label for="email" class="form-label">{{ $t('modal-project-invite') }}</label>
                 <div class="input-group mb-1">
                   <input type="text" v-model="inviteEmails" class="form-control"
-                    placeholder="Email (comma-separated list of email addresses)" />
+                    :placeholder="$t('modal-project-invite-placeholder')" />
                   <button class="btn btn-outline-secondary" type="button" id="inviteButton" @click="inviteUsers">
-                    Invite
+                    {{ $t('common-invite') }}
                   </button>
                 </div>
-                <small id="inviteHelp" class="form-text text-muted">Separate multiple email addresses with a comma.</small>
+                <small id="inviteHelp" class="form-text text-muted">{{ $t('modal-project-invite-help') }}</small>
               </div>
             </div>
             <div class="tab-pane fade" id="nav-edit-api" role="tabpanel">
               <span v-if="currentProject.api">
                 <div class="mb-3">
-                  <label for="url" class="form-label">Key</label>
+                  <label for="url" class="form-label">{{ $t('common-key') }}</label>
                   <input type="text" class="form-control" id="api-key" disabled :value="currentProject.api.key" />
                 </div>
                 <div class="mb-3">
-                  <label for="secret" class="form-label">Secret</label>
+                  <label for="secret" class="form-label">{{ $t('common-secret') }}</label>
                   <input type="text" class="form-control" id="secret-key" disabled :value="currentProject.api.secret
                 ? currentProject.api.secret
                 : currentProject.api.secretPart.replace(
@@ -190,25 +189,24 @@
                 )
                 " />
                   <div id="secretHelp" v-if="currentProject.api.secret" class="form-text text-danger">
-                    <b>Your secret will not be visible after closing this window.</b><br />
-                    The secret will be shown just once. Copy the secret to the safe place.
+                    <b>{{ $t('common-help-1') }}</b><br />{{ $t('common-help-2') }}
                   </div>
                 </div>
                 <div class="mb-3">
-                  <label for="issued-on" class="form-label">Issued on</label>
+                  <label for="issued-on" class="form-label">{{ $t('modal-project-issued') }}</label>
                   <input type="text" class="form-control" id="issued-on" disabled
                     :value="formatDate(currentProject.api.addedOn)" />
                 </div>
                 <button type="button" class="btn btn-danger btn-sm mt-3 mb-3"
                   @click="APIKeyRevoke(currentProject.id, currentProject.api.id)">
                   <FontAwesomeIcon :icon="['fas', 'trash']" class="me-1" />
-                  Revoke API Key
+                  {{ $t('modal-project-revoke-key') }}
                 </button>
               </span>
               <div v-else class="text-center">
                 <button type="button" class="btn btn-primary" @click="APIKeyCreate(currentProject.id)">
                   <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
-                  Create API Key
+                  {{ $t('modal-project-create-key') }}
                 </button>
               </div>
             </div>

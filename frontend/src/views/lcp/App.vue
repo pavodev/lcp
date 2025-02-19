@@ -19,7 +19,7 @@
             <li class="nav-item">
               <router-link class="nav-link" to="/">
                 <FontAwesomeIcon :icon="['fas', 'house']" class="me-1" />
-                {{ $t('home') }}
+                {{ $t('menu-home') }}
               </router-link>
             </li>
             <li class="nav-item">

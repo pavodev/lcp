@@ -4,7 +4,7 @@
     <hr>
     Copyright &copy; 2024 LiRI 
     | 
-    <a style="color: white;" href="mailto:lcp@linguistik.uzh.ch?subject=Bug%20report">Report a bug</a>
+    <a style="color: white;" href="mailto:lcp@linguistik.uzh.ch?subject=Bug%20report">{{ $t('footer-report') }}</a>
   </footer>
 </template>
 

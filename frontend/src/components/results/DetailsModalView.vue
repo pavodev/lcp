@@ -13,7 +13,7 @@
           aria-selected="true"
           v-if="hasDepRel"
         >
-          Dependency Graph
+          {{ $t('modal-results-tab-graph') }}
         </button>
         <button
           class="nav-link"
@@ -26,7 +26,7 @@
           aria-controls="nav-details"
           aria-selected="false"
         >
-          Tabular
+          {{ $t('modal-results-tab-tabular') }}
         </button>
       </div>
     </nav>
