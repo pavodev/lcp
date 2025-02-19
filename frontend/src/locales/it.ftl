@@ -3,10 +3,23 @@
 
 ## --------------- GENERAL ---------------
 
-platform-general = LCP
+platform-general = LiRI Corpus Platform
+platform-general-short = LCP
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
+plaftorm-general-description =
+    The LiRI Corpus Platform (LCP) is a software system for handling and querying corpora of different kinds. Users can query corpora directly from their browser, and upload their
+    own corpora using a command-line interface.
+platform-general-no-permission = You currently don't have permissions to query this corpus. Please see the corpus description to learn how to gain access.
+platform-general-access-restricted = Access to this corpus is restricted. We need you to log in to evaluate your permissions.
+platform-general-corpus-edit = Corpus edit
+platform-general-corpus-license = Corpus licence
+platform-general-user-license = Corpus licence: User defined - Check details
+platform-general-corpus-details = Corpus details
+platform-general-corpus-settings = Corpus settings
+platform-general-corpus-origin = Corpus origin
+platform-general-data-type = Data type
 
 ## --------------- COMMON ---------------
 
@@ -18,6 +31,8 @@ common-user =
 common-name = Name
 common-email = Email
 common-admin = Admin
+common-login = Login
+common-logout = Logout
 common-active = Active
 common-ready = Ready
 common-invited = Invited
@@ -30,6 +45,7 @@ common-help-2 = The secret will be shown just once. Copy the secret to the safe 
 common-match = Match
 common-details = Details
 common-close = Close
+common-save = Save
 common-copy-clipboard = Copy to clipboard
 common-loading = Loading
 common-loading-data = Loading data ...
@@ -39,6 +55,16 @@ common-select-document = Select document
 common-query-corpus = Query corpus
 common-frame = Frame
 common-time = Time
+common-add-group = Add new group
+common-group-settings = Group settings
+common-start-date = Start date
+common-finish-date = Finish date
+common-enabled = Enabled
+common-disabled = Disabled
+common-description = Description
+common-partition = Partition
+common-word-count = Word count
+common-revision = Revision
 common-play-audio = Play audio
 common-play-video = Play video
 common-zoom-out = Zoom Out
@@ -82,6 +108,7 @@ modal-meta-user-license = User defined license
 
 # New/Edit project modal
 
+modal-project-new = New Group
 modal-project-title = Title
 modal-project-title-error =
     Title is mandatory (min. length is seven letters).
