@@ -314,7 +314,7 @@
         <div class="row mb-3 mt-2">
           <div class="col">
             <!-- Percentage: <span v-html="progress.toFixed(2)" />% -->
-            {{ $t('common-frame') }}
+            {{ $t('common-frame') }}:
             <span
               v-html="parseInt(currentFrame, 10)"
             />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ $t('common-time') }}: <span v-html="currentTime" />

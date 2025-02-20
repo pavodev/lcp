@@ -15,7 +15,7 @@ export const fluent = createFluentVue({
   bundles: [enBundle, itBundle]
 });
 
-export function changeLocale (locale) {
+export function changeLocale(locale) {
   if(locale === 'en'){
     fluent.bundles = [enBundle];
   } else if (locale === 'it'){
