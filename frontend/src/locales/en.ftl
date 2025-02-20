@@ -45,14 +45,20 @@ common-help-2 = The secret will be shown just once. Copy the secret to the safe 
 common-match = Match
 common-details = Details
 common-close = Close
+common-stop = Stop
 common-save = Save
+common-submit = Submit
 common-copy-clipboard = Copy to clipboard
 common-loading = Loading
-common-loading-data = Loading data ...
+common-loading-data = Loading data
 common-previous = Previous
 common-next = Next
 common-select-document = Select document
+common-corpus = Corpus
+load-example-query = Load example query
 common-query-corpus = Query corpus
+common-go-to-time = Go to time
+common-loading-video-duration = Loading video duration
 common-frame = Frame
 common-time = Time
 common-add-group = Add new group
@@ -85,14 +91,14 @@ menu-manual = Manual
 
 # Corpus details modal
 
-modal-details-count = Word count:
-modal-details-revison = Revison:
-modal-details-url = URL:
-modal-details-description = Description:
-modal-details-partitions = Partitions:
-modal-details-segments = Segments:
-modal-details-license = License:
-modal-details-user-license = User defined:
+modal-details-count = Word count
+modal-details-revison = Revison
+modal-details-url = URL
+modal-details-description = Description
+modal-details-partitions = Partitions
+modal-details-segments = Segments
+modal-details-license = License
+modal-details-user-license = User defined
 
 # Metadata edit modal
 

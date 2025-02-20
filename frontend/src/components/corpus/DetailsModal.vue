@@ -43,7 +43,7 @@
         {{ corpusModal.meta.corpusDescription }}
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-count')}}
+        {{$t('modal-details-count')}}:
         <b>{{
           calculateSum(
             Object.values(corpusModal.token_counts)
@@ -51,25 +51,25 @@
         }}</b>
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-revison')}} {{ corpusModal.meta.revision }}
+        {{$t('modal-details-revison')}}: {{ corpusModal.meta.revision }}
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-url')}} 
+        {{$t('modal-details-url')}}: 
         <a :href="getURLWithProtocol(corpusModal.meta.url)" target="_blank">{{
           corpusModal.meta.url
         }}</a>
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-description')}} {{ corpusModal.description }}
+        {{$t('modal-details-description')}}: {{ corpusModal.description }}
       </p>
       <span v-if="corpusModal.partitions">
         <p class="word-count" v-if="corpusModal.partitions">
-          {{$t('modal-details-partitions')}} {{ corpusModal.partitions.values.join(", ") }}
+          {{$t('modal-details-partitions')}}: {{ corpusModal.partitions.values.join(", ") }}
         </p>
         <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
           <p class="text-bold">{{ partition.toUpperCase() }}</p>
           <p class="word-count">
-            {{$t('modal-details-segments')}}
+            {{$t('modal-details-segments')}}: 
             {{
               corpusModal.mapping.layer.Segment.partitions[
                 partition
@@ -83,9 +83,9 @@
         </div>
       </span>
       <p class="word-count mb-0 mt-2" v-if="license">
-        {{ $t('modal-details-license') }}
+        {{ $t('modal-details-license') }}: 
         <span v-if="license.tag == 'user-defined'">
-          {{ $t('modal-details-user-license') }} {{ corpusModal.meta.userLicense }}
+          {{ $t('modal-details-user-license') }}: {{ corpusModal.meta.userLicense }}
         </span>
         <span v-else>
           <a :href="license.url" target="_blank">

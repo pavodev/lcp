@@ -350,7 +350,7 @@
         :key="documentIndexKey"
       />
       <div v-else-if="loadingDocument == true">
-        {{ $t('common-loading-data') }}
+        {{ $t('common-loading-data') }}...
       </div>
     </div>
   </div>
