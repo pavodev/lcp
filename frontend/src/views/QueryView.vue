@@ -3,18 +3,18 @@
     <div class="container mt-4">
       <div class="row">
         <div class="col">
-          <Title :title="'Query'" />
+          <Title :title="$t('common-query')" />
         </div>
       </div>
       <div class="row">
         <div class="col-4">
           <div class="mb-3 mt-3">
-            <label class="form-label">Corpora</label>
+            <label class="form-label">{{ $t('common-corpora') }}</label>
             <div
               v-if="selectedCorpora && selectedCorpora.corpus"
               class="details-button icon-3 tooltips"
               @click.stop="switchGraph()"
-              title="Show/hide corpus structure"
+              :title="$t('common-show-hide-corpus')"
               :style="{
                 position: 'absolute',
                 lineHeight: '40px',
@@ -34,7 +34,7 @@
           <div class="mb-3"
             v-if="selectedCorpora && availableLanguages.length > 1"
           >
-            <label class="form-label">Languages</label>
+            <label class="form-label">{{ $t('common-languages') }}</label>
             <multiselect
               v-model="selectedLanguages"
               :options="availableLanguages"
@@ -106,7 +106,7 @@
               :disabled="isSubmitDisabled()"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
+              {{ loading == "resubmit" ? $t('common-resubmit') : $t('common-submit') }}
             </button>
 
             <button
@@ -117,7 +117,7 @@
               data-bs-target="#exportModal"
             >
               <FontAwesomeIcon :icon="['fas', 'file-export']" />
-              Export
+              {{ $t('common-export') }}
             </button>
 
             <button
@@ -127,7 +127,7 @@
               class="btn btn-primary me-1 mb-1"
             >
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Search whole corpus
+              {{ $t('common-search-whole') }}
             </button>
             <button
               v-else-if="loading"
@@ -137,7 +137,7 @@
               class="btn btn-primary me-1 mb-1"
             >
               <FontAwesomeIcon :icon="['fas', 'xmark']" />
-              Stop
+              {{ $t('common-stop') }}
             </button>
             <!-- <button
               type="button"
@@ -317,7 +317,7 @@
         <div class="col">
           <hr class="mt-5 mb-5" />
           <span>
-            <h6 class="mb-3">Query result</h6>
+            <h6 class="mb-3">{{ $t('common-query-result') }}</h6>
             <div class="progress mb-2">
               <div
                 class="progress-bar"
@@ -334,7 +334,7 @@
                 {{ percentageDone.toFixed(2) }}%
               </div>
             </div>
-            Total progress
+            {{ $t('common-total-progress') }}
             <div class="progress mb-2">
               <div
                 class="progress-bar"
@@ -354,7 +354,7 @@
             <div class="row mb-4">
               <div class="col">
                 <p class="mb-1">
-                  Number of results:
+                  {{ $t('common-number-results') }}:
                   <span
                     class="text-bold"
                     v-html="WSDataResults.total_results_so_far"
@@ -363,7 +363,7 @@
               </div>
               <div class="col">
                 <p class="mb-1">
-                  Projected results:
+                  {{ $t('common-projected-results') }}:
                   <span
                     class="text-bold"
                     v-html="WSDataResults.projected_results"
@@ -372,7 +372,7 @@
               </div>
               <div class="col">
                 <p class="mb-1">
-                  Batch done:
+                  {{ $t('common-batch-done') }}:
                   <span
                     class="text-bold"
                     v-html="WSDataResults.batches_done"
@@ -381,7 +381,7 @@
               </div>
               <div class="col">
                 <p class="mb-1">
-                  Status:
+                  {{ $t('common-status') }}:
                   <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
                   <span class="text-bold" v-html="queryStatus"></span>
                 </p>
@@ -407,13 +407,11 @@
       <div class="tooltip-arrow" style="position: absolute; left: 50%"></div>
       <div class="tooltip-inner">
         <div>
-          The first pages of results have been fetched. More results will be
-          fetched if you move to the next page or if you hit Search whole
-          corpus.
+          {{ $t('platform-general-fetched-results') }}
         </div>
         <div style="margin-top: 0.5em">
           <input type="checkbox" id="dontShowResultsNotif" />
-          <label for="dontShowResultsNotif">Don't show this again</label>
+          <label for="dontShowResultsNotif">{{ $t('common-dont-show-again') }}</label>
           <button
             @click="dismissResultsNotification"
             style="
@@ -424,7 +422,7 @@
               background-color: transparent;
             "
           >
-            OK
+            {{ $t('common-ok').toUpperCase() }}
           </button>
         </div>
       </div>
@@ -438,10 +436,10 @@
       class="mb-3"
     >
       <div v-if="WSDataResults && WSDataResults.total_results_so_far == 0">
-        No results found!
+        {{ $t('common-no-results') }}!
       </div>
       <div>
-        Loading results...
+        {{ $t('common-loading-results') }}...
       </div>
     </div>
     <div class="container-fluid">
@@ -529,7 +527,7 @@
                     "
                   >
                     <FontAwesomeIcon :icon="['fas', 'table']" />
-                    Plain
+                    {{ $t('common-plain') }}
                   </a>
                   <a
                     v-if="resultContainsSet(resultSet) == false"
@@ -596,7 +594,7 @@
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="exportModalLabel">Export results</h5>
+            <h5 class="modal-title" id="exportModalLabel">{{ $t('common-export-results') }}</h5>
             <button
               type="button"
               class="btn-close"
@@ -605,14 +603,14 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label class="form-label">Plain format (TSV + JSON)</label>
+            <label class="form-label">{{ $t('common-plain-format') }} (TSV + JSON)</label>
             <button
               type="button"
               @click="exportResults('plain', /*download=*/true, /*preview=*/true)"
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
-              Download preview
+              {{ $t('common-download-preview') }}
             </button>
             <!-- <button
               type="button"
@@ -631,7 +629,7 @@
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
-              Launch export
+              {{ $t('common-launch-export') }}
             </button>
           </div>
           <div class="modal-footer">
@@ -640,7 +638,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -656,7 +654,7 @@
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="saveQueryModalLabel">Save query</h5>
+            <h5 class="modal-title" id="saveQueryModalLabel">{{ $t('common-save-query') }}</h5>
             <button
               type="button"
               class="btn-close"
@@ -665,7 +663,7 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label for="queryName" class="form-label">Query name</label>
+            <label for="queryName" class="form-label">{{ $t('common-query-name') }}</label>
             <input
               type="text"
               class="form-control"
@@ -679,7 +677,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
             <button
               type="button"
@@ -687,7 +685,7 @@
               @click="saveQuery"
               class="btn btn-primary me-1"
             >
-              Save query
+              {{ $t('common-save-query') }}
             </button>
           </div>
         </div>
@@ -705,7 +703,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="corpusDetailsModalLabel">
-              Corpus structure
+              {{ $t('corpus-structure') }}
             </h5>
             <button
               type="button"
@@ -726,7 +724,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -734,7 +732,7 @@
     </div>
     <div
       class="lcp-progress-bar"
-      title="Refresh progress bar"
+      :title="$t('common-refresh-progress')"
       v-if="showLoadingBar"
     >
       <div
