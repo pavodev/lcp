@@ -1,120 +1,185 @@
-# This file contains Italian translations for the LCP platform.
+# Questo file contiene le traduzioni italiane per la piattaforma LCP.
 
-## --------------- GENERAL ---------------
+## --------------- GENERALE ---------------
 
-platform-general = LCP
+platform-general = LiRI Corpus Platform
+platform-general-short = LCP
 platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
 
-## --------------- COMMON ---------------
+plaftorm-general-description = 
+ La LiRI Corpus Platform (LCP) è un sistema software per gestire e interrogare corpora di vario tipo. Gli utenti possono interrogare i corpora direttamente dal loro browser e caricare i propri corpora utilizzando un'interfaccia a riga di comando.
+platform-general-no-permission = Attualmente non hai i permessi per interrogare questo corpus. Consulta la descrizione del corpus per sapere come ottenere l'accesso.
+platform-general-access-restricted = L'accesso a questo corpus è ristretto. Devi effettuare il login per verificare i tuoi permessi.
+platform-general-fetched-results = Le prime pagine dei risultati sono state recuperate. Altri risultati verranno caricati se passi alla pagina successiva o se clicchi su Cerca in tutto il corpus.
+platform-general-find-corpora = Trova corpora
+platform-general-corpus-edit = Modifica corpus
+platform-general-corpus-license = Licenza del corpus
+platform-general-user-license = Licenza del corpus: Definita dall'utente - Controlla i dettagli
+platform-general-corpus-details = Dettagli del corpus
+platform-general-corpus-settings = Impostazioni del corpus
+platform-general-corpus-origin = Origine del corpus
+platform-general-data-type = Tipo di dati
+
+## --------------- COMUNE ---------------
 
 common-user = { $count ->
- *[one] User
- [other] Users
+ *[one] Utente
+ [other] Utenti
 }
-common-name = Name
+common-name = Nome
 common-email = Email
 common-admin = Admin
-common-active = Active
-common-ready = Ready
-common-invited = Invited
-common-invite = Invite
-common-remove = Remove
-common-key = Key
-common-secret = Secret
-common-help-1 = Your secret will not be visible after closing this window.
-common-help-2 = The secret will be shown just once. Copy the secret to the safe place.
-common-match = Match
-common-details = Details
-common-close = Close
-common-copy-clipboard = Copy to clipboard
-common-loading = Loading
-common-loading-data = Loading data ...
-common-previous = Previous
-common-next = Next
-common-select-document = Select document
+common-login = Login
+common-logout = Logout
+common-active = Attivo
+common-ready = Pronto
+common-ok = Ok
+common-invited = Invitato
+common-invite = Invita
+common-remove = Rimuovi
+common-key = Chiave
+common-secret = Segreto
+common-help-1 = Il tuo segreto non sarà visibile dopo la chiusura di questa finestra.
+common-help-2 = Il segreto verrà mostrato solo una volta. Copialo in un luogo sicuro.
+common-match = Corrispondenza
+common-details = Dettagli
+common-close = Chiudi
+common-stop = Ferma
+common-save = Salva
+common-save-query = Salva query
+common-submit = Invia
+common-resubmit = Invia nuovamente
+common-copy-clipboard = Copia negli appunti
+common-loading = Caricamento
+common-loading-data = Caricamento dati
+common-data = Dati
+common-loading-results = Caricamento risultati
+common-previous = Precedente
+common-next = Successivo
+common-select-document = Seleziona documento
+common-corpus = Corpus
+corpus-structure = Struttura del corpus
+common-select-corpus = Seleziona corpus
+common-corpora = Corpora
+common-query = Query
+common-query-name = Nome query
+common-query-result = Risultato query
+common-total-progress = Progresso totale
+common-refresh-progress = Aggiorna barra di avanzamento
+common-show-hide-corpus = Mostra/nascondi struttura del corpus
+load-example-query = Carica query di esempio
 common-query-corpus = Query corpus
-common-frame = Frame
-common-time = Time
+common-go-to-time = Vai al tempo
+common-loading-video-duration = Caricamento durata video
+common-frame = Fotogramma
+common-time = Tempo
+common-add-group = Aggiungi nuovo gruppo
+common-group-settings = Impostazioni gruppo
+common-start-date = Data di inizio
+common-finish-date = Data di fine
+common-institution = Istituzione
+common-enabled = Abilitato
+common-disabled = Disabilitato
+common-description = Descrizione
+common-partition = Partizione
+common-word-count = Conteggio parole
+common-revision = Revisione
+common-languages = Lingue
+common-export = Esporta
+common-export-results = Esporta risultati
+common-launch-export = Avvia esportazione
+common-search-whole = Cerca in tutto il corpus
+common-number-results = Numero di risultati
+common-projected-results = Risultati previsti
+common-batch-done = Batch completato
+common-status = Stato
+common-dont-show-again = Non mostrare più
+common-no-results = Nessun risultato trovato
+common-plain = Testo semplice
+common-plain-format = Formato semplice
+common-download-preview = Scarica anteprima
+common-text = Testo
 
-common-play-audio = Play audio
-common-play-video = Play video
-common-zoom-out = Zoom Out
-common-zoom-in = Zoom In
-common-zoom-reset-default = Reset default
-common-zoom-fit-content = Fit content
+common-play-audio = Riproduci audio
+common-play-video = Riproduci video
+common-zoom-out = Riduci zoom
+common-zoom-in = Aumenta zoom
+common-zoom-reset-default = Reimposta predefinito
+common-zoom-fit-content = Adatta al contenuto
 
 ## --------------- MENU ---------------
 
 menu-home = Home
 menu-query = Query
-menu-viewer = Viewer
-menu-manual = Manual
+menu-viewer = Visualizzatore
+menu-manual = Manuale
 
-## --------------- MODALS ---------------
+## --------------- MODALI ---------------
 
-# Corpus details modal
+# Dettagli del corpus
 
-modal-details-count = Word count:
-modal-details-revison = Revison:
-modal-details-url = URL:
-modal-details-description = Description:
-modal-details-partitions = Partitions:
-modal-details-segments = Segments:
-modal-details-license = License:
-modal-details-user-license = User defined:
+modal-details-count = Conteggio parole
+modal-details-revison = Revisione
+modal-details-url = URL
+modal-details-description = Descrizione
+modal-details-partitions = Partizioni
+modal-details-segments = Segmenti
+modal-details-license = Licenza
+modal-details-user-license = Definita dall'utente
 
-# Metadata edit modal
+# Modifica dei metadati
 
-modal-meta-name = Name
-modal-meta-source = Source
-modal-meta-authors = Authors
-modal-meta-provider = Provider/Institution
-modal-meta-revision = Revision
-modal-meta-data-type = Data type:
-modal-meta-description = Description
-modal-meta-license = License
-modal-meta-user-defined = User defined
-modal-meta-user-license = User defined license
+modal-meta-name = Nome
+modal-meta-source = Fonte
+modal-meta-authors = Autori
+modal-meta-provider = Fornitore/Istituzione
+modal-meta-revision = Revisione
+modal-meta-data-type = Tipo di dati
+modal-meta-description = Descrizione
+modal-meta-license = Licenza
+modal-meta-user-defined = Definito dall'utente
+modal-meta-user-license = Licenza definita dall'utente
 
-# New/Edit project modal
+# Nuovo/Modifica progetto
 
-modal-project-title = Title
+modal-project-new = Nuovo Gruppo
+modal-project-title = Titolo
 modal-project-title-error = 
- Title is mandatory (min. length is seven letters).
- Title will be manually checked. Try to be concise and informative.
-modal-project-start-date = Start date
-modal-project-start-date-error = Start date is mandatory.
-modal-project-end-date = End date
-modal-project-end-date-error = End date is mandatory.
-modal-project-description = Description
-modal-project-description-placeholder = Please describe the purpose of your group
-modal-project-tab-metadata = Metadata
-modal-project-tab-permissions = Permissions
+ Il titolo è obbligatorio (lunghezza minima di sette lettere).
+ Il titolo verrà verificato manualmente. Cerca di essere conciso e informativo.
+modal-project-start-date = Data di inizio
+modal-project-start-date-error = La data di inizio è obbligatoria.
+modal-project-end-date = Data di fine
+modal-project-end-date-error = La data di fine è obbligatoria.
+modal-project-description = Descrizione
+modal-project-description-placeholder = Descrivi lo scopo del tuo gruppo
+modal-project-tab-metadata = Metadati
+modal-project-tab-permissions = Permessi
 modal-project-tab-api = API
-modal-project-data-public = Request to Make Data Public
-modal-project-invitation = (invitation sent to { $email })
-modal-project-invited = Invited users
-modal-project-invite = Invite people
-modal-project-invite-placeholder = Email (comma-separated list of email addresses)
-modal-project-invite-help = Separate multiple email addresses with a comma.
-modal-project-issued = Issued on
-modal-project-revoke-key = Revoke API Key
-modal-project-create-key = Create API Key
+modal-project-data-public = Richiesta di rendere i dati pubblici
+modal-project-invitation = (invito inviato a { $email })
+modal-project-invited = Utenti invitati
+modal-project-invite = Invita persone
+modal-project-invite-placeholder = Email (elenco separato da virgole)
+modal-project-invite-help = Separa più indirizzi email con una virgola.
+modal-project-issued = Rilasciato il
+modal-project-revoke-key = Revoca chiave API
+modal-project-create-key = Crea chiave API
 
-# Results details modal
+# Dettagli dei risultati
 
-modal-results-tab-graph = Dependency Graph
-modal-results-tab-tabular = Tabular
+modal-results-tab-graph = Grafo delle dipendenze
+modal-results-tab-tabular = Tabellare
 
-# Results components
+# Componenti dei risultati
 
-results-kwic-right-context = Right context
-results-image-viewer = Image Viewer
-results-audio-no-support = Your browser does not support the audio element.
-results-plain-filter-placeholder = Filter by
+results-kwic-right-context = Contesto a destra
+results-image-viewer = Visualizzatore immagini
+results-audio-no-support = Il tuo browser non supporta l'elemento audio.
+results-plain-filter-placeholder = Filtra per
 
 # Footer
 
-footer-report = Report a bug
+footer-report = Segnala un bug
