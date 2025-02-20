@@ -27,5 +27,9 @@ module.exports = defineConfig({
         'process.env.GIT_HASH': JSON.stringify(gitDescribeSync().hash),
       }),
     ]
+    config.module.rules.push({
+      test: /\.ftl$/,
+      type: 'asset/source'
+    })
   },
 });

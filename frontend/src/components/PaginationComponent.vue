@@ -3,7 +3,7 @@
     <nav>
       <ul class="pagination">
         <li class="page-item" :class="currentPage <= 1 ? 'disabled' : ''">
-          <button class="page-link" @click="previousPage">Previous</button>
+          <button class="page-link" @click="previousPage">{{ $t('common-previous') }}</button>
         </li>
         <li
           class="page-item"
@@ -37,7 +37,7 @@
         </li>
         <li class="page-item loader" v-if="loading">
           <span class="page-link">
-            Loading
+            {{ $t('common-loading') }}
             <svg
               xmlns="http://www.w3.org/2000/svg"
               xmlns:xlink="http://www.w3.org/1999/xlink"
@@ -95,7 +95,7 @@
           class="page-item"
           :class="currentPage >= maxPages ? 'disabled' : ''"
         >
-          <button class="page-link" @click="nextPage">Next</button>
+          <button class="page-link" @click="nextPage">{{ $t('common-next') }}</button>
         </li>
       </ul>
     </nav>

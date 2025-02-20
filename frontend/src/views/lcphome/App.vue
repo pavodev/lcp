@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">LCP</a>
+        <a class="navbar-brand" href="/">{{ $t('platform-general-short') }}</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -19,7 +19,7 @@
             <li class="nav-item">
               <router-link class="nav-link" to="/">
                 <FontAwesomeIcon :icon="['fas', 'house']" class="me-1" />
-                Home
+                {{ $t('menu-home') }}
               </router-link>
             </li>
             <!-- <li class="nav-item">
@@ -37,7 +37,7 @@
                   :icon="['fas', 'circle-question']"
                   class="me-1"
                 />
-                Manual
+                {{ $t('menu-manual') }}
               </a>
             </li>
             <!-- <li class="nav-item">
@@ -69,12 +69,12 @@
                 href="/Shibboleth.sso/Logout"
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
-                Logout
+                {{ $t('common-logout') }}
                 <small>({{ userData.user.displayName }})</small>
               </a>
               <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
-                Login
+                {{ $t('common-login') }}
               </a>
             </li>
           </ul>

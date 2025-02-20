@@ -14,7 +14,7 @@
             @click="modalIndexKey++"
           >
             <FontAwesomeIcon :icon="['fas', 'circle-plus']" class="me-1" />
-            Add new group
+            {{ $t('common-add-group') }}
           </button>
         </div>
       </div>
@@ -24,7 +24,7 @@
             <span class="input-group-text" id="basic-addon1">
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass']" />
             </span>
-            <input type="text" class="form-control" v-model="corporaFilter" placeholder="Find Corpora" />
+            <input type="text" class="form-control" v-model="corporaFilter" :placeholder="$t('platform-general-find-corpora')" />
           </div>
           <div v-if="corporaFilter && filterError && filterError.message" class="alert notification alert-danger">
             {{ filterError.message }}
@@ -76,13 +76,13 @@
                   <div class="col-11">
                     <div class="row" v-if="project.isAdmin">
                       <div class="col-2">
-                        Start date: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
+                        {{ $t('common-start-date') }}: <b>{{ formatDate(project.startDate, "DD.MM.YYYY") }}</b>
                       </div>
                       <div class="col-2">
-                        Finish date: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
+                        {{ $t('common-finish-date') }}: <b>{{ formatDate(project.finishDate, "DD.MM.YYYY") }}</b>
                       </div>
                       <div class="col-2">
-                        Institution: <b>{{ project.institution }}</b>
+                        {{ $t('common-institution') }}: <b>{{ project.institution }}</b>
                       </div>
                       <div class="col-2">
                         API: <b>{{ project.api ? "Enabled" : "Disabled" }}</b>
@@ -93,7 +93,7 @@
                     </div>
                     <div class="row">
                       <div class="col-12">
-                        Description: <b>{{ project.description }}</b>
+                        {{ $t('common-description') }}: <b>{{ project.description }}</b>
                       </div>
                     </div>
                   </div>
@@ -131,12 +131,12 @@
                     <p class="word-count">
                       <template v-if="corpus.partitions">
                         <span
-                          class="badge text-bg-primary me-1 tooltips" title="Partition"
+                          class="badge text-bg-primary me-1 tooltips" :title="$t('common-partition')"
                           v-for="language in corpus.partitions.values"
                           v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`"
                         />
                       </template>
-                      <span class="badge text-bg-primary me-1 tooltips" title="Word count"
+                      <span class="badge text-bg-primary me-1 tooltips" :title="$t('common-word-count')"
                       >{{
                         nFormatter(
                           calculateSum(Object.values(corpus.token_counts))
@@ -144,14 +144,14 @@
                       }}</span>
                       <span
                         class="badge text-bg-primary me-1 tooltips"
-                        :title="`Revision: ${corpus.meta.revision}`"
+                        :title="`${$t('common-revision')}: ${corpus.meta.revision}`"
                         v-if="corpus.meta.revision"
                       >{{ corpus.meta.revision }}</span>
                     </p>
                   </div>
                   <div
                     class="details-button icon-1 tooltips"
-                    title="Query corpus"
+                    :title="$t('common-query-corpus')"
                     v-if="hasAccessToCorpus(corpus, userData)"
                     @click.stop="openQueryWithCorpus(corpus)"
                   >
@@ -159,14 +159,14 @@
                   </div>
                   <div
                     class="details-button icon-1 tooltips disabled"
-                    title="You currently don't have permissions to query this corpus. Please see the corpus description to learn how to gain access."
+                    :title="$t('platform-general-no-permission')"
                     v-else-if="userData.user.displayName"
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
                   </div>
                   <div
                     class="details-button icon-1 tooltips disabled"
-                    title="Access to this corpus is restricted. We need you to log in to evaluate your permissions."
+                    :title="$t('platform-general-access-restricted')"
                     v-else
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
@@ -176,7 +176,7 @@
                     <span
                       v-if="project.isAdmin"
                       class="tooltips icon-x"
-                      title="Corpus edit"
+                      :title="$t('platform-general-corpus-edit')"
                       @click.stop="openCorpusEdit(corpus)"
                     >
                       <FontAwesomeIcon :icon="['fas', 'gear']" />
@@ -185,7 +185,7 @@
                       :href="corpusStore.getLicenseByTag(corpus.meta.license)"
                       class="tooltips icon-x"
                       target="_blank"
-                      :title="`Corpus licence: User defined - Check details`"
+                      :title="$t('platform-general-user-license')"
                       v-if="corpus.meta.license == 'user-defined'"
                     >
                       <FontAwesomeIcon :icon="['fas', 'certificate']" />
@@ -195,19 +195,19 @@
                       target="_blank"
                       class="tooltips icon-x"
                       v-else-if="corpus.meta.license"
-                      :title="`Corpus licence: ${corpus.meta.license}`"
+                      :title="`${$t('platform-general-corpus-license')}: ${corpus.meta.license}`"
                     >
                       <FontAwesomeIcon :icon="['fas', 'certificate']" />
                     </a>
-                    <span class="tooltips icon-x" title="Corpus details" @click.stop="openCorpusDetailsModal(corpus)">
+                    <span class="tooltips icon-x" :title="$t('platform-general-corpus-details')" @click.stop="openCorpusDetailsModal(corpus)">
                       <FontAwesomeIcon :icon="['fas', 'circle-info']" />
                     </span>
-                    <a class="tooltips icon-x" :href="getURLWithProtocol(corpus.meta.url)" title="Corpus origin"
+                    <a class="tooltips icon-x" :href="getURLWithProtocol(corpus.meta.url)" :title="$t('platform-general-corpus-origin')"
                       :disabled="!corpus.meta.url" target="_blank" @click.stop>
                       <FontAwesomeIcon :icon="['fas', 'link']" />
                     </a>
                   </div>
-                  <div class="details-data-type icon-3 tooltips" title="Data type" v-if="appType == 'lcp'">
+                  <div class="details-data-type icon-3 tooltips" :title="$t('platform-general-data-type')" v-if="appType == 'lcp'">
                     <FontAwesomeIcon :icon="['fas', 'music']" v-if="corpusDataType(corpus) == 'audio'" />
                     <FontAwesomeIcon :icon="['fas', 'video']" v-else-if="corpusDataType(corpus) == 'video'" />
                     <FontAwesomeIcon :icon="['fas', 'font']" v-else />
@@ -226,7 +226,7 @@
       <div class="modal-dialog modal-lg">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="newProjectModalLabel">New Group</h5>
+            <h5 class="modal-title" id="newProjectModalLabel">{{ $t('modal-project-new') }}</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start">
@@ -234,11 +234,11 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              Close
+              {{ $t('common-close') }}
             </button>
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="saveModalProject"
               :disabled="!allowProjectModalSave">
-              Save
+              {{ $t('common-save') }}
             </button>
           </div>
         </div>
@@ -251,7 +251,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="corpusDetailsModalLabel">
-              Corpus details
+              {{ $t('platform-general-corpus-details') }}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
@@ -293,7 +293,7 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -306,7 +306,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="corpusEditModalLabel">
-              Corpus settings
+              {{ $t('platform-general-corpus-settings') }}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
@@ -315,10 +315,10 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="saveModalCorpus">
-              Save
+              {{ $t('common-save') }}
             </button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -331,7 +331,7 @@
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="projectEditModalLabel">
-              <b v-if="currentProject">{{ currentProject.title }}</b> group settings
+              <b v-if="currentProject">{{ currentProject.title }}</b> {{ $t('common-group-settings').toLowerCase() }}
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
@@ -340,10 +340,10 @@
           </div>
           <div class="modal-footer">
             <button type="button" class="btn btn-primary" data-bs-dismiss="modal" @click="saveModalEditProject" :disabled="!allowProjectModalSave">
-              Save
+              {{ $t('common-save') }}
             </button>
             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>

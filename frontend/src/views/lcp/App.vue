@@ -2,7 +2,7 @@
   <div id="app-content">
     <nav class="navbar navbar-expand-lg bg-liri mb-3 fixed-top">
       <div class="container">
-        <a class="navbar-brand" href="/">LCP</a>
+        <a class="navbar-brand" href="/">{{ $t('platform-general-short') }}</a>
         <button
           class="navbar-toggler"
           type="button"
@@ -19,7 +19,7 @@
             <li class="nav-item">
               <router-link class="nav-link" to="/">
                 <FontAwesomeIcon :icon="['fas', 'house']" class="me-1" />
-                Home
+                {{ $t('menu-home') }}
               </router-link>
             </li>
             <li class="nav-item">
@@ -28,7 +28,7 @@
                   :icon="['fas', 'magnifying-glass']"
                   class="me-1"
                 />
-                Query
+                {{ $t('menu-query') }}
               </router-link>
             </li>
             <li class="nav-item">
@@ -37,7 +37,7 @@
                   :icon="['fas', 'video']"
                   class="me-1"
                 />
-                Viewer
+                {{ $t('menu-viewer') }}
               </router-link>
             </li>
             <li class="nav-item">
@@ -46,7 +46,7 @@
                   :icon="['fas', 'circle-question']"
                   class="me-1"
                 />
-                Manual
+                {{ $t('menu-manual') }}
               </a>
             </li>
             <!-- <li class="nav-item">
@@ -66,6 +66,11 @@
             </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
+            <li>
+              <multiselect v-model="language" @select="changeLanguage" :options="[{name: 'English', value: 'en'},{name: 'Italiano', value:'it'}]" track-by="name" label="name" :searchable="false" :close-on-select="true" :show-labels="false" :allow-empty="false"
+                 placeholder="English" aria-label="Select a language">
+                </multiselect>
+            </li>
             <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
@@ -78,12 +83,12 @@
                 href="/Shibboleth.sso/Logout"
               >
                 <FontAwesomeIcon :icon="['fas', 'power-off']" class="me-1" />
-                Logout
+                {{ $t('common-logout') }}
                 <small>({{ userData.user.displayName }})</small>
               </a>
               <a class="nav-link" href="/login" v-else>
                 <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
-                Login
+                {{ $t('common-login') }}
               </a>
             </li>
           </ul>
@@ -103,6 +108,7 @@ import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
+import { changeLocale } from "@/fluent";
 
 import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
@@ -115,6 +121,7 @@ export default {
     console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
+      language: {name: "English", value: 'en'}
     }
   },
   mounted() {
@@ -129,6 +136,10 @@ export default {
     addActionClass(e) {
       e.currentTarget.querySelector(".nav-link").classList.add("active");
     },
+    changeLanguage(selectedOption){
+      const newLocale = selectedOption.value;
+      changeLocale(newLocale);
+    }
   },
   components: {
     LoadingView,
