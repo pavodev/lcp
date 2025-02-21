@@ -103,7 +103,7 @@
               :data-bs-target="`#detailsModal${randInt}`"
               @click="showModal(resultIndex)"
             >
-              {{ $t('details') }}
+              {{ $t('common-details') }}
             </button>
           </td>
           <td :class="['audioplayer','audioplayer-'+resultIndex, playIndex == resultIndex ? 'visible' : '']"></td>
