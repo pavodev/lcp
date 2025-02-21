@@ -139,7 +139,7 @@ export default {
     },
     changeLanguage(selectedOption){
       changeLocale(selectedOption);
-      this.$router.go();
+      this.$router.push('/');
     }
   },
   components: {
