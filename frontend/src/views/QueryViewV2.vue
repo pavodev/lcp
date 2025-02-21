@@ -117,7 +117,7 @@
                     :disabled="isSubmitDisabled()"
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                    {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
+                    {{ loading == "resubmit" ? $t('common-resubmit') : $t('common-submit') }}
                   </button>
 
                   <button
