@@ -143,7 +143,7 @@ export default {
       // This is necessary in order to correctly load the language bundle
       if (this.$route.path === '/') {
         // Reload the page if already on the homepage
-        window.location.reload();
+        this.$router.go();
       } else {
         // Otherwise, navigate to the homepage
         this.$router.push('/');
