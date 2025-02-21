@@ -19,8 +19,6 @@ import { fluent } from "./fluent";
 
 const pinia = createPinia();
 
-console.log(fluent);
-
 createApp(App)
   .provide('$fluent', fluent)
   .use(fluent)

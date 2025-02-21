@@ -5,7 +5,7 @@
         <div class="col-8">
           <Title :title="$t('platform-general')" />
           <p>
-            {{ $t('plaftorm-general-description') }}
+            {{ $t('platform-general-description') }}
           </p>
         </div>
         <div class="col mt-1 text-end" v-if="userData && userData.user && userData.user.displayName">

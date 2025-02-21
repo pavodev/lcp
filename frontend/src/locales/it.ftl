@@ -8,7 +8,7 @@ platform-catchphrase = catchphrase
 platform-soundscript = soundscript
 platform-videoscope = videoscope
 
-plaftorm-general-description = 
+platform-general-description = 
  La LiRI Corpus Platform (LCP) è un sistema software per gestire e interrogare corpora di vario tipo. Gli utenti possono interrogare i corpora direttamente dal loro browser e caricare i propri corpora utilizzando un'interfaccia a riga di comando.
 platform-general-no-permission = Attualmente non hai i permessi per interrogare questo corpus. Consulta la descrizione del corpus per sapere come ottenere l'accesso.
 platform-general-access-restricted = L'accesso a questo corpus è ristretto. Devi effettuare il login per verificare i tuoi permessi.

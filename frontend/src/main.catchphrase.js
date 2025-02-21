@@ -15,10 +15,12 @@ import "bootstrap/dist/css/bootstrap.min.css";
 import "bootstrap";
 import "@/assets/style.css";
 import "@/assets/multiselect.css";
+import { fluent } from "./fluent";
 
 const pinia = createPinia();
 
 createApp(App)
+  .use(fluent)
   .use(
     VueNativeSock,
     config.wsUrl,

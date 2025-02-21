@@ -67,7 +67,7 @@
           </ul>
           <ul class="navbar-nav ms-auto">
             <li>
-              <multiselect v-model="language" @select="changeLanguage" :options="[{name: 'English', value: 'en'},{name: 'Italiano', value:'it'}]" track-by="name" label="name" :searchable="false" :close-on-select="true" :show-labels="false" :allow-empty="false"
+              <multiselect v-model="language" @select="changeLanguage" :options="languageOptions" track-by="name" label="name" :searchable="false" :close-on-select="true" :show-labels="false" :allow-empty="false"
                  placeholder="English" aria-label="Select a language">
                 </multiselect>
             </li>
@@ -108,7 +108,7 @@ import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
-import { changeLocale } from "@/fluent";
+import { changeLocale, getUserLocale, availableLanguages } from "@/fluent";
 
 import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
@@ -121,7 +121,8 @@ export default {
     console.log("Application version:", process.env.GIT_HASH)
     return {
       appVersion: process.env.GIT_HASH,
-      language: {name: "English", value: 'en'}
+      language: getUserLocale(),
+      languageOptions: availableLanguages,
     }
   },
   mounted() {
@@ -137,8 +138,8 @@ export default {
       e.currentTarget.querySelector(".nav-link").classList.add("active");
     },
     changeLanguage(selectedOption){
-      const newLocale = selectedOption.value;
-      changeLocale(newLocale);
+      changeLocale(selectedOption);
+      this.$router.go();
     }
   },
   components: {

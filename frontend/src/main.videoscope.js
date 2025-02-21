@@ -16,10 +16,11 @@ import "bootstrap";
 import "@/assets/style.css";
 import "@/assets/multiselect.css";
 import "@/assets/datepicker.css";
+import { fluent } from "./fluent";
 
 const pinia = createPinia();
 
-createApp(App).use(
+createApp(App).use(fluent).use(
   VueNativeSock, config.wsUrl, {
     reconnection: true,
     reconnectionAttempts: 5,
