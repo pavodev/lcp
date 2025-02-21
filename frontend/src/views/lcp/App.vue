@@ -139,7 +139,15 @@ export default {
     },
     changeLanguage(selectedOption){
       changeLocale(selectedOption);
-      this.$router.push('/');
+
+      // This is necessary in order to correctly load the language bundle
+      if (this.$route.path === '/') {
+        // Reload the page if already on the homepage
+        window.location.reload();
+      } else {
+        // Otherwise, navigate to the homepage
+        this.$router.push('/');
+      }
     }
   },
   components: {
