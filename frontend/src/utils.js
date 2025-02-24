@@ -168,7 +168,7 @@ const Utils = {
         appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
       }
       else {
-        appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
+        appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
       }
       return appLink
     },

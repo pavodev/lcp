@@ -46,15 +46,6 @@
                 Query Test
               </router-link>
             </li> -->
-            <!-- <li class="nav-item">
-              <router-link class="nav-link" to="/player">
-                <FontAwesomeIcon
-                  :icon="['fas', 'video']"
-                  class="me-1"
-                />
-                Player
-              </router-link>
-            </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
             <li class="nav-item" v-if="debug">
