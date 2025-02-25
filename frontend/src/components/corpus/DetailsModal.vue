@@ -148,13 +148,9 @@
       getURLWithProtocol: Utils.getURLWithProtocol,
       hasAccessToCorpus: Utils.hasAccessToCorpus,
       calculateSum: Utils.calculateSum,
-      openQueryWithCorpus(corpus, type) {
+      openQueryWithCorpus(corpus) {
         if (this.hasAccessToCorpus(corpus, this.userData)) {
-          if (type == "videoscope") {
-            router.push(`/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
-          } else {
-            router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
-          }
+          router.push(`/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`);
         }
       },
     },

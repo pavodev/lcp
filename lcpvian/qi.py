@@ -48,8 +48,8 @@ from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
-from .typed import Batch, JSONObject, Query, Results
-from .utils import _determine_language, push_msg, _meta_query
+from .typed import Batch, JSONObject, Query, QueryArgs, Results
+from .utils import _determine_language, push_msg, _meta_query, hasher
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 DEFAULT_MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
@@ -276,6 +276,14 @@ class QueryIteration:
                             break
         self.word_count = total
         return None
+
+    def get_query_args(self) -> QueryArgs:
+        query_args_keys = QueryArgs.__required_keys__.union(QueryArgs.__optional_keys__)
+        qi_args = QueryArgs(
+            **{k: getattr(self, k) for k in query_args_keys if k != "hash"}  # type: ignore
+        )
+        qi_args["hash"] = hasher(self.sql)
+        return qi_args
 
     async def submit_query(self) -> tuple[Job, bool | None]:
         """

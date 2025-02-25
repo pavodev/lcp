@@ -46,21 +46,17 @@
                 Query Test
               </router-link>
             </li> -->
-            <!-- <li class="nav-item">
-              <router-link class="nav-link" to="/player">
-                <FontAwesomeIcon
-                  :icon="['fas', 'video']"
-                  class="me-1"
-                />
-                Player
-              </router-link>
-            </li> -->
           </ul>
           <ul class="navbar-nav ms-auto">
             <li class="nav-item" v-if="debug">
               <span class="nav-link version-number">
                 #{{ appVersion }}
               </span>
+            </li>
+            <li class="nav-item export">
+              <!-- <FontAwesomeIcon :icon="['fas', 'gauge']" class="me-2" /> -->
+               <a class="nav-link">(XP)</a>
+              <ExportView />
             </li>
             <li class="nav-item">
               <a :href="appLinks['lcphome']" target="_blank" class="nav-link">
@@ -101,6 +97,7 @@ import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
 
+import ExportView from "@/components/ExportView.vue";
 import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
 import NotificationView from "@/components/NotificationView.vue";
@@ -128,6 +125,7 @@ export default {
     },
   },
   components: {
+    ExportView,
     LoadingView,
     NotificationView,
     FooterView,
@@ -151,5 +149,8 @@ export default {
   font-size: 80% !important;
   opacity: 0.75;
   margin-top: 2px;
+}
+.export:hover #exportMonitor {
+  display: flex !important;
 }
 </style>

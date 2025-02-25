@@ -222,11 +222,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/create", "POST", make_schema),
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
-        (
-            "/download_export/{hash}/{format}/{offset}/{total_results_requested}",
-            "GET",
-            download_export,
-        ),
+        ("/download_export", "GET", download_export),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),
@@ -296,16 +292,6 @@ async def create_app(test: bool = False) -> web.Application:
                 health_check_interval=10,
                 retry_on_error=[ConnectionError],
                 retry=retry_policy,
-            ),
-        )
-        app.addkey(
-            "ashared_aredis",
-            aioredis.Redis,
-            aioredis.Redis.from_url(
-                shared_redis_url,
-                health_check_interval=10,
-                retry_on_error=[ConnectionError],
-                retry=async_retry_policy,
             ),
         )
 

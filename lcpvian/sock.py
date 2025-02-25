@@ -310,6 +310,24 @@ async def _handle_message(
     if action == "set_config":
         return await _set_config(payload, app)
 
+    if action == "export_notifs":
+        room = ""
+        for rid, users in app["websockets"].items():
+            for _, uid in users:
+                if uid != user:
+                    continue
+                room = rid
+                break
+        if room:
+            await push_msg(
+                app["websockets"],
+                room,
+                payload,
+                skip=None,
+                just=(room, user),
+            )
+        return
+
     # handle the final stage of a corpus being uploaded.
     # - add the corpus to config
     # - if corpus was uploaded via gui mode, send a ws message

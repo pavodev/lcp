@@ -1,13 +1,9 @@
 import json
 import logging
 import os
-import pandas
 import shutil
 import traceback
 
-import duckdb
-
-from asyncpg import Range
 from typing import Any, cast
 
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,7 +12,6 @@ from sqlalchemy.sql import text
 from rq.connections import get_current_connection
 from rq.job import get_current_job, Job
 
-from .configure import CorpusTemplate
 from .impo import Importer
 from .project import refresh_config
 from .typed import DBQueryParams, JSONObject, MainCorpus, Sentence, UserQuery
@@ -71,6 +66,48 @@ async def _upload_data(
     return row
 
 
+async def _handle_export(
+    query_hash: str,
+    format: str,
+    create: bool = True,
+    user: str = "",
+    offset: int = 0,
+    requested: int = 0,
+    **kwargs: int | str | None,
+) -> None:
+    """
+    To be run by rq worker, create/update entry in main.exports table
+    """
+
+    export_query: str
+    export_params = {
+        "query_hash": query_hash,
+        "format": format,
+        "offset": offset,
+        "requested": requested,
+        "user_id": user,
+    }
+    if create:
+        export_query = "CALL main.init_export('{query_hash}', '{format}', {offset}, {requested}, '{user_id}', FALSE);"
+    else:
+        export_query = "CALL main.finish_export('{query_hash}', '{format}', {offset}, {requested}, {delivered});"
+        export_params.pop("user_id", "")
+        export_params["delivered"] = kwargs.get("delivered", 0)
+
+    query = export_query.format(**export_params)
+
+    async with get_current_job()._pool.begin() as conn:  # type: ignore
+        raw = await conn.get_raw_connection()
+        con = raw._connection
+        async with con.transaction():
+            try:
+                print("Handling export...\n", query)
+                await con.execute(query)
+            except Exception as err:
+                print("Error when handling export", err)
+    return None
+
+
 async def _create_schema(
     create: str,
     schema_name: str,
@@ -91,20 +128,10 @@ async def _create_schema(
         con = raw._connection
         async with con.transaction():
             try:
-                # Move this to the end of a successful upload pipeline instead
-                # if drops:
-                #     msg = f"Attempting schema drop (create) * {len(drops)-1}"
-                #     create = "\n".join(drops) + "\n" + create
                 print("Creating schema...\n", create)
                 await con.execute(create)
             except Exception as err:
                 print("Error when creating the schema", err)
-                pass  # All is handled as one transaction now in open_import
-                # script = f'DROP SCHEMA IF EXISTS "{schema_name}" CASCADE;'
-                # extra.pop("drops")
-                # msg = f"Attempting schema drop (create): {schema_name}"
-                # logging.info(msg, extra=extra)
-                # await con.execute(script)
     return None
 
 

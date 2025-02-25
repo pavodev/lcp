@@ -7,6 +7,7 @@ from typing import Any, cast
 from .callbacks import _export_complete, _general_failure
 from .exporter import Exporter
 from .exporter_xml import ExporterXml
+from .jobfuncs import _handle_export
 from .swissdox import export_swissdox
 from .typed import JSONObject
 from .utils import (
@@ -40,7 +41,7 @@ async def exporter(
     total_requested = kwargs.get("total_results_requested", 200)
     offset = kwargs.get("offset", 0)
     full = kwargs.get("full", False)
-    await exp_class(
+    exp_instance = exp_class(
         hash,
         connection,
         config,
@@ -48,7 +49,17 @@ async def exporter(
         total_results_requested=total_requested,
         offset=offset,
         full=full,
-    ).export()
+    )
+    await exp_instance.export()
+    await _handle_export(
+        hash,
+        format,
+        create=False,
+        user=kwargs.get("user", ""),
+        offset=exp_instance._offset,
+        requested=exp_instance._total_results_requested,
+        delivered=exp_instance.n_results,
+    )
 
 
 async def export(app: web.Application, payload: JSONObject, first_job_id: str) -> Job:
@@ -57,17 +68,32 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     Called in sock.py after the last batch was queried
     """
     export_format = cast(str, payload.get("format", ""))
-    room = payload.get("room", "")
-    user = payload.get("user", "")
+    room = cast(str, payload.get("room", ""))
+    user = cast(str, payload.get("user", ""))
+    offset = payload.get("offset", 0)
+    requested = payload.get("total_results_requested", 0)
+
     print("Ready to start exporting")
     corpus_conf = payload.get("config", {})
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
     first_job = Job.fetch(first_job_id, connection=app["redis"])
+    hash: str = first_job.id
+
+    init_export_job = app["internal"].enqueue(
+        _handle_export,
+        on_failure=Callback(_general_failure, EXPORT_TTL),
+        result_ttl=EXPORT_TTL,
+        job_timeout=EXPORT_TTL,
+        args=(hash, export_format, True, user, offset, requested),
+    )
+
     depends_on = [
         jid
         for ks in ("_sent_jobs", "_meta_jobs")
         for jid in first_job.meta.get(ks, {}).keys()
     ]
+    depends_on.append(init_export_job.id)
+
     job: Job
     if export_format == "swissdox":
         batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
@@ -98,7 +124,6 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
         if depends_on:
             print("Scheduled dump export depending on", depends_on)
             rest = {"depends_on": depends_on}
-        hash: str = first_job.id
         partition: str = ""
         languages: list[str] = cast(dict, first_job.kwargs).get("languages", [])
         partitions: dict = cast(dict, payload["config"]).get("partitions", {})
@@ -119,14 +144,14 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             **rest,
         )
 
-    room = cast(str, payload.get("room", ""))
-    user = cast(str, payload.get("user", ""))
     export_msg: JSONObject = cast(
         JSONObject,
         {
             "room": room,
             "user": user,
             "action": "started_export",
+            "format": export_format,
+            "hash": hash,
             "job_id": str(job.id),
         },
     )
@@ -143,11 +168,11 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 async def download_export(request: web.Request) -> web.FileResponse:
     filepath = ""
-    hash = request.match_info["hash"]
-    format = request.match_info["format"]
-    offset = request.match_info["offset"]
-    requested = request.match_info["total_results_requested"]
-    full = cast(bool, request.match_info.get("full", False))
+    hash = request.rel_url.query["hash"]
+    format = request.rel_url.query["format"]
+    offset = request.rel_url.query.get("offset", "0")
+    requested = request.rel_url.query.get("requested", "0")
+    full = cast(bool, request.rel_url.query.get("full", False))
     if format == "swissdox":
         results_path = str(os.environ.get("RESULTS_PATH", "results"))
         filepath = os.path.join(results_path, hash, offset, "swissdox.db")
@@ -157,6 +182,7 @@ async def download_export(request: web.Request) -> web.FileResponse:
             hash, cast(int, offset), cast(int, requested), full
         )
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
+    # TODO: check user access to file
     content_disposition = f'attachment; filename="{os.path.basename(filepath)}"'
     headers = {
         "content-disposition": content_disposition,

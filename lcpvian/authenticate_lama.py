@@ -76,6 +76,12 @@ class Lama(Authentication):
             sub = subs.get("subscriptions", [])
             for s in sub:
                 ids.add(s["id"])
+                # Hack to support responses from both user_details and check_api_key
+                for p in s.get("profiles", []):
+                    if "id" not in p:
+                        continue
+                    ids.add(cast(dict, p)["id"])
+
             for proj in cast(list[dict[str, Any]], user_data.get("publicProfiles", [])):
                 ids.add(proj["id"])
 
