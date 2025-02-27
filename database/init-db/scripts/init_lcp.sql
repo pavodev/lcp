@@ -52,6 +52,7 @@ CREATE TYPE main.export_status AS ENUM (
 
 CREATE TABLE main.exports (
    query_hash        text                 NOT NULL
+ , corpus_id         int                  NOT NULL
  , status            main.export_status   NOT NULL
  , message           text
  , user_id           text
@@ -59,11 +60,12 @@ CREATE TABLE main.exports (
  , n_offset          int                  NOT NULL
  , requested         int                  NOT NULL
  , delivered         int                  NOT NULL
+ , fn                text                 NOT NULL
  , created_at        timestamptz          NOT NULL DEFAULT now()
  , modified_at       timestamptz          NOT NULL DEFAULT now()
 );
-CREATE INDEX ON main.exports user_id;
-CREATE INDEX ON main.exports query_hash;
+CREATE INDEX ON main.exports (user_id);
+CREATE INDEX ON main.exports (query_hash);
 
 -- global ENUM types
 CREATE TYPE main.udep AS ENUM (

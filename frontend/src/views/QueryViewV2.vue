@@ -1526,7 +1526,7 @@ export default {
         } else if (data["action"] === "store_query") {
           console.log("query stored", data);
           return;
-        } else if (data["action"] == "export_link") {
+        } else if (data["action"] == "export_complete") {
           this.loading = false;
           this.percentageDone = this.WSDataResults.percentage_done;
           const info = {

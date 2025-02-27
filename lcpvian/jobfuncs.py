@@ -70,7 +70,6 @@ async def _handle_export(
     query_hash: str,
     format: str,
     create: bool = True,
-    user: str = "",
     offset: int = 0,
     requested: int = 0,
     **kwargs: int | str | None,
@@ -78,18 +77,21 @@ async def _handle_export(
     """
     To be run by rq worker, create/update entry in main.exports table
     """
-
     export_query: str
     export_params = {
         "query_hash": query_hash,
         "format": format,
         "offset": offset,
         "requested": requested,
-        "user_id": user,
     }
     if create:
-        export_query = "CALL main.init_export('{query_hash}', '{format}', {offset}, {requested}, '{user_id}', FALSE);"
+        export_params["user_id"] = kwargs.get("user_id", "")
+        export_params["userpath"] = kwargs.get("userpath", "export")
+        export_params["corpus_id"] = kwargs.get("corpus_id", 0)
+        export_query = "CALL main.init_export('{query_hash}', '{format}', {offset}, {requested}, '{user_id}', FALSE, '{userpath}', {corpus_id});"
     else:
+        # if path := kwargs.get("path"):
+        #     RESULTS_DIR = os.getenv("RESULTS_USERS", os.path.join("results","users/"))
         export_query = "CALL main.finish_export('{query_hash}', '{format}', {offset}, {requested}, {delivered});"
         export_params.pop("user_id", "")
         export_params["delivered"] = kwargs.get("delivered", 0)

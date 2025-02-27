@@ -41,13 +41,25 @@ export default {
       if (data["action"] == "started_export") {
         this.notifs = [{when: nowStr, msg: `Started exporting to ${data.format}`}, ...this.notifs];
       }
-      if (data["action"] == "export_link") {
+      if (data["action"] == "export_complete") {
         this.notifs = [{when: nowStr, msg: `Downloading ${data.format} export file`}, ...this.notifs];
       }
       if (data["action"] == "export_notifs") {
         const _notifs = [];
-        // eslint-disable-next-line no-unused-vars
-        for (let [hash, status, msg, uid, format, offset, requested, delivered, created_at, modified_at] of data.exports) {
+        for (let [
+          hash,
+          corpus_id, // eslint-disable-line no-unused-vars
+          status,
+          msg, // eslint-disable-line no-unused-vars
+          uid, // eslint-disable-line no-unused-vars
+          format,
+          offset,
+          requested,
+          delivered,
+          filename,
+          created_at, // eslint-disable-line no-unused-vars
+          modified_at
+        ] of data.exports) {
           const d = new Date(modified_at).toLocaleString();
           const info = {
             hash: hash,
@@ -57,7 +69,7 @@ export default {
             delivered: delivered,
             status: status
           };
-          const obj = {when: d, msg: `Exported to ${format}`, dl_info: info};
+          const obj = {when: d, msg: `Exported ${filename}`, dl_info: info};
           const json_obj = JSON.stringify(obj);
           if (_notifs.map(n=>JSON.stringify(n)).includes(json_obj))
             continue

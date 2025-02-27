@@ -7,6 +7,8 @@ CREATE OR REPLACE PROCEDURE main.init_export(
  , requested         int
  , user_id           text
  , need_querying     bool
+ , fn                text
+ , corpus_id         int
 )
 AS $$
    DECLARE
@@ -22,8 +24,9 @@ AS $$
            ;
 
       INSERT
-        INTO main.exports (query_hash, status, message, user_id, format, n_offset, requested, delivered)
+        INTO main.exports (query_hash, corpus_id, status, message, user_id, format, n_offset, requested, delivered, fn)
       SELECT $1
+           , $8
            , stat::main.export_status 
            , ''
            , $5
@@ -31,6 +34,7 @@ AS $$
            , $3
            , $4
            , 0
+           , $7
            ;
 
    END;
