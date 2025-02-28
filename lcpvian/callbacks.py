@@ -10,7 +10,6 @@ These callbacks are hooked up as on_success and on_failure kwargs in
 calls to Queue.enqueue in query_service.py
 """
 
-import datetime
 import duckdb
 import json
 import os
@@ -18,6 +17,7 @@ import pandas
 import shutil
 import traceback
 
+from datetime import datetime
 from types import TracebackType
 from typing import Any, Unpack, cast
 from uuid import uuid4
@@ -709,11 +709,10 @@ def _swissdox_to_db_file(
     j_kwargs = cast(dict, job.kwargs)
     hash = j_kwargs.get("hash", "swissdox")
     swissdox_dir = os.environ.get("RESULTS_SWISSDOX", "results/swissdox")
-    dest = os.path.join(
-        swissdox_dir,
-        "exports",
-        f"{hash}.db",
-    )
+    export_dir = os.path.join(swissdox_dir, "exports")
+    if not os.path.exists(export_dir):
+        os.makedirs(export_dir)
+    dest = os.path.join(export_dir, f"{hash}.db")
     if os.path.exists(dest):
         os.remove(dest)
 
