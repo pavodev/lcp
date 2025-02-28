@@ -10,7 +10,7 @@
         <div class="col-4">
           <div class="form-group row">
             <label for="staticEmail" class="col-sm-3 col-form-label">
-              Corpora
+              {{ $t('common-corpora') }}
               <!-- <div
                 v-if="selectedCorpora && selectedCorpora.corpus"
                 class="details-button icon-3 tooltips corpus-structure-button"
@@ -32,7 +32,7 @@
             </div>
           </div>
           <div class="form-group row mt-1" v-if="selectedCorpora && availableLanguages.length > 1">
-            <label for="staticEmail" class="col-sm-3 col-form-label">Languages</label>
+            <label for="staticEmail" class="col-sm-3 col-form-label">{{ $t('common-languages') }}</label>
             <div class="col-sm-9">
               <multiselect
                 v-model="selectedLanguages"
@@ -65,7 +65,7 @@
                   aria-selected="true"
                   @click="activeMainTab = 'query'"
                 >
-                  Query
+                  {{ $t('common-query') }}
                 </button>
                 <button
                   class="nav-link"
@@ -79,7 +79,7 @@
                   aria-selected="false"
                   @click="activeMainTab = 'data'"
                 >
-                  Data
+                  {{ $t('common-data') }}
                   <div class="lds-ripple lds-white lds-xs" v-if="loading">
                     <div></div>
                     <div></div>
@@ -117,7 +117,7 @@
                     :disabled="isSubmitDisabled()"
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                    {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
+                    {{ loading == "resubmit" ? $t('common-resubmit') : $t('common-submit') }}
                   </button>
 
                   <button
@@ -128,7 +128,7 @@
                     data-bs-target="#exportModal"
                   >
                     <FontAwesomeIcon :icon="['fas', 'file-export']" />
-                    Export
+                    {{ $t('common-export') }}
                   </button>
 
                   <button
@@ -138,7 +138,7 @@
                     class="btn btn-primary me-1 mb-1"
                   >
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                    Search whole corpus
+                    {{ $t('common-search-whole') }}
                   </button>
                   <button
                     v-else-if="loading"
@@ -148,7 +148,7 @@
                     class="btn btn-primary me-1 mb-1"
                   >
                     <FontAwesomeIcon :icon="['fas', 'xmark']" />
-                    Stop
+                    {{ $t('common-stop') }}
                   </button>
                 </div>
 
@@ -168,7 +168,7 @@
                             aria-selected="false"
                             @click="currentTab = 'text'"
                           >
-                            Text
+                            {{ $t('common-stop') }}
                           </button>
                           <button
                             class="nav-link active"
@@ -381,7 +381,7 @@
                 <hr>
                 <div class="mt-5 row" v-if="querySubmitted">
                   <div class="col-6">
-                    <h6 class="mb-2">Query result</h6>
+                    <h6 class="mb-2">{{ $t('common-query-result') }}</h6>
                     <div class="progress mb-2">
                       <div
                         class="progress-bar"
@@ -399,7 +399,7 @@
                     </div>
                   </div>
                   <div class="col-6">
-                    <h6 class="mb-2">Total progress</h6>
+                    <h6 class="mb-2">{{ $t('common-total-progress') }}</h6>
                     <div class="progress mb-2">
                       <div
                         class="progress-bar"
@@ -420,7 +420,7 @@
                     <div class="row mb-4">
                       <div class="col">
                         <p class="mb-1">
-                          Number of results:
+                          {{ $t('common-number-results') }}:
                           <span
                             class="text-bold"
                             v-html="WSDataResults.total_results_so_far"
@@ -429,7 +429,7 @@
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Projected results:
+                          {{ $t('common-projected-results') }}:
                           <span
                             class="text-bold"
                             v-html="WSDataResults.projected_results"
@@ -438,7 +438,7 @@
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Batch done:
+                          {{ $t('common-batch-done') }}:
                           <span
                             class="text-bold"
                             v-html="WSDataResults.batches_done"
@@ -447,7 +447,7 @@
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Status:
+                          {{ $t('common-status') }}:
                           <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
                           <span class="text-bold" v-html="queryStatus"></span>
                         </p>
@@ -472,13 +472,11 @@
                   <div class="tooltip-arrow" style="position: absolute; left: 50%"></div>
                   <div class="tooltip-inner">
                     <div>
-                      The first pages of results have been fetched. More results will be
-                      fetched if you move to the next page or if you hit Search whole
-                      corpus.
+                      {{ $t('platform-general-fetched-results') }}
                     </div>
                     <div style="margin-top: 0.5em">
                       <input type="checkbox" id="dontShowResultsNotif" />
-                      <label for="dontShowResultsNotif">Don't show this again</label>
+                      <label for="dontShowResultsNotif">{{ $t('common-dont-show-again') }}</label>
                       <button
                         @click="dismissResultsNotification"
                         style="
@@ -489,7 +487,7 @@
                           background-color: transparent;
                         "
                       >
-                        OK
+                        {{ $t('common-ok').toUpperCase() }}
                       </button>
                     </div>
                   </div>
@@ -501,10 +499,10 @@
                   class="mb-3 mt-2"
                 >
                   <div v-if="WSDataResults && WSDataResults.total_results_so_far == 0">
-                    No results found!
+                    {{ $t('common-no-results') }}!
                   </div>
                   <div>
-                    Loading results...
+                    {{ $t('common-loading-results') }}...
                   </div>
                 </div>
                 <div class="mt-2">
@@ -592,7 +590,7 @@
                                 "
                               >
                                 <FontAwesomeIcon :icon="['fas', 'table']" />
-                                Plain
+                                {{ $t('common-plain') }}
                               </a>
                               <a
                                 v-if="resultContainsSet(resultSet) == false"
@@ -684,7 +682,7 @@
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
-              Download preview
+              {{ $t('common-download-preview') }}
             </button>
             <input
               type="text"
@@ -709,7 +707,7 @@
               class="btn btn-primary me-1"
               data-bs-dismiss="modal"
             >
-              Download preview
+              {{ $t('common-download-preview') }}
             </button>
             <input
               type="text"
