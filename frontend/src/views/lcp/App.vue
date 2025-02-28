@@ -32,15 +32,6 @@
               </router-link>
             </li>
             <li class="nav-item">
-              <router-link class="nav-link" to="/player">
-                <FontAwesomeIcon
-                  :icon="['fas', 'video']"
-                  class="me-1"
-                />
-                Viewer
-              </router-link>
-            </li>
-            <li class="nav-item">
               <a href="https://lcp.linguistik.uzh.ch/manual" target="_blank" class="nav-link">
                 <FontAwesomeIcon
                   :icon="['fas', 'circle-question']"
@@ -53,15 +44,6 @@
               <router-link class="nav-link" to="/query-test">
                 <FontAwesomeIcon :icon="['fas', 'circle-nodes']" class="me-1" />
                 Query Test
-              </router-link>
-            </li> -->
-            <!-- <li class="nav-item">
-              <router-link class="nav-link" to="/player">
-                <FontAwesomeIcon
-                  :icon="['fas', 'video']"
-                  class="me-1"
-                />
-                Player
               </router-link>
             </li> -->
           </ul>

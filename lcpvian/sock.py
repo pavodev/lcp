@@ -224,7 +224,7 @@ async def _handle_message(
         "document",
         "document_ids",
         "started_export",
-        "export_link",
+        "export_complete",
     )
     errors = (
         "failed",
@@ -247,6 +247,10 @@ async def _handle_message(
         if not app["redis"].get(uu):
             app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
+
+    if action == "export_complete":
+        await app["query_service"].get_export_notifs(hash=payload.get("hash", ""))
+        return
 
     if action == "sentences":
         base = "rq:job:"

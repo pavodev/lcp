@@ -101,6 +101,7 @@ class KwicLine:
 
 
 class Exporter:
+    format = "plain"
 
     def __init__(
         self,
@@ -131,17 +132,30 @@ class Exporter:
         self._results_info: list[dict[str, Any]] = []
         self._info: dict[str, Any] = {}
 
+    @classmethod
+    def get_exporter_class(cls, format: str) -> type["Exporter"]:
+        for c in cls.__subclasses__():
+            if getattr(c, "format", "") == format:
+                return c
+        return cls
+
     @staticmethod
     def get_dl_path_from_hash(
         hash: str, offset: int = 0, requested: int = 0, full: bool = False
     ) -> str:
+        filename = "results.tsv"
         hash_folder = os.path.join(RESULTS_DIR, hash)
-        if not os.path.exists(hash_folder):
-            os.mkdir(hash_folder)
-        dump_folder = os.path.join(hash_folder, "plain")
-        if not os.path.exists(dump_folder):
-            os.mkdir(dump_folder)
-        filepath = os.path.join(dump_folder, "results.tsv")
+        xml_folder = os.path.join(hash_folder, "plain")
+        if full:
+            full_folder = os.path.join(xml_folder, "full")
+            if not os.path.exists(full_folder):
+                os.makedirs(full_folder)
+            return os.path.join(full_folder, filename)
+        offset_folder = os.path.join(xml_folder, str(offset))
+        requested_folder = os.path.join(offset_folder, str(requested))
+        if not os.path.exists(requested_folder):
+            os.makedirs(requested_folder)
+        filepath = os.path.join(requested_folder, filename)
         return filepath
 
     @property

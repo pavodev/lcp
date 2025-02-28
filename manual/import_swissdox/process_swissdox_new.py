@@ -1,1 +1,0 @@
-/home/liri-js/ownCloud/LiRI/LCP/Swissdox@LCP/process_swissdox_new.py

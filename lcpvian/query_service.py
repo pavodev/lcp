@@ -581,7 +581,7 @@ class QueryService:
             query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
         elif hash:
             assert ";" not in hash and "'" not in hash
-            query = f"SELECT * FROM main.exports WHERE hash = '{hash}';"
+            query = f"SELECT * FROM main.exports WHERE query_hash = '{hash}';"
 
         job = self.app["internal"].enqueue(
             _db_query,

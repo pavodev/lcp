@@ -1,1 +1,0 @@
-/home/liri-js/ownCloud/LiRI/LCP/Swissdox@LCP/definite_swissdox_import_files/scripts/Swissdox2LCP_langident.py

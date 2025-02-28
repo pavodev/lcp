@@ -25,59 +25,41 @@
 
     <div v-if="currentDocument">
       <div class="container-fluid mt-4 mb-4">
-        <div :class="appType == 'videoscope' ? 'video-box' : 'audio-box'" @click="playerTogglePlay" :data-is-playing="playerIsPlaying">
-          <div class="video-text" v-html="subtext" v-if="appType == 'videoscope'"></div>
-          <div class="video-play-button" v-if="appType == 'videoscope'">
+        <div
+          :class="appType == 'video' ? 'video-box' : 'audio-box'"
+          @click="playerTogglePlay"
+          :data-is-playing="playerIsPlaying"
+        >
+          <div class="video-text" v-html="subtext" v-if="appType == 'video'"></div>
+          <div class="video-play-button" v-if="appType == 'video'">
             <div class="button" :class="playerIsPlaying ? '' : 'play'">
               <span class="s1"></span>
             </div>
           </div>
-          <!-- v-if="appType == 'videoscope'" -->
+          <!-- v-if="appType == 'video'" -->
           <div :class="mainVideo == 1 ? 'active' : ''">
-            <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay" v-if="appType == 'videoscope'">
-              <source
-                :src="baseMediaUrl + currentDocument[2][0]"
-                type="video/mp4"
-              />
+            <video ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay"
+              v-if="appType == 'video'">
+              <source :src="baseMediaUrl + currentDocument[2][0]" type="video/mp4" />
             </video>
-            <audio ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay" v-if="appType == 'soundscript'">
-              <source
-                :src="baseMediaUrl + currentDocument[2][0]"
-                type="audio/mpeg"
-              />
+            <audio ref="videoPlayer1" @timeupdate="timeupdate" @canplay="videoPlayer1CanPlay"
+              v-if="appType == 'audio'">
+              <source :src="baseMediaUrl + currentDocument[2][0]" type="audio/mpeg" />
             </audio>
           </div>
-          <div
-            :class="mainVideo == 2 ? 'active' : ''"
-            v-if="appType == 'videoscope' && currentDocument[2].length > 1"
-          >
+          <div :class="mainVideo == 2 ? 'active' : ''" v-if="appType == 'video' && currentDocument[2].length > 1">
             <video ref="videoPlayer2">
-              <source
-                :src="baseMediaUrl + currentDocument[2][1]"
-                type="video/mp4"
-              />
+              <source :src="baseMediaUrl + currentDocument[2][1]" type="video/mp4" />
             </video>
           </div>
-          <div
-            :class="mainVideo == 3 ? 'active' : ''"
-            v-if="appType == 'videoscope' && currentDocument[2].length > 2"
-          >
+          <div :class="mainVideo == 3 ? 'active' : ''" v-if="appType == 'video' && currentDocument[2].length > 2">
             <video ref="videoPlayer3">
-              <source
-                :src="baseMediaUrl + currentDocument[2][2]"
-                type="video/mp4"
-              />
+              <source :src="baseMediaUrl + currentDocument[2][2]" type="video/mp4" />
             </video>
           </div>
-          <div
-            :class="mainVideo == 4 ? 'active' : ''"
-            v-if="appType == 'videoscope' && currentDocument[2].length > 3"
-          >
+          <div :class="mainVideo == 4 ? 'active' : ''" v-if="appType == 'video' && currentDocument[2].length > 3">
             <video ref="videoPlayer4">
-              <source
-                :src="baseMediaUrl + currentDocument[2][3]"
-                type="video/mp4"
-              />
+              <source :src="baseMediaUrl + currentDocument[2][3]" type="video/mp4" />
             </video>
           </div>
         </div>
@@ -85,30 +67,16 @@
 
       <div class="container-fluid mt-4 mb-4">
         <div class="btn-group" role="group">
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            @click="playerFromStart"
-          >
+          <button type="button" class="btn btn-sm btn-primary" @click="playerFromStart">
             <FontAwesomeIcon :icon="['fas', 'backward-step']" />
           </button>
           <button type="button" class="btn btn-sm btn-primary">
             <FontAwesomeIcon :icon="['fas', 'backward']" />
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary active"
-            @click="playerStop"
-            v-if="playerIsPlaying"
-          >
+          <button type="button" class="btn btn-sm btn-primary active" @click="playerStop" v-if="playerIsPlaying">
             <FontAwesomeIcon :icon="['fas', 'pause']" />
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            @click="playerPlay"
-            v-else
-          >
+          <button type="button" class="btn btn-sm btn-primary" @click="playerPlay" v-else>
             <FontAwesomeIcon :icon="['fas', 'play']" />
           </button>
           <button type="button" class="btn btn-sm btn-primary">
@@ -116,11 +84,7 @@
           </button>
         </div>
         <div class="btn-group ms-1" role="group">
-          <button
-            type="button"
-            class="btn btn-sm btn-primary"
-            @click="playerVolumeMute"
-          >
+          <button type="button" class="btn btn-sm btn-primary" @click="playerVolumeMute">
             <div style="width: 11px; text-align: left">
               <FontAwesomeIcon v-if="volume == 0" :icon="['fas', 'volume-xmark']" />
               <FontAwesomeIcon v-else-if="volume > 0.9" :icon="['fas', 'volume-high']" />
@@ -140,36 +104,20 @@
             />
           </span>
           <span class="btn btn-sm btn-primary" style="width: 37px">
-            <small>{{ parseInt(volume*100, 10) }}</small>
+            <small>{{ parseInt(volume * 100, 10) }}</small>
           </span>
         </div>
         <div class="btn-group ms-1" role="group">
-          <button
-            type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            @click="playerFrameDown(5)"
-          >
+          <button type="button" class="btn btn-sm btn-primary btn-text-icon" @click="playerFrameDown(5)">
             -5
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            @click="playerFrameDown(1)"
-          >
+          <button type="button" class="btn btn-sm btn-primary btn-text-icon" @click="playerFrameDown(1)">
             -1
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            @click="playerFrameUp(1)"
-          >
+          <button type="button" class="btn btn-sm btn-primary btn-text-icon" @click="playerFrameUp(1)">
             +1
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-primary btn-text-icon"
-            @click="playerFrameUp(5)"
-          >
+          <button type="button" class="btn btn-sm btn-primary btn-text-icon" @click="playerFrameUp(5)">
             +5
           </button>
           <!-- <button type="button" class="btn btn-sm btn-primary" @click="playerFrame100"><div class="icon-number">F100</div></button>
@@ -217,77 +165,39 @@
             3x
           </button>
         </div>
-        <div class="btn-group ms-1" role="group" v-if="appType == 'videoscope'">
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            :class="mainVideo == 1 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainVideo(1)"
-          >
+        <div class="btn-group ms-1" role="group" v-if="appType == 'video'">
+          <button type="button" class="btn btn-sm btn-text-icon"
+            :class="mainVideo == 1 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainVideo(1)">
             V1
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 1"
-            :class="mainVideo == 2 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainVideo(2)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 1"
+            :class="mainVideo == 2 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainVideo(2)">
             V2
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 2"
-            :class="mainVideo == 3 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainVideo(3)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 2"
+            :class="mainVideo == 3 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainVideo(3)">
             V3
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 3"
-            :class="mainVideo == 4 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainVideo(4)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 3"
+            :class="mainVideo == 4 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainVideo(4)">
             V4
           </button>
         </div>
-        <div class="btn-group ms-1" role="group" v-if="appType == 'videoscope'">
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            :class="mainAudio == 1 ? 'active btn-primary' : 'btn-light'"
-            @click="playerMainAudio(1)"
-          >
+        <div class="btn-group ms-1" role="group" v-if="appType == 'video'">
+          <button type="button" class="btn btn-sm btn-text-icon"
+            :class="mainAudio == 1 ? 'active btn-primary' : 'btn-light'" @click="playerMainAudio(1)">
             A1
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 1"
-            :class="mainAudio == 2 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainAudio(2)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 1"
+            :class="mainAudio == 2 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainAudio(2)">
             A2
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 2"
-            :class="mainAudio == 3 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainAudio(3)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 2"
+            :class="mainAudio == 3 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainAudio(3)">
             A3
           </button>
-          <button
-            type="button"
-            class="btn btn-sm btn-text-icon"
-            v-if="currentDocument[2].length > 3"
-            :class="mainAudio == 4 ? 'active btn-primary' : 'btn-secondary'"
-            @click="playerMainAudio(4)"
-          >
+          <button type="button" class="btn btn-sm btn-text-icon" v-if="currentDocument[2].length > 3"
+            :class="mainAudio == 4 ? 'active btn-primary' : 'btn-secondary'" @click="playerMainAudio(4)">
             A4
           </button>
         </div>
@@ -295,19 +205,9 @@
       <div class="container-fluid mt-4">
         <div class="row">
           <div class="col" @click="timelineClick">
-            <div
-              class="progress"
-              style="height: 10px; width: 100%"
-              ref="timeline"
-            >
-              <div
-                class="progress-bar bg-danger"
-                role="progressbar"
-                :style="'width: ' + progress + '%'"
-                aria-valuenow="25"
-                aria-valuemin="0"
-                aria-valuemax="100"
-              ></div>
+            <div class="progress" style="height: 10px; width: 100%" ref="timeline">
+              <div class="progress-bar bg-danger" role="progressbar" :style="'width: ' + progress + '%'"
+                aria-valuenow="25" aria-valuemin="0" aria-valuemax="100"></div>
             </div>
           </div>
         </div>
@@ -315,22 +215,13 @@
           <div class="col">
             <!-- Percentage: <span v-html="progress.toFixed(2)" />% -->
             Frame:
-            <span
-              v-html="parseInt(currentFrame, 10)"
-            />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Time: <span v-html="currentTime" />
+            <span v-html="parseInt(currentFrame, 10)" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Time: <span
+              v-html="currentTime" />
           </div>
         </div>
       </div>
-      <div
-        id="timelinePopin"
-        ref="timelinePopin"
-        v-if="timelineEntry"
-        :style="_getTimelinePopinXY()"
-      >
-        <div
-          v-for="(entry, index) in timelineEntry"
-          :key=index
-        >
+      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()">
+        <div v-for="(entry, index) in timelineEntry" :key=index>
           <div class="header" v-html=entry[0]></div>
           <div v-html=entry[1]></div>
         </div>
@@ -370,7 +261,7 @@ import TimelineView from "@/components/videoscope/TimelineView.vue";
 const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
 
 export default {
-  props: ["selectedCorpora", "documentIds", "selectedMediaForPlay", "hoveredResult"],
+  props: ["selectedCorpora", "documentIds", "selectedMediaForPlay", "hoveredResult", "dataType"],
   data() {
     return {
       currentDocumentSelected: null,
@@ -412,7 +303,7 @@ export default {
       corpusData: [],
       documentDict: {},
 
-      appType: config.appType,
+      appType: this.dataType,
     };
   },
   components: {
@@ -446,99 +337,33 @@ export default {
     },
   },
   methods: {
-    // otherEntityInfo(result, index) {
-    //   index = 0; // hard-coded for now
-    //   // const ret = [];
-    //   // const template = "{layer}: <b><span>{value}</span></b>";
-    //   // const context = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "identifier");
-    //   // const entities = this.WSDataResults.result[0].result_sets[index].attributes.find(a=>a.name == "entities");
-    //   return ([] || result[index]).join("<br>");
-    // },
-    // contextWithHighlightedEntities(result, index) {
-    //   index = 0; // hard-coded for now
-    //   const n_entities = this.WSDataResults.result[0].result_sets[index].attributes.findIndex(a=>a.name == "entities");
-    //   const context = [];
-    //   const offset = parseInt(this.WSDataResults.result[-1][result[0]][0]);
-    //   const segment_layer_name = this.selectedCorpora.corpus.firstClass.segment;
-    //   const column_names = this.selectedCorpora.corpus.mapping.layer[segment_layer_name].prepared.columnHeaders;
-    //   const form_n = column_names.indexOf("form");
-    //   const toks = this.WSDataResults.result[-1][result[0]][1].map(x=>x[form_n]);
-    //   for (let n in toks) {
-    //     if (n_entities<0 || !(result[n_entities]||[]).includes(offset+parseInt(n))) context.push(toks[n]);
-    //     else context.push("<span style='color:brown;'>"+toks[n]+"</span>");
-    //   }
-    //   return context.join(' ')
-    // },
     frameNumberToTime(frameNumber) {
       let seconds = Utils.frameNumberToSeconds(frameNumber);
       return Utils.msToTime(seconds);
     },
-    // frameNumberToTimeInResults(result, index) {
-    //   let docId = this.docIdFromFrame(this.frameFromResult(result, index))
-    //   return this.frameNumberToTime(
-    //     parseInt(this.frameFromResult(result, index)[0])
-    //     -
-    //     parseInt(this.corpusData.find(c => c[0] == docId)[3][0])
-    //   )
-    // },
-    // frameFromResult(result, index) {
-    //   // if (index >= this.WSDataResults.result[0].result_sets.length)
-    //   //   return [0,0];
-    //   index = 0; // hard-coded for now
-    //   const resAttrs = this.WSDataResults.result[0].result_sets[index].attributes;
-    //   for (let n in resAttrs)
-    //     if (resAttrs[n].name == "frame_ranges")
-    //       return result[n];
-    //   return [0,0];
-    // },
     updatePage(currentPage) {
       this.currentPage = currentPage;
     },
-    // docIdFromFrame(frame) {
-    //   let [minFrame, maxFrame] = frame;
-    //   return this.corpusData.find(c=>c[3][0] <= minFrame && maxFrame <= c[3][1])[0];
-    // },
     docIdFromFrame(frame) {
       // Binary search
       let [minFrame, maxFrame] = frame;
       let left = 0, right = this.corpusData.length - 1;
 
       while (left <= right) {
-          let mid = Math.floor((left + right) / 2);
-          let [start, end] = this.corpusData[mid][3];
+        let mid = Math.floor((left + right) / 2);
+        let [start, end] = this.corpusData[mid][3];
 
-          if (start <= minFrame && maxFrame <= end) {
-              return this.corpusData[mid][0];
-          } else if (minFrame < start) {
-              right = mid - 1;
-          } else {
-              left = mid + 1;
-          }
+        if (start <= minFrame && maxFrame <= end) {
+          return this.corpusData[mid][0];
+        } else if (minFrame < start) {
+          right = mid - 1;
+        } else {
+          left = mid + 1;
+        }
       }
       return null;
     },
-    // resultClick(result, index) {
-    //   // if (index >= this.WSDataResults.result[0].result_sets.length)
-    //   //   return;
-    //   index = 0; // hard-coded for now
-    //   const frameFromResult = this.frameFromResult(result, index);
-    //   const doc_result_id = this.docIdFromFrame(frameFromResult);
-    //   const doc_result = this.corpusData.filter(corpus => corpus[0] == doc_result_id)[0];
-    //   const adjustedFrames = frameFromResult.map(x=>parseInt(x) - parseInt(doc_result[3][0]));
-    //   let [start, end] = adjustedFrames.map(x=>Utils.frameNumberToSeconds(x) / 1000);
-    //   if (this.currentDocument == doc_result) {
-    //     this._playerSetTime(start);
-    //     window.scrollTo(0, 120);
-    //     this.playerPlay(end);
-    //   } else {
-    //     //   // this.currentDocument = this.corpusData[result[2] - 1];
-    //     // this.currentDocument = this.documentDict[result[2]];
-    //     this.setResultTimes = [start,end];
-    //     // TODO: should be fixed - corpusData changed
-    //     this.currentDocument = doc_result;
-    //   }
-    // },
-    playerTogglePlay(){
+    playerTogglePlay() {
       if (this.playerIsPlaying) {
         this.playerStop()
       }
@@ -546,19 +371,19 @@ export default {
         setTimeout(() => this.playerPlay(), 100)
       }
     },
-    playerPlay(end=0) {
+    playerPlay(end = 0) {
       const n_players = [1, 2, 3, 4];
       for (let n of n_players) {
-        const player = this.$refs['videoPlayer'+n];
+        const player = this.$refs['videoPlayer' + n];
         if (!player)
           continue
         if (end && end >= 0) {
           end = Math.min(end, player.duration);
-          const handler = ()=>{
+          const handler = () => {
             if (player.currentTime < end) return;
             this.playerStop();
           };
-          player.addEventListener("pause", () => player.removeEventListener("timeupdate", handler), {once: true});
+          player.addEventListener("pause", () => player.removeEventListener("timeupdate", handler), { once: true });
           player.addEventListener("timeupdate", handler);
         }
         player.play();
@@ -669,7 +494,7 @@ export default {
     videoPlayer1CanPlay() {
       this.loadingMedia = false;
       this.currentMediaDuration = this.$refs.videoPlayer1.duration;
-      this.$refs.videoPlayer1.addEventListener("pause", ()=>this.playerIsPlaying=false);
+      this.$refs.videoPlayer1.addEventListener("pause", () => this.playerIsPlaying = false);
       if (this.setResultTimes) {
         const [start, end] = this.setResultTimes;
         this.setResultTimes = null;
@@ -727,35 +552,35 @@ export default {
       }
       this.volume = _volume
     },
-    _annotationEnter({x, y, mouseX, mouseY, entry}) {
+    _annotationEnter({ x, y, mouseX, mouseY, entry }) {
       this.timelinePopinY = Number(mouseY);
       this.timelinePopinX = Number(x);
       this.timelinePopinY = Number(y);
       this.timelinePopinX = Number(mouseX);
       this.timelineEntry = [
-        ...Object.entries(entry).filter(kv=>!(kv[0] in {frame_range:1,char_range:1,prepared:1,meta:1})),
-        ...Object.entries(entry.meta||{})
+        ...Object.entries(entry).filter(kv => !(kv[0] in { frame_range: 1, char_range: 1, prepared: 1, meta: 1 })),
+        ...Object.entries(entry.meta || {})
       ]
-      .filter(kv=>kv && kv[0] && kv[1])
-      .map(([name,value])=>[name,value.replace(urlRegex, "<a href='$1' target='_blank'>$1</a>")]);
+        .filter(kv => kv && kv[0] && kv[1])
+        .map(([name, value]) => [name, value.replace(urlRegex, "<a href='$1' target='_blank'>$1</a>")]);
     },
     _annotationLeave() {
       this.timelineEntry = null;
     },
     _getTimelinePopinXY() {
-      let {x, y} = document.querySelector("#timeline-svg").getBoundingClientRect();
+      let { x, y } = document.querySelector("#timeline-svg").getBoundingClientRect();
       x += this.timelinePopinX + window.scrollX;
       y += this.timelinePopinY + window.scrollY;
       const bottom = window.scrollY + window.innerHeight, right = window.scrollX + window.innerWidth;
-      const {width, height} = (
+      const { width, height } = (
         this.$refs.timelinePopin
-        || {getBoundingClientRect:()=>Object({width:0,height:0})}
+        || { getBoundingClientRect: () => Object({ width: 0, height: 0 }) }
       ).getBoundingClientRect();
       if (x + width > right)
         x = right - width;
       if (y + height > bottom)
         y = bottom - height;
-      return {'left': x+'px', 'top': y-250+'px'};
+      return { 'left': x + 'px', 'top': y - 250 + 'px' };
     },
     onSocketMessage(data) {
       // console.log("SOC2", data)
@@ -765,20 +590,20 @@ export default {
           let dataToShow = {};
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
-          if (!(this.selectedCorpora.value in {115: 1})) { // old tangram exception
+          if (!(this.selectedCorpora.value in { 115: 1 })) { // old tangram exception
             // TODO[URGENT]: hardcoded if there is no tracks
-            let tracks = this.selectedCorpora.corpus.tracks || {"layers": {"Utterance": {"split": []}}};
+            let tracks = this.selectedCorpora.corpus.tracks || { "layers": { "Utterance": { "split": [] } } };
             // console.log("CRP", this.selectedCorpora, data.document.layers)
             dataToShow = {
-              layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n)=>[n+1, Object({name: e[0]})])),
+              layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n) => [n + 1, Object({ name: e[0] })])),
               tracks: {},
               document_id: document_id,
               groupBy: tracks.group_by
             };
-            for (let gb of (tracks.group_by||[])) {
-              if (!(gb in (data.document.global_attributes||{})))
+            for (let gb of (tracks.group_by || [])) {
+              if (!(gb in (data.document.global_attributes || {})))
                 throw ReferenceError(`'${gb}' could not be found in global_attributes`);
-              dataToShow[gb] = Object.fromEntries(data.document.global_attributes[gb].map(v=>[v[gb+'_id'],v[gb]]))
+              dataToShow[gb] = Object.fromEntries(data.document.global_attributes[gb].map(v => [v[gb + '_id'], v[gb]]))
             }
             for (let layer in data.document.layers) {
               tracks.layers[layer].split = tracks.layers[layer].split || [];
@@ -790,15 +615,15 @@ export default {
                 for (let ncol in row) {
                   let name = cols[ncol];
                   let value = row[ncol];
-                  if (tracks.layers[layer].split.find(s=>name.toLowerCase().match(new RegExp(`^${s}(_id)?$`,'i'))))
-                    trackName = (isNaN(parseInt(value)) ? value : `${name.replace(/_id$/,'')} ${value}`) + ' ' + trackName;
+                  if (tracks.layers[layer].split.find(s => name.toLowerCase().match(new RegExp(`^${s}(_id)?$`, 'i'))))
+                    trackName = (isNaN(parseInt(value)) ? value : `${name.replace(/_id$/, '')} ${value}`) + ' ' + trackName;
                   else
                     content[name] = value;
                 }
-                let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null,null];
-                if (ntrack===null) {
+                let [ntrack, track] = Object.entries(dataToShow.tracks).find(nt => nt[1].name == trackName) || [null, null];
+                if (ntrack === null) {
                   ntrack = Object.keys(dataToShow.tracks).length;
-                  track = {name: trackName, layer: Object.keys(tracks.layers).indexOf(layer)+1};
+                  track = { name: trackName, layer: Object.keys(tracks.layers).indexOf(layer) + 1 };
                   track[layer] = [];
                 }
                 track[layer].push(content);
@@ -828,9 +653,9 @@ export default {
 
           // Add group_by speaker
           if (this.selectedCorpora.corpus &&
-              this.selectedCorpora.corpus.tracks &&
-              this.selectedCorpora.corpus.tracks.group_by &&
-              this.selectedCorpora.corpus.tracks.group_by[0] == "speaker"
+            this.selectedCorpora.corpus.tracks &&
+            this.selectedCorpora.corpus.tracks.group_by &&
+            this.selectedCorpora.corpus.tracks.group_by[0] == "speaker"
           ) {
             let trackGroupCounter = {};
             let newTracksNamesSorted = [];
@@ -856,7 +681,7 @@ export default {
           // Generate timeline data
           tracksNamesSorted.forEach((track, key) => {
             let values = []
-            if (track.layer != -1){
+            if (track.layer != -1) {
               const keyName = dataToShow.layers[track.layer].name;
               const isSegment = keyName.toLowerCase() == segment_name.toLowerCase();
 
@@ -865,13 +690,13 @@ export default {
                 let shift = this.currentDocument[3][0];
                 let startTime = (parseFloat(startFrame - shift) / this.frameRate);
                 let endTime = (parseFloat(endFrame - shift) / this.frameRate);
-                const unitData = {x1: startTime, x2: endTime, l: key, entry: entry};
+                const unitData = { x1: startTime, x2: endTime, l: key, entry: entry };
                 if (isSegment)
                   unitData.n = entry.prepared.map(row => row[form_n]).join(" ");
                 else {
                   let firstStringAttribute = Object.entries(
                     this.selectedCorpora.corpus.layer[keyName].attributes || {}
-                  ).find( e=> e[1].type in {text:1,categorical:1} );
+                  ).find(e => e[1].type in { text: 1, categorical: 1 });
                   if (firstStringAttribute)
                     unitData.n = entry[firstStringAttribute[0]];
                 }
@@ -889,7 +714,7 @@ export default {
 
           this.currentMediaDuration = this.$refs.videoPlayer1.duration;
           if (!this.currentMediaDuration && "doc" in this.documentData && "frame_range" in this.documentData.doc)
-            this.currentMediaDuration = this.documentData.doc.frame_range.reduce((x,y)=>y-x) / this.frameRate;
+            this.currentMediaDuration = this.documentData.doc.frame_range.reduce((x, y) => y - x) / this.frameRate;
           this.currentDocumentData = timelineData;
           this.loadingDocument = false;
           this.documentIndexKey++;
@@ -897,8 +722,8 @@ export default {
           return;
         }
         else if (data["action"] === "document_ids") {
-          this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id,props])=>[id,props.name]));
-          this.corpusData = Object.entries(data.document_ids).map(([id,props])=>[id,props.name,Object.values(props.media),props.frame_range]);
+          this.documentDict = Object.fromEntries(Object.entries(data.document_ids).map(([id, props]) => [id, props.name]));
+          this.corpusData = Object.entries(data.document_ids).map(([id, props]) => [id, props.name, Object.values(props.media), props.frame_range]);
 
           // Preselect first document
           if (!this.currentDocumentSelected) {
@@ -952,11 +777,11 @@ export default {
     },
     async loadDocument() {
       try {
-        const checkVideoPlayer = r=>{
+        const checkVideoPlayer = r => {
           if (this.$refs.videoPlayer1) r();
-          else window.requestAnimationFrame(()=>checkVideoPlayer(r));
+          else window.requestAnimationFrame(() => checkVideoPlayer(r));
         }
-        await new Promise(r=>checkVideoPlayer(r));
+        await new Promise(r => checkVideoPlayer(r));
         this.$refs.videoPlayer1.load();
         if (this.currentDocument[2].length > 1) {
           this.$refs.videoPlayer2.load();
@@ -975,7 +800,6 @@ export default {
         this.loadingDocument = true
         this.loadingMedia = true
         this.timelineEntry = null
-        // console.log("AA", this.currentDocument)
         useCorpusStore().fetchDocument({
           doc_id: this.currentDocument[0],
           corpora: [this.selectedCorpora.value],
@@ -1084,11 +908,13 @@ export default {
   display: flex;
   overflow: scroll;
 }
+
 video {
   margin-right: 3px;
   object-fit: fill;
   height: 140px;
 }
+
 .vertical-line {
   position: absolute;
   width: 1px;
@@ -1096,9 +922,11 @@ video {
   margin-top: -10px;
   background-color: rgb(114, 114, 114);
 }
+
 .progress-bar {
   border-radius: 4px;
 }
+
 .btn-text-icon {
   font-weight: bold;
   color: #fff;
@@ -1149,20 +977,20 @@ video {
   opacity: 1;
 }
 
-.video-play-button > .button {
+.video-play-button>.button {
   margin-top: 39px;
   margin-left: 54px;
   transform: scale(2.0);
 }
 
-.video-play-button > .button.play {
+.video-play-button>.button.play {
   margin-left: 58px;
 }
 
-.video-play-button > .button > .s1 {
+.video-play-button>.button>.s1 {
   display: block;
   background: #FFFFFF;
-  width:20px;
+  width: 20px;
   height: 20px;
   transition: all 0.3s ease;
 
@@ -1170,7 +998,7 @@ video {
   clip-path: polygon(100% 0, 100% 100%, 66% 100%, 66% 0, 35% 0, 35% 100%, 0 100%, 0 0);
 }
 
-.video-play-button > .button.play > .s1 {
+.video-play-button>.button.play>.s1 {
   -webkit-clip-path: polygon(100% 49%, 100% 49%, 46% 77%, 46% 26%, 46% 25%, 46% 77%, 0 100%, 0 0);
   clip-path: polygon(100% 49%, 100% 49%, 46% 77%, 46% 26%, 46% 25%, 46% 77%, 0 100%, 0 0);
 }
@@ -1187,31 +1015,38 @@ video {
   position: relative;
   cursor: default;
 }
-.video-box > div {
+
+.video-box>div {
   flex: 1 1 80px;
   margin: 1px;
 }
-.video-box > div.active {
+
+.video-box>div.active {
   min-height: 100%;
   order: -1;
 }
-div.active > video {
+
+div.active>video {
   height: 450px;
 }
 
-* >>> .drop {
+*>>>.drop {
   cursor: pointer;
 }
+
 .query-field {
   height: 328px;
 }
+
 .list-no-bullets {
   list-style-type: none;
 }
+
 .list-no-bullets li:hover {
   cursor: pointer;
   opacity: 0.8;
 }
+
 .list-no-bullets .col-1 {
   width: 20%;
   max-height: 2em;
@@ -1219,6 +1054,7 @@ div.active > video {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 #timelinePopin {
   position: absolute;
   width: 25em;
@@ -1231,6 +1067,7 @@ div.active > video {
   border-radius: 0.25em;
   z-index: 99;
 }
+
 #timelinePopin .header {
   font-weight: bold;
   background-color: lightgray;
