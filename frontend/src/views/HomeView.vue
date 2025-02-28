@@ -512,16 +512,6 @@ export default {
         }
       }
     },
-    // getAppLink(appType, corpus) {
-    //   let appLink = config.appLinks[appType]
-    //   if (["catchphrase", "soundscript"].includes(appType)) {
-    //     appLink = `${appLink}/query/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-    //   }
-    //   else {
-    //     appLink = `${appLink}/player/${corpus.meta.id}/${Utils.slugify(corpus.shortname)}`
-    //   }
-    //   return appLink
-    // },
     calculateSum(array) {
       return array.reduce((accumulator, value) => {
         return accumulator + value;
