@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import traceback
+import uuid
 
 from dotenv import load_dotenv
 from asyncpg import Range, Box
@@ -169,6 +170,7 @@ class Interrupted(Exception):
 class CustomEncoder(json.JSONEncoder):
     """
     Fix numpy objects and dates, otherwise normal serialisation
+    Also handle ranges from postgres
     """
 
     def default(self, obj: Any) -> JSON:
@@ -178,11 +180,14 @@ class CustomEncoder(json.JSONEncoder):
             return int(obj)
         if isinstance(obj, np.floating):
             return float(obj)
-        # todo -- are we sure this isn't needed?:
-        # ifisinstance(obj, uuid.UUID):
-        #   return str(obj)
-        elif isinstance(obj, (datetime, date)):
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        if isinstance(obj, (datetime, date)):
             return obj.isoformat()
+        if isinstance(obj, Range):
+            return [obj.lower, obj.upper]
+        if isinstance(obj, Box):
+            return [obj.low.x, obj.low.y, obj.high.x, obj.high.y]
         default: JSON = json.JSONEncoder.default(self, obj)
         return default
 

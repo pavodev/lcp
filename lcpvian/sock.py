@@ -87,6 +87,10 @@ async def _process_message(
         if not raw:
             return None
         payload: JSONObject = json.loads(raw)
+        if data["msg_id"] in app["futures"]:
+            # This will be read as the result of an await instruction
+            app["futures"][data["msg_id"]].set_result(payload)
+            return
         if "user" in data or "room" in data:
             # If the incoming data contains fresher information than from redis memory,
             # (as determined by the presence of a user/room in data)
