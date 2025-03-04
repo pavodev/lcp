@@ -597,7 +597,7 @@ class QueryService:
             params["room"] = room
 
         query = f"""SELECT * FROM lcp_user.queries
-                    WHERE username = :user {room_info}
+                    WHERE "user" = :user {room_info}
                     ORDER BY created_at DESC LIMIT {limit};
                 """
         opts = {
@@ -627,7 +627,10 @@ class QueryService:
         """
         Add a saved query to the db
         """
-        query = f"INSERT INTO lcp_user.queries VALUES(:idx, :query, :user, :room);"
+        query = (
+            'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name) '
+            'VALUES (:idx, :query, :user, :room, :query_name);'
+        )
         kwargs = {
             "user": user,
             "room": room,
@@ -637,9 +640,10 @@ class QueryService:
         }
         params: dict[str, str | int | None | JSONObject] = {
             "idx": idx,
-            "query": query_data,
+            "query": json.dumps(query_data, default=str),
             "user": user,
             "room": room,
+            "query_name": query_data["query_name"]
         }
         job: Job = self.app[queue].enqueue(
             _db_query,

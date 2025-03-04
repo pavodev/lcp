@@ -152,6 +152,29 @@
                   </button>
                 </div>
 
+                <div class="mt-3">
+                  <button
+                    type="button"
+                    v-if="queryStatus in {'satisfied':1,'finished':1} && !loading && userData.user.anon != true"
+                    class="btn btn-primary me-1 mb-1"
+                    data-bs-toggle="modal"
+                    data-bs-target="#saveQueryModal"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'file-export']" />
+                    {{ $t('common-save-query') }}
+                  </button>
+                  
+                  <button
+                    type="button"
+                    v-if="!loading && userData.user.anon != true"
+                    class="btn btn-primary me-1 mb-1"
+                    @click="fetch()"
+                  >
+                    <FontAwesomeIcon :icon="['fas', 'file-export']" />
+                    Fetch queries
+                  </button>
+                </div>
+
                 <div class="row">
                   <div class="col-6">
                     <div class="form-floating mb-3">
@@ -787,6 +810,7 @@
               :disabled="!queryName"
               @click="saveQuery"
               class="btn btn-primary me-1"
+              data-bs-dismiss="modal"
             >
               {{ $t('common-save-query') }}
             </button>
@@ -971,6 +995,7 @@ export default {
       selectedMediaForPlay: null,
       hoveredResult: null,
 
+      userQueries: [],
       // selectedDocument: null,
       // documentDict: {},
       // userId: null,
@@ -1329,9 +1354,24 @@ export default {
         }
         if (data["action"] === "fetch_queries") {
           console.log("do something here with the fetched queries?", data);
+
+          useNotificationStore().add({
+            type: "success",
+            text: `Queries fetched`
+          });
+
+          if(data["queries"]){
+            this.userQueries = data;
+          }
+
           return;
         } else if (data["action"] === "store_query") {
           console.log("query stored", data);
+          useNotificationStore().add({
+            type: "success",
+            text: `Query successfully saved.`
+          });
+
           return;
         } else if (data["action"] == "export_link") {
           this.loading = false;
@@ -1644,6 +1684,9 @@ export default {
         total_results_requested: this.nResults,
         query_name: this.queryName,
       };
+
+      console.log('data', JSON.stringify(data));
+
       useCorpusStore().saveQuery(data);
     },
     fetch() {
