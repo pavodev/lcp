@@ -4,38 +4,37 @@
       <div class="row">
         <div class="col-12">
           <div class="mb-3">
-            <label for="url" class="form-label">Title</label>
+            <label for="url" class="form-label">{{ $t('modal-project-title') }}</label>
             <input type="text" class="form-control" v-model="model.title" id="title" aria-describedby="titleHelp"
               maxlength="50" />
-            <div id="titleHelp" v-if="titleState == false" class="form-text text-danger">
-              Title is mandatory (min. length is seven letters).<br>
-              Title will be manually checked. Try to be concise and informative.
+            <div id="titleHelp" v-if="titleState == false" class="form-text text-danger pre-line">
+              {{ $t('modal-project-title-error') }}
             </div>
           </div>
         </div>
         <div class="col-4">
           <div class="mb-3">
-            <label for="content" class="form-label">Start date</label>
+            <label for="content" class="form-label">{{ $t('modal-project-start-date') }}</label>
             <DatePicker v-model:value="model.startDate" id="startDate" class="d-block" />
             <div id="urlHelp" v-if="startDateState == false" class="form-text text-danger">
-              Start date is mandatory.
+              {{ $t('modal-project-start-date-error') }}
             </div>
           </div>
         </div>
         <div class="col-4">
           <div class="mb-3">
-            <label for="content" class="form-label">End date</label>
+            <label for="content" class="form-label">{{ $t('modal-project-end-date') }}</label>
             <DatePicker v-model:value="model.finishDate" id="finishDate" :disabled-date="disabledBeforeToday"
               class="d-block" />
             <div id="urlHelp" v-if="finishDateState == false" class="form-text text-danger">
-              End date is mandatory.
+              {{ $t('modal-project-end-date-error') }}
             </div>
           </div>
         </div>
         <div class="col-12">
           <div class="mb-3">
-            <label for="description" class="form-label">Description</label>
-            <textarea class="form-control" placeholder="Please describe the purpose of your group"
+            <label for="description" class="form-label">{{ $t('modal-project-description') }}</label>
+            <textarea class="form-control" :placeholder="$t('modal-project-description-placeholder')"
               v-model="model.description" id="description" style="height: 100px"></textarea>
           </div>
         </div>

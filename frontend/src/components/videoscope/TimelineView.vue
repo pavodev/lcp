@@ -3,20 +3,20 @@
     <div class="button-container">
       <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue <= 1" @click="zoomOut">
         <FontAwesomeIcon :icon="['fas', 'magnifying-glass-minus']" class="me-1" />
-        Zoom Out
+        {{ $t('common-zoom-out') }}
       </button>
       <input type="range" min="1" :max="MAX_ZOOM_LEVEL" class="zoom-slider" v-model="zoomValue" step="1" />
       <button class="btn btn-primary btn-sm me-1" :disabled="zoomValue >= MAX_ZOOM_LEVEL" @click="zoomIn">
         <FontAwesomeIcon :icon="['fas', 'magnifying-glass-plus']" class="me-1" />
-        Zoom In
+        {{ $t('common-zoom-in') }}
       </button>
       <button class="btn btn-primary btn-sm me-1" @click="resetZoom">
         <FontAwesomeIcon :icon="['fas', 'rotate-left']" class="me-1" />
-        Reset default
+        {{ $t('common-zoom-reset-default') }}
       </button>
       <button class="btn btn-primary btn-sm me-1" @click="fitZoom">
         <FontAwesomeIcon :icon="['fas', 'arrows-left-right-to-line']" class="me-1" />
-        Fit content
+        {{ $t('common-zoom-fit-content') }}
       </button>
     </div>
     <!--
@@ -143,7 +143,9 @@ export default {
       this.currentTime = time;
       const newXScale = d3.zoomTransform(svg.node()).rescaleX(linearScale);
       this.updateVerticalLine(newXScale(this.currentTime));
-      this.center();
+      if(!this.playerIsPlaying){
+        this.center();
+      }
     },
     // Function to update the vertical timeline
     updateVerticalLine(xPosition) {

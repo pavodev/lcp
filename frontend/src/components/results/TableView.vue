@@ -9,7 +9,7 @@
               v-model="filters[index]"
               class="form-control form-control-sm"
               :class="filterErrors[index] ? 'is-invalid' : ''"
-              :placeholder="`Filter by ${col.name}`"
+              :placeholder="`${$t('results-plain-filter-placeholder')} ${col.name}`"
             >
           </th>
         </tr>

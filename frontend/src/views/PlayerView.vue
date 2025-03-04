@@ -3,7 +3,7 @@
     <div class="container mt-4">
       <div class="row">
         <div class="col-5">
-          <label class="form-label">Corpus</label>
+          <label class="form-label">{{ $t('common-corpus') }}</label>
           <select v-model="selectedCorpora" class="form-select">
             <option v-for="corpora in corpusList" :value="corpora" v-html="corpora.name" :key="corpora.value"></option>
           </select>
@@ -215,13 +215,13 @@
       <div class="container mt-4">
         <div class="row mt-2 mb-4">
           <div class="col col-md-2">
-            <label for="timePicker">Go to time:</label>
+            <label for="timePicker">{{ $t('common-go-to-time') }}:</label>
             <div v-if="currentMediaDuration > 0">
               <VueDatePicker v-model="selectedTime" time-picker enable-seconds format="HH:mm:ss" :min-time="minTime"
                 :start-time="startTime" @update:model-value="handleDatePickerChange"></VueDatePicker>
             </div>
             <div v-else>
-              <input type="text" disabled placeholder="Loading video duration..." />
+              <input type="text" disabled :placeholder="`${$t('common-loading-video-duration')}...`" />
             </div>
           </div>
         </div>
@@ -237,13 +237,13 @@
         <div class="row mb-3 mt-2">
           <div class="col">
             <!-- Percentage: <span v-html="progress.toFixed(2)" />% -->
-            Frame:
-            <span v-html="parseInt(currentFrame, 10)" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Time: <span
+            {{ $t('common-frame') }}:
+            <span v-html="parseInt(currentFrame, 10)" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ $t('common-time') }}: <span
               v-html="currentTime" />
           </div>
         </div>
       </div>
-      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()">
+      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()" @mouseleave="_annotationLeave">
         <div v-for="(entry, index) in timelineEntry" :key=index>
           <div class="header" v-html=entry[0]></div>
           <div v-html=entry[1]></div>
@@ -254,7 +254,7 @@
         :playerCurrentTime="playerCurrentTime" @updateTime="_playerSetTime" @annotationEnter="_annotationEnter"
         @annotationLeave="_annotationLeave" :key="documentIndexKey" />
       <div v-else-if="loadingDocument == true">
-        Loading data ...
+        {{ $t('common-loading-data') }}...
       </div>
       <hr />
 
@@ -311,14 +311,14 @@
               !query
               ">
               <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-              Submit
+              {{ $t('common-submit') }}
             </button>
             <button v-if="loading" type="button" @click="stop" :disabled="loading == false" class="btn btn-primary">
-              Stop
+              {{ $t('common-stop') }}
             </button>
             <br />
             <br />
-            Load example query:
+            {{ $t('load-example-query') }}:
             <button type="button" @click="setExample(1)" class="btn btn-sm btn-secondary ms-1">
               1
             </button>
@@ -377,7 +377,7 @@
                 :loading="loading" />
             </span>
             <!-- <span v-else-if="queryData == 1"></span> -->
-            <span v-else>Loading ...</span>
+            <span v-else>{{ $t('common-loading') }}...</span>
           </div>
         </div>
       </div>

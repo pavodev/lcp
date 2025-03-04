@@ -3,13 +3,13 @@
     <div class="row">
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-name" class="form-label">Name</label>
+          <label for="corpus-name" class="form-label">{{ $t('modal-meta-name') }}</label>
           <input type="text" class="form-control" v-model="corpusData.meta.name" id="corpus-name" maxlength="50" />
         </div>
       </div>
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-source" class="form-label">Source</label>
+          <label for="corpus-source" class="form-label">{{ $t('modal-meta-source') }}</label>
           <input type="text" class="form-control" v-model="corpusData.meta.source" id="corpus-source" />
         </div>
       </div>
@@ -17,7 +17,7 @@
     <div class="row">
       <div class="col-12">
         <div class="mb-3">
-          <label for="corpus-authors" class="form-label">Authors</label>
+          <label for="corpus-authors" class="form-label">{{ $t('modal-meta-authors') }}</label>
           <input type="text" class="form-control" v-model="corpusData.meta.authors" id="corpus-authors" />
         </div>
       </div>
@@ -25,13 +25,13 @@
     <div class="row">
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-institution" class="form-label">Provider/Institution</label>
+          <label for="corpus-institution" class="form-label">{{ $t('modal-meta-provider') }}</label>
           <input type="text" class="form-control" v-model="corpusData.meta.institution" id="corpus-institution" />
         </div>
       </div>
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-revision" class="form-label">Revision</label>
+          <label for="corpus-revision" class="form-label">{{ $t('modal-meta-revision') }}</label>
           <input type="text" class="form-control" v-model="corpusData.meta.revision" id="corpus-revision" />
         </div>
       </div>
@@ -39,14 +39,14 @@
     <div class="row">
       <div class="col-7">
         <div class="mb-3">
-          <label for="corpus-license" class="form-label">Data type: <b>{{ corpusDataType(corpusData) }}</b></label>
+          <label for="corpus-license" class="form-label">{{ $t('modal-meta-data-type') }} <b>{{ corpusDataType(corpusData) }}</b></label>
         </div>
       </div>
     </div>
     <div class="row">
       <div class="col-12">
         <div class="mb-3">
-          <label for="corpus-description" class="form-label">Description</label>
+          <label for="corpus-description" class="form-label">{{ $t('modal-meta-description') }}</label>
           <textarea class="form-control" placeholder="Corpora description" v-model="corpusData.meta.corpusDescription"
             id="corpus-description" style="height: 100px"></textarea>
         </div>
@@ -55,7 +55,7 @@
     <div class="row">
       <div class="col-12">
         <div class="mb-3">
-          <label for="corpus-license" class="form-label">License</label>
+          <label for="corpus-license" class="form-label">{{ $t('modal-meta-license') }}</label>
           <div class="row">
             <div class="col-3 mb-2" v-for="licence in licenses" :key="licence.name">
               <div class="form-check">
@@ -68,7 +68,7 @@
                   :selected="corpusData.meta.license === licence.tag"
                 >
                 <label class="form-check-label" :for="licence.tag" v-if="licence.tag == 'user-defined'">
-                  User defined
+                  {{ $t('modal-meta-user-defined') }}
                 </label>
                 <label class="form-check-label" :for="licence.tag" v-else>
                   <img :src="`/licenses/${licence.tag}.png`" :alt="licence.name" class="license-img" />
@@ -84,7 +84,7 @@
       </div>
       <div class="col-12" v-if="corpusData.meta.license == 'user-defined'">
         <div class="mb-3">
-          <label for="corpus-description" class="form-label">User defined licence</label>
+          <label for="corpus-description" class="form-label">{{ $t('modal-meta-user-license') }}</label>
           <textarea class="form-control" placeholder="User defined licence" v-model="userLicense"
             id="user-defined-licence" style="height: 100px"></textarea>
         </div>
