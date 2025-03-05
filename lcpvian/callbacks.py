@@ -828,7 +828,7 @@ def _queries(
         for x in result:
             dct: dict[str, Any] = dict(zip(cols, x))
             queries.append(dct)
-        jso["queries"] = queries
+        jso["queries"] = json.dumps(queries, default=str)
     return _publish_msg(connection, jso, msg_id)
 
 

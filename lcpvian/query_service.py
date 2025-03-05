@@ -591,15 +591,20 @@ class QueryService:
         Get previous saved queries for this user/room
         """
         params: dict[str, str] = {"user": user}
-        room_info: str = ""
-        if room:
-            room_info = " AND room = :room"
-            params["room"] = room
 
-        query = f"""SELECT * FROM lcp_user.queries
-                    WHERE "user" = :user {room_info}
-                    ORDER BY created_at DESC LIMIT {limit};
-                """
+        # room_info: str = ""
+        # if room:
+        #     room_info = " AND room = :room"
+        #     params["room"] = room
+
+        # query = f"""SELECT * FROM lcp_user.queries WHERE "user" = :user {room_info} ORDER BY created_at DESC LIMIT {limit};"""
+
+        query = (
+            """SELECT * FROM lcp_user.queries
+            WHERE "user" = :user
+            ORDER BY created_at DESC LIMIT {limit};"""
+        ).format(limit=limit)
+
         opts = {
             "user": user,
             "room": room,
