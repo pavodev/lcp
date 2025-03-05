@@ -68,6 +68,7 @@ from .utils import (
 
 PUBSUB_LIMIT = int(os.getenv("PUBSUB_LIMIT", 31999999))
 MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
+RESULTS_SWISSDOX = os.environ.get("RESULTS_SWISSDOX", "results/swissdox")
 
 
 def _query(
@@ -842,9 +843,8 @@ def _swissdox_to_db_file(
     print("export complete!")
     j_kwargs = cast(dict, job.kwargs)
     hash = j_kwargs.get("hash", "swissdox")
-    swissdox_dir = os.environ.get("RESULTS_SWISSDOX", "results/swissdox")
     dest = os.path.join(
-        swissdox_dir,
+        RESULTS_SWISSDOX,
         "exports",
         f"{hash}.db",
     )
@@ -852,7 +852,9 @@ def _swissdox_to_db_file(
         os.remove(dest)
 
     for table_name, index_col, data in job.result:
-        df = pandas.DataFrame.from_dict(data)
+        df = pandas.DataFrame.from_dict(
+            {cname: cvalue if cvalue else [] for cname, cvalue in data.items()}
+        )
         df.set_index(index_col)
         con = duckdb.connect(database=dest, read_only=False)
         con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
@@ -861,12 +863,15 @@ def _swissdox_to_db_file(
     room = j_kwargs.get("room")
 
     if user and room:
-        userpath = os.path.join(swissdox_dir, user)
+        userpath = os.path.join(RESULTS_SWISSDOX, user)
         if not os.path.exists(userpath):
             os.makedirs(userpath)
         cname = j_kwargs.get("name", "swissdox")
-        fn = f"{cname}_{str(datetime.now()).split('.')[0]}.db"
-        userdest = os.path.join(userpath, fn.replace(" ", "_"))
+        original_userpath = j_kwargs.get("userpath", "")
+        if not original_userpath:
+            original_userpath = f"{cname}_{str(datetime.now()).split('.')[0]}.db"
+        fn = os.path.basename(original_userpath)
+        userdest = os.path.join(userpath, fn)
         if os.path.exists(userdest):
             os.remove(userdest)
         os.symlink(os.path.abspath(dest), userdest)
@@ -948,7 +953,7 @@ def _export_notifs(
             # TODO: maybe create an ExporterSwissdox class?
             if format == "swissdox":
                 srcfn = os.path.join(
-                    os.environ.get("RESULTS_SWISSDOX", "results/swissdox"),
+                    RESULTS_SWISSDOX,
                     "exports",
                     f"{hash}.db",
                 )
@@ -959,6 +964,7 @@ def _export_notifs(
             if os.path.exists(destfn):
                 os.remove(destfn)
             os.symlink(os.path.abspath(srcfn), destfn)
+
             user_id = res[4]
             msg_id = str(uuid4())
             jso = {

@@ -1,4 +1,7 @@
+import os
+
 from aiohttp import web
+from datetime import datetime
 from rq import Callback
 from rq.connections import get_current_connection
 from rq.job import Job
@@ -14,10 +17,11 @@ from .utils import (
     _get_all_jobs_from_hash,
     push_msg,
     format_meta_lines,
+    sanitize_filename,
 )
-import os
 
 EXPORT_TTL = 5000
+RESULTS_USERS = os.environ.get("RESULTS_USERS", os.path.join("results", "users"))
 
 # See at the bottom for the definition of the class Export
 
@@ -74,7 +78,21 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     hash: str = first_job.id
     batch: Batch = cast(dict, first_job.kwargs).get("current_batch", (0, "", "", 0))
 
-    userpath: str = f"{corpus_conf.get('shortname')}/results.{export_format}"
+    filename: str = cast(str, payload.get("filename", ""))
+    extension: str = "db" if export_format == "swissdox" else export_format
+    if not filename:
+        filename = f"{corpus_conf.get('shortname')} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}.{extension}"
+    filename = sanitize_filename(filename)
+    corpus_folder = sanitize_filename(
+        corpus_conf.get("shortname") or corpus_conf["project_id"]
+    )
+    userpath: str = os.path.join(corpus_folder, filename)
+    suffix: int = 0
+    while os.path.exists(os.path.join(RESULTS_USERS, user, userpath)):
+        suffix += 1
+        userpath = os.path.join(
+            corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}).{extension}"
+        )
     init_export_job = app["internal"].enqueue(
         _handle_export,  # init_export
         on_failure=Callback(_general_failure, EXPORT_TTL),
@@ -112,6 +130,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             "project_id": str(conf.get("project_id", "all")),
             "corpus_name": str(conf.get("shortname", "swissdox")),
             "hash": hash,
+            "userpath": userpath,
         }
         job = await export_swissdox(
             app["redis"], [a for a in article_ids], **swissdox_kwargs  # type: ignore

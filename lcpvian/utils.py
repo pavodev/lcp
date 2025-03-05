@@ -238,7 +238,11 @@ def setup() -> None:
         )
 
 
-def sanitize_xml_attribute_name(name):
+def sanitize_filename(filename: str) -> str:
+    return re.sub(r"^[ .]|[/<>:\"\\|?*]+|[ .]$", "_", filename)
+
+
+def sanitize_xml_attribute_name(name: str) -> str:
     # Replace invalid characters with an underscore
     # Invalid characters include anything that is not a valid XML character
     name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)

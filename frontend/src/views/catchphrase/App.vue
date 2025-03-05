@@ -151,6 +151,6 @@ export default {
   margin-top: 2px;
 }
 .export:hover #exportMonitor {
-  display: flex !important;
+  visibility: visible !important;
 }
 </style>

@@ -186,6 +186,8 @@ class Exporter:
 
     @property
     def results_info(self) -> list[dict[str, Any]]:
+        if not self._query_jobs:
+            return []
         if not self._results_info:
             job = self._query_jobs[0]
             results_info = (
