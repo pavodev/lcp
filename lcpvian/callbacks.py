@@ -843,11 +843,10 @@ def _swissdox_to_db_file(
     print("export complete!")
     j_kwargs = cast(dict, job.kwargs)
     hash = j_kwargs.get("hash", "swissdox")
-    dest = os.path.join(
-        RESULTS_SWISSDOX,
-        "exports",
-        f"{hash}.db",
-    )
+    dest_folder = os.path.join(RESULTS_SWISSDOX, "exports")
+    if not os.path.exists(dest_folder):
+        os.makedirs(dest_folder)
+    dest = os.path.join(dest_folder, f"{hash}.db")
     if os.path.exists(dest):
         os.remove(dest)
 
