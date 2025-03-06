@@ -35,6 +35,7 @@ from .callbacks import (
     _config,
     _document,
     _document_ids,
+    _export_notifs,
     _general_failure,
     _upload_failure,
     _meta,
@@ -60,8 +61,10 @@ from .typed import (
 )
 from .utils import (
     _default_tracks,
+    _get_status,
     _format_config_query,
     _set_config,
+    _sign_payload,
     hasher,
     PUBSUB_CHANNEL,
     CustomEncoder,
@@ -96,11 +99,26 @@ class QueryService:
         msg = job.meta["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
+
         if jso is None:
             return False
+
         payload: JSONObject = json.loads(jso)
-        payload["user"] = kwargs.get("user", "")
-        payload["room"] = kwargs.get("room", "")
+        _sign_payload(payload, kwargs)
+        total_requested = cast(int, payload.get("total_results_requested", 0))
+        status = _get_status(
+            cast(int, payload.get("total_results_so_far", 0)),
+            done_batches=cast(list, payload.get("done_batches")),
+            all_batches=cast(list, payload.get("all_batches")),
+            total_results_requested=total_requested,
+            search_all=cast(bool, payload.get("search_all", False)),
+            full=cast(bool, payload.get("full", False)),
+            time_so_far=cast(float, payload.get("total_duration", 0)),
+        )
+        if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
+            status = "finished"
+        payload["status"] = status
+
         # we may have to apply the latest post-processes...
         pps = cast(
             dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
@@ -127,17 +145,16 @@ class QueryService:
         }
 
         for msg in sent_and_meta_msgs:
-            # print(f"Retrieving sentences message: {msg}")
             print(f"Retrieving sentences or metadata message: {msg}")
             jso = self.app["redis"].get(msg)
             if jso is None:
                 failed = True
                 continue
             payload = json.loads(jso)
-            payload["user"] = kwargs.get("user", "")
-            payload["room"] = kwargs.get("room", "")
+            _sign_payload(payload, kwargs)
             payload["no_update_progress"] = True
             payload["no_restart"] = True
+            payload["status"] = status
             self.app["redis"].expire(msg, self.query_ttl)
             task = self.app["aredis"].publish(
                 PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
@@ -199,24 +216,17 @@ class QueryService:
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
             if job.get_status() == "finished":
-                if is_first and not kwargs["full"]:
-                    success = await self.send_all_data(job, **kwargs)
-                    if success:
-                        return job, None
-                if not kwargs["full"]:
-                    success = await self.send_all_data(first_job, **kwargs)
-                if not kwargs["full"]:
-                    _query(
-                        job,
-                        self.app["redis"],
-                        job.result,
-                        user=kwargs.get("user", ""),
-                        room=kwargs.get("room", ""),
-                        full=kwargs["full"],
-                        post_processes=kwargs["post_processes"],
-                        current_kwic_lines=kwargs["current_kwic_lines"],
-                        from_memory=True,
-                    )
+                job_for_send_all_data = job if is_first else first_job
+                success = await self.send_all_data(job_for_send_all_data, **kwargs)
+                if success:
+                    return job, None
+                query_kwargs = {
+                    "post_processes": kwargs["post_processes"],
+                    "current_kwic_lines": kwargs["current_kwic_lines"],
+                    "from_memory": True,
+                }
+                _sign_payload(query_kwargs, kwargs)
+                _query(job, self.app["redis"], job.result, **query_kwargs)
                 return job, False
         except NoSuchJobError:
             pass
@@ -466,11 +476,9 @@ class QueryService:
                 print("Meta found in redis memory. Retrieving...")
                 kwa = {
                     "full": kwargs.get("full", False),
-                    "user": kwargs.get("user", ""),
-                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": kwargs.get("total_results_requested", 0),
                 }
+                _sign_payload(kwa, kwargs)
                 _meta(job, self.app["redis"], job.result, **kwa)
                 return [job.id]
         except NoSuchJobError:
@@ -494,18 +502,17 @@ class QueryService:
                 trr = kwargs.get("total_results_requested", 0)
                 kwa = {
                     "full": kwargs.get("full", False),
-                    "user": kwargs.get("user", ""),
-                    "room": kwargs.get("room", ""),
                     "from_memory": True,
-                    "total_results_requested": trr,
                 }
+                _sign_payload(kwa, cast(JSONObject, kwargs))
                 first_job_id = cast(dict, job.kwargs)["first_job"]
                 first_job = Job.fetch(first_job_id, connection=self.app["redis"])
                 all_sent_ids = first_job.meta.get("_sent_jobs", [])
                 results: list[RawSent] = []
                 for sj in all_sent_ids:
                     sent_job = Job.fetch(sj, connection=self.app["redis"])
-                    results += sent_job.result
+                    if sent_job.result:
+                        results += sent_job.result
                     if len(results) >= trr:
                         break
                 _sentences(job, self.app["redis"], results, **kwa)
@@ -548,6 +555,32 @@ class QueryService:
             job_timeout=self.timeout,
             args=(query,),
             kwargs=opts,
+        )
+        return job
+
+    async def get_export_notifs(self, user_id: str = "", hash: str = "") -> Job:
+        """
+        Get initial app configuration JSON
+        """
+        job: Job
+
+        query: str
+        # TODO: better check on symbols (use pgsql)
+        if user_id:
+            assert ";" not in user_id and "'" not in user_id
+            query = f"SELECT * FROM main.exports WHERE user_id = '{user_id}';"
+        elif hash:
+            assert ";" not in hash and "'" not in hash
+            query = f"SELECT * FROM main.exports WHERE query_hash = '{hash}';"
+
+        job = self.app["internal"].enqueue(
+            _db_query,
+            on_success=Callback(_export_notifs, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query,),
+            kwargs={"user": user_id, "hash": hash},
         )
         return job
 

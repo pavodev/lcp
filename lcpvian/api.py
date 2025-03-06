@@ -14,6 +14,7 @@ except ImportError:
 from aiohttp import web
 from rq.job import Job
 
+from .exporter_xml import ExporterXml
 from .query import query as submit_query
 from .typed import JSONObject
 from .utils import Timer
@@ -80,6 +81,21 @@ async def query(corpus: int, query: str) -> None:
 
 
 async def api_query(request: web.Request) -> web.Response:
+    req_json = await request.json()
+    if hash := req_json.get("export", ""):
+        config = request.app["config"]
+        # TODO: always run a query first with the desired number of results
+        # Need to handle partitions
+        exporter = ExporterXml(hash, request.app["redis"], config)
+        await exporter.export()
+        return web.json_response({"status": 200, "message": "export complete"})
+    if not all(
+        h in ("X-API-Key", "X-API-Secret") if h.startswith("X-") else True
+        for h in request.headers
+    ):
+        raise web.HTTPForbidden(
+            text="API authenticated access only allowed via key-secret pair"
+        )
     res = await submit_query(request, api=True)
     res_json = json.loads(res.text)
     job_id = res_json.get("job", "")
@@ -93,38 +109,39 @@ async def api_query(request: web.Request) -> web.Response:
                 break
             await asyncio.sleep(5)
 
-        export_job_timer = Timer(QUERY_TIMEOUT)
-        while True:
-            assert not export_job_timer.elapsed(), TimeoutError(
-                "Could not run export job in time"
-            )
-            export_job = next(
-                (
-                    j
-                    for j in [
-                        Job.fetch(jid, request.app["redis"])
-                        for jid in request.app[
-                            "background"
-                        ].started_job_registry.get_job_ids()
-                    ]
-                    + [
-                        Job.fetch(jid, request.app["redis"])
-                        for jid in request.app[
-                            "background"
-                        ].finished_job_registry.get_job_ids()
-                    ]
-                    if job_id in j.args
-                ),
-                None,
-            )
-            if export_job and export_job.is_finished:
-                break
-            await asyncio.sleep(5)
+        # export_job_timer = Timer(QUERY_TIMEOUT)
+        # while True:
+        #     assert not export_job_timer.elapsed(), TimeoutError(
+        #         "Could not run export job in time"
+        #     )
+        #     export_job = next(
+        #         (
+        #             j
+        #             for j in [
+        #                 Job.fetch(jid, request.app["redis"])
+        #                 for jid in request.app[
+        #                     "background"
+        #                 ].started_job_registry.get_job_ids()
+        #             ]
+        #             + [
+        #                 Job.fetch(jid, request.app["redis"])
+        #                 for jid in request.app[
+        #                     "background"
+        #                 ].finished_job_registry.get_job_ids()
+        #             ]
+        #             if job_id in j.args
+        #         ),
+        #         None,
+        #     )
+        #     if export_job and export_job.is_finished:
+        #         break
+        #     await asyncio.sleep(5)
 
-        res_str = ""
-        with open(export_job.args[0], "r") as export_file:
-            while t := export_file.read():
-                res_str += t
+        # res_str = ""
+        # with open(export_job.args[0], "r") as export_file:
+        #     while t := export_file.read():
+        #         res_str += t
+        res_str = str(Job.fetch(job_id, request.app["redis"]).result)
 
     except TimeoutError as err:
         return web.json_response({"error": err.strerror, "status": 408})

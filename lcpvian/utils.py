@@ -20,6 +20,7 @@ from datetime import date, datetime
 from hashlib import md5
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq.registry import FinishedJobRegistry
 
 from aiohttp import web
 
@@ -51,12 +52,16 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
+    SentJob,
+    QueryArgs,
     Websockets,
 )
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
+
+PSQL_NAMEDATALEN = int(os.getenv("PSQL_NAMEDATALEN", 64))
 
 TRUES = {"true", "1", "y", "yes"}
 FALSES = {"", "0", "null", "none"}
@@ -231,6 +236,26 @@ def setup() -> None:
             then run `lcp` and `lcp-worker` commands to start app
             """.strip()
         )
+
+
+def sanitize_filename(filename: str) -> str:
+    return re.sub(r"^[ .]|[/<>:\"\\|?*]+|[ .]$", "_", filename)
+
+
+def sanitize_xml_attribute_name(name: str) -> str:
+    # Replace invalid characters with an underscore
+    # Invalid characters include anything that is not a valid XML character
+    name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
+
+    # Ensure name starts with a letter or underscore
+    if name and not name[0].isalpha() and name[0] != "_":
+        name = "_" + name  # Prepend an underscore if it starts with a digit
+
+    # Additional rule: XML names cannot be a vs reserved name ('xml' in any case)
+    if name.lower() == "xml":
+        name = "xml_attr"  # Change if it conflicts with reserved name
+
+    return name
 
 
 def ensure_authorised(func: Callable[..., Any]) -> Callable[..., Any]:
@@ -514,7 +539,7 @@ def _row_to_value(
     layer = corpus_template.get("layer", {})
     fc = corpus_template.get("firstClass", {})
     tok = fc.get("token", "")
-    cols = layer.get(tok, {}).get("attributes", {})
+    cols = [str(k) for k in layer.get(tok, {}).get("attributes", {}).keys()]
 
     projects: list[str] = corpus_template.get("projects", [])
     if not projects:
@@ -602,6 +627,66 @@ def _get_associated_query_job(
     return depended
 
 
+def _get_all_jobs_from_hash(
+    hash: str,
+    connection: "RedisConnection[bytes]",
+) -> tuple[list[Job], list[Job], list[Job]]:
+    """
+    Helper to get all the query, sent and meta jobs from a hash
+    """
+    query_jobs: list[Job] = []
+    sent_jobs: list[Job] = []
+    meta_jobs: list[Job] = []
+
+    main_job = Job.fetch(hash, connection=connection)
+    finished_jobs = [
+        Job.fetch(jid, connection=connection)
+        for registry in [
+            FinishedJobRegistry(name=x, connection=connection)
+            for x in ("query", "background")
+        ]
+        + [main_job.finished_job_registry]
+        for jid in registry.get_job_ids()
+    ]
+    for j in finished_jobs:
+        j_kwargs = cast(dict, j.kwargs)
+        if j_kwargs.get("first_job") != hash and j.id != hash:
+            continue
+        if j_kwargs.get("meta_query"):
+            meta_jobs.append(j)
+        elif j_kwargs.get("sentences_query"):
+            sent_jobs.append(j)
+        else:
+            query_jobs.append(j)
+    query_jobs_sorted = sorted(
+        query_jobs, key=lambda j: len(cast(dict, j.kwargs).get("done_batches", []))
+    )
+    return (query_jobs_sorted, sent_jobs, meta_jobs)
+
+
+def _get_prep_segment(
+    segment_id: str, sentence_jobs: list[Job], first_job: Job
+) -> tuple[str, int, list]:
+    try:
+        sid, s_offset, s_tokens = next(
+            r for sj in sentence_jobs for r in sj.result if str(r[0]) == segment_id
+        )
+    except:
+        sid, s_offset, s_tokens = next(
+            (si, so, st)
+            for msg_id in first_job.meta.get("sent_job_ws_messages", {})
+            for si, (so, st) in cast(
+                dict,
+                json.loads(first_job.connection.get(msg_id) or b"{}"),
+            )
+            .get("result", {})
+            .get("-1", {})
+            .items()
+            if str(si) == segment_id
+        )
+    return (sid, s_offset, s_tokens)
+
+
 def _sanitize_corpus_name(corpus_name: str) -> str:
     cn = re.sub(r"\W", "_", corpus_name)
     cn = re.sub(r"_+", "_", cn)
@@ -610,7 +695,19 @@ def _sanitize_corpus_name(corpus_name: str) -> str:
 
 def _schema_from_corpus_name(corpus_name: str, project_id: str) -> str:
     tmp_name = _sanitize_corpus_name(corpus_name)
-    return tmp_name + "_" + re.sub("-", "", re.sub(r"_+", "_", project_id))
+    while (
+        len(tmp_name) > 1
+        and len(
+            str.encode(
+                schema_name := re.sub(
+                    "-", "", re.sub(r"_+", "_", tmp_name + "_" + project_id)
+                )
+            )
+        )
+        > PSQL_NAMEDATALEN - 5  # Leave some room for the version suffix
+    ):
+        tmp_name = tmp_name[0:-1]
+    return schema_name
 
 
 def format_query_params(
@@ -637,6 +734,8 @@ def format_query_params(
 def format_meta_lines(
     query: str, result: list[dict[int, str | dict[Any, Any]]]
 ) -> dict[str, Any] | None:
+    if not result:
+        return {}
     # replace this with actual upstream handling of column names
     pre_columns = re.match(META_QUERY_REGEXP, query)
     if not pre_columns:
@@ -818,6 +917,42 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
+def _get_query_args(connection: RedisConnection, hash: str) -> list[QueryArgs]:
+    qas_json = connection.get(f"query_args_{hash}")
+    qas = json.loads(qas_json) if qas_json else []
+    return qas
+
+
+def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+    hash = qi_args.get("hash", "")
+    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
+    if not next((x for x in all_query_args if x == qi_args), None):
+        all_query_args.append(qi_args)
+    connection.set(f"query_args_{hash}", json.dumps(all_query_args))
+
+
+def _sign_payload(
+    payload: dict[str, Any] | JSONObject | SentJob,
+    kwargs: dict[str, Any] | QueryArgs | SentJob,
+) -> None:
+    to_export = kwargs.get("to_export")
+    kwargs_to_payload_keys = (
+        "user",
+        "room",
+        "total_results_requested",
+        "offset",
+        "full",
+    )
+    for k in kwargs_to_payload_keys:
+        if k not in kwargs:
+            continue
+        payload[k] = kwargs[k]  # type: ignore
+    if to_export:
+        payload["to_export"] = to_export
+    else:
+        payload.pop("to_export", None)
+
+
 def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     """
     Connect to the shared redis instance (if it exists) and call _publish_msg on it
@@ -826,10 +961,12 @@ def _sharepublish_msg(message: JSONObject | str | bytes, msg_id: str) -> None:
     redis_shared_url = os.getenv(
         "REDIS_SHARED_URL", os.getenv("REDIS_URL", "redis://localhost:6379")
     )
-    if redis_shared_db_index < 0:
-        return
 
-    full_url = f"{redis_shared_url}/{redis_shared_db_index}"
+    full_url = (
+        redis_shared_url
+        if redis_shared_db_index < 0
+        else f"{redis_shared_url}/{redis_shared_db_index}"
+    )
     shared_connection = RedisConnection.from_url(full_url)
     _publish_msg(shared_connection, message, msg_id)
 
@@ -846,13 +983,6 @@ def _publish_msg(
     connection.expire(msg_id, MESSAGE_TTL)
     connection.publish(PUBSUB_CHANNEL, json.dumps({"msg_id": msg_id}))
     return None
-
-
-def results_dir_for_corpus(config: Any) -> str:
-    dir = os.path.join(RESULTS_DIR, config.get("schema_path", "anonymous"))
-    if not os.path.exists(dir):
-        os.mkdir(dir)
-    return dir
 
 
 def hasher(arg):

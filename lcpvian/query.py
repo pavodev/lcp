@@ -26,11 +26,11 @@ from typing import cast
 from aiohttp import web
 from rq.job import Job
 
-from .export import export
+from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import ensure_authorised, push_msg
+from .utils import _set_query_args, ensure_authorised, push_msg
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -166,7 +166,7 @@ async def _query_iteration(
     if (
         qi.current_batch is not None
         and qi.job is not None
-        and do_sents is not None
+        and do_sents
         and not qi.resume
     ):
         print(f"\nNow querying: {schema_table} ... {query_job.id}")
@@ -233,11 +233,48 @@ async def query(
         app = request.app
         if api:
             request_data["room"] = "api"
-            corpus_id: int = request_data.get("corpora", [0])[0]
-            request_data["to_export"] = request_data.get(
-                "to_export", {"format": "dump", "config": app["config"][str(corpus_id)]}
-            )
+            request_data["to_export"] = request_data.get("to_export") or {
+                "format": "xml"
+            }
         qi = await QueryIteration.from_request(request_data, app, api=api)
+        # Check permission
+        authenticator = cast(Authentication, app["auth_class"](app))
+        user_data: dict = {}
+        if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
+            user_data = await authenticator.check_api_key(request)
+        else:
+            user_data = await authenticator.user_details(request)
+        app_type = str(request_data.get("appType", "lcp"))
+        app_type = (
+            "lcp"
+            if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"}
+            else app_type
+        )
+        allowed = all(
+            authenticator.check_corpus_allowed(
+                str(cid), qi.config[str(cid)], user_data, app_type, get_all=False
+            )
+            for cid in qi.corpora
+        )
+        if not allowed:
+            fail: dict[str, str] = {
+                "status": "403",
+                "error": "Forbidden",
+                "action": "query_error",
+                "user": qi.user,
+                "room": qi.room or "",
+                "info": "Attempted access to an unauthorized corpus",
+            }
+            msg = "Attempted access to an unauthorized corpus"
+            # # alert everyone possible about this problem:
+            print(msg)
+            logging.error(msg, extra=fail)
+            payload = cast(JSONObject, fail)
+            room: str = qi.room or ""
+            just: tuple[str, str] = (room, qi.user)
+            await push_msg(qi.app["websockets"], room, payload, just=just)
+            print("pushed message")
+            raise web.HTTPForbidden(text=msg)
 
     # prepare for query iterations (just one if not simultaneous mode)
     iterations = len(qi.all_batches) if qi.simultaneous else 1
@@ -245,28 +282,21 @@ async def query(
     out: Iteration
 
     try:
+        set_qi_args = False
         for it in range(iterations):
             qi = await _query_iteration(qi, it)
             if not isinstance(qi, QueryIteration):
                 return qi
-            elif qi.to_export:
-                ready_to_export = len(qi.done_batches) == len(
-                    qi.all_batches
-                ) or qi.to_export.get("preview")
-                print("all batches", qi.all_batches)
-                print("done batches", qi.done_batches)
-                if ready_to_export:
-                    await export(qi.app, qi.to_export, qi.first_job)
-                # elif qi.job and len(qi.done_batches)+1 == len(qi.all_batches):
-                else:
-                    qi_job = cast(Job, qi.job)
-                    qi_job.meta["to_export"] = qi.to_export
-                    qi_job.save_meta()
+            # Set qi_args on the first non-manual request
+            if not manual and not set_qi_args:
+                qi_args = qi.get_query_args()
+                _set_query_args(app["redis"], qi_args)
+                set_qi_args = True
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)
         tb = traceback.format_exc()
-        fail: dict[str, str] = {
+        fail = {
             "status": "error",
             "action": "query_error",
             "type": str(type(err)),
@@ -280,8 +310,8 @@ async def query(
         print(f"{msg}:\n\n{tb}")
         logging.error(msg, extra=fail)
         payload = cast(JSONObject, fail)
-        room: str = qi.room or ""
-        just: tuple[str, str] = (room, qi.user)
+        room = qi.room or ""
+        just = (room, qi.user)
         await push_msg(qi.app["websockets"], room, payload, just=just)
         return web.json_response(fail)
 

@@ -15,25 +15,11 @@ const routes = [
     },
   },
   {
-    name: "player",
-    path: "/player",
-    alias: "/player/:id/:name/",
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () =>
-      import("../views/PlayerView.vue"),
-    meta: {
-      requiresAuth: true,
-    },
-  },
-  {
     name: "query",
     path: "/query",
     alias: "/query/:id/:name/",
     component: () =>
-      // import("../views/QueryView.vue"),
-      import("../views/QueryViewV2.vue"),
+      import("../views/QueryView.vue"),
     meta: {
       requiresAuth: true,
     },

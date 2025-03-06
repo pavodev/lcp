@@ -145,10 +145,20 @@ class BaseArgs(TypedDict, total=False):
 
 
 class QueryArgs(BaseArgs):
+    """
+    The request-specific arguments/parameters associated with a corpus query
+    Multiple users can request the same corpus query but with different args,
+    like offset, requested, full, export, etc.
+    """
+
+    hash: str
     full: bool
     post_processes: Any
     current_kwic_lines: Any
     from_memory: bool
+    to_export: Any
+    total_results_requested: int
+    offset: int
 
 
 class DocIDArgs(BaseArgs):
@@ -164,3 +174,4 @@ class SentJob(BaseArgs, total=False):
     offset: int
     sentences_query: str
     total_results_requested: int
+    to_export: Any

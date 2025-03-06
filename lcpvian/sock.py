@@ -46,7 +46,7 @@ from .utils import push_msg
 from .validate import validate
 
 from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config
+from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config, _sign_payload
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -68,16 +68,23 @@ async def _process_message(
     if not message.get("data"):
         return
     data = json.loads(cast(bytes, message["data"]))
-    raw: bytes = app["redis"].get(data["msg_id"])
-    if not raw and "shared_redis" in app:
-        raw = app["shared_redis"].get(data["msg_id"])
-    if not raw:
-        return None
-    payload: JSONObject = json.loads(raw)
-    payload["user"] = data.get("user", payload.get("user", ""))
-    payload["room"] = data.get("room", payload.get("room", ""))
-    if not payload or not isinstance(payload, dict):
-        return
+    if "msg_id" in data:
+        raw: bytes = app["redis"].get(data["msg_id"])
+        if not raw and "shared_redis" in app:
+            raw = app["shared_redis"].get(data["msg_id"])
+        if not raw:
+            return None
+        payload: JSONObject = json.loads(raw)
+        if "user" in data or "room" in data:
+            # If the incoming data contains fresher information than from redis memory,
+            # (as determined by the presence of a user/room in data)
+            # then sign the payload with the information contained in data
+            _sign_payload(payload, data)
+        payload["status"] = data.get("status", payload.get("status", ""))
+        if not payload or not isinstance(payload, dict):
+            return
+    else:
+        payload = data
     await _handle_message(payload, channel, app)
     return None
 
@@ -195,6 +202,9 @@ async def _handle_message(
     user = cast(str, payload.get("user", ""))
     room = cast(str, payload.get("room", ""))
     action = payload.get("action", "")
+    status = payload.get("status", "")
+    do_full = payload.get("full") and status != "finished"
+    to_export = payload.get("to_export")
     simples = (
         "fetch_queries",
         "store_query",
@@ -202,7 +212,7 @@ async def _handle_message(
         "document",
         "document_ids",
         "started_export",
-        "export_link",
+        "export_complete",
     )
     errors = (
         "failed",
@@ -226,6 +236,10 @@ async def _handle_message(
             app["redis"].set(uu, json.dumps(payload))
         app["redis"].expire(uu, MESSAGE_TTL)
 
+    if action == "export_complete":
+        await app["query_service"].get_export_notifs(hash=payload.get("hash", ""))
+        return
+
     if action == "sentences":
         base = "rq:job:"
         first_id = cast(str, payload["first_job"])
@@ -242,13 +256,14 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    can_send = payload.get("can_send", True)
+    can_send = payload.get("can_send", True) and not to_export
 
     sent_allowed = action in ("sentences", "meta") and can_send
     to_submit: None | Coroutine[None, None, web.Response] = None
 
     if (
-        action in ("sentences", "meta")
+        (status == "partial" or do_full)
+        and action in ("sentences", "meta")
         and payload.get("submit_query")
         and not payload.get("no_restart")
     ):
@@ -260,13 +275,23 @@ async def _handle_message(
         for drop in drops:
             payload.pop(drop, None)
 
+    if to_export and action == "query_result" and status in ("satisfied", "finished"):
+        export_obj: Any = to_export
+        if isinstance(export_obj, str):
+            export_obj = json.loads(cast(str, to_export))
+        export_obj["user"] = user
+        export_obj["room"] = room
+        corpus_id: str = str(cast(list, payload["current_batch"])[0])
+        export_obj["config"] = app["config"][corpus_id]
+        await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
+
     if action in simples or sent_allowed:
         send_sents = not payload.get("full") and (
             action == "sentences"
             and len(cast(Results, payload["result"])) > 2
             or action == "meta"
         )
-        if action in simples or send_sents:
+        if not to_export and action in simples or send_sents:
             await push_msg(
                 app["websockets"],
                 room,
@@ -288,6 +313,24 @@ async def _handle_message(
     # handle configuration message
     if action == "set_config":
         return await _set_config(payload, app)
+
+    if action == "export_notifs":
+        room = ""
+        for rid, users in app["websockets"].items():
+            for _, uid in users:
+                if uid != user:
+                    continue
+                room = rid
+                break
+        if room:
+            await push_msg(
+                app["websockets"],
+                room,
+                payload,
+                skip=None,
+                just=(room, user),
+            )
+        return
 
     # handle the final stage of a corpus being uploaded.
     # - add the corpus to config
@@ -315,6 +358,7 @@ async def _handle_message(
             await push_msg(app["websockets"], "", payload)
 
     if action == "query_result":
+        payload["can_send"] = can_send
         await _handle_query(app, payload, user, room)
 
     if to_submit is not None:
@@ -382,18 +426,9 @@ async def _handle_query(
         and not payload.get("no_restart")
     ):
         payload["config"] = app["config"]
-        if room == "api":
-            payload["to_export"] = {
-                "room": "api",
-                "user": "api",
-                "format": "dump",
-                "config": cast(dict[str, Any], app["config"]).get(
-                    str(cast(list[int], payload["current_batch"])[0]), {}
-                ),
-            }
         to_submit = query(None, manual=payload, app=app)
 
-    if do_full:
+    if do_full and "progress" in payload:
         prog = cast(dict[str, JSON], payload["progress"])
         await push_msg(
             app["websockets"],
@@ -434,6 +469,7 @@ async def _handle_query(
             "batches_done",
             "simultaneous",
             "consoleSQL",
+            "to_export",
         ]
         payload = {k: v for k, v in payload.items() if k in keys}
         await push_msg(
@@ -447,22 +483,6 @@ async def _handle_query(
     if to_submit is not None:
         await to_submit
 
-    if to_export := cast(dict, the_job.kwargs).get(
-        "to_export", the_job.meta.get("to_export")
-    ):
-        tjk = cast(dict, the_job.kwargs)
-        done_batches = cast(list, tjk.get("done_batches", []))
-        all_batches = cast(list, tjk.get("all_batches", []))
-        if len(done_batches) + 1 == len(all_batches) or status == "satisfied":
-            await export(app, to_export, tjk.get("first_job", ""))
-
-
-async def _ait(self: WSMessage) -> WSMessage:
-    """
-    Just a hack to fix aiohttp websocket response
-    """
-    return self
-
 
 async def sock(request: web.Request) -> web.WebSocketResponse:
     """
@@ -470,7 +490,6 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     queries have finished processing
     """
     ws = web.WebSocketResponse(autoping=True, heartbeat=17)
-    # setattr(ws, "__aiter__", _ait)
 
     await ws.prepare(request)
 
