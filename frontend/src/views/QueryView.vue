@@ -185,16 +185,11 @@
                     </div>
                     <div class="mt-3">
                       <button type="button"
-                        v-if="queryStatus in { 'satisfied': 1, 'finished': 1 } && !loading && userData.user.anon != true"
+                        v-if="!loading && userData.user.anon != true"
+                        :disabled="isQueryValidData && isQueryValidData.valid != true"
                         class="btn btn-primary me-1 mb-1" data-bs-toggle="modal" data-bs-target="#saveQueryModal">
                         <FontAwesomeIcon :icon="['fas', 'file-export']" />
                         {{ $t('common-save-query') }}
-                      </button>
-
-                      <button type="button" v-if="!loading && userData.user.anon != true"
-                        class="btn btn-primary me-1 mb-1" @click="fetch()">
-                        <FontAwesomeIcon :icon="['fas', 'file-export']" />
-                        Fetch queries
                       </button>
 
                       <div>
@@ -1012,20 +1007,33 @@ export default {
           return;
         }
         if (data["action"] === "fetch_queries") {
-          const queries = JSON.parse(data["queries"]);
-          console.log(data['queries']);
+          if (!data["queries"]) return;
 
-          if (queries && queries.length > 0) {
-            this.userQueries = queries;
-            // this.selectedQuery = queries[0];
+          let queries;
+          if (typeof data["queries"] === 'string') {
+            try {
+              queries = JSON.parse(data["queries"]);
+            } catch (e) {
+              queries = [];
+            }
+          } else {
+            queries = data["queries"];
           }
 
+          console.log(queries);
+          this.userQueries = queries;
           return;
         } else if (data["action"] === "store_query") {
-          useNotificationStore().add({
-            type: "success",
-            text: `Query successfully saved.`
-          });
+          console.log('store_query', data);
+
+          if(data['status'] === 'success'){
+            useNotificationStore().add({
+              type: "success",
+              text: `Query successfully saved.`
+            });
+          }
+
+          this.fetch(); // Fetch the update query list
 
           return;
         } else if (data["action"] == "export_link") {
@@ -1330,7 +1338,7 @@ export default {
       let data = {
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
-        query: this.query,
+        query: this.queryDQD,
         user: this.userData.user.id,
         room: this.roomId,
         // room: null,
@@ -1353,13 +1361,13 @@ export default {
       useCorpusStore().fetchQueries(data);
     },
     handleQuerySelection(selectedQuery) {
-      console.log('Query selected!', selectedQuery);
+      // console.log('Query selected!', selectedQuery);
       console.log('Query selected!', selectedQuery.query.query);
       console.log('Query selected!', this.queryDQD);
-      console.log('Query selected!', this.query);
-      
-      this.defaultQueryDQD = this.queryDQD;
-      // this.updateQueryDQD(selectedQuery.query.query);
+      // console.log('Query selected!', this.query);
+      this.queryDQD = selectedQuery.query.query;
+      this.defaultQueryDQD = selectedQuery.query.query;
+      this.updateQueryDQD(selectedQuery.query.query);
     },
     dismissResultsNotification() {
       this.showResultsNotification = false;
@@ -1413,7 +1421,7 @@ export default {
       else return this.percentageDone;
     },
     processedSavedQueries() {
-      if(!this.userQueries) return [];
+      if (!this.userQueries) return [];
 
       return this.userQueries.map((q) => ({
         ...q,
