@@ -24,6 +24,16 @@ const routes = [
       requiresAuth: true,
     },
   },
+  {
+    name: "user",
+    path: "/user",
+    // alias: "/user/:id/",
+    component: () =>
+      import("../views/UserView.vue"),
+    meta: {
+      requiresAuth: true,
+    },
+  },
 ];
 
 const router = createRouter({
