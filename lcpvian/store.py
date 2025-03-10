@@ -19,7 +19,8 @@ async def fetch_queries(request: web.Request) -> web.Response:
     request_data: dict[str, str] = await request.json()
     user = request_data["user"]
     room = request_data.get("room")
-    job: Job = request.app["query_service"].fetch_queries(user, room)
+    query_type = request_data.get("query_type")
+    job: Job = request.app["query_service"].fetch_queries(user, room, query_type)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
 
@@ -42,6 +43,7 @@ async def store_query(request: web.Request) -> web.Response:
         languages=request_data["languages"],
         total_results_requested=request_data["total_results_requested"],
         query_name=request_data["query_name"],
+        query_type=request_data["query_type"],
     )
     idx = uuid4()
     args = (to_store, idx, user, room)

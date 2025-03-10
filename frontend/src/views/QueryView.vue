@@ -105,27 +105,27 @@
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
                           <button class="nav-link" id="nav-plaintext-tab" data-bs-toggle="tab"
                             data-bs-target="#nav-plaintext" type="button" role="tab" aria-controls="nav-plaintext"
-                            aria-selected="false" @click="currentTab = 'text'">
+                            aria-selected="false" @click="setTab('text')">
                             {{ $t('common-text') }}
                           </button>
                           <button class="nav-link active" id="nav-dqd-tab" data-bs-toggle="tab"
                             data-bs-target="#nav-dqd" type="button" role="tab" aria-controls="nav-dqd"
-                            aria-selected="true" @click="currentTab = 'dqd'">
+                            aria-selected="true" @click="setTab('dqd')">
                             DQD
                           </button>
                           <button class="nav-link" id="nav-cqp-tab" data-bs-toggle="tab" data-bs-target="#nav-cqp"
                             type="button" role="tab" aria-controls="nav-cqp" aria-selected="false"
-                            @click="currentTab = 'cqp'">
+                            @click="setTab('cqp')">
                             CQP
                           </button>
                           <button class="nav-link" id="nav-json-tab" data-bs-toggle="tab" data-bs-target="#nav-json"
                             type="button" role="tab" aria-controls="nav-json" aria-selected="false"
-                            @click="currentTab = 'json'">
+                            @click="setTab('json')">
                             JSON
                           </button>
                           <button v-if="sqlQuery" class="nav-link" id="nav-sql-tab" data-bs-toggle="tab"
                             data-bs-target="#nav-sql" type="button" role="tab" aria-controls="nav-sql"
-                            aria-selected="false" @click="currentTab = 'sql'">
+                            aria-selected="false" @click="setTab(currentTab = 'sql')">
                             SQL
                           </button>
                         </div>
@@ -184,15 +184,14 @@
                       </div>
                     </div>
                     <div class="mt-3">
-                      <button type="button"
-                        v-if="!loading && userData.user.anon != true"
-                        :disabled="isQueryValidData && isQueryValidData.valid != true"
-                        class="btn btn-primary me-1 mb-1" data-bs-toggle="modal" data-bs-target="#saveQueryModal">
+                      <button type="button" v-if="!loading && userData.user.anon != true && userQueryVisible()"
+                        :disabled="isQueryValidData && isQueryValidData.valid != true" class="btn btn-primary me-1 mb-1"
+                        data-bs-toggle="modal" data-bs-target="#saveQueryModal">
                         <FontAwesomeIcon :icon="['fas', 'file-export']" />
                         {{ $t('common-save-query') }}
                       </button>
 
-                      <div>
+                      <div v-if="userQueryVisible()">
                         <multiselect v-model="selectedQuery" :options="processedSavedQueries" :searchable="true"
                           :clear-on-select="false" :close-on-select="true" placeholder="Select a saved query"
                           label="query_name" track-by="idx" @select="handleQuerySelection"></multiselect>
@@ -836,6 +835,10 @@ export default {
     setMainTab() {
       this.activeMainTab = 'query'
     },
+    setTab(tab){
+      this.selectedQuery = null;
+      this.currentTab = tab;
+    },
     hoverResultLine(line) {
       this.hoveredResult = line;
     },
@@ -1026,7 +1029,7 @@ export default {
         } else if (data["action"] === "store_query") {
           console.log('store_query', data);
 
-          if(data['status'] === 'success'){
+          if (data['status'] === 'success') {
             useNotificationStore().add({
               type: "success",
               text: `Query successfully saved.`
@@ -1334,11 +1337,26 @@ export default {
         corpus: this.selectedCorpora.value
       });
     },
+    getCurrentQuery() {
+      if (this.currentTab == "text")
+        return this.textsearch;
+      if (this.currentTab == "dqd")
+        return this.queryDQD + "\n";
+      if (this.currentTab == "cqp")
+        return this.cqp;
+    },
+    userQueryVisible() {
+      if (this.currentTab == "text" || this.currentTab == "dqd" || this.currentTab == "cqp") {
+        return true;
+      }
+
+      return false;
+    },
     saveQuery() {
       let data = {
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
-        query: this.queryDQD,
+        query: this.getCurrentQuery(),
         user: this.userData.user.id,
         room: this.roomId,
         // room: null,
@@ -1346,28 +1364,37 @@ export default {
         languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         query_name: this.queryName,
+        query_type: this.currentTab,
       };
 
       console.log('data', JSON.stringify(data));
 
+      this.queryName = "";
       useCorpusStore().saveQuery(data);
     },
     fetch() {
       let data = {
         user: this.userData.user.id,
         room: this.roomId,
+        // query_type: this.currentTab,
         // room: null,
       };
       useCorpusStore().fetchQueries(data);
     },
     handleQuerySelection(selectedQuery) {
-      // console.log('Query selected!', selectedQuery);
-      console.log('Query selected!', selectedQuery.query.query);
-      console.log('Query selected!', this.queryDQD);
-      // console.log('Query selected!', this.query);
-      this.queryDQD = selectedQuery.query.query;
-      this.defaultQueryDQD = selectedQuery.query.query;
-      this.updateQueryDQD(selectedQuery.query.query);
+      if (this.currentTab == "text"){
+        this.textsearch = selectedQuery.query.query;
+      }
+      else if (this.currentTab == "dqd"){
+        this.queryDQD = selectedQuery.query.query;
+        this.defaultQueryDQD = selectedQuery.query.query;
+        this.updateQueryDQD(selectedQuery.query.query);
+      }
+      else if (this.currentTab == "cqp"){
+        this.cqp = selectedQuery.query.query;
+      }
+
+      return;
     },
     dismissResultsNotification() {
       this.showResultsNotification = false;
@@ -1426,7 +1453,7 @@ export default {
       return this.userQueries.map((q) => ({
         ...q,
         query_name: q.query?.query_name || "",
-      }));
+      })).filter((q) => q.query?.query_type === this.currentTab);
     },
   },
   mounted() {

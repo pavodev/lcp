@@ -585,7 +585,7 @@ class QueryService:
         return job
 
     def fetch_queries(
-        self, user: str, room: str, queue: str = "internal", limit: int = 10
+        self, user: str, room: str, query_type: str, queue: str = "internal", limit: int = 10
     ) -> Job:
         """
         Get previous saved queries for this user/room
@@ -599,16 +599,26 @@ class QueryService:
 
         # query = f"""SELECT * FROM lcp_user.queries WHERE "user" = :user {room_info} ORDER BY created_at DESC LIMIT {limit};"""
 
-        query = (
-            """SELECT * FROM lcp_user.queries
-            WHERE "user" = :user
-            ORDER BY created_at DESC LIMIT {limit};"""
-        ).format(limit=limit)
+        if query_type:
+            params["query_type"] = query_type
+
+            query = (
+                """SELECT * FROM lcp_user.queries
+                WHERE "user" = :user AND query_type = :query_type
+                ORDER BY created_at DESC LIMIT {limit};"""
+            ).format(limit=limit)
+        else:
+            query = (
+                """SELECT * FROM lcp_user.queries
+                WHERE "user" = :user
+                ORDER BY created_at DESC LIMIT {limit};"""
+            ).format(limit=limit)
 
         opts = {
             "user": user,
             "room": room,
             "config": True,
+            "query_type": query_type
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -633,8 +643,8 @@ class QueryService:
         Add a saved query to the db
         """
         query = (
-            'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name) '
-            'VALUES (:idx, :query, :user, :room, :query_name);'
+            'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name, query_type) '
+            'VALUES (:idx, :query, :user, :room, :query_name, :query_type);'
         )
         kwargs = {
             "user": user,
@@ -648,7 +658,8 @@ class QueryService:
             "query": json.dumps(query_data, default=str),
             "user": user,
             "room": room,
-            "query_name": query_data["query_name"]
+            "query_name": query_data["query_name"],
+            "query_type": query_data["query_type"]
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
