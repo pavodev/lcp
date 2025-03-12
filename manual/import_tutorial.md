@@ -42,12 +42,17 @@ Note that we have decided to ignore the numbered divisions marked `1` and `2` fr
 
 Each annotation layer has its own TSV file, with one row per unit and one column for each annotation or "attribute" on that unit (besides one ID column). Applied to the example above, this means that we want three TSV files, one for "document", one for "segment" and one for "token". Focusing on the illustrated sample only, the token TSV file would have 7 rows (below the header), the segment TSV file would have 2 rows and the document TSV file would have a single row.
 
-Let us focus on tokens for now, with one annotation reporting whether a token was preceded by a single-quote character in the original transcript as `0` vs `1` in a column named "shortened", which applies to token number 2 `s`. Although the final TSV file will contain more columns, the table below is a first version of what we want to generate:
+Let us focus on tokens for now, with one annotation reporting whether a token was preceded by a single-quote character in the original transcript as `0` vs `1` in a column named "shortened", which applies to token number 2 (`s`). Although the final TSV file will contain more columns, the table below is a first version of what we want to generate:
 
 ```
 token_id	form	shortened
 1	Let	0
-
-
+2	s	1
+3	talk	0
+4	about	0
+5	finance	0
+6	One	0
+7	of	0
+```
 
 ## Part 2: time alignment
