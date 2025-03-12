@@ -36,7 +36,6 @@ export const useCorpusStore = defineStore("corpusData", {
     },
     deleteQuery(user_id, query_id) {
       httpApi.delete(`/user/${user_id}/query/${query_id}`).then((response) => {
-        console.log('DELETE RETURNED', response.data);
         return response.data;
       });
     },

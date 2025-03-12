@@ -675,34 +675,85 @@ class QueryService:
         )
         return job
     
-    def delete_query(
-        self, user_id: str, query_id: str, queue: str = "internal"
-    ) -> Job:
+    # def delete_query(
+    #     self, user_id: str, query_id: str, queue: str = "internal"
+    # ) -> Job:
+    #     """
+    #     Delete a query
+    #     """
+
+    #     # Convert the query_id string to a UUID object
+    #     try:
+    #         query_uuid = uuid.UUID(query_id)
+    #     except ValueError:
+    #         raise ValueError("Invalid query id provided")
+    
+    #     params: dict[str, str] = {"user": user_id, "idx": query_uuid}
+
+    #     print("Type of idx in params:", type(params["idx"]), flush=True)
+
+    #     # room_info: str = ""
+    #     # if room:
+    #     #     room_info = " AND room = :room"
+    #     #     params["room"] = room
+
+    #     # query = f"""DELETE FROM lcp_user.queries WHERE "user" = :user {room_info} AND idx = :idx"""
+
+    #     query = ('DELETE FROM lcp_user.queries ' 
+    #              'WHERE "user" = :user ' 
+    #              'AND idx = :idx '
+    #              'RETURNING idx;')
+
+    #     kwargs = {
+    #         "user": user_id,
+    #         "idx": query_id,
+    #         "delete": True,
+    #         "config": True
+    #     }
+
+    #     print(f"Deleting query with user={user_id}, idx={query_id} (UUID format: {query_uuid})", flush=True)
+        
+    #     job: Job = self.app[queue].enqueue(
+    #         _db_query,
+    #         result_ttl=self.query_ttl,
+    #         on_success=Callback(_deleted, self.callback_timeout),
+    #         on_failure=Callback(_general_failure, self.callback_timeout),
+    #         job_timeout=self.timeout,
+    #         args=(query, params),
+    #         kwargs=kwargs,
+    #     )
+    #     return job
+
+    def delete_query(self, user_id: str, query_id: str, queue: str = "internal") -> Job:
         """
-        Delete a query
+        Delete a query using a background job.
         """
-        params: dict[str, str] = {"user": user_id, "idx": uuid.UUID(query_id)}
+        # Convert the query_id string to a UUID object for proper binding.
+        try:
+            query_uuid = uuid.UUID(query_id)
+        except ValueError:
+            raise ValueError("Invalid query id provided")
+        
+        # Build parameters with the UUID object.
+        params: dict[str, any] = {"user": user_id, "idx": query_uuid}
 
         print("Type of idx in params:", type(params["idx"]), flush=True)
+        print(f"Deleting query with user={user_id}, idx={query_id} (UUID: {query_uuid})", flush=True)
 
-        # room_info: str = ""
-        # if room:
-        #     room_info = " AND room = :room"
-        #     params["room"] = room
-
-        # query = f"""DELETE FROM lcp_user.queries WHERE "user" = :user {room_info} AND idx = :idx"""
-
+        # DELETE query without a RETURNING clause.
         query = (
             """DELETE FROM lcp_user.queries
             WHERE "user" = :user
-            AND idx = :idx RETURNING idx"""
+            AND idx = :idx"""
         )
 
         opts = {
             "user": user_id,
-            "idx": query_id,
+            "idx": query_id,  # keep as string for logging and later use in the callback
+            "delete": True,
             "config": True
         }
+
         job: Job = self.app[queue].enqueue(
             _db_query,
             on_success=Callback(_deleted, self.callback_timeout),
@@ -713,6 +764,7 @@ class QueryService:
             kwargs=opts,
         )
         return job
+
 
     def update_metadata(
         self,

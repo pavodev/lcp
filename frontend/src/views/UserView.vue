@@ -251,10 +251,13 @@ export default {
       this.currentTab = tab;
     },
     onSocketMessage(data) {
+      console.log('WebSocket msg received: ', data);
+
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "fetch_queries") {
+          console.log('QUERIES RECEIVED', )
           if (!data["queries"]) return;
-
+          
           let queries;
           if (typeof data["queries"] === 'string') {
             try {
@@ -265,13 +268,16 @@ export default {
           } else {
             queries = data["queries"];
           }
-
+          
+          console.log('QUERIES RECEIVED', queries);
+          
           this.userQueries = queries;
           return;
         }
 
         if (data["action"] === "delete_query") {
           console.log('DELETED something', data);
+          this.fetch();
           return;
         }
 

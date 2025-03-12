@@ -831,29 +831,48 @@ def _queries(
         jso["queries"] = json.dumps(queries, default=str)
     return _publish_msg(connection, jso, msg_id)
 
-def _deleted(
-    job: Job,
-    connection: RedisConnection,
-    result: Any
-) -> None:
+# def _deleted(
+#     job: Job,
+#     connection: RedisConnection,
+#     result: Any
+# ) -> None:
+#     """
+#     delete a query
+#     """
+#     job_kwargs: dict = cast(dict, job.kwargs)
+#     idx: str | None = job_kwargs.get("idx")
+#     msg_id = str(uuid4())
+#     jso: dict[str, Any] = {
+#         "user": str(job_kwargs["user"]),
+#         "idx": idx,
+#         "status": "success",
+#         "action": "delete_query",
+#         "msg_id": msg_id,
+#     }
+    
+#     return _publish_msg(connection, jso, msg_id)
+
+def _deleted(job: Job, connection: RedisConnection, result: any) -> None:
     """
-    delete a query
+    Callback for successful deletion.
     """
     job_kwargs: dict = cast(dict, job.kwargs)
     action = "delete_query"
     room: str | None = job_kwargs.get("room")
-    idx: str | None = job_kwargs.get("idx")
+    # Since DELETE without RETURNING doesn't provide row data, we use the original query_id.
+    deleted_idx = job_kwargs.get("idx")
     msg_id = str(uuid4())
-    jso: dict[str, Any] = {
+    jso: dict[str, any] = {
         "user": str(job_kwargs["user"]),
         "room": room,
-        "idx": idx,
+        "idx": deleted_idx,
         "status": "success",
         "action": action,
         "msg_id": msg_id,
     }
     
     return _publish_msg(connection, jso, msg_id)
+
 
 
 def _swissdox_to_db_file(

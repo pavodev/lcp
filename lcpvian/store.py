@@ -46,10 +46,23 @@ async def store_query(request: web.Request) -> web.Response:
     info: dict[str, str] = {"status": "started", "job": job.id, "query_id": str(idx)}
     return web.json_response(info)
 
+# @ensure_authorised
+# async def delete_query(request: web.Request) -> web.Response:
+#     """
+#     User wants to delete their stored query from the DB
+#     """
+#     user_id: str = request.match_info["user_id"]
+#     query_id: str = request.match_info["query_id"]
+
+#     job: Job = request.app["query_service"].delete_query(user_id, query_id)
+#     info: dict[str, str] = {"status": "started", "job": job.id}
+#     return web.json_response(info)
+
 @ensure_authorised
 async def delete_query(request: web.Request) -> web.Response:
     """
-    User wants to delete their stored query from the DB
+    User wants to delete their stored query from the DB.
+    Expects URL parameters: /delete_query/{user_id}/{query_id}
     """
     user_id: str = request.match_info["user_id"]
     query_id: str = request.match_info["query_id"]

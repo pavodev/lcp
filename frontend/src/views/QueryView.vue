@@ -201,6 +201,14 @@
                       </div>
                     </div>
                   </div>
+                  <div class="col-6">
+                    <div class="corpus-graph mt-3" v-if="selectedCorpora">
+                      <FontAwesomeIcon :icon="['fas', 'expand']" @click="openGraphInModal" data-bs-toggle="modal"
+                        data-bs-target="#corpusDetailsModal" />
+                      <CorpusGraphView :corpus="selectedCorpora.corpus" :key="graphIndex" v-if="showGraph == 'main'"
+                        @graphReady="resizeGraph" />
+                    </div>
+                  </div>
                 </div>
               </div>
               <div class="tab-pane fade" :class="{ active: activeMainTab === 'data', show: activeMainTab === 'data' }"
