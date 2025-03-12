@@ -67,6 +67,9 @@ CREATE TABLE main.exports (
 CREATE INDEX ON main.exports (user_id);
 CREATE INDEX ON main.exports (query_hash);
 
+GRANT SELECT, INSERT, UPDATE ON main.exports TO lcp_production_owner;
+
+
 -- global ENUM types
 CREATE TYPE main.udep AS ENUM (
    'acl'
