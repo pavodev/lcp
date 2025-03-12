@@ -651,7 +651,6 @@ res => plain
         Run the entire import pipeline: add data, set indices, grant rights
         """
         await self.import_corpus()
-        self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"
         cons = "\n".join(self.constraints)
         self.update_progress(f"Setting constraints...\n{cons}")
@@ -662,6 +661,7 @@ res => plain
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
         await self.collocations()
+        self.token_count = await self.get_token_count()
         self.update_progress(f"Granting select privileges for querying...")
         await self.run_script(self.grant_query_select)
         self.update_progress(f"Privileges granted!")

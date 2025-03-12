@@ -533,7 +533,7 @@ class CTProcessor:
 
     @staticmethod
     def _order_ct_layers(
-        layers: dict[str, dict[str, Any]]
+        layers: dict[str, dict[str, Any]],
     ) -> dict[str, dict[str, Any]]:
         # check if all layers referred to do exist
         referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
@@ -733,7 +733,9 @@ class CTProcessor:
                 entity_mapping["hasMeta"] = True
 
             else:
-                raise Exception(f"unknown type for attribute: '{attr}'")
+                raise Exception(
+                    f"unknown type for attribute: '{entity_name}'->'{attr}'"
+                )
 
         if map_attr:
             entity_mapping["attributes"] = cast(JSONObject, map_attr)
