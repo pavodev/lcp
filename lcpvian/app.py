@@ -57,7 +57,7 @@ from .project import project_users_invitation_remove, project_user_update
 from .query import query, refresh_config
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
-from .store import fetch_queries, store_query
+from .store import fetch_queries, store_query, delete_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
 from .lama import handle_lama_error
@@ -240,6 +240,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/query", "POST", query),
         ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
+        ("/user/{user_id}/query/{query_id}", "DELETE", delete_query),
         ("/upload", "POST", upload),
         ("/video", "GET", video),
         ("/ws", "GET", sock),

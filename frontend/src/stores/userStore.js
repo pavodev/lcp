@@ -21,7 +21,7 @@ export const useUserStore = defineStore("userData", {
   getters: {},
   actions: {
     fetchUserData() {
-      httpApi.get(`/settings`).then((r) => {
+      return httpApi.get(`/settings`).then((r) => {
         this.dataFetched = true
         this.userData = {
           publicProfiles: {},

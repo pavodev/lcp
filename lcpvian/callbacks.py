@@ -831,6 +831,30 @@ def _queries(
         jso["queries"] = json.dumps(queries, default=str)
     return _publish_msg(connection, jso, msg_id)
 
+def _deleted(
+    job: Job,
+    connection: RedisConnection,
+    result: Any
+) -> None:
+    """
+    delete a query
+    """
+    job_kwargs: dict = cast(dict, job.kwargs)
+    action = "delete_query"
+    room: str | None = job_kwargs.get("room")
+    idx: str | None = job_kwargs.get("idx")
+    msg_id = str(uuid4())
+    jso: dict[str, Any] = {
+        "user": str(job_kwargs["user"]),
+        "room": room,
+        "idx": idx,
+        "status": "success",
+        "action": action,
+        "msg_id": msg_id,
+    }
+    
+    return _publish_msg(connection, jso, msg_id)
+
 
 def _swissdox_to_db_file(
     job: Job,

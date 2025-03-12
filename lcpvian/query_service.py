@@ -20,6 +20,7 @@ save ourselves from running duplicate DB queries.
 
 import json
 import os
+import uuid
 
 from collections.abc import Coroutine
 from typing import Any, final, Unpack, cast
@@ -40,6 +41,7 @@ from .callbacks import (
     _upload_failure,
     _meta,
     _queries,
+    _deleted,
     _query,
     _schema,
     _sentences,
@@ -630,6 +632,7 @@ class QueryService:
             kwargs=opts,
         )
         return job
+    
 
     def store_query(
         self,
@@ -669,6 +672,45 @@ class QueryService:
             job_timeout=self.timeout,
             args=(query, params),
             kwargs=kwargs,
+        )
+        return job
+    
+    def delete_query(
+        self, user_id: str, query_id: str, queue: str = "internal"
+    ) -> Job:
+        """
+        Delete a query
+        """
+        params: dict[str, str] = {"user": user_id, "idx": uuid.UUID(query_id)}
+
+        print("Type of idx in params:", type(params["idx"]), flush=True)
+
+        # room_info: str = ""
+        # if room:
+        #     room_info = " AND room = :room"
+        #     params["room"] = room
+
+        # query = f"""DELETE FROM lcp_user.queries WHERE "user" = :user {room_info} AND idx = :idx"""
+
+        query = (
+            """DELETE FROM lcp_user.queries
+            WHERE "user" = :user
+            AND idx = :idx RETURNING idx"""
+        )
+
+        opts = {
+            "user": user_id,
+            "idx": query_id,
+            "config": True
+        }
+        job: Job = self.app[queue].enqueue(
+            _db_query,
+            on_success=Callback(_deleted, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query.strip(), params),
+            kwargs=opts,
         )
         return job
 

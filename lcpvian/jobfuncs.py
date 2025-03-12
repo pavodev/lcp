@@ -191,7 +191,10 @@ async def _db_query(
             res = await conn.execute(text(query), params)
             if store:
                 return None
-            out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
+            if res.returns_rows:
+                out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
+            else:
+                out = []
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")
