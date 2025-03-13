@@ -59,8 +59,8 @@ Turning to the segments, again without adding any annotations to them, the TSV f
 
 ```
 segment_id	char_range
-daab3ddc-d2a3-4596-ae55-6f4303b23b4b	[1,21)
-92b705da-e42e-4293-87b8-037ce6094b1e	[21,68)
+6fd88979-742c-4e75-8da3-b1d8c1ecd734	[1,21)
+64b81434-2bd4-4ddd-a51f-4a17d089669a	[1,68)
 ```
 
 LCP requires the segment table to use UUIDs as IDs in `segment_id`: they will be used to randomly partition the corpus in batches of logarithmically increasing sizes for faster preview of query results. Again, `char_range` reports the characters covered by each annotation unit.
@@ -69,21 +69,21 @@ Let us finally turn to the tokens. So far we have included no annotations in the
 
 ```
 token_id	form_id	char_range	segment_id
-1	1	[1,4)	daab3ddc-d2a3-4596-ae55-6f4303b23b4b
-2	2	[4,5)	daab3ddc-d2a3-4596-ae55-6f4303b23b4b
-3	3	[5,9)	daab3ddc-d2a3-4596-ae55-6f4303b23b4b
-4	4	[9,14)	daab3ddc-d2a3-4596-ae55-6f4303b23b4b
-5	5	[14,21)	daab3ddc-d2a3-4596-ae55-6f4303b23b4b
-6	6	[21,24) 92b705da-e42e-4293-87b8-037ce6094b1e
-7	7	[24,26) 92b705da-e42e-4293-87b8-037ce6094b1e
-8	8	[26,29) 92b705da-e42e-4293-87b8-037ce6094b1e
-9	9	[29,33) 92b705da-e42e-4293-87b8-037ce6094b1e
-10	10	[33,42) 92b705da-e42e-4293-87b8-037ce6094b1e
-11	11	[42,49) 92b705da-e42e-4293-87b8-037ce6094b1e
-12	7	[49,51) 92b705da-e42e-4293-87b8-037ce6094b1e
-13	5	[51,58) 92b705da-e42e-4293-87b8-037ce6094b1e
-14	12	[58,60) 92b705da-e42e-4293-87b8-037ce6094b1e
-15	13	[60,68) 92b705da-e42e-4293-87b8-037ce6094b1e
+1	1	[1,4)	6fd88979-742c-4e75-8da3-b1d8c1ecd734
+2	2	[4,5)	6fd88979-742c-4e75-8da3-b1d8c1ecd734
+3	3	[5,9)	6fd88979-742c-4e75-8da3-b1d8c1ecd734
+4	4	[9,14)	6fd88979-742c-4e75-8da3-b1d8c1ecd734
+5	5	[14,21)	6fd88979-742c-4e75-8da3-b1d8c1ecd734
+6	6	[21,24)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+7	7	[24,26)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+8	8	[26,29)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+9	9	[29,33)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+10	10	[33,42)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+11	11	[42,49)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+12	7	[49,51)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+13	5	[51,58)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+14	12	[58,60)	64b81434-2bd4-4ddd-a51f-4a17d089669a
+15	13	[60,68)	64b81434-2bd4-4ddd-a51f-4a17d089669a
 ```
 
 Note that the token table uses integer IDs, just like the document table (UUIDs are only used in segment for the purpose we discussed earlier). It also reports the `segment_id` to which the tokens belong, to optimize queries in LCP. Now, looking at the first 11 lines, it may look like reporting an index in `form_id` does not accomplish much becasuse the value is the same as `token_id`. However, the next two lines, which correspond to the second occurrences of `of` and `finance`, show that some tokens re-use indices, and this actually is true of most tokens in sufficiently large corpora.
@@ -109,28 +109,136 @@ form_id	form
 
 ### Generating the tables
 
+The script below will generate the table files from the transcript files. It contains detailed comments to guide the reader through its logic, but the general idea is the following: for each line from the transcript files (ignoring the two lines starting each transcript block, i.e. its number and its timestamps) we split the tokens on each whitespace/comma/apostrophe, and whenever we find a period/question mark/exclamation mark, we write the current tokens and segment to their files; in parallel, we keep a `char_range` counter incremented with the length of each token, and we maintain a dictionary of the encountered forms to write the corresponding lookup table at the end.
+
 ```python
-from os import path
+from os import path, mkdir
+from re import search, split
+from uuid import uuid4
 
-documents = ["transcript1.srt", "transcript2.srt"]
-forms = {}
-char_range = 1
+documents = ["transcript1.srt", "transcript2.srt"]  # the documents to process
+forms = {}  # we'll associate each token form with an index
+char_range = 1  # track the current character index
+token_id = 1  # counter for tokens
+token_delimiters = r"[', ]"  # the characters that separate tokens
+segment_delimiters = r"[.?!]"  # the characters that mark the end of a segment
 
-with open(path.join("output", "document.tsv"), "w") as doc_output,
-     open(path.join("output", "segment.tsv"), "w") as seg_output,
-     open(path.join("output", "token.tsv"), "w") as tok_output,
-     open(path.join("output", "token_form.tsv"), "w") as form_output:
 
-    doc_output.write("\t".join(["document_id", "char_range"]))
-    seg_output.write("\t".join(["segment_id", "char_range"]))
-    tok_output.write("\t".join(["token_id", "form_id", "char_range", "segment_id"]))
-    form_output.write("\t".join(["form_id", "form"]))
+# helper method returning tab-separated values
+def to_row(columns):
+    return "\t".join([str(x) for x in columns])
 
+
+# helpler method returning char_range in the proper format
+def to_char_range(lower, upper):
+    return f"[{lower},{upper})"
+
+
+# helper method returning a list of tokens from a string
+def get_tokens(text):
+    return [x for x in split(token_delimiters, text) if x]
+
+
+# helper method that writes to the segment and token files
+def process_segment(seg_file, tok_file, tokens):
+    global char_range, token_id
+    char_range_seg_start = char_range  # lower bound of the segment's char_range
+    seg_id = uuid4() # use a uuid for the segment
+    for token in tokens:
+        if not token:
+            continue
+        # retrieve and store the form's ID using our forms dictionary
+        form_id = forms.get(token, len(forms) + 1)
+        forms[token] = form_id
+        # write the token's information to the token file
+        tok_file.write(
+            "\n"
+            + to_row(
+                [
+                    token_id,
+                    form_id,
+                    to_char_range(char_range, char_range + len(token)),
+                    seg_id,
+                ]
+            )
+        )
+        # increment the char_range counter by the number of characters in the token
+        char_range += len(token)
+        token_id += 1
+    # now that all the tokens have been processed, write the segment to the segment file
+    seg_file.write(
+        "\n" + to_row([seg_id, to_char_range(char_range_seg_start, char_range)])
+    )
+
+
+# create the output folder if it doesn't exist yet
+if not path.exists("output"):
+    mkdir("output")
+
+# we first create all the output files
+with open(path.join("output", "document.tsv"), "w") as doc_output, open(
+    path.join("output", "segment.tsv"), "w"
+) as seg_output, open(path.join("output", "token.tsv"), "w") as tok_output, open(
+    path.join("output", "token_form.tsv"), "w"
+) as form_output:
+    # start with writing the headers in each output file
+    doc_output.write(to_row(["document_id", "char_range"]))
+    seg_output.write(to_row(["segment_id", "char_range"]))
+    tok_output.write(to_row(["token_id", "form_id", "char_range", "segment_id"]))
+    form_output.write(to_row(["form_id", "form"]))
+    # now process each document
     for n_doc, document in enumerate(documents, start=1):
         with open(document, "r") as input:
-            char_range_doc_start = char_range
-            doc_output.write("\n" + "\t".join([str(n_doc_), f"[{char_range_doc_start},{char_range})"]))
-
+            char_range_doc_start = char_range  # lower bound of doc's char_range
+            current_segment = []  # store the curent sentence's tokens
+            new_block = True  # are we starting a new block from the transcription file
+            while line := input.readline():
+                if new_block:
+                    # in SRT files, at the start of a new block, the first two lines
+                    # are the block number and the timestamps: we ignore those
+                    input.readline()
+                    new_block = False
+                    continue
+                if line == "\n":
+                    # in SRT files, an empty line signals the start of a new block
+                    new_block = True
+                    continue
+                # from here on out we the line contains some actual transcript
+                line = line.rstrip()
+                if not search(segment_delimiters, line):
+                    # if the line has no segment delimiter, add each token to the current segment
+                    current_segment += get_tokens(line)
+                else:
+                    # if there's at least one segment delimiter, proceed in two times:
+                    # first end the current segment, then process the remainder content
+                    end_of_current_segment, *remainder = split(segment_delimiters, line)
+                    current_segment += get_tokens(end_of_current_segment)
+                    # call process_segment now to write the current segment and its tokens to the files
+                    process_segment(seg_output, tok_output, current_segment)
+                    # now process any remaining content
+                    current_segment = []
+                    for middle_segment in remainder[1:-1]:
+                        # the line could have full segments in the middle, as in "ipsum. lorem ipsum. lorem"
+                        # if it does, call process_segment on each of those
+                        tokens = get_tokens(middle_segment)
+                        process_segment(seg_output, tok_output, tokens)
+                    # start a new current_segment with the last tokens in the line
+                    current_segment = get_tokens(remainder[-1])
+                    if search(segment_delimiters + "$", line):
+                        # but if the line actually *ends* with a segment delimiter,
+                        # call process_segment on the last tokens and start afresh
+                        process_segment(seg_output, tok_output, current_segment)
+                        current_segment = []
+            # we are done with the current document: write it to the document file
+            doc_output.write(
+                "\n" + to_row([n_doc, to_char_range(char_range_doc_start, char_range)])
+            )
+    # we are done with all the documents: write the forms to the form file
+    for form, form_id in forms.items():
+        form_output.write("\n" + to_row([form_id, form]))
 ```
+
+### Configuration file
+
 
 ## Part 2: time alignment
