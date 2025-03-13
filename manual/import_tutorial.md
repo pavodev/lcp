@@ -240,5 +240,88 @@ with open(path.join("output", "document.tsv"), "w") as doc_output, open(
 
 ### Configuration file
 
+Before we can upload our files, we need to create a configuration file to let LCP know how to handle the tables. The configuration file is a JSON file which reports some metadata information about the corpus (its name, its authors, etc.) the annotation layers present in the corpus and their attributes.
+
+In our case, things are pretty simple, let's see what the configuration file needs to look like:
+
+```json
+{
+    "meta": {
+        "name": "Test Corpus",
+        "author": "LCP tutorial",
+        "date": "2025-03-13",
+        "version": 1,
+        "corpusDescription": "Test corpus from the tutorial"
+    },
+    "firstClass": {
+        "document": "Document",
+        "segment": "Segment",
+        "token": "Token"
+    },
+    "layer": {
+        "Document": {
+            "layerType": "span",
+            "contains": "Segment",
+            "attributes": {}
+        },
+        "Segment": {
+            "layerType": "span",
+            "contains": "Token",
+            "attributes": {}
+        },
+        "Token": {
+            "layerType": "unit",
+            "anchoring": {
+                "stream": true,
+                "time": false,
+                "location": false
+            },
+            "attributes": {
+                "form": {
+                    "type": "text",
+                    "nullable": false
+                }
+            }
+        }
+    }
+}
+```
+
+You do not need to worry about `firstClass` for now: it simply defines the names your corpus uses for the three basic annotation layers, in this case we use straightforward names.
+
+Under `layer` should there be one key for each annotation layer. In this case, we work with a very basic corpus, so we only define the three basic annotation layers. Note that for the basic layers, the names need to match exactly the values defined in `firstClass` (i.e. the names start with an uppercase character, not a lowercase one). The names of the TSV files also need to match those names, although the filenames should use lowercase characters exclusively.
+
+The `Document` and `Segment` layers are straightforward: they are spans of segments and token units, respectively, and have no attributes (their IDs are character ranges exist for database-related purposes only and, as such, are not considered attributes).
+
+The `Token` layer is of type `"unit"` because it is parent to no further annotation layer. This layer must always define `anchoring`: it tells LCP whether the layer has a `char_range` column (i.e. `stream` is set to `true`) and whether it has other types of ranges for timestamps (`time` -- more about this later in this tutorial) and for XY coordinates (`location` -- not covered in this tutorial). Finally, `attributes` lists the attributes of the tokens, in this case only `form`. Note that the names reported in `attributes` need to match exactly the column names in the TSV files: token_form.csv indeed has a column named *exactly* `form` and another one named `form_id` while token.csv also has a column named `form_id`. Attribute names should always use under_score casing and can never include uppercase characters. Like we said earlier, the `form` attribute is of type `text` because the possible values are numerous, and when LCP sees an attribute of type `text` on an annotation layer in the configuration file, it requires a lookup file named `{layer}_{attribute}.tsv` in addition to `{layer}.tsv`. Finally, the `form` attribute is set to `nullable`=`false` because we do not accept tokens with an empty form.
+
+### One last step
+
+In its current state, LCP also requires the token layer of all corpora to define a `lemma` attribute of type `text` besides `form`, otherwise import will crash. Take a moment to think of how you would modify the python script to add that attribute (re-using the same values as for `form`) and how you would update the configuration file to report that attribute.
+
+The necessary edits to the python script are minimal. In the `process_segment` method, one simply needs to duplicate the line `form_id,` in `tok_file.write`. Then after opening a file named `token_form.tsv`, one should also open a file named `token_lemma.tsv` (`open(path.join("output", "token_lemma.tsv"), "w") as lemma_output`)  add `lemma_output.write(to_row(["lemma_id", "lemma"]))` under `form_output.write(to_row(["form_id", "form"]))` and below `form_output.write("\n" + to_row([form_id, form]))` towards the end: `lemma_output.write("\n" + to_row([form_id, form]))`.
+
+The necessary edits to the JSON configuration are also minimal, as only these lines need to be added under `form`:
+
+```json
+"lemma": {
+    "type": "text",
+    "nullable": false
+}
+```
+
+### Import
+
+Run the python script, save the JSON configuration in a file named meta.json alongside your TSV files in your output folder. Install the `lcpcli` tool:
+
+`pip install lcpcli`
+
+Now visit [catchphrase](https://catchphrase.linguistik.uzh.ch) and create a new corpus collection, then open its setting by clicking the gear icon, click the "API" tab and create a new API key; write down the key and the secret.
+
+Open a terminal and run the following command, replacing `$API_KEY` with the key you just got, `$API_SECRET` with the secret you just got and `$PROJECT` with the name of the collection you just created:
+
+`lcpcli -c path/to/output/ -k $API_KEY -s $API_SECRET -p "$PROJECT" --live`
+
+You should get a confirmation message, and your corpus should now be visible in your collection after you refresh the page!
 
 ## Part 2: time alignment
