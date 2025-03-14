@@ -22,6 +22,15 @@ GRANT USAGE
     , lcp_production_web_user
     ;
 
+-- create lcp_user schema: this is where user related data is saved
+CREATE SCHEMA lcp_user AUTHORIZATION lcp_production_owner;
+GRANT USAGE
+   ON SCHEMA lcp_user
+   TO lcp_production_maintenance
+    , lcp_production_monitoring
+    , lcp_production_importer
+    , lcp_production_web_user
+    ;
 
 -- default privileges only apply to objects created *after* granting
 -- therefore lcp_production_ro cannot access objects in main

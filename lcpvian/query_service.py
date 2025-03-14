@@ -3,7 +3,7 @@ query_service.py: control submission of RQ jobs
 
 We use RQ/Redis for long-running DB queries. The QueryService class has a method
 for each type of DB query that we need to run (query, sentence-query, upload,
-create schema, store query, fetch query, etc.). Jobs are run by a dedicated
+create schema, store query, delete_query, fetch query, etc.). Jobs are run by a dedicated
 worker process.
 
 After the job is complete, callback functions can be run by worker for success and
