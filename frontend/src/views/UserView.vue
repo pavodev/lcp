@@ -8,15 +8,14 @@
         </div>
       </div>
       <div class="row my-5 border-secondary" v-if="userData && userData.user">
-        <h4>User information</h4>
-        <p class="my-1" v-if="userData.user.email">E-mail: <strong>{{ userData.user.email }}</strong></p>
-        <p class="my-1" v-if="userData.user.homeOrganization">Organization: <strong>{{ userData.user.homeOrganization }}</strong></p>
+        <h4>{{ $t('common-user-info') }}</h4>
+        <p class="my-1" v-if="userData.user.email">{{ $t('common-email') }}: <strong>{{ userData.user.email }}</strong></p>
+        <p class="my-1" v-if="userData.user.homeOrganization">{{ $t('common-organization') }}: <strong>{{ userData.user.homeOrganization }}</strong></p>
       </div>
       <div class="row my-5">
-        <h4>Saved queries</h4>
+        <h4>{{ $t('common-saved-queries') }}</h4>
         <p>
-          Here you can view and delete the queries you've saved. Saved queries are divided by type: Text, DQD or CQP,
-          select the corresponding tab to view all queries of a given type.
+          {{ $t('platform-user-saved-query-description') }}
         </p>
         <div class="form-floating mb-3">
           <div class="tab-content" id="nav-main-tabContent">
@@ -25,7 +24,7 @@
                 <div class="m-3">
                   <div class="container-fluid" v-if="userQueryVisible()">
                     <multiselect v-model="selectedQuery" :options="processedSavedQueries" :searchable="true"
-                      :clear-on-select="false" :close-on-select="true" placeholder="Select a saved query"
+                      :clear-on-select="false" :close-on-select="true" :placeholder="$t('common-select-saved-queries')"
                       label="query_name" track-by="idx" @select="handleQuerySelection"></multiselect>
                     <!-- <p v-if="selectedQuery">
                           Selected query: {{ selectedQuery.query_name }}
@@ -76,7 +75,7 @@
                     </div>
                     <div class="tab-pane fade pt-3" id="nav-cqp" role="tabpanel" aria-labelledby="nav-cqp-tab">
                       <textarea readonly class="form-control query-field"
-                        :placeholder="processedSavedQueries?.length > 0 ? 'Select a query in the dropdown menu below..' : 'You don\'t have any saved queries of this type.'"
+                        :placeholder="processedSavedQueries?.length > 0 ? $t('common-select-saved-queries-dropdown') : $t('common-select-no-saved-queries')"
                         :class="isQueryValidData == null || isQueryValidData.valid == true
                           ? 'ok'
                           : 'error'
@@ -95,36 +94,13 @@
                       :disabled="(isQueryValidData && isQueryValidData.valid != true)" class="btn btn-danger me-1 mb-1"
                       data-bs-toggle="modal" data-bs-target="#deleteQueryModal">
                       <FontAwesomeIcon :icon="['fas', 'trash']" />
-                      Delete query
+                      {{ $t('common-delete-query') }}
                     </button>
                   </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-  </div>
-  <div class="modal fade" id="saveQueryModal" tabindex="-1" aria-labelledby="saveQueryModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h5 class="modal-title" id="saveQueryModalLabel">{{ $t('common-save-query') }}</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
-        <div class="modal-body text-start">
-          <label for="queryName" class="form-label">{{ $t('common-query-name') }}</label>
-          <input type="text" class="form-control" id="queryName" v-model="queryName" />
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
-            {{ $t('common-close') }}
-          </button>
-          <button type="button" :disabled="!queryName" @click="deleteQuery" class="btn btn-primary me-1"
-            data-bs-dismiss="modal">
-            {{ $t('common-save-query') }}
-          </button>
         </div>
       </div>
     </div>
@@ -157,11 +133,11 @@
     <div class="modal-dialog">
       <div class="modal-content">
         <div class="modal-header">
-          <h5 class="modal-title" id="deleteQueryModalLabel">Delete query</h5>
+          <h5 class="modal-title" id="deleteQueryModalLabel">{{ $t('common-delete-query') }}</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
         <div class="modal-body text-start">
-          <p>Are you sure you want to delete this query?</p>
+          <p>{{ $t('common-delete-query-sure') }}</p>
         </div>
         <div class="modal-footer">
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
@@ -169,7 +145,7 @@
           </button>
           <button type="button" :disabled="!queryName" @click="deleteQuery" class="btn btn-danger me-1"
             data-bs-dismiss="modal">
-            Delete Query
+            {{ $t('common-delete-query') }}
           </button>
         </div>
       </div>

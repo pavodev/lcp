@@ -22,14 +22,21 @@ platform-general-corpus-settings = Impostazioni del corpus
 platform-general-corpus-origin = Origine del corpus
 platform-general-data-type = Tipo di dati
 
+## --------------- PAGINA UTENTE ---------------
+
+platform-user-saved-query-description =
+ Qui puoi visualizzare ed eliminare le query salvate. Le query salvate sono divise per tipo: Testo, DQD o CQP. Seleziona la scheda corrispondente per visualizzare tutte le query di un determinato tipo.
+
 ## --------------- COMUNE ---------------
 
 common-user = { $count ->
  *[one] Utente
  [other] Utenti
 }
+common-user-info = Dati dell'utente
 common-name = Nome
 common-email = Email
+common-organization = Organizzazione
 common-admin = Admin
 common-login = Login
 common-logout = Logout
@@ -49,6 +56,12 @@ common-close = Chiudi
 common-stop = Ferma
 common-save = Salva
 common-save-query = Salva query
+common-saved-queries = Query salvate
+common-select-saved-queries = Seleziona una delle query salvate
+common-select-saved-queries-dropdown = Seleziona una query dal menu a tendina..
+common-select-no-saved-queries = Non hai salvato alcuna query di questo tipo.
+common-delete-query-sure = Sei sicura/o di voler eliminare questa query?
+common-delete-query = Elimina query
 common-submit = Invia
 common-resubmit = Invia nuovamente
 common-copy-clipboard = Copia negli appunti

@@ -23,14 +23,21 @@ platform-general-corpus-settings = Corpus settings
 platform-general-corpus-origin = Corpus origin
 platform-general-data-type = Data type
 
+## --------------- USER PAGE ---------------
+
+platform-user-saved-query-description =
+ Here you can view and delete the queries you've saved. Saved queries are divided by type: Text, DQD or CQP, select the corresponding tab to view all queries of a given type.
+
 ## --------------- COMMON ---------------
 
 common-user = { $count ->
  *[one] User
  [other] Users
 }
+common-user-info = User information
 common-name = Name
 common-email = Email
+common-organization = Organization
 common-admin = Admin
 common-login = Login
 common-logout = Logout
@@ -50,6 +57,12 @@ common-close = Close
 common-stop = Stop
 common-save = Save
 common-save-query = Save query
+common-saved-queries = Saved queries
+common-select-saved-queries = Select a saved query
+common-select-saved-queries-dropdown = Select a query from the dropdown..
+common-select-no-saved-queries = You don't have any saved queries of this type.
+common-delete-query-sure = Are you sure you want to delete this query?
+common-delete-query = Delete query
 common-submit = Submit
 common-resubmit = Resubmit
 common-copy-clipboard = Copy to clipboard
