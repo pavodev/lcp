@@ -112,6 +112,8 @@ form_id	form
 The script below will generate the table files from the transcript files. It contains detailed comments to guide the reader through its logic, but the general idea is the following: for each line from the transcript files (ignoring the two lines starting each transcript block, i.e. its number and its timestamps) we split the tokens on each whitespace/comma/apostrophe, and whenever we find a period/question mark/exclamation mark, we write the current tokens and segment to their files; in parallel, we keep a `char_range` counter incremented with the length of each token, and we maintain a dictionary of the encountered forms to write the corresponding lookup table at the end.
 
 ```python
+import csv
+
 from os import path, mkdir
 from re import search, split
 from uuid import uuid4
@@ -124,24 +126,19 @@ token_delimiters = r"[', ]"  # the characters that separate tokens
 segment_delimiters = r"[.?!]"  # the characters that mark the end of a segment
 
 
-# helper method returning tab-separated values
-def to_row(*columns):
-    return "\t".join([str(x).replace("\t", " ") for x in columns])
-
-
 # helpler method returning char_range in the proper format
 def to_char_range(lower, upper):
     return f"[{lower},{upper})"
 
 
 # helper method that writes to the segment and token files
-def process_segment(seg_file, tok_file, text):
-    global char_range, token_id
+def process_segment(seg_tsv, tok_tsv, text, char_range, token_id):
     text = text.strip()
     if not text:
-        return
+        return (char_range, token_id)
     char_range_seg_start = char_range  # lower bound of the segment's char_range
     seg_id = uuid4()  # use a uuid for the segment
+    # read the text one character at a time (make sure you end with a token delimiter)
     for token in split(token_delimiters, text):
         if not token:
             continue
@@ -149,23 +146,21 @@ def process_segment(seg_file, tok_file, text):
         form_id = forms.get(token, len(forms) + 1)
         forms[token] = form_id
         # write the token's information to the token file
-        tok_file.write(
-            "\n"
-            + to_row(
+        tok_tsv.writerow(
+            [
                 token_id,
-                form_id,
                 form_id,
                 to_char_range(char_range, char_range + len(token)),
                 seg_id,
-            )
+            ]
         )
         # increment the char_range counter by the number of characters in the token
         char_range += len(token)
         token_id += 1
+        token = ""
     # now that all the tokens have been processed, write the segment to the segment file
-    seg_file.write(
-        "\n" + to_row(seg_id, to_char_range(char_range_seg_start, char_range))
-    )
+    seg_tsv.writerow([seg_id, to_char_range(char_range_seg_start, char_range)])
+    return (char_range, token_id)
 
 
 # create the output folder if it doesn't exist yet
@@ -178,11 +173,16 @@ with open(path.join("output", "document.tsv"), "w") as doc_output, open(
 ) as seg_output, open(path.join("output", "token.tsv"), "w") as tok_output, open(
     path.join("output", "token_form.tsv"), "w"
 ) as form_output:
+    doc_tsv = csv.writer(doc_output, delimiter="\t", quotechar="\b")
+    seg_tsv = csv.writer(seg_output, delimiter="\t", quotechar="\b")
+    tok_tsv = csv.writer(tok_output, delimiter="\t", quotechar="\b")
+    form_tsv = csv.writer(form_output, delimiter="\t", quotechar="\b")
+
     # start with writing the headers in each output file
-    doc_output.write(to_row("document_id", "char_range"))
-    seg_output.write(to_row("segment_id", "char_range"))
-    tok_output.write(to_row("token_id", "form_id", "char_range", "segment_id"))
-    form_output.write(to_row("form_id", "form"))
+    doc_tsv.writerow(["document_id", "char_range"])
+    seg_tsv.writerow(["segment_id", "char_range"])
+    tok_tsv.writerow(["token_id", "form_id", "char_range", "segment_id"])
+    form_tsv.writerow(["form_id", "form"])
     # now process each document
     for n_doc, document in enumerate(documents, start=1):
         with open(document, "r") as input:
@@ -211,27 +211,31 @@ with open(path.join("output", "document.tsv"), "w") as doc_output, open(
                     end_of_current_segment, *remainder = split(segment_delimiters, line)
                     current_segment += " " + end_of_current_segment
                     # call process_segment now to write the current segment and its tokens to the files
-                    process_segment(seg_output, tok_output, current_segment)
+                    char_range, token_id = process_segment(
+                        seg_tsv, tok_tsv, current_segment, char_range, token_id
+                    )
                     # now process any remaining content
                     current_segment = ""
                     for middle_segment in remainder[1:-1]:
                         # the line could have full segments in the middle, as in "ipsum. lorem ipsum. lorem"
                         # if it does, call process_segment on each of those
-                        process_segment(seg_output, tok_output, middle_segment)
+                        char_range, token_id = process_segment(
+                            seg_tsv, tok_tsv, middle_segment, char_range, token_id
+                        )
                     # start a new current_segment with the last tokens in the line
                     current_segment = remainder[-1]
                     if search(segment_delimiters + "$", line):
                         # but if the line actually *ends* with a segment delimiter,
                         # call process_segment on the last tokens and start afresh
-                        process_segment(seg_output, tok_output, current_segment)
+                        char_range, token_id = process_segment(
+                            seg_tsv, tok_tsv, current_segment, char_range, token_id
+                        )
                         current_segment = ""
             # we are done with the current document: write it to the document file
-            doc_output.write(
-                "\n" + to_row(n_doc, to_char_range(char_range_doc_start, char_range))
-            )
+            doc_tsv.writerow([n_doc, to_char_range(char_range_doc_start, char_range)])
     # we are done with all the documents: write the forms to the form file
     for form, form_id in forms.items():
-        form_output.write("\n" + to_row(form_id, form))
+        form_tsv.writerow([form_id, form])
 ```
 
 ### Configuration file
@@ -328,6 +332,8 @@ For the sake of illustration, we will add two pieces of annotation: on the segme
 Updated script:
 
 ```python
+import csv
+
 from os import path, mkdir
 from re import search, split
 from uuid import uuid4
@@ -352,11 +358,10 @@ def to_char_range(lower, upper):
 
 
 # helper method that writes to the segment and token files
-def process_segment(seg_file, tok_file, text):
-    global char_range, token_id
+def process_segment(seg_tsv, tok_tsv, text, char_range, token_id):
     text = text.strip()
     if not text:
-        return
+        return (char_range, token_id)
     char_range_seg_start = char_range  # lower bound of the segment's char_range
     seg_id = uuid4()  # use a uuid for the segment
     token = ""
@@ -371,16 +376,15 @@ def process_segment(seg_file, tok_file, text):
             form_id = forms.get(token, len(forms) + 1)
             forms[token] = form_id
             # write the token's information to the token file
-            tok_file.write(
-                "\n"
-                + to_row(
+            tok_tsv.writerow(
+                [
                     token_id,
                     form_id,
                     form_id,
                     "yes" if shortened else "no",
                     to_char_range(char_range, char_range + len(token)),
                     seg_id,
-                )
+                ]
             )
             # increment the char_range counter by the number of characters in the token
             char_range += len(token)
@@ -393,10 +397,10 @@ def process_segment(seg_file, tok_file, text):
     original_id = originals.get(text, len(originals) + 1)
     originals[text] = original_id
     # now that all the tokens have been processed, write the segment to the segment file
-    seg_file.write(
-        "\n"
-        + to_row(seg_id, to_char_range(char_range_seg_start, char_range), original_id)
+    seg_tsv.writerow(
+        [seg_id, to_char_range(char_range_seg_start, char_range), original_id]
     )
+    return (char_range, token_id)
 
 
 # create the output folder if it doesn't exist yet
@@ -415,17 +419,22 @@ with open(path.join("output", "document.tsv"), "w") as doc_output, open(
 ) as form_output, open(
     path.join("output", "token_lemma.tsv"), "w"
 ) as lemma_output:
+    doc_tsv = csv.writer(doc_output, delimiter="\t", quotechar="\b")
+    seg_tsv = csv.writer(seg_output, delimiter="\t", quotechar="\b")
+    ori_tsv = csv.writer(original_output, delimiter="\t", quotechar="\b")
+    tok_tsv = csv.writer(tok_output, delimiter="\t", quotechar="\b")
+    form_tsv = csv.writer(form_output, delimiter="\t", quotechar="\b")
+    lemma_tsv = csv.writer(lemma_output, delimiter="\t", quotechar="\b")
+
     # start with writing the headers in each output file
-    doc_output.write(to_row("document_id", "char_range"))
-    seg_output.write(to_row("segment_id", "char_range", "original_id"))
-    original_output.write(to_row("original_id", "original"))
-    tok_output.write(
-        to_row(
-            "token_id", "form_id", "lemma_id", "shortened", "char_range", "segment_id"
-        )
+    doc_tsv.writerow(["document_id", "char_range"])
+    seg_tsv.writerow(["segment_id", "char_range", "original_id"])
+    ori_tsv.writerow(["original_id", "original"])
+    tok_tsv.writerow(
+        ["token_id", "form_id", "lemma_id", "shortened", "char_range", "segment_id"]
     )
-    form_output.write(to_row("form_id", "form"))
-    lemma_output.write(to_row("lemma_id", "lemma"))
+    form_tsv.writerow(["form_id", "form"])
+    lemma_tsv.writerow(["lemma_id", "lemma"])
     # now process each document
     for n_doc, document in enumerate(documents, start=1):
         with open(document, "r") as input:
@@ -454,32 +463,36 @@ with open(path.join("output", "document.tsv"), "w") as doc_output, open(
                     end_of_current_segment, *remainder = split(segment_delimiters, line)
                     current_segment += " " + end_of_current_segment
                     # call process_segment now to write the current segment and its tokens to the files
-                    process_segment(seg_output, tok_output, current_segment)
+                    char_range, token_id = process_segment(
+                        seg_tsv, tok_tsv, current_segment, char_range, token_id
+                    )
                     # now process any remaining content
                     current_segment = ""
                     for middle_segment in remainder[1:-1]:
                         # the line could have full segments in the middle, as in "ipsum. lorem ipsum. lorem"
                         # if it does, call process_segment on each of those
-                        process_segment(seg_output, tok_output, middle_segment)
+                        char_range, token_id = process_segment(
+                            seg_tsv, tok_tsv, middle_segment, char_range, token_id
+                        )
                     # start a new current_segment with the last tokens in the line
                     current_segment = remainder[-1]
                     if search(segment_delimiters + "$", line):
                         # but if the line actually *ends* with a segment delimiter,
                         # call process_segment on the last tokens and start afresh
-                        process_segment(seg_output, tok_output, current_segment)
+                        char_range, token_id = process_segment(
+                            seg_tsv, tok_tsv, current_segment, char_range, token_id
+                        )
                         current_segment = ""
             # we are done with the current document: write it to the document file
-            doc_output.write(
-                "\n" + to_row(n_doc, to_char_range(char_range_doc_start, char_range))
-            )
+            doc_tsv.writerow([n_doc, to_char_range(char_range_doc_start, char_range)])
     # we are done with all the documents: write the forms to the form file
     for form, form_id in forms.items():
-        form_output.write("\n" + to_row(form_id, form))
-        lemma_output.write("\n" + to_row(form_id, form))
+        form_tsv.writerow([form_id, form])
+        lemma_tsv.writerow([form_id, form])
 
     # we are done with all the documents: write the forms to the form file
     for original, original_id in originals.items():
-        original_output.write("\n" + to_row(original_id, original))
+        ori_tsv.writerow([original_id, original])
 ```
 
 Updated JSON configuration:
