@@ -34,8 +34,8 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
-    deleteQuery(user_id, query_id) {
-      httpApi.delete(`/user/${user_id}/query/${query_id}`).then((response) => {
+    deleteQuery(user_id, room_id, query_id) {
+      httpApi.delete(`/user/${user_id}/room/${room_id}/query/${query_id}`).then((response) => {
         return response.data;
       });
     },

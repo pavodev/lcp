@@ -49,7 +49,7 @@ let editor = null;
 let decorations = null;
 
 export default {
-  name: "QueryEditView",
+  name: "ReadonlyEditorView",
   data() {
     return {
       queryData: this.query,

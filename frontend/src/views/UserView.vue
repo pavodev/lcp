@@ -7,10 +7,12 @@
             :title="`User profile${userData && userData.user && userData.user.displayName ? ' - ' + userData.user.displayName : ''}`" />
         </div>
       </div>
-      <div class="row mt-2">
-
+      <div class="row my-5 border-secondary" v-if="userData && userData.user">
+        <h4>User information</h4>
+        <p class="my-1" v-if="userData.user.email">E-mail: <strong>{{ userData.user.email }}</strong></p>
+        <p class="my-1" v-if="userData.user.homeOrganization">Organization: <strong>{{ userData.user.homeOrganization }}</strong></p>
       </div>
-      <div class="row mt-5">
+      <div class="row my-5">
         <h4>Saved queries</h4>
         <p>
           Here you can view and delete the queries you've saved. Saved queries are divided by type: Text, DQD or CQP,
@@ -19,7 +21,7 @@
         <div class="form-floating mb-3">
           <div class="tab-content" id="nav-main-tabContent">
             <div class="row">
-              <div class="col-6">
+              <div class="col-lg-6">
                 <div class="m-3">
                   <div class="container-fluid" v-if="userQueryVisible()">
                     <multiselect v-model="selectedQuery" :options="processedSavedQueries" :searchable="true"
@@ -62,7 +64,7 @@
                     </div>
                     <div class="tab-pane fade show active pt-3" id="nav-dqd" role="tabpanel"
                       aria-labelledby="nav-results-tab">
-                      <QueryEditView :query="queryDQD" :defaultQuery="defaultQueryDQD" :invalidError="isQueryValidData && isQueryValidData.valid != true
+                      <ReadonlyEditorView :query="queryDQD" :defaultQuery="defaultQueryDQD" :invalidError="isQueryValidData && isQueryValidData.valid != true
                         ? isQueryValidData.error
                         : null
                         " @update="updateQueryDQD" />
@@ -182,7 +184,7 @@ import { mapState } from "pinia";
 
 // Components
 import Title from "@/components/TitleComponent.vue";
-import QueryEditView from "@/components/QueryEditView.vue";
+import ReadonlyEditorView from "@/components/ReadonlyEditorView.vue";
 
 // Stores
 import { useUserStore } from "@/stores/userStore";
@@ -218,7 +220,7 @@ export default {
   },
   components: {
     Title,
-    QueryEditView
+    ReadonlyEditorView
   },
   watch: {
     userData() {
@@ -251,13 +253,10 @@ export default {
       this.currentTab = tab;
     },
     onSocketMessage(data) {
-      console.log('WebSocket msg received: ', data);
-
       if (Object.prototype.hasOwnProperty.call(data, "action")) {
         if (data["action"] === "fetch_queries") {
-          console.log('QUERIES RECEIVED', )
           if (!data["queries"]) return;
-          
+
           let queries;
           if (typeof data["queries"] === 'string') {
             try {
@@ -268,53 +267,19 @@ export default {
           } else {
             queries = data["queries"];
           }
-          
-          console.log('QUERIES RECEIVED', queries);
-          
+
           this.userQueries = queries;
           return;
         }
 
         if (data["action"] === "delete_query") {
-          console.log('DELETED something', data);
           this.fetch();
+          this.selectedQuery = null;
+
           return;
         }
-
-        // if (data["action"] === "validate") {
-        //   // Validate is called after setting availableLanguages, so it's a good time to check selectedLanguages
-        //   this.selectedLanguages = this.selectedLanguages.filter(v => this.availableLanguages.includes(v));
-        //   if (this.selectedLanguages == 0) {
-        //     this.selectedLanguages = [this.availableLanguages[0]];
-        //   }
-        //   // console.log("Query validation", data);
-        //   if (data.kind in { dqd: 1, text: 1, cqp: 1 } && data.valid == true) {
-        //     // console.log("Set query from server");
-        //     this.query = JSON.stringify(data.json, null, 2);
-        //   }
-        //   this.isQueryValidData = data;
-        //   return;
-        // }
       }
     },
-    // validate() {
-    //   let query = this.query;
-    //   if (this.currentTab == "text")
-    //     query = this.textsearch;
-    //   if (this.currentTab == "dqd")
-    //     query = this.queryDQD + "\n";
-    //   if (this.currentTab == "cqp")
-    //     query = this.cqp;
-
-    //   if (!query) { return; }
-
-    //   useWsStore().sendWSMessage({
-    //     action: "validate",
-    //     query: query,
-    //     kind: this.currentTab,
-    //     // corpus: this.selectedCorpora.value
-    //   });
-    // },
     fetch() {
       let data = {
         user: this.userData.user.id,
@@ -323,8 +288,8 @@ export default {
       useCorpusStore().fetchQueries(data);
     },
     deleteQuery() {
-      if(!this.selectedQuery) return;
-      useCorpusStore().deleteQuery(this.userData.user.id, this.selectedQuery.idx);
+      if (!this.selectedQuery) return;
+      useCorpusStore().deleteQuery(this.userData.user.id, this.roomId, this.selectedQuery.idx);
     },
     userQueryVisible() {
       if (this.currentTab == "text" || this.currentTab == "dqd" || this.currentTab == "cqp") {

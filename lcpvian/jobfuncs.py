@@ -194,23 +194,11 @@ async def _db_query(
                 # For DELETE queries, simply return None (or log res.rowcount if needed)
                 if delete:
                     # For non-SELECT queries (store/delete), do not attempt to fetch rows.
-                    print("Deleted rows (rowcount):", res.rowcount, flush=True)
                     return res.rowcount
                 else:
                     return None
-                return None
-            # if res.returns_rows:
-            #     rows = res.fetchall()  # fetchall() returns a list of Row objects.
-            #     out = []
-            #     for row in rows:
-            #         # Create a dictionary manually using the row's _mapping attribute.
-            #         row_dict = {}
-            #         for key in row._mapping.keys():
-            #             row_dict[key] = row._mapping[key]
-            #         out.append(row_dict)
             else:
                 out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
-                # out = []
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")

@@ -208,6 +208,7 @@ async def _handle_message(
     simples = (
         "fetch_queries",
         "store_query",
+        "delete_query",
         "background_job_progress",
         "document",
         "document_ids",
@@ -296,7 +297,7 @@ async def _handle_message(
                 just=(room, user),
             )
         else:
-            print(f"Not sending {action} message!")
+            print(f"Not sending {action} message!", flush=True)
         if to_submit is not None:
             await to_submit
             to_submit = None

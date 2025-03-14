@@ -240,7 +240,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/query", "POST", query),
         ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
-        ("/user/{user_id}/query/{query_id}", "DELETE", delete_query),
+        ("/user/{user_id}/room/{room_id}/query/{query_id}", "DELETE", delete_query),
         ("/upload", "POST", upload),
         ("/video", "GET", video),
         ("/ws", "GET", sock),
