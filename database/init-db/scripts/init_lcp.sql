@@ -465,7 +465,7 @@ GRANT SELECT
    ON main.corpus
     , main.inprogress_corpus
     , main.exports
-    , schema.queries
+    , lcp_user.queries
    TO lcp_production_maintenance
     , lcp_production_monitoring
     , lcp_production_importer
