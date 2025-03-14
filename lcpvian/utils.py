@@ -3,6 +3,7 @@ utils.py: all miscellaneous helpers and tools used by backend
 """
 
 import asyncio
+import csv
 import json
 import logging
 import math
@@ -13,11 +14,12 @@ import shutil
 import traceback
 
 from dotenv import load_dotenv
-from asyncpg import Range, Box
+from asyncpg import Connection, Range, Box
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
 from hashlib import md5
+from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 from rq.registry import FinishedJobRegistry
@@ -56,6 +58,9 @@ from .typed import (
     QueryArgs,
     Websockets,
 )
+
+CSV_DELIMITERS = [",", "\t"]
+CSV_QUOTES = ['"', "\b"]
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
@@ -1164,3 +1169,37 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     )
     print("meta script", script)
     return script
+
+
+async def copy_to_table(
+    connection: Connection,
+    table: str,
+    source: BytesIO,
+    schema: str,
+    columns: list[str],
+    timeout=0,
+    force_delimiter: str | None = None,
+    force_quote: str | None = None,
+) -> None:
+    if timeout == 0:
+        timeout = os.getenv("UPLOAD_TIMEOUT", 300)
+    first_exception: Exception | None = None
+    for delimiter in CSV_DELIMITERS:
+        for quote in CSV_QUOTES:
+            try:
+                await connection.copy_to_table(
+                    table,
+                    source=source,
+                    schema_name=schema,
+                    columns=columns,
+                    delimiter=(force_delimiter or delimiter),
+                    quote=(force_quote or quote),
+                    format="csv",
+                    timeout=timeout,
+                )
+                return None
+            except Exception as e:
+                first_exception = first_exception or e
+    if first_exception:
+        raise first_exception
+    return None
