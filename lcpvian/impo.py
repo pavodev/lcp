@@ -134,7 +134,12 @@ class Table:
 
 class Importer:
     def __init__(
-        self, pool: AsyncEngine, data: JSONObject, project_dir: str, debug: bool = False
+        self,
+        pool: AsyncEngine,
+        data: JSONObject,
+        project_dir: str,
+        debug: bool = False,
+        **kwargs,
     ) -> None:
         """
         Manage the import of a corpus into the DB via async postgres connection
@@ -172,6 +177,9 @@ class Importer:
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
         self.filenames_to_delimiters_quotes: dict[str, tuple[str, str]] = {}
+        self.force_delimiter: str = cast(str, kwargs.get("delimiter", ""))
+        self.force_quote: str = cast(str, kwargs.get("quote", ""))
+        self.force_escape: str = cast(str, kwargs.get("escape", ""))
         # self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
@@ -260,8 +268,9 @@ class Importer:
                         schema,
                         columns,
                         timeout=self.upload_timeout,
-                        force_delimiter=delimiter,
-                        force_quote=quote,
+                        force_delimiter=(self.force_delimiter or delimiter),
+                        force_quote=(self.force_quote or quote),
+                        force_escape=self.force_escape,
                     )
                 except Exception as e:
                     print(f"Failed to copy table {table} with columns {columns}")
@@ -281,9 +290,13 @@ class Importer:
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        delimiter, quote = self.filenames_to_delimiters_quotes[
-            os.path.basename(csv_path)
-        ]
+        first_delimiter_quote_pair = next(
+            v for v in self.filenames_to_delimiters_quotes.values()
+        )
+        delimiter, quote = (
+            self.filenames_to_delimiters_quotes.get(os.path.basename(csv_path))
+            or first_delimiter_quote_pair
+        )
         parsed_headers = next(
             csv.reader([headers.decode("utf-8")], delimiter=delimiter, quotechar=quote)
         )
@@ -306,9 +319,6 @@ class Importer:
             return None
 
         # no concurrency:
-        delimiter, quote = self.filenames_to_delimiters_quotes[
-            os.path.basename(csv_path)
-        ]
         async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
@@ -323,8 +333,9 @@ class Importer:
                             self.schema,
                             cast(list[str], table.columns),
                             timeout=self.upload_timeout,
-                            force_delimiter=delimiter,
-                            force_quote=quote,
+                            force_delimiter=(self.force_delimiter or delimiter),
+                            force_quote=(self.force_quote or quote),
+                            force_escape=self.force_escape,
                         )
                     except Exception as e:
                         print(
@@ -354,7 +365,11 @@ class Importer:
         filename = os.path.basename(fpath)
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as afile:
                         header = next(
@@ -391,7 +406,11 @@ class Importer:
         filename = os.path.basename(fpath)
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as afile:
                         header = next(
@@ -431,7 +450,11 @@ class Importer:
         filename = os.path.basename(fpath)
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as afile:
                         header = next(
@@ -489,7 +512,11 @@ class Importer:
             return
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as layer_file:
                         header = next(
