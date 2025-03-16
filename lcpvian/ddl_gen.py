@@ -288,6 +288,8 @@ class Column(DDL):
         """
         if self.constrs.get("primary_key", False):
             return ""
+        elif self.type == "jsonb":
+            return ""
         elif self.type in ("int4range", "int8range", "point", "box"):
             return self._idx_constr.format("USING gist", self.name)
         elif self.type == "tsvector":
@@ -728,7 +730,7 @@ class CTProcessor:
                     )
                     tables.append(label_lookup_table)
 
-            elif not typ and attr == "meta":
+            elif attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
                 entity_mapping["hasMeta"] = True
 

@@ -37,10 +37,10 @@ Look at upload._get_progress to understand how the pgoress info is parsed
 
 """
 
+import csv
 import importlib
 import json
 import os
-import re
 
 from collections.abc import Callable, Coroutine, Sequence
 from io import BytesIO
@@ -57,11 +57,15 @@ from sqlalchemy.sql import text
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
 from .utils import (
+    copy_to_table,
     _format_config_query,
     format_query_params,
     gather,
     _schema_from_corpus_name,
 )
+
+CSV_DELIMITERS = [",", "\t"]
+CSV_QUOTES = ['"', "\b"]
 
 
 class SQLstats:
@@ -167,6 +171,7 @@ class Importer:
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
+        self.filenames_to_delimiters_quotes: dict[str, tuple[str, str]] = {}
         # self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
@@ -233,6 +238,9 @@ class Importer:
         plus potentially the remainder of a line
         """
         base = os.path.basename(csv_path)
+        delimiter, quote = self.filenames_to_delimiters_quotes[
+            os.path.basename(csv_path)
+        ]
         async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
@@ -241,15 +249,15 @@ class Importer:
                 if not data or not data.strip():
                     return None
                 try:
-                    await raw.cursor()._connection.copy_to_table(
+                    await copy_to_table(
+                        raw.cursor()._connection,
                         table,
-                        source=BytesIO(data),
-                        schema_name=schema,
-                        columns=columns,
-                        delimiter="\t",
-                        quote="\b",
-                        format="csv",
+                        BytesIO(data),
+                        schema,
+                        columns,
                         timeout=self.upload_timeout,
+                        force_delimiter=delimiter,
+                        force_quote=quote,
                     )
                 except Exception as e:
                     print(f"Failed to copy table {table} with columns {columns}")
@@ -269,7 +277,13 @@ class Importer:
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        table = Table(self.schema, tab, headers.decode("utf-8").strip().split("\t"))
+        delimiter, quote = self.filenames_to_delimiters_quotes[
+            os.path.basename(csv_path)
+        ]
+        parsed_headers = next(
+            csv.reader([headers.decode("utf-8")], delimiter=delimiter, quotechar=quote)
+        )
+        table = Table(self.schema, tab, parsed_headers)
         script = self.sql.check_tbl(table.schema, table.name)
         exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
@@ -288,6 +302,9 @@ class Importer:
             return None
 
         # no concurrency:
+        delimiter, quote = self.filenames_to_delimiters_quotes[
+            os.path.basename(csv_path)
+        ]
         async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
@@ -295,15 +312,15 @@ class Importer:
                     await f.seek(start)
                     data = await f.read(chunk)
                     try:
-                        await raw.cursor()._connection.copy_to_table(
+                        await copy_to_table(
+                            raw.cursor()._connection,
                             table.name,
-                            source=BytesIO(data),
-                            schema_name=self.schema,
-                            columns=table.columns,
-                            delimiter="\t",
-                            quote="\b",
-                            format="csv",
+                            BytesIO(data),
+                            self.schema,
+                            cast(list[str], table.columns),
                             timeout=self.upload_timeout,
+                            force_delimiter=delimiter,
+                            force_quote=quote,
                         )
                     except Exception as e:
                         print(
@@ -312,6 +329,145 @@ class Importer:
                         raise e
                     sz = len(data)
                     self.update_progress(f":progress:{sz}:{tot}:{base}:")
+        return None
+
+    def check_attribute_file(
+        self,
+        path: str,
+        layer_name: str,
+        attribute_name: str,
+        attribute_props: dict,
+    ) -> None:
+        attribute_low = attribute_name.lower()
+        lay_att = f"{layer_name.lower()}_{attribute_low}"
+        typ = attribute_props.get("type", "")
+        fpath = os.path.join(path, f"{lay_att}.csv")
+        if not os.path.exists(fpath):
+            fpath = fpath.replace(".csv", ".tsv")
+        assert os.path.exists(fpath), FileNotFoundError(
+            f"Could not find a file named {lay_att}.csv for attribute '{attribute_name}' of type {typ} for layer '{layer_name}'"
+        )
+        filename = os.path.basename(fpath)
+        exception: Exception | None = None
+        for delimiter in CSV_DELIMITERS:
+            for quote in CSV_QUOTES:
+                try:
+                    with open(fpath, "r") as afile:
+                        header = next(
+                            csv.reader(
+                                [afile.readline()], delimiter=delimiter, quotechar=quote
+                            )
+                        )
+                        assert f"{attribute_low}_id" in header, ReferenceError(
+                            f"Column {attribute_low}_id missing from file {filename} for attribute '{attribute_name}' of type {typ} for layer {layer_name}"
+                        )
+                        assert attribute_low in header, ReferenceError(
+                            f"Column {attribute_low} missing from file {filename} for attribute '{attribute_name}' of type {typ} for layer {layer_name}"
+                        )
+                    self.filenames_to_delimiters_quotes[filename] = (delimiter, quote)
+                    break
+                except Exception as e:
+                    exception = e
+            if not exception:
+                break
+        if not self.filenames_to_delimiters_quotes.get(filename):
+            raise exception or Exception(
+                f"Could not process file {filename} for attribute {attribute_name} of type {typ} on layer {layer_name}"
+            )
+        return None
+
+    def check_layer_file(self, path: str, layer_name: str, layer_props: dict) -> None:
+        token_layer = self.template["firstClass"]["token"]
+        segment_layer = self.template["firstClass"]["segment"]
+        token_anchoring = self.template["layer"][token_layer].get("anchoring", {})
+
+        layer_low = layer_name.lower()
+        anchoring = layer_props.get("anchoring", {})
+        anchored_stream = (
+            anchoring.get("stream")
+            or layer_name in self.template["firstClass"]
+            and token_anchoring.get("stream")
+        )
+        anchored_time = (
+            anchoring.get("time")
+            or layer_name in self.template["firstClass"]
+            and token_anchoring.get("time")
+        )
+
+        fpath = os.path.join(
+            path,
+            layer_low
+            + ("0.csv" if layer_name in (token_layer, segment_layer) else ".csv"),
+        )
+        if not os.path.exists(fpath):
+            fpath = fpath.replace(".csv", ".tsv")
+        assert os.path.exists(fpath), FileNotFoundError(
+            f"Could not find a file named {layer_low}.csv for layer '{layer_name}'"
+        )
+        filename = os.path.basename(fpath)
+        if layer_props.get("layerType") == "relation":
+            return
+        exception: Exception | None = None
+        for delimiter in CSV_DELIMITERS:
+            for quote in CSV_QUOTES:
+                try:
+                    with open(fpath, "r") as layer_file:
+                        header = next(
+                            csv.reader(
+                                [layer_file.readline()],
+                                delimiter=delimiter,
+                                quotechar=quote,
+                            )
+                        )
+                        assert f"{layer_low}_id" in header, ReferenceError(
+                            f"Could not find a column named {layer_low}_id in {filename}"
+                        )
+                        assert (
+                            not anchored_stream or "char_range" in header
+                        ), ReferenceError(
+                            f"Column 'char_range' missing from file {filename} for stream-anchored layer {layer_name}"
+                        )
+                        assert (
+                            not anchored_time or "frame_range" in header
+                        ), ReferenceError(
+                            f"Column 'frame_range' missing from file {filename} for time-anchored layer {layer_name}"
+                        )
+                        if layer_name == token_layer:
+                            assert (
+                                f"{segment_layer.lower()}_id" in header
+                            ), ReferenceError(
+                                f"Column '{segment_layer.lower()}_id' missing from file {filename} for token-level layer {layer_name}"
+                            )
+                        self.filenames_to_delimiters_quotes[filename] = (
+                            delimiter,
+                            quote,
+                        )
+                        for aname, aprops in layer_props.get("attributes", {}).items():
+                            acol = aname.lower()
+                            lookup = aprops.get("type", "") in ("dict", "text")
+                            if lookup:
+                                acol += "_id"
+                            assert acol in header, ReferenceError(
+                                f"Column '{acol}' is missing from file {filename} for the attribute '{aname}' of layer {layer_name}"
+                            )
+                            if lookup:
+                                self.check_attribute_file(
+                                    path, layer_name, aname, aprops
+                                )
+                        break
+                except Exception as e:
+                    exception = e
+            if not exception:
+                break
+        if not self.filenames_to_delimiters_quotes.get(filename):
+            raise exception or Exception(
+                f"Could not process file {filename} for layer {layer_name}"
+            )
+        return None
+
+    async def check_files(self, path: str) -> None:
+        for layer, layer_attrs in self.template["layer"].items():
+            self.check_layer_file(path, layer, cast(dict, layer_attrs))
         return None
 
     async def import_corpus(self) -> None:
@@ -327,120 +483,11 @@ class Importer:
         ]
         self.corpus_size = sum(s[1] for s in sizes)
 
-        token_anchoring = self.template["layer"][
-            self.template["firstClass"]["token"]
-        ].get("anchoring", {})
-
         # Do some checks on the layer files
-        for layer, layer_attrs in self.template["layer"].items():
-            lowlayer = layer.lower()
-            fpath = os.path.join(
-                path,
-                lowlayer
-                + (
-                    "0.csv"
-                    if layer
-                    in (
-                        self.template["firstClass"]["token"],
-                        self.template["firstClass"]["segment"],
-                    )
-                    else ".csv"
-                ),
-            )
-            if not os.path.exists(fpath):
-                fpath = fpath.replace(".csv", ".tsv")
-            assert os.path.exists(fpath), FileNotFoundError(
-                f"Could not find a file named {lowlayer}.csv for layer '{layer}'"
-            )
-            if layer_attrs.get("layerType") == "relation":
-                continue
-            with open(fpath, "r") as layer_file:
-                columns = layer_file.readline().rstrip().split("\t")
-                assert lowlayer + "_id" in columns, ReferenceError(
-                    f"Column '{lowlayer}_id' missing from file {lowlayer}.csv"
-                )
-                anchoring = layer_attrs.get("anchoring", {})
-                anchored_stream = (
-                    anchoring.get("stream")
-                    or layer in self.template["firstClass"]
-                    and token_anchoring.get("stream")
-                )
-                anchored_time = (
-                    anchoring.get("time")
-                    or layer in self.template["firstClass"]
-                    and token_anchoring.get("time")
-                )
-                assert not anchored_stream or "char_range" in columns, ReferenceError(
-                    f"Column 'char_range' missing from file {lowlayer}.csv"
-                )
-                assert not anchored_time or "frame_range" in columns, ReferenceError(
-                    f"Column 'frame_range' missing from file {lowlayer}.csv"
-                )
-                if layer != self.template["firstClass"]["document"]:
-                    continue
-                # self.partition_on_doc_range(
-                #     columns,
-                #     "char_range" if anchored_stream else "frame_range",
-                #     layer_file,
-                # )
+        await self.check_files(path)
 
         await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
         return None
-
-    def partition_on_doc_range(
-        self, columns: list[str], anchoring: str, file: Any
-    ) -> None:
-        ncol: int = next(n for n, col in enumerate(columns) if col == anchoring)
-        ranges: list[tuple[int, int]] = []
-
-        while line := file.readline():
-            range_min, range_max = [
-                int(i)
-                for i in line.split("\t")[ncol].lstrip("[ ").rstrip(") ").split(",")
-            ]
-            ranges.append((range_min, range_max))
-
-        ranges = sorted(ranges, key=lambda r: r[0])
-        num_partitions = 10
-        partition_ranges: list[tuple[int, int]] = []
-
-        for np in range(num_partitions - 1):  # split n-1 times to get n partitions
-            last_iteration = np == (num_partitions - 2)
-            if len(ranges) == 1:
-                partition_ranges.append((ranges[0][0], ranges[-1][1]))
-                ranges = []
-            if not ranges:
-                break
-            mid_r = ranges[0][0] + ((ranges[-1][1] - ranges[0][0]) / 2)
-            # include in left as long as 'mid' falls further than the range's mid-point
-            left_ranges = [
-                r for r in ranges if r[1] < mid_r or (mid_r - r[0] > r[1] - mid_r)
-            ]
-            right_ranges = [r for r in ranges if r not in left_ranges]
-            if last_iteration:
-                more_chars_in_left = (left_ranges[-1][1] - left_ranges[0][0]) > (
-                    right_ranges[-1][1] - right_ranges[0][0]
-                )
-                first_ranges = left_ranges if more_chars_in_left else right_ranges
-                second_ranges = right_ranges if more_chars_in_left else left_ranges
-                partition_ranges.append((first_ranges[0][0], first_ranges[-1][1]))
-                partition_ranges.append((second_ranges[0][0], second_ranges[-1][1]))
-                ranges = []
-            else:
-                # Keep as many documents as possible in the next range, to maximize the chances of further splitting
-                more_docs_in_left = len(left_ranges) > len(right_ranges)
-                ranges_to_add = right_ranges if more_docs_in_left else left_ranges
-                partition_ranges.append((ranges_to_add[0][0], ranges_to_add[-1][1]))
-                ranges = left_ranges if more_docs_in_left else right_ranges
-
-        for first_layer in cast(dict[str, str], self.template["firstClass"]).values():
-            for n, pr in enumerate(partition_ranges, start=1):
-                suffix = str(n)
-                if n == len(partition_ranges):
-                    suffix = "rest"
-                print(
-                    f"CREATE TABLE {first_layer.lower()}{suffix} PARTITION OF document FOR VALUES FROM ('[{pr[0]},{pr[0]+1})'::int4range) TO ('[{pr[1]-1},{pr[1]})'::int4range)"
-                )
 
     async def process_data(
         self,
