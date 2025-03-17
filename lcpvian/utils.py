@@ -1195,7 +1195,7 @@ async def copy_to_table(
                     columns=columns,
                     delimiter=(force_delimiter or delimiter),
                     quote=(force_quote or quote),
-                    escape=(force_escape or "\\"),
+                    escape=(force_escape or force_quote or quote or '"'),
                     format="csv",
                     timeout=timeout,
                 )
