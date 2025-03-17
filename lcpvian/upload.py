@@ -293,7 +293,13 @@ async def upload(request: web.Request) -> web.Response:
         return web.json_response(return_data)
 
     qs = request.app["query_service"]
-    kwa = dict(gui=gui_mode, user_data=user_data)
+    kwa = dict(
+        gui=gui_mode,
+        user_data=user_data,
+        delimiter=request.rel_url.query.get("delimiter", ""),
+        quote=request.rel_url.query.get("quote", ""),
+        escape=request.rel_url.query.get("escape", ""),
+    )
     path = os.path.join(UPLOADS_PATH, cpath)
     print(f"Uploading data to database: {cpath}")
     upload_job = qs.upload(username, cpath, room, **kwa)

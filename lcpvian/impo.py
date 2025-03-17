@@ -134,7 +134,12 @@ class Table:
 
 class Importer:
     def __init__(
-        self, pool: AsyncEngine, data: JSONObject, project_dir: str, debug: bool = False
+        self,
+        pool: AsyncEngine,
+        data: JSONObject,
+        project_dir: str,
+        debug: bool = False,
+        **kwargs,
     ) -> None:
         """
         Manage the import of a corpus into the DB via async postgres connection
@@ -172,6 +177,9 @@ class Importer:
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
         self.filenames_to_delimiters_quotes: dict[str, tuple[str, str]] = {}
+        self.force_delimiter: str = cast(str, kwargs.get("delimiter", ""))
+        self.force_quote: str = cast(str, kwargs.get("quote", ""))
+        self.force_escape: str = cast(str, kwargs.get("escape", ""))
         # self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
@@ -238,9 +246,13 @@ class Importer:
         plus potentially the remainder of a line
         """
         base = os.path.basename(csv_path)
-        delimiter, quote = self.filenames_to_delimiters_quotes[
-            os.path.basename(csv_path)
-        ]
+        first_delimiter_quote_pair = next(
+            v for v in self.filenames_to_delimiters_quotes.values()
+        )
+        delimiter, quote = (
+            self.filenames_to_delimiters_quotes.get(os.path.basename(csv_path))
+            or first_delimiter_quote_pair
+        )
         async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
@@ -256,8 +268,9 @@ class Importer:
                         schema,
                         columns,
                         timeout=self.upload_timeout,
-                        force_delimiter=delimiter,
-                        force_quote=quote,
+                        force_delimiter=(self.force_delimiter or delimiter),
+                        force_quote=(self.force_quote or quote),
+                        force_escape=self.force_escape,
                     )
                 except Exception as e:
                     print(f"Failed to copy table {table} with columns {columns}")
@@ -277,9 +290,13 @@ class Importer:
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        delimiter, quote = self.filenames_to_delimiters_quotes[
-            os.path.basename(csv_path)
-        ]
+        first_delimiter_quote_pair = next(
+            v for v in self.filenames_to_delimiters_quotes.values()
+        )
+        delimiter, quote = (
+            self.filenames_to_delimiters_quotes.get(os.path.basename(csv_path))
+            or first_delimiter_quote_pair
+        )
         parsed_headers = next(
             csv.reader([headers.decode("utf-8")], delimiter=delimiter, quotechar=quote)
         )
@@ -302,9 +319,6 @@ class Importer:
             return None
 
         # no concurrency:
-        delimiter, quote = self.filenames_to_delimiters_quotes[
-            os.path.basename(csv_path)
-        ]
         async with aopen(csv_path, "rb") as f:
             async with self.pool.begin() as conn:
                 raw = await conn.get_raw_connection()
@@ -319,8 +333,9 @@ class Importer:
                             self.schema,
                             cast(list[str], table.columns),
                             timeout=self.upload_timeout,
-                            force_delimiter=delimiter,
-                            force_quote=quote,
+                            force_delimiter=(self.force_delimiter or delimiter),
+                            force_quote=(self.force_quote or quote),
+                            force_escape=self.force_escape,
                         )
                     except Exception as e:
                         print(
@@ -350,7 +365,11 @@ class Importer:
         filename = os.path.basename(fpath)
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as afile:
                         header = next(
@@ -373,6 +392,90 @@ class Importer:
         if not self.filenames_to_delimiters_quotes.get(filename):
             raise exception or Exception(
                 f"Could not process file {filename} for attribute {attribute_name} of type {typ} on layer {layer_name}"
+            )
+        return None
+
+    def check_global_attribute_file(self, path: str, glob_attr: str) -> None:
+        glob_attr_low = glob_attr.lower()
+        fpath = os.path.join(path, f"global_attribute_{glob_attr_low}.csv")
+        if not os.path.exists(fpath):
+            fpath = fpath.replace(".csv", ".tsv")
+        assert os.path.exists(fpath), FileNotFoundError(
+            f"Could not find a file named global_attribute_{glob_attr_low}.csv for global attribute '{glob_attr}'"
+        )
+        filename = os.path.basename(fpath)
+        exception: Exception | None = None
+        for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
+            for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
+                try:
+                    with open(fpath, "r") as afile:
+                        header = next(
+                            csv.reader(
+                                [afile.readline()], delimiter=delimiter, quotechar=quote
+                            )
+                        )
+                        assert f"{glob_attr_low}_id" in header, ReferenceError(
+                            f"Column {glob_attr_low}_id missing from file {filename} for global attribute '{glob_attr}'"
+                        )
+                        assert f"{glob_attr_low}" in header, ReferenceError(
+                            f"Column {glob_attr_low} missing from file {filename} for global attribute '{glob_attr}'"
+                        )
+                        self.filenames_to_delimiters_quotes[filename] = (
+                            delimiter,
+                            quote,
+                        )
+                    break
+                except Exception as e:
+                    exception = e
+            if not exception:
+                break
+        if not self.filenames_to_delimiters_quotes.get(filename):
+            raise exception or Exception(
+                f"Could not process file {filename} for global attribute {glob_attr}"
+            )
+        return None
+
+    def check_labels_file(self, path: str, layer_name: str, aname: str) -> None:
+        layer_low = layer_name.lower()
+        fpath = os.path.join(path, f"{layer_low}_labels.csv")
+        if not os.path.exists(fpath):
+            fpath = fpath.replace(".csv", ".tsv")
+        assert os.path.exists(fpath), FileNotFoundError(
+            f"Could not find a file named {layer_low}_labels.csv for attribute '{aname}' of type labels on layer {layer_name}"
+        )
+        filename = os.path.basename(fpath)
+        exception: Exception | None = None
+        for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
+            for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
+                try:
+                    with open(fpath, "r") as afile:
+                        header = next(
+                            csv.reader(
+                                [afile.readline()], delimiter=delimiter, quotechar=quote
+                            )
+                        )
+                        assert "bit" in header, ReferenceError(
+                            f"Column bit missing from file {filename} for labels attribute '{aname}' on layer {layer_name}"
+                        )
+                        assert "label" in header, ReferenceError(
+                            f"Column label missing from file {filename} for labels attribute '{aname}' on layer {layer_name}"
+                        )
+                    break
+                except Exception as e:
+                    exception = e
+            if not exception:
+                break
+        if not self.filenames_to_delimiters_quotes.get(filename):
+            raise exception or Exception(
+                f"Could not process file {filename} for labels attribute {aname} on layer {layer_name}"
             )
         return None
 
@@ -409,7 +512,11 @@ class Importer:
             return
         exception: Exception | None = None
         for delimiter in CSV_DELIMITERS:
+            if self.force_delimiter and delimiter != self.force_delimiter:
+                continue
             for quote in CSV_QUOTES:
+                if self.force_quote and quote != self.force_quote:
+                    continue
                 try:
                     with open(fpath, "r") as layer_file:
                         header = next(
@@ -438,14 +545,12 @@ class Importer:
                             ), ReferenceError(
                                 f"Column '{segment_layer.lower()}_id' missing from file {filename} for token-level layer {layer_name}"
                             )
-                        self.filenames_to_delimiters_quotes[filename] = (
-                            delimiter,
-                            quote,
-                        )
                         for aname, aprops in layer_props.get("attributes", {}).items():
                             acol = aname.lower()
-                            lookup = aprops.get("type", "") in ("dict", "text")
-                            if lookup:
+                            typ = aprops.get("type", "")
+                            ref = aprops.get("ref")
+                            lookup = typ in ("dict", "text")
+                            if lookup or ref:
                                 acol += "_id"
                             assert acol in header, ReferenceError(
                                 f"Column '{acol}' is missing from file {filename} for the attribute '{aname}' of layer {layer_name}"
@@ -454,6 +559,14 @@ class Importer:
                                 self.check_attribute_file(
                                     path, layer_name, aname, aprops
                                 )
+                            if typ == "labels":
+                                self.check_labels_file(path, layer_name, aname)
+                            if ref:
+                                self.check_global_attribute_file(path, ref)
+                        self.filenames_to_delimiters_quotes[filename] = (
+                            delimiter,
+                            quote,
+                        )
                         break
                 except Exception as e:
                     exception = e

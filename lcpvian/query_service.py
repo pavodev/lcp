@@ -696,14 +696,12 @@ class QueryService:
         queue: str = "background",
         gui: bool = False,
         user_data: JSONObject | None = None,
+        **kwargs,
     ) -> Job:
         """
         Upload a new corpus to the system
         """
-        kwargs = {
-            "gui": gui,
-            "user_data": user_data,
-        }
+        kwargs = {"gui": gui, "user_data": user_data, **kwargs}
         job: Job = self.app[queue].enqueue(
             _upload_data,
             on_success=Callback(_upload, self.callback_timeout),

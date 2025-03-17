@@ -1180,6 +1180,7 @@ async def copy_to_table(
     timeout=0,
     force_delimiter: str | None = None,
     force_quote: str | None = None,
+    force_escape: str | None = None,
 ) -> None:
     if timeout == 0:
         timeout = os.getenv("UPLOAD_TIMEOUT", 300)
@@ -1194,6 +1195,7 @@ async def copy_to_table(
                     columns=columns,
                     delimiter=(force_delimiter or delimiter),
                     quote=(force_quote or quote),
+                    escape=(force_escape or force_quote or quote or '"'),
                     format="csv",
                     timeout=timeout,
                 )
