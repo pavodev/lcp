@@ -98,7 +98,7 @@ async def _handle_export(
 
     query = export_query.format(**export_params)
 
-    async with get_current_job()._pool.begin() as conn:  # type: ignore
+    async with get_current_job()._wpool.begin() as conn:  # type: ignore
         raw = await conn.get_raw_connection()
         con = raw._connection
         async with con.transaction():
@@ -142,6 +142,7 @@ async def _db_query(
     params: DBQueryParams = {},
     is_main: bool = False,  # is the query related to the schame 'main'?
     is_import: bool = False,  # is the query related to the import pipeline?
+    has_return: bool = True,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
 ) -> (
@@ -172,7 +173,7 @@ async def _db_query(
     name = "_upool" if is_import else ("_wpool" if is_main else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
-    method = "begin" if is_import else "connect"
+    method = "begin" if is_import or not has_return else "connect"
 
     first_job_id = cast(str, kwargs.get("first_job", ""))
     if first_job_id:
@@ -191,7 +192,7 @@ async def _db_query(
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)
-            if is_import:
+            if is_import or not has_return:
                 return None
             out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
             return out
