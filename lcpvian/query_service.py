@@ -661,18 +661,17 @@ class QueryService:
         """
         Update metadata for a corpus
         """
-        query = """SELECT main.update_corpus_meta(:corpus_id, :metadata_json);"""
         kwargs = {
             "store": True,
             "is_main": True,  # query on main.*
+            "has_return": False,
             "refresh_config": True,
         }
+        query = f"""CALL main.update_corpus_meta(:corpus_id, :metadata_json ::jsonb);"""
         params: dict[str, str | int | None | JSONObject] = {
             "corpus_id": corpus_id,
             "metadata_json": json.dumps(query_data),
         }
-        # TODO: use the uploader user/pool instead (ie the one that can upload corpora)
-        # and update app's config once done
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
