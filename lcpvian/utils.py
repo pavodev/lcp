@@ -1184,24 +1184,15 @@ async def copy_to_table(
 ) -> None:
     if timeout == 0:
         timeout = os.getenv("UPLOAD_TIMEOUT", 300)
-    first_exception: Exception | None = None
-    for delimiter in CSV_DELIMITERS:
-        for quote in CSV_QUOTES:
-            try:
-                await connection.copy_to_table(
-                    table,
-                    source=source,
-                    schema_name=schema,
-                    columns=columns,
-                    delimiter=(force_delimiter or delimiter),
-                    quote=(force_quote or quote),
-                    escape=(force_escape or force_quote or quote or '"'),
-                    format="csv",
-                    timeout=timeout,
-                )
-                return None
-            except Exception as e:
-                first_exception = first_exception or e
-    if first_exception:
-        raise first_exception
+    await connection.copy_to_table(
+        table,
+        source=source,
+        schema_name=schema,
+        columns=columns,
+        delimiter=(force_delimiter or ","),
+        quote=(force_quote or '"'),
+        escape=(force_escape or force_quote or None),
+        format="csv",
+        timeout=timeout,
+    )
     return None

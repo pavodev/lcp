@@ -27,5 +27,10 @@ async def export_swissdox(
         result_ttl=EXPORT_TTL,
         job_timeout=EXPORT_TTL,
         args=(query, {"article_ids": article_ids}),
-        kwargs={"project_id": project_id, "name": corpus_name, **kwargs},
+        kwargs={
+            "project_id": project_id,
+            "name": corpus_name,
+            "is_main": True,
+            **kwargs,
+        },
     )

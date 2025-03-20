@@ -140,8 +140,8 @@ async def _create_schema(
 async def _db_query(
     query: str,
     params: DBQueryParams = {},
-    config: bool = False,
-    store: bool = False,
+    is_main: bool = False,  # is the query related to the schame 'main'?
+    is_import: bool = False,  # is the query related to the import pipeline?
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
 ) -> (
@@ -169,10 +169,10 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if store else ("_wpool" if config else "_pool")
+    name = "_upool" if is_import else ("_wpool" if is_main else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
-    method = "begin" if store else "connect"
+    method = "begin" if is_import else "connect"
 
     first_job_id = cast(str, kwargs.get("first_job", ""))
     if first_job_id:
@@ -191,7 +191,7 @@ async def _db_query(
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)
-            if store:
+            if is_import:
                 return None
             out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
             return out

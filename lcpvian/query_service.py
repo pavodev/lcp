@@ -533,7 +533,7 @@ class QueryService:
         )
 
         redis: RedisConnection[bytes] = self.app["redis"]
-        opts: dict[str, bool] = {"config": True}
+        opts: dict[str, bool] = {"is_main": True}  # query on main.*
         if self.use_cache and not force_refresh:
             try:
                 already = Job.fetch(job_id, connection=redis)
@@ -580,7 +580,7 @@ class QueryService:
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query,),
-            kwargs={"user": user_id, "hash": hash},
+            kwargs={"user": user_id, "hash": hash, "is_main": True},
         )
         return job
 
@@ -603,7 +603,7 @@ class QueryService:
         opts = {
             "user": user,
             "room": room,
-            "config": True,
+            "is_Main": True,  # query on main.* or something similar
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -632,7 +632,7 @@ class QueryService:
             "user": user,
             "room": room,
             "store": True,
-            "config": True,
+            "is_main": True,  # query on main.* or something similar
             "query_id": idx,
         }
         params: dict[str, str | int | None | JSONObject] = {
@@ -661,16 +661,10 @@ class QueryService:
         """
         Update metadata for a corpus
         """
-        query = """UPDATE main.corpus SET
-            corpus_template = jsonb_set(
-                corpus_template,
-                '{meta}',
-                corpus_template->'meta' || :metadata_json
-            )
-        WHERE corpus_id = :corpus_id;"""
+        query = """SELECT main.update_corpus_meta(:corpus_id, :metadata_json);"""
         kwargs = {
             "store": True,
-            "config": True,
+            "is_main": True,  # query on main.*
             "refresh_config": True,
         }
         params: dict[str, str | int | None | JSONObject] = {
