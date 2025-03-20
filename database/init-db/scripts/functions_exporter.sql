@@ -44,7 +44,7 @@ ALTER PROCEDURE main.init_export
   SET search_path = pg_catalog,pg_temp;
 
 REVOKE EXECUTE ON PROCEDURE main.init_export FROM public;
-GRANT EXECUTE ON PROCEDURE main.init_export TO lcp_production_query_engine;
+GRANT EXECUTE ON PROCEDURE main.init_export TO lcp_production_web_user;
 
 
 CREATE OR REPLACE PROCEDURE main.finish_export(
@@ -75,4 +75,4 @@ ALTER PROCEDURE main.finish_export
   SET search_path = pg_catalog,pg_temp;
 
 REVOKE EXECUTE ON PROCEDURE main.finish_export FROM public;
-GRANT EXECUTE ON PROCEDURE main.finish_export TO lcp_production_query_engine;
+GRANT EXECUTE ON PROCEDURE main.finish_export TO lcp_production_web_user;
