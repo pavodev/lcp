@@ -27,6 +27,7 @@ GRANT USAGE
 -- therefore lcp_production_ro cannot access objects in main
 ALTER DEFAULT PRIVILEGES GRANT USAGE ON SCHEMAS TO lcp_production_ro;
 ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO lcp_production_ro;
+REVOKE USAGE ON SCHEMA main FROM lcp_production_ro;
 
 -- does that make sense or too broad?
 GRANT lcp_production_ro

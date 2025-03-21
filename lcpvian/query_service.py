@@ -543,7 +543,7 @@ class QueryService:
         )
 
         redis: RedisConnection[bytes] = self.app["redis"]
-        opts: dict[str, bool] = {"config": True}
+        opts: dict[str, bool] = {"is_main": True}  # query on main.*
         if self.use_cache and not force_refresh:
             try:
                 already = Job.fetch(job_id, connection=redis)
@@ -590,7 +590,7 @@ class QueryService:
             result_ttl=self.query_ttl,
             job_timeout=self.timeout,
             args=(query,),
-            kwargs={"user": user_id, "hash": hash},
+            kwargs={"user": user_id, "hash": hash, "is_main": True},
         )
         return job
 
@@ -613,7 +613,7 @@ class QueryService:
         opts = {
             "user": user,
             "room": room,
-            "config": True,
+            "is_Main": True,  # query on main.* or something similar
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -642,7 +642,7 @@ class QueryService:
             "user": user,
             "room": room,
             "store": True,
-            "config": True,
+            "is_main": True,  # query on main.* or something similar
             "query_id": idx,
         }
         params: dict[str, str | int | None | JSONObject] = {
@@ -671,24 +671,17 @@ class QueryService:
         """
         Update metadata for a corpus
         """
-        query = """UPDATE main.corpus SET
-            corpus_template = jsonb_set(
-                corpus_template,
-                '{meta}',
-                corpus_template->'meta' || :metadata_json
-            )
-        WHERE corpus_id = :corpus_id;"""
         kwargs = {
             "store": True,
-            "config": True,
+            "is_main": True,  # query on main.*
+            "has_return": False,
             "refresh_config": True,
         }
+        query = f"""CALL main.update_corpus_meta(:corpus_id, :metadata_json ::jsonb);"""
         params: dict[str, str | int | None | JSONObject] = {
             "corpus_id": corpus_id,
             "metadata_json": json.dumps(query_data),
         }
-        # TODO: use the uploader user/pool instead (ie the one that can upload corpora)
-        # and update app's config once done
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,
@@ -706,14 +699,12 @@ class QueryService:
         queue: str = "background",
         gui: bool = False,
         user_data: JSONObject | None = None,
+        **kwargs,
     ) -> Job:
         """
         Upload a new corpus to the system
         """
-        kwargs = {
-            "gui": gui,
-            "user_data": user_data,
-        }
+        kwargs = {"gui": gui, "user_data": user_data, **kwargs}
         job: Job = self.app[queue].enqueue(
             _upload_data,
             on_success=Callback(_upload, self.callback_timeout),

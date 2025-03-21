@@ -46,7 +46,7 @@
         Word count:
         <b>{{
           calculateSum(
-            Object.values(corpusModal.token_counts)
+            Object.entries(corpusModal.token_counts).filter(kv=>kv[0].endsWith("0")).map(kv=>kv[1])
           ).toLocaleString("de-DE")
         }}</b>
       </p>

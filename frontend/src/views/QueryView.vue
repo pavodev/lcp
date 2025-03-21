@@ -126,6 +126,7 @@
                     class="btn btn-primary me-1 mb-1"
                     data-bs-toggle="modal"
                     data-bs-target="#exportModal"
+                    @click="setExportFilename('xml')"
                   >
                     <FontAwesomeIcon :icon="['fas', 'file-export']" />
                     Export
@@ -677,59 +678,97 @@
             ></button>
           </div>
           <div class="modal-body text-start">
-            <label class="form-label">Plain format (TSV + JSON)</label>
-            <button
-              type="button"
-              @click="exportResults('plain', /*download=*/true, /*preview=*/false)"
-              class="btn btn-primary me-1"
-              data-bs-dismiss="modal"
-            >
-              Download preview
-            </button>
-            <!-- <button
-              type="button"
-              @click="exportResults('plain')"
-              class="btn btn-primary me-1"
-              data-bs-dismiss="modal"
-            >
-              Launch export
-            </button> -->
-          </div>
-          <div class="modal-body text-start">
-            <label class="form-label">XML</label>
-            <button
-              type="button"
-              @click="exportResults('xml', /*download=*/true, /*preview=*/true)"
-              class="btn btn-primary me-1"
-              data-bs-dismiss="modal"
-            >
-              Download preview
-            </button>
-            <input
-              type="text"
-              class="form-control"
-              id="nExport"
-              v-model="nExport"
-            />
-            <!-- <button
-              type="button"
-              @click="exportResults('plain')"
-              class="btn btn-primary me-1"
-              data-bs-dismiss="modal"
-            >
-              Launch export
-            </button> -->
-          </div>
-          <div class="modal-body text-start" v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)">
-            <label class="form-label">Swissdox</label>
-            <button
-              type="button"
-              @click="exportResults('swissdox', /*download=*/true, /*preview=*/true)"
-              class="btn btn-primary me-1"
-              data-bs-dismiss="modal"
-            >
-              Launch export
-            </button>
+            <div class="form-floating mb-3">
+              <nav>
+                <div class="nav nav-tabs justify-content-end" id="nav-export-tab" role="tablist">
+                  <button
+                    class="nav-link active"
+                    id="nav-exportxml-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#nav-exportxml"
+                    type="button"
+                    role="tab"
+                    aria-controls="nav-exportxml"
+                    aria-selected="false"
+                    @click="(exportTab = 'xml') && setExportFilename('xml')"
+                  >
+                    XML
+                  </button>
+                  <button
+                    class="nav-link"
+                    id="nav-exportswissdox-tab"
+                    data-bs-toggle="tab"
+                    data-bs-target="#nav-exportswissdox"
+                    type="button"
+                    role="tab"
+                    aria-controls="nav-exportswissdox"
+                    aria-selected="false"
+                    @click="(exportTab = 'swissdox') && setExportFilename('swissdox')"
+                    v-if="selectedCorpora && selectedCorpora.corpus && selectedCorpora.corpus.shortname.match(/swissdox/i)"
+                  >
+                    SwissdoxViz
+                  </button>
+                </div>
+              </nav>
+              <div class="tab-content" id="nav-exportxml-tabContent">
+                <div
+                  class="tab-pane fade show active pt-3"
+                  id="nav-exportxml"
+                  role="tabpanel"
+                  aria-labelledby="nav-exportxml-tab"
+                >
+                  <label for="nExport">Number of hits:</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="nExport"
+                    name="nExport"
+                    v-model="nExport"
+                  />
+                  <label for="nameExport">Filename:</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="nameExport"
+                    name="nameExport"
+                    v-model="nameExport"
+                  />
+                  <button
+                    type="button"
+                    @click="exportResults('xml', /*download=*/true, /*preview=*/true)"
+                    class="btn btn-primary me-1"
+                    data-bs-dismiss="modal"
+                  >
+                    Download
+                  </button>
+                </div>
+              </div>
+              <div class="tab-content" id="nav-exportswissdox-tabContent">
+                <div
+                  class="tab-pane fade pt-3"
+                  id="nav-exportswissdox"
+                  role="tabpanel"
+                  aria-labelledby="nav-exportswissdox-tab"
+                >
+                  <label for="nameExport">Filename:</label>
+                  <input
+                    type="text"
+                    class="form-control"
+                    id="nameExport"
+                    name="nameExport"
+                    v-model="nameExport"
+                  />
+                  <button
+                    type="button"
+                    @click="exportResults('swissdox', /*download=*/true, /*preview=*/true)"
+                    class="btn btn-primary me-1"
+                    data-bs-dismiss="modal"
+                  >
+                    Launch export
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="modal-footer">
             <button
@@ -944,7 +983,9 @@ export default {
       selectedLanguages: ["en"],
       queryName: "",
       nExport: 200,
+      nameExport: "",
       currentTab: "dqd",
+      exportTab: "xml",
       simultaneousMode: false,
       percentageDone: 0,
       percentageTotalDone: 0,
@@ -1083,6 +1124,7 @@ export default {
         this.WSDataResults = {};
         this.WSDataMeta = {};
         this.WSDataSentences = {};
+        this.nameExport = "";
       }
     },
     WSDataResults() {
@@ -1150,6 +1192,13 @@ export default {
     // },
   },
   methods: {
+    setExportFilename(format) {
+      if (!this.nameExport)
+        this.nameExport = `${this.selectedCorpora.corpus.shortname} ${new Date().toLocaleString()}.${format}`;
+      else
+        this.nameExport = this.nameExport.replace(/\.[^.]+$/,"."+format);
+      this.nameExport = this.nameExport.replace(/\/+/g,"-").replace(/,+/g,"");
+    },
     setMainTab() {
       this.activeMainTab = 'query'
     },
@@ -1352,6 +1401,8 @@ export default {
             this.loading = false;
           }
           return;
+        } else if (data["action"] == "started_export") {
+          this.loading = false;
         } else if (data["action"] === "query_result") {
           useWsStore().addMessageForPlayer(data)
           // console.log("query_result", data);
@@ -1522,6 +1573,8 @@ export default {
       }[format];
       to_export.preview = preview;
       to_export.download = download;
+      this.setExportFilename(format);
+      to_export.filename = this.nameExport;
       let full = !preview;
       let resume = full; // If not a full query, no need to resume the query: we already have the necessary results
       if (format == 'swissdox') {

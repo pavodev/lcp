@@ -288,6 +288,8 @@ class Column(DDL):
         """
         if self.constrs.get("primary_key", False):
             return ""
+        elif self.type == "jsonb":
+            return ""
         elif self.type in ("int4range", "int8range", "point", "box"):
             return self._idx_constr.format("USING gist", self.name)
         elif self.type == "tsvector":
@@ -533,7 +535,7 @@ class CTProcessor:
 
     @staticmethod
     def _order_ct_layers(
-        layers: dict[str, dict[str, Any]]
+        layers: dict[str, dict[str, Any]],
     ) -> dict[str, dict[str, Any]]:
         # check if all layers referred to do exist
         referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
@@ -728,12 +730,14 @@ class CTProcessor:
                     )
                     tables.append(label_lookup_table)
 
-            elif not typ and attr == "meta":
+            elif attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
                 entity_mapping["hasMeta"] = True
 
             else:
-                raise Exception(f"unknown type for attribute: '{attr}'")
+                raise Exception(
+                    f"unknown type for attribute: '{entity_name}'->'{attr}'"
+                )
 
         if map_attr:
             entity_mapping["attributes"] = cast(JSONObject, map_attr)
