@@ -249,8 +249,8 @@ export default {
         }
 
         if (data["action"] === "delete_query") {
-          this.fetch();
           this.selectedQuery = null;
+          this.fetch(); // Fetch the updated query list
 
           return;
         }

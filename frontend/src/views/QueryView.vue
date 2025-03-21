@@ -185,12 +185,17 @@
                     </div>
                     <div class="mt-3">
                       <button type="button" v-if="!loading && userData.user.anon != true && userQueryVisible()"
-                        :disabled="isQueryValidData && isQueryValidData.valid != true" class="btn btn-primary me-1 mb-1"
+                        :disabled="isQueryValidData && isQueryValidData.valid != true" class="btn btn-primary me-2 mb-2"
                         data-bs-toggle="modal" data-bs-target="#saveQueryModal">
                         <FontAwesomeIcon :icon="['fas', 'file-export']" />
                         {{ $t('common-save-query') }}
                       </button>
-
+                      <button type="button" v-if="!loading && userQueryVisible() && selectedQuery"
+                        :disabled="(isQueryValidData && isQueryValidData.valid != true)"
+                        class="btn btn-danger me-2 mb-2" data-bs-toggle="modal" data-bs-target="#deleteQueryModal">
+                        <FontAwesomeIcon :icon="['fas', 'trash']" />
+                        {{ $t('common-delete-query') }}
+                      </button>
                       <div v-if="userQueryVisible()">
                         <multiselect v-model="selectedQuery" :options="processedSavedQueries" :searchable="true"
                           :clear-on-select="false" :close-on-select="true" placeholder="Select a saved query"
@@ -474,6 +479,29 @@
             <button type="button" :disabled="!queryName" @click="saveQuery" class="btn btn-primary me-1"
               data-bs-dismiss="modal">
               {{ $t('common-save-query') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade" id="deleteQueryModal" tabindex="-1" aria-labelledby="deleteQueryModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteQueryModalLabel">{{ $t('common-delete-query') }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-start">
+            <p>{{ $t('common-delete-query-sure') }}</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              {{ $t('common-close') }}
+            </button>
+            <button type="button" @click="deleteQuery" class="btn btn-danger me-1"
+              data-bs-dismiss="modal">
+              {{ $t('common-delete-query') }}
             </button>
           </div>
         </div>
@@ -835,7 +863,7 @@ export default {
     setMainTab() {
       this.activeMainTab = 'query'
     },
-    setTab(tab){
+    setTab(tab) {
       this.selectedQuery = null;
       this.currentTab = tab;
     },
@@ -1036,7 +1064,12 @@ export default {
             });
           }
 
-          this.fetch(); // Fetch the update query list
+          this.fetch(); // Fetch the updated query list
+
+          return;
+        } else if (data["action"] == "delete_query") {
+          this.selectedQuery = null;
+          this.fetch(); // Fetch the updated query list
 
           return;
         } else if (data["action"] == "export_link") {
@@ -1372,6 +1405,10 @@ export default {
       this.queryName = "";
       useCorpusStore().saveQuery(data);
     },
+    deleteQuery() {
+      if (!this.selectedQuery) return;
+      useCorpusStore().deleteQuery(this.userData.user.id, this.roomId, this.selectedQuery.idx);
+    },
     fetch() {
       let data = {
         user: this.userData.user.id,
@@ -1382,15 +1419,15 @@ export default {
       useCorpusStore().fetchQueries(data);
     },
     handleQuerySelection(selectedQuery) {
-      if (this.currentTab == "text"){
+      if (this.currentTab == "text") {
         this.textsearch = selectedQuery.query.query;
       }
-      else if (this.currentTab == "dqd"){
+      else if (this.currentTab == "dqd") {
         this.queryDQD = selectedQuery.query.query;
         this.defaultQueryDQD = selectedQuery.query.query;
         this.updateQueryDQD(selectedQuery.query.query);
       }
-      else if (this.currentTab == "cqp"){
+      else if (this.currentTab == "cqp") {
         this.cqp = selectedQuery.query.query;
       }
 
