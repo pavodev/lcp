@@ -55,6 +55,7 @@ from .project import project_create, project_update
 from .project import project_users_invite, project_users
 from .project import project_users_invitation_remove, project_user_update
 from .query import query, refresh_config
+from .query_future import post_query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query
@@ -239,6 +240,7 @@ async def create_app(test: bool = False) -> web.Application:
             project_users_invitation_remove,
         ),
         ("/query", "POST", query),
+        ("/query_future", "POST", post_query),
         ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
         ("/upload", "POST", upload),
