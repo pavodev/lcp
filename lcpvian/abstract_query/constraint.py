@@ -449,23 +449,18 @@ class Constraint:
         self,
         label: str,
         layer: str,
+        nbit: int,
         op: str,
         ref_mapping: dict[str, Any],
         value: str,
         value_type: str,
-    ) -> tuple[int, str, str]:
+    ) -> tuple[str, str]:
         assert op.lower().endswith("contain"), SyntaxError(
             f"Must use 'contain' on labels (attempted to use {op} instead)"
         )
         assert value_type in ("string", "regex"), TypeError(
             f"Contained labels can only be tested against strings or regexes"
         )
-        ref_layer = layer or self.layer
-        ref_layer_info = self.config["layer"].get(ref_layer, {})
-        assert "nlabels" in ref_layer_info, KeyError(
-            f"Missing 'nlabels' for layer '{ref_layer}' in config"
-        )
-        nbit = ref_layer_info["nlabels"]
         lookup_table = ref_mapping.get("name", "")
         inner_op = "~" if value_type == "regex" else "="
         dummy_mask = "".join(["0" for _ in range(nbit)])
@@ -491,7 +486,7 @@ class Constraint:
         self._add_join_on(formed_join_table, "")
         negated = op.lower().startswith(("not", "!"))
         op = "=" if negated else ">"
-        return (nbit, op, mask_label)
+        return (op, mask_label)
         # formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
 
     def make(self) -> None:
@@ -572,8 +567,10 @@ class Constraint:
             )
             value = right if labels_left else left
             value_type: str = right_type if labels_left else left_type
-            (nbit, parsed_op, mask) = self.join_labels_table(
-                ref, ref_layer, self.op, ref_mapping, value, value_type
+            labels_meta = (left_info if labels_left else right_info).get("meta")
+            nbit = cast(int, (labels_meta or {}).get("nbit", 1))
+            (parsed_op, mask) = self.join_labels_table(
+                ref, ref_layer, nbit, self.op, ref_mapping, value, value_type
             )
             formed_condition = f"{ref} & {mask}.m {parsed_op} 0::bit({nbit})"
 
@@ -767,8 +764,12 @@ class Constraint:
                 .replace("text", "string")
             )
             if ref_type == "labels":
+                assert "nlabels" in attributes[ref], LookupError(
+                    f"No value reported for 'nlabels' in the configuration for {ref}"
+                )
+                nbit = attributes[ref]["nlabels"]
                 ref = f"{prefix}.{ref}"
-                ref_info = RefInfo(type="labels")
+                ref_info = RefInfo(type="labels", meta={"nbit": nbit})
                 return (ref, ref_info)
             global_attr = ref_template.get("ref")
             # Sub-attribute reference like 'agent.region' or 'ufeat.Degree'

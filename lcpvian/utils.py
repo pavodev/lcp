@@ -1258,7 +1258,6 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             for attr, v in attributes.items()
             if attr not in relational_attributes and v.get("type") != "vector"
         ]
-        nbit: int = cast(int, layer_info[layer].get("nlabels", 1))
         for attr, v in relational_attributes.items():
             # Quote attribute name (is arbitrary)
             attr_mapping = mapping_attrs.get(attr, {})
@@ -1271,6 +1270,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             dotref = f"{alias_attr_table}.{attr_name}"
             sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
+                nbit: int = cast(int, attributes[attr].get("nlabels", 1))
                 on_cond = (
                     f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
                 )
