@@ -5,7 +5,6 @@ import traceback
 
 from aiohttp import web
 from redis import Redis as RedisConnection
-from rq import Callback
 from rq.job import Job
 from typing import cast, TypedDict
 from uuid import uuid4
@@ -13,7 +12,7 @@ from uuid import uuid4
 from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .authenticate import Authentication
-from .callbacks import _general_failure
+from .convert import _aggregate_results
 from .dqd_parser import convert
 from .jobfuncs import _db_query
 from .typed import JSONObject
@@ -102,17 +101,6 @@ def decide_batch(config: dict, query_info: dict) -> tuple[str, int] | None:
     return first_not_done
 
 
-# move that to callbacks or something
-def _mycb(
-    job: Job,
-    connection: RedisConnection,
-    result: dict | None = None,
-) -> None:
-    msg_id = cast(dict, job.kwargs).get("msg_id", "")
-    jso = json.dumps(result, cls=CustomEncoder)
-    return _publish_msg(connection, jso, msg_id)
-
-
 # TODO
 async def run_meta_on_batch():
     pass
@@ -133,6 +121,7 @@ async def run_query(app, hash: str, json_query: dict, config: dict, qi: dict) ->
     all_batches = _get_query_batches(config, langs)
     schema = config.get("schema_path", "")
     while 1:
+        existing_results = qi.get("stats_results", {})
         max_requested: int = max(x.get("requested", 200) for x in qi["requests"])
         total_results_so_far: int = qi.get("total_results_so_far", 0)
         if total_results_so_far >= max_requested:
@@ -150,24 +139,14 @@ async def run_query(app, hash: str, json_query: dict, config: dict, qi: dict) ->
             config=config,
             lang=lang,
         )
+        kwic = any(x.get("type") == "plain" for x in meta_json.get("result_sets", []))
         # genericize this logic
-        current_query: asyncio.Future = asyncio.Future()
-        msg_id = str(uuid4())
-        app["futures"][msg_id] = current_query
-        job = app["background"].enqueue(
-            _db_query,
-            on_success=Callback(_mycb, 5000),
-            on_failure=Callback(_general_failure, 5000),
-            args=(sql_query,),
-            kwargs={"msg_id": msg_id},
-        )
+        main_query = app.to_job(_db_query, sql_query)
+        job_id = main_query.job.id
         qi["query_jobs"] = qi.get("query_jobs", {})
-        qi["query_jobs"][batch[0]] = job.id
+        qi["query_jobs"][batch[0]] = job_id
         _update_query_info(app["redis"], hash, info=qi)
-        res = await current_query
-        payload = {"job": job.id, "result": res}
-        total_results_so_far += len(res)
-        qi["total_results_so_far"] = total_results_so_far
+        res = await main_query
         done_batches = qi.get("done_batches", [])
         if batch not in done_batches:
             done_batches.append(batch)
@@ -176,6 +155,23 @@ async def run_query(app, hash: str, json_query: dict, config: dict, qi: dict) ->
         if all_done:
             qi["status"] = "complete"
         _update_query_info(app["redis"], hash, info=qi)
+        # Send _aggregate_results to the worker
+        (all_res, to_send, n_res, _, _) = await app.to_job(
+            _aggregate_results,
+            res,
+            existing_results,
+            meta_json,
+            post_processes,
+            batch,
+            done_batches,
+        )
+        qi["stat_results"] = all_res
+        total_results_so_far += n_res
+        qi["total_results_so_far"] = total_results_so_far
+        _update_query_info(app["redis"], hash, info=qi)
+        payload = {"job": job_id, "result": to_send}
+        if kwic:
+            asyncio.create_task(run_sentence_on_batch())
         for r in qi["requests"]:
             if r["status"] == "satisfied":
                 continue

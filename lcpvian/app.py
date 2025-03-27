@@ -48,6 +48,7 @@ from .document import document, document_ids
 from .export import download_export
 
 from .api import api_query
+from .callbacks import _general_failure
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -188,7 +189,7 @@ async def create_app(test: bool = False) -> web.Application:
         .and_call(handle_lama_error)
     )
 
-    app = LCPApplication(middlewares=[catcher.middleware])
+    app = LCPApplication(_general_failure, middlewares=[catcher.middleware])
     app.addkey("mypy", bool, C_COMPILED)
     if C_COMPILED:
         print("Running mypy/c app!")

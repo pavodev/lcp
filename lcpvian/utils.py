@@ -23,6 +23,7 @@ from hashlib import md5
 from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq import Callback
 from rq.exceptions import NoSuchJobError
 from rq.registry import FinishedJobRegistry
 
@@ -49,6 +50,8 @@ from rq.connections import get_current_connection
 from rq.job import Job
 
 from .authenticate import Authentication
+
+# from .callbacks import _general_failure
 from .configure import CorpusConfig, CorpusTemplate
 from .typed import (
     Batch,
@@ -144,11 +147,34 @@ FROM(.|{slb})+
 """
 
 
+def _futurecb(
+    job: Job,
+    connection: RedisConnection,
+    result: dict | None = None,
+) -> None:
+    """
+    Fetch msg_id from the job's meta and sends it publish_msg
+    Will be picked up in socks.py, which will resolve the future
+    """
+    msg_id = cast(dict, job.get_meta(refresh=True)).get("msg_id", "")
+    jso = json.dumps(result, cls=CustomEncoder)
+    return _publish_msg(connection, jso, msg_id)
+
+
+# Custom class to add a `job` attribute
+class CustomFuture(asyncio.Future):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.job: Job | None = None
+
+
 class LCPApplication(web.Application):
 
-    def __init__(self, *args, **kwargs) -> None:
+    def __init__(self, failure_cb: Callable, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._keys: dict[str, web.AppKey] = {}
+        # Needed in to_job, pass as an argument to avoid import dependency issues
+        self._general_failure = failure_cb
         return None
 
     def addkey(self, name: str, kind: Any, value: Any) -> None:
@@ -162,6 +188,26 @@ class LCPApplication(web.Application):
             assert isinstance(a, str)
             return self[self._keys[a]]
         return super().__getitem__(a)
+
+    def to_job(self, fn: Callable, *args, **kwargs) -> CustomFuture:
+        """
+        Send a method to be exected by the worker in the background
+        Return a future that resolves to the return value of the method
+        """
+        fut: CustomFuture = CustomFuture()
+        msg_id = str(uuid4())
+        self["futures"][msg_id] = fut
+        job = self["background"].enqueue(
+            fn,
+            on_success=Callback(_futurecb, 5000),
+            on_failure=Callback(self._general_failure, 5000),
+            args=args,
+            kwargs=kwargs,
+        )
+        job.meta["msg_id"] = msg_id
+        job.save_meta()
+        fut.job = job
+        return fut
 
 
 class Interrupted(Exception):
