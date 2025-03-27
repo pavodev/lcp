@@ -699,16 +699,20 @@ class CTProcessor:
                 table_cols.append(Column(attr, "main.vector", nullable=nullable))
 
             elif typ == "labels":
-                assert "nlabels" in self.layers[entity_name], AttributeError(
-                    f"Attribute {attr} is of type labels but no number of distinct labels was provided for entity type {entity_name}"
+                entity_attrs = self.layers[entity_name].get("attributes", {})
+                assert attr in entity_attrs, ReferenceError(
+                    f"Could not find attribute {attr} on {entity_name}"
                 )
-                nbit = self.layers[entity_name]["nlabels"]
+                assert "nlabels" in entity_attrs[attr], AttributeError(
+                    f"Attribute {entity_name}->{attr} is of type labels but no number of distinct labels was provided for it"
+                )
+                nbit = entity_attrs[attr]["nlabels"]
                 assert str(nbit).isnumeric(), TypeError(
-                    f"The value of {entity_name}'s 'nlabels' should be an integer; got '{nbit}' instead"
+                    f"The value of {entity_name}->{attr}'s 'nlabels' should be an integer; got '{nbit}' instead"
                 )
                 table_cols.append(Column(attr, f"bit({nbit})", nullable=nullable))
                 # Create lookup table if needed
-                label_lookup_table_name = f"{entity_name.lower()}_labels"
+                label_lookup_table_name = f"{entity_name.lower()}_{attr.lower()}"
                 map_attr[attr] = {"name": label_lookup_table_name, "type": "relation"}
                 if label_lookup_table_name not in [t.name for t in tables]:
                     inttype = "int2"
@@ -721,7 +725,7 @@ class CTProcessor:
                             f"Cannot accommodate more than 9223372036854775807 distinct labels"
                         )
                     label_lookup_table = Table(
-                        "labels",
+                        label_lookup_table_name,
                         [
                             Column("bit", inttype, primary_key=True),
                             Column("label", "text", unique=True),
