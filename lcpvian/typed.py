@@ -189,3 +189,167 @@ class SentJob(BaseArgs, total=False):
     sentences_query: str
     total_results_requested: int
     to_export: Any
+
+
+def _make_observable(obj, obs):
+    # Pass the parent Observable instance to the observer callback
+    new_observer = lambda event, _, *rest: obs._observer(
+        f"child:{event}", obs._data, *rest
+    )
+    if isinstance(obj, list):
+        return ObservableList(*obj, observer=new_observer)
+    if isinstance(obj, dict):
+        return ObservableDict(observer=obs._observer, **obj)
+    return obj
+
+
+def _serialize_observable(obj: Any) -> Any:
+    if isinstance(obj, ObservableDict):
+        return {k: _serialize_observable(v) for k, v in obj._data.items()}
+    if isinstance(obj, ObservableList):
+        return [_serialize_observable(d) for d in obj._data]
+    if isinstance(obj, dict):
+        return {k: _serialize_observable(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_serialize_observable(d) for d in obj]
+    return obj
+
+
+class ObservableDict:
+    """
+    Wrapper around a regular dictionary.
+    Overrides methods like __setitem__, __delitem__, and update
+    to include a call to a notification method (_notify) whenever a change occurs.
+    """
+
+    def __init__(self, *args, observer: Callable | None = None, **kwargs):
+        self._observer: Callable | None = observer
+        new_kwargs = {k: _make_observable(v, self) for k, v in kwargs.items()}
+        self._data = dict(*args, **new_kwargs)
+
+    def _serialize(self):
+        return _serialize_observable(self)
+
+    def __setitem__(self, key, value):
+        value = _make_observable(value, self)
+        self._data[key] = value
+        if self._observer:
+            self._observer("set", self._data, key, value)
+
+    def __delitem__(self, key):
+        del self._data[key]
+        if self._observer:
+            self._observer("set", self._data, key)
+
+    def update(self, *args, **kwargs):
+        kwargs = {k: _make_observable(v, self) for k, v in kwargs.items()}
+        self._data.update(*args, **kwargs)
+        if self._observer:
+            self._observer("update", self._data)
+
+    def setdefault(self, key, value):
+        value = _make_observable(value, self)
+        ret = self._data.setdefault(key, value)
+        if self._observer:
+            self._observer("setdefault", self._data)
+        return ret
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def __contains__(self, key):
+        return key in self._data
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __repr__(self):
+        return repr(self._data)
+
+    def items(self):
+        return self._data.items()
+
+    def keys(self):
+        return self._data.keys()
+
+    def values(self):
+        return self._data.values()
+
+    def get(self, name, default=None):
+        return self._data.get(name, default)
+
+
+class ObservableList:
+    """
+    Wrapper around a regular list.
+    Overrides methods like __setitem__, __delitem__, append, insert, remove, pop and clear
+    to include a call to a notification method (_notify) whenever a change occurs.
+    """
+
+    def __init__(self, *args, observer: Callable | None = None):
+        self._observer: Callable | None = observer
+        new_args = [_make_observable(a, self) for a in args]
+        self._data = list(new_args)
+
+    def _serialize(self):
+        return _serialize_observable(self)
+
+    def append(self, item):
+        item = _make_observable(item, self)
+        self._data.append(item)
+        if self._observer:
+            self._observer("append", self._data, item)
+
+    def extend(self, iterable):
+        iterable = [_make_observable(i, self) for i in iterable]
+        self._data.extend(iterable)
+        if self._observer:
+            self._observer("extend", self._data)
+
+    def insert(self, index, item):
+        item = _make_observable(item, self)
+        self._data.insert(index, item)
+        if self._observer:
+            self._observer("insert", self._data, index, item)
+
+    def remove(self, item):
+        self._data.remove(item)
+        if self._observer:
+            self._observer("remove", self._data, item)
+
+    def pop(self, index=-1):
+        item = self._data.pop(index)
+        if self._observer:
+            self._observer("pop", self._data, index, item)
+        return item
+
+    def clear(self):
+        self._data.clear()
+        if self._observer:
+            self._observer("clear", self._data)
+
+    def __getitem__(self, index):
+        return self._data[index]
+
+    def __setitem__(self, index, value):
+        value = _make_observable(value, self)
+        self._data[index] = value
+        if self._observer:
+            self._observer("set", self._data, index, value)
+
+    def __delitem__(self, index):
+        del self._data[index]
+        if self._observer:
+            self._observer("delete", self._data, index)
+
+    def __len__(self):
+        return len(self._data)
+
+    def __iter__(self):
+        return iter(self._data)
+
+    def __repr__(self):
+        return repr(self._data)

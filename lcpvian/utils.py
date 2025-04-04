@@ -59,6 +59,9 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
+    ObservableDict,
+    ObservableList,
+    _serialize_observable,
     SentJob,
     QueryArgs,
     RequestInfo,
@@ -165,7 +168,7 @@ def _futurecb(
 class CustomFuture(asyncio.Future):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.job: Job | None = None
+        self.job: Job  # type: ignore
 
 
 class LCPApplication(web.Application):
@@ -197,12 +200,17 @@ class LCPApplication(web.Application):
         fut: CustomFuture = CustomFuture()
         msg_id = str(uuid4())
         self["futures"][msg_id] = fut
+        job_id: str | None = kwargs.pop("job_id", None)
+        serializer = CustomEncoder()
+        new_args = [serializer.default(a) for a in args]
+        new_kwargs = {k: serializer.default(v) for k, v in kwargs.items()}
         job = self["background"].enqueue(
             fn,
             on_success=Callback(_futurecb, 5000),
             on_failure=Callback(self._general_failure, 5000),
-            args=args,
-            kwargs=kwargs,
+            job_id=job_id,
+            args=new_args,
+            kwargs=new_kwargs,
         )
         job.meta["msg_id"] = msg_id
         job.save_meta()
@@ -239,7 +247,16 @@ class CustomEncoder(json.JSONEncoder):
             return [obj.lower, obj.upper]
         if isinstance(obj, Box):
             return [obj.low.x, obj.low.y, obj.high.x, obj.high.y]
-        default: JSON = json.JSONEncoder.default(self, obj)
+        if isinstance(obj, (ObservableDict, ObservableList)):
+            return obj._serialize()
+        if isinstance(obj, (tuple, list)):
+            return [_serialize_observable(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: _serialize_observable(v) for k, v in obj.items()}
+        try:
+            default: JSON = json.JSONEncoder.default(self, obj)
+        except:
+            default = obj
         return default
 
 
@@ -440,7 +457,7 @@ def _update_query_info(
     for k, v in info.items():
         query_info[k] = v
     query_info["hash"] = hash
-    connection.set(qi_key, json.dumps(query_info))
+    connection.set(qi_key, json.dumps(query_info, cls=CustomEncoder))
     connection.expire(qi_key, MESSAGE_TTL)
     return query_info
 
@@ -1243,6 +1260,40 @@ def _default_tracks(config: CorpusConfig) -> dict:
     segment: str = config["firstClass"]["segment"]
     ret["layers"] = {segment: {}}
     return ret
+
+
+def get_segment_meta_script(
+    config: dict, languages: list[str], segment_ids: list[str]
+) -> str:
+    schema = config["schema_path"]
+    seg = config["segment"]
+    name = seg.strip()
+    lang = languages[0] if languages else ""
+    underlang = f"_{lang}" if lang else ""
+    seg_mapping = config["mapping"]["layer"].get(seg, {}).get("prepared", {})
+    if lang:
+        seg_mapping = (
+            config["mapping"]["layer"]
+            .get(seg, {})
+            .get("partitions", {})
+            .get(lang, {})
+            .get("prepared")
+        )
+    seg_name = seg_mapping.get("relation", "")
+    if not seg_name:
+        seg_name = f"prepared_{name}{underlang}"
+    annotations: str = ""
+    for layer, properties in config["layer"].items():
+        if (
+            layer == seg
+            or properties.get("contains", "").lower() != config["token"].lower()
+        ):
+            continue
+        annotations = ", annotations"
+        break
+    sids = ", ".join([f"'{sid}'" for sid in segment_ids])
+    script = f"SELECT {name}_id, id_offset, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id IN ({sids});"
+    return script
 
 
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
