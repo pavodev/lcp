@@ -254,25 +254,25 @@ class Request:
             query_job.result, qi.kwic_keys, offset_this_batch, max_this_batch
         )
         self.update_dict("segment_sent_jobs", {seg_job_id: 1})
-        segments = {
-            "-1": [
-                [str(sid), *values] for sid, *values in res if str(sid) in segment_ids
-            ]
-        }
+        results: dict[str, Any] = {}
+        for rtype, [sid, *rem] in res:
+            if sid not in segment_ids:
+                continue
+            results[rtype] = results.get(rtype, []) + [[sid, *rem]]
         payload = {
             "action": "segments",
             "job": qi.hash,
             "user": self.user,
             "room": self.room,
             "status": self.status,
-            "results": segments,
+            "results": results,
         }
         if self.synchronous:
             print(
                 f"[{self.id}] Sending segments related to job {query_job.id} (hash {qi.hash}; batch {qi.get_jobs_batch(query_job.id)}) to sync request"
             )
             fut: CustomFuture = self._app["futures"][cast(str, self.synchronous)]
-            fut.set_result(segments)
+            fut.set_result(results)
             self.set_sync_future()
         else:
             print(
@@ -651,9 +651,10 @@ async def segment_and_meta(
     ]
     if not segment_ids:
         return []
-    script = get_segment_meta_script(qi._config, qi.languages, segment_ids)
+    script = get_segment_meta_script(qi._config, qi.languages, batch_name, segment_ids)
     shash = hasher(script)
-    qi.segment_jobs_for_query_job[query_job.id].append(shash)
+    if shash not in seg_job_ids:
+        qi.segment_jobs_for_query_job[query_job.id].append(shash)
     try:
         segment_job = Job.fetch(shash, connection=app["redis"])
         print(f"Retrieving segment query from cache: {batch_name} -- {shash}")

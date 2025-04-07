@@ -32,7 +32,7 @@ from aiohttp import web
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis import Redis as RedisConnection
 
-from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser
+from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser  # type: ignore
 
 from redis.utils import HIREDIS_AVAILABLE
 
@@ -133,16 +133,12 @@ CONFIG_JOIN = """CROSS JOIN
 """
 
 META_QUERY = """SELECT
-    -2::int2 AS rstype,
     {selects_formed}
 FROM
-    {froms_formed}
+    preps
     {joins_formed}
-WHERE
-    {wheres_formed}
 GROUP BY
-    {group_by_formed}
-;"""
+    {group_by_formed}"""
 slb = r"[\s\n]+"
 META_QUERY_REGEXP = rf"""SELECT
     -2::int2 AS rstype,{slb}((.+ AS .+)+?)
@@ -1230,29 +1226,28 @@ def hasher(arg):
     return md5(str_arg.encode("utf-8")).digest().hex()
 
 
-def _parent_of(
-    current_batch: Batch, config: CorpusConfig, child: str, parent: str
-) -> bool:
-    if not current_batch:
-        raise ValueError("Need batch")
+def _parent_of(config: CorpusConfig, child: str, parent: str) -> bool:
     return _layer_contains(config, parent, child)
 
 
-def _is_time_anchored(current_batch: Batch, config: CorpusConfig, layer: str) -> bool:
-    if not current_batch:
-        raise ValueError("Need batch")
-    layer_config = config["layer"].get(layer)
-    if not layer_config:
-        return False
-    if "anchoring" in layer_config:
-        return layer_config["anchoring"].get("time", False)
-    if "contains" in layer_config:
-        return _is_time_anchored(
-            current_batch,
-            config,
-            layer_config.get("contains", config["firstClass"]["token"]),
-        )
+def _is_anchored(entity: dict, config: dict, anchor: str) -> bool:
+    if "anchoring" in entity:
+        return entity["anchoring"].get(anchor, False)
+    if entity.get("contains", "") in config.get("layer", {}):
+        return _is_anchored(config["layer"][entity["contains"]], config, anchor)
     return False
+
+
+def _is_char_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "stream")
+
+
+def _is_time_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "time")
+
+
+def _is_xy_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "location")
 
 
 def _default_tracks(config: CorpusConfig) -> dict:
@@ -1263,54 +1258,190 @@ def _default_tracks(config: CorpusConfig) -> dict:
 
 
 def get_segment_meta_script(
-    config: dict, languages: list[str], segment_ids: list[str]
+    config: dict, languages: list[str], batch_name: str, segment_ids: list[str]
 ) -> str:
     schema = config["schema_path"]
-    seg = config["segment"]
-    name = seg.strip()
+    layers: dict = config["layer"]
+    doc: str = config["document"]
+    seg: str = config["segment"]
+    tok: str = config["token"]
     lang = languages[0] if languages else ""
-    underlang = f"_{lang}" if lang else ""
-    seg_mapping = config["mapping"]["layer"].get(seg, {}).get("prepared", {})
-    if lang:
-        seg_mapping = (
-            config["mapping"]["layer"]
-            .get(seg, {})
-            .get("partitions", {})
-            .get(lang, {})
-            .get("prepared")
-        )
-    seg_name = seg_mapping.get("relation", "")
-    if not seg_name:
-        seg_name = f"prepared_{name}{underlang}"
-    annotations: str = ""
-    for layer, properties in config["layer"].items():
-        if (
-            layer == seg
-            or properties.get("contains", "").lower() != config["token"].lower()
-        ):
-            continue
-        annotations = ", annotations"
-        break
+    seg_table = _get_table(seg, config, batch_name, lang)
+    if not seg_table:
+        underlang = f"_{lang}" if lang else ""
+        seg_table = f"{seg}{underlang}"
+
+    # SEGMENT
+    # annotations: str = (
+    #     ", annotations"
+    #     if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
+    #     else ""
+    # )
     sids = ", ".join([f"'{sid}'" for sid in segment_ids])
-    script = f"SELECT {name}_id, id_offset, content{annotations} FROM {schema}.{seg_name} WHERE {name}_id IN ({sids});"
+    prep_table: str = (
+        config["mapping"]["layer"][seg]
+        .get("prepared", {})
+        .get("relation", f"prepared_{seg_table}")
+    )
+    seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
+    # script = f"SELECT -1::int2 AS rstype, {seg}_id AS s, id_offset, content{annotations} FROM {schema}.{seg_table} WHERE {seg}_id IN ({sids})"
+
+    # META
+    has_media = config.get("meta", config).get("mediaSlots", {})
+    parents_of_seg = [
+        k for k in layers if _parent_of(cast(CorpusConfig, config), seg, k)
+    ]
+    parents_with_attributes: dict[str, int] = {seg: 1}  # Query the segment layer itself
+    parents_with_attributes.update(
+        {k: 1 for k in parents_of_seg if layers[k].get("attributes")}
+    )
+    # Make sure to include Document in there, even if it's not a parent of Segment
+    if has_media or layers[doc].get("attributes"):
+        parents_with_attributes[doc] = 1
+
+    selects = []
+    joins: dict[str, int] = {}
+    group_by = []
+    for layer in parents_with_attributes:
+        alias = "s" if layer == seg else layer
+        layer_mapping = config["mapping"]["layer"].get(layer, {})
+        mapping_attrs = layer_mapping.get("attributes", {})
+        partitions = None if layer == seg else layer_mapping.get("partitions")
+        alignment = {} if layer == seg else layer_mapping.get("alignment", {})
+        relation = alignment.get("relation", None)
+        if not relation and layer != seg:
+            relation = layer_mapping.get("relation", layer.lower())
+        if not relation and lang and partitions:
+            relation = partitions.get(lang, {}).get("relation")
+        prefix_id: str = layer.lower()
+        if alignment:
+            prefix_id = "alignment"
+        # Select the ID
+        iddotref = f"{alias}.{prefix_id}_id"
+        selects.append(f"{iddotref} AS {layer}_id")
+        group_by.append(iddotref)
+        joins_later: dict[str, Any] = {}
+        attributes: dict[str, Any] = layers[layer].get("attributes", {})
+        relational_attributes = {
+            k: v
+            for k, v in attributes.items()
+            if mapping_attrs.get(k, {}).get("type") == "relation"
+        }
+        # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+        selects += [
+            f"{alias}.\"{attr}\"{'::jsonb' if attr=='meta' else ''} AS {layer}_{attr}"
+            for attr, v in attributes.items()
+            if attr not in relational_attributes and v.get("type") != "vector"
+        ]
+        for attr, v in relational_attributes.items():
+            # Quote attribute name (is arbitrary)
+            attr_mapping = mapping_attrs.get(attr, {})
+            # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
+            attr_table = attr_mapping.get("name", "")
+            alias_attr_table = f"{layer}_{attr}_{attr_table}"
+            attr_table_key = attr_mapping.get("key", attr)
+            attr_name = f'"{attr_table_key}"'
+            on_cond = f"{alias}.{attr}_id = {alias_attr_table}.{attr_table_key}_id"
+            dotref = f"{alias_attr_table}.{attr_name}"
+            sel = f"{dotref} AS {layer}_{attr}"
+            if v.get("type") == "labels":
+                nbit: int = cast(int, attributes[attr].get("nlabels", 1))
+                on_cond = (
+                    f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                )
+                sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
+            else:
+                group_by.append(dotref)
+            # Join the lookup table
+            joins_later[f"{schema}.{attr_table} {alias_attr_table} ON {on_cond}"] = None
+            # Select the attribute from the lookup table
+            selects.append(sel)
+
+        # Join the segment table on preps
+        if layer == seg:
+            joins[f"{schema}.{seg_table} {alias} ON s.{seg}_id = preps.{seg}_id"] = 1
+
+        # Will get char_range from the appropriate table
+        char_range_table: str = alias
+        # join tables
+        if lang and partitions:
+            interim_relation = partitions.get(lang, {}).get("relation")
+            if not interim_relation:
+                # This should never happen?
+                continue
+            if alignment and relation:
+                # The partition table is aligned to a main document table
+                joins[
+                    f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
+                ] = 1
+                joins[
+                    f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
+                ] = 1
+                char_range_table = f"{alias}_{lang}"
+            else:
+                # This is the main document table for this partition
+                joins[
+                    f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range"
+                ] = 1
+        elif relation:
+            joins[
+                f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
+            ] = 1
+        for k in joins_later:
+            joins[k] = 1
+        # Get char_range from the main table
+        chardotref = char_range_table + '."char_range"'
+        selects.append(f"{chardotref} AS {layer}_char_range")
+        group_by.append(chardotref)
+        # And frame_range if applicable
+        if _is_time_anchored(layers[layer], config):
+            selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
+        # And xy_box if applicable
+        if _is_xy_anchored(layers[layer], config):
+            selects.append(f'{char_range_table}."xy_box" AS {layer}_xy_box')
+
+    # Add code here to add "media" if dealing with a multimedia corpus
+    if has_media:
+        selects.append(f"{doc}.media::jsonb AS {doc}_media")
+
+    selects_formed = ", ".join(selects)
+    # left join = include non-empty entities even if other ones are empty
+    joins_formed = f"\n    LEFT JOIN ".join(joins)
+    joins_formed = "" if not joins_formed else f"LEFT JOIN {joins_formed}"
+    group_by_formed = ", ".join(group_by)
+    meta_script = META_QUERY.format(
+        selects_formed=selects_formed,
+        joins_formed=joins_formed,
+        group_by_formed=group_by_formed,
+    )
+    meta_select_labels = [sl.split(" AS ")[-1] for sl in selects]
+
+    # SEGMENTS + META
+    meta_array = ", ".join(f"meta.{lb}" for lb in meta_select_labels)
+    script = f"""WITH preps AS ({seg_script}),
+    meta AS ({meta_script})
+SELECT -1::int2 AS rstype, jsonb_build_array(preps.segment_id, preps.id_offset, preps.content, preps.annotations) FROM preps
+UNION ALL
+SELECT -2::int2 AS rstype, jsonb_build_array({meta_array}) FROM meta;    
+    """
     return script
 
 
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     if not current_batch:
         raise ValueError("Need batch")
-    doc = config["document"]
-    seg = config["segment"]
     layer_info = config["layer"]
     schema = current_batch[1]
     lang = _determine_language(current_batch[2])
+
+    doc: str = config["document"]
+    seg: str = config["segment"]
+    tok: str = config["token"]
     seg_name = _get_table(seg, config, current_batch[2], lang or "")
 
     has_media = config.get("meta", config).get("mediaSlots", {})
 
-    parents_of_seg = [
-        k for k in layer_info if _parent_of(current_batch, config, seg, k)
-    ]
+    parents_of_seg = [k for k in layer_info if _parent_of(config, seg, k)]
     parents_with_attributes = {
         k: None for k in parents_of_seg if layer_info[k].get("attributes")
     }
@@ -1412,7 +1543,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         selects.append(f"{chardotref} AS {layer}_char_range")
         group_by.append(chardotref)
         # And frame_range if applicable
-        if _is_time_anchored(current_batch, config, layer):
+        if _is_time_anchored(cast(dict, layer_info[layer]), cast(dict, config)):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
         # And xy_box if applicable
         if config["layer"].get(layer, {}).get("anchoring", {}).get("location", False):
