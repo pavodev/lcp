@@ -96,7 +96,8 @@ class Request:
         request = cast(dict, request)
         # The attributes below are immutable
         self.id: str = str(request.get("id", uuid4()))
-        self.synchronous: bool | str = request.get("synchronous", False)
+        self.synchronous: bool = request.get("synchronous", False)
+        self.futures: list[str] = []
         self.requested: int = request.get("requested", 0)
         self.full: bool = request.get("full", False)
         self.offset: int = request.get("offset", 0)
@@ -151,7 +152,7 @@ class Request:
         # manual re-implementation of @property decorator
         if name == "lines_sent_so_far":
             lines_sent_per_job = cast(dict, self.__getattribute__("lines_sent_per_job"))
-            return sum(up - lo for lo, up in lines_sent_per_job.values())
+            return sum(up for _, up in lines_sent_per_job.values())
         try:
             # Try to retrieve the value from redis first
             rhash = super().__getattribute__("hash")
@@ -188,18 +189,32 @@ class Request:
             obj[k] = attr
         return obj
 
-    def set_sync_future(self):
+    def add_sync_future(self) -> str:
         """
         Set the `synchronous` attribute to the key used by the app
         to store a future resolved with the payload in the next send_*
         """
         assert self.synchronous, RuntimeError(
-            "Tried to set the sync future of a non-synchronous request"
+            "Tried to add a future of a non-synchronous request"
         )
         fut = CustomFuture()
-        msg_id = str(uuid4())
-        self.synchronous = msg_id
+        msg_id: str = str(uuid4())
         self._app["futures"][msg_id] = fut
+        self.futures = self.futures + [msg_id]
+        return msg_id
+
+    def next_future(self) -> str:
+        """
+        Get the next undone future listed in self.futures
+        """
+        assert self.synchronous, RuntimeError(
+            "Tried to get a future for a non-synchronous request"
+        )
+        try:
+            msg_id = next(m for m in self.futures if not self._app["futures"][m].done())
+        except:
+            msg_id = self.add_sync_future()
+        return msg_id
 
     def delete_if_done(self, qi: "QueryInfo"):
         queries_done: bool = qi.status == "complete" or self.status == "satisfied"
@@ -236,29 +251,34 @@ class Request:
             return offset_max
         if self.offset + self.requested < lines_before_job:
             return offset_max
-        offset_this_job: int = (
-            self.offset - lines_before_job if self.offset > lines_before_job else 0
-        )
-        max_this_job: int = offset_this_job + min(self.requested, lines_this_job)
+        offset_this_job: int = self.offset - lines_before_job
+        max_this_job: int = min(lines_this_job, self.requested)
+        if offset_this_job < 0:
+            offset_this_job = 0
+            max_this_job = max_this_job - (lines_before_job - self.offset)
+        elif offset_this_job + max_this_job > lines_this_job:
+            max_this_job = lines_this_job - offset_this_job
         offset_max = (offset_this_job, max_this_job)
-        self.update_dict("lines_sent_per_job", {job.id: offset_max})
         return offset_max
 
     async def send_segments(self, qi, query_job: Job, seg_job_id: str, res):
         if seg_job_id in self.segment_sent_jobs:
             return
-        offset_this_batch, max_this_batch = self.lines_for_job(qi, query_job)
-        if max_this_batch == 0:
+        offset_this_batch, lines_this_batch = self.lines_for_job(qi, query_job)
+        if lines_this_batch == 0:
             return
         segment_ids: dict[str, int] = segment_ids_in_query_job(
-            query_job.result, qi.kwic_keys, offset_this_batch, max_this_batch
+            query_job.result,
+            qi.kwic_keys,
+            offset_this_batch,
+            offset_this_batch + lines_this_batch,
         )
         self.update_dict("segment_sent_jobs", {seg_job_id: 1})
         results: dict[str, Any] = {}
         for rtype, [sid, *rem] in res:
             if sid not in segment_ids:
                 continue
-            results[rtype] = results.get(rtype, []) + [[sid, *rem]]
+            results[str(rtype)] = results.get(str(rtype), []) + [[sid, *rem]]
         payload = {
             "action": "segments",
             "job": qi.hash,
@@ -271,9 +291,9 @@ class Request:
             print(
                 f"[{self.id}] Sending segments related to job {query_job.id} (hash {qi.hash}; batch {qi.get_jobs_batch(query_job.id)}) to sync request"
             )
-            fut: CustomFuture = self._app["futures"][cast(str, self.synchronous)]
+            msg_id: str = self.next_future()
+            fut: CustomFuture = self._app["futures"][msg_id]
             fut.set_result(results)
-            self.set_sync_future()
         else:
             print(
                 f"[{self.id}] Sending segments of job {query_job.id} (hash {qi.hash}; {qi.get_jobs_batch(query_job.id)}) to user '{self.user}' room '{self.room}'"
@@ -285,7 +305,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-        self.delete_if_done(qi)
+            self.delete_if_done(qi)
 
     async def send_query(self, qi, job: Job):
         """
@@ -294,12 +314,18 @@ class Request:
         """
         if self.status in ("satisfied", "complete"):
             return
-        offset_this_batch, max_this_batch = self.lines_for_job(qi, job)
-        if max_this_batch == 0:
+        offset_this_batch, lines_this_batch = self.lines_for_job(qi, job)
+        self.update_dict(
+            "lines_sent_per_job", {job.id: (offset_this_batch, lines_this_batch)}
+        )
+        if lines_this_batch == 0:
             print(
                 f"[{self.id}] No lines required for query job {job.id} (batch {qi.get_jobs_batch(job.id)}) for this request, skipping"
             )
             return
+        if qi.kwic_keys:
+            # if one needs kwic lines, make sure there's a pending future for that
+            self.next_future()
         _, results = qi.get_stats_results()  # fetch any stats results first
         lines_so_far = -1
         for k, v in job.result:
@@ -315,7 +341,7 @@ class Request:
             lines_so_far += 1
             if lines_so_far < offset_this_batch:
                 continue
-            if lines_so_far >= max_this_batch:
+            if lines_so_far >= offset_this_batch + lines_this_batch:
                 continue
             results[sk].append(v)
         if qi.status == "complete":
@@ -331,16 +357,17 @@ class Request:
             "results": results,
         }
         qi.update()
+        batch_name = qi.get_jobs_batch(job.id)
         if self.synchronous:
             print(
-                f"[{self.id}] Sending results of job {job.id} (hash {qi.hash}; {qi.get_jobs_batch(job.id)}) to sync request"
+                f"[{self.id}] Sending results of job {job.id} (hash {qi.hash}; {batch_name}) to sync request"
             )
-            fut: CustomFuture = self._app["futures"][cast(str, self.synchronous)]
+            msg_id: str = self.next_future()
+            fut: CustomFuture = self._app["futures"][msg_id]
             fut.set_result(results)
-            self.set_sync_future()
         else:
             print(
-                f"[{self.id}] Sending results of job {job.id} (hash {qi.hash}; {qi.get_jobs_batch(job.id)}) to user '{self.user}' room '{self.room}'"
+                f"[{self.id}] Sending results of job {job.id} (hash {qi.hash}; {batch_name}) to user '{self.user}' room '{self.room}'"
             )
             await push_msg(
                 self._app["websockets"],
@@ -349,7 +376,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-        self.delete_if_done(qi)
+            self.delete_if_done(qi)
 
 
 class QueryInfo:
@@ -620,13 +647,16 @@ async def segment_and_meta(
     batch_name: str,
     query_job: Job,
     offset_this_batch: int,
-    max_this_batch: int,
+    lines_this_batch: int,
 ):
     """
     Build a query to fetch sentences, with a placeholder param :ids
     """
     all_segment_ids: dict[str, int] = segment_ids_in_query_job(
-        query_job.result, qi.kwic_keys, offset_this_batch, max_this_batch
+        query_job.result,
+        qi.kwic_keys,
+        offset_this_batch,
+        offset_this_batch + lines_this_batch,
     )
     seg_job_ids = qi.segment_jobs_for_query_job.setdefault(query_job.id, [])
     existing_seg_ids: dict[str, int] = {}
@@ -636,7 +666,7 @@ async def segment_and_meta(
             sjob = Job.fetch(sjid, app["redis"])
             app["redis"].expire(f"rq:job:{sjob.id}", QUERY_TTL)
             print(f"Retrieving segment query from cache: {batch_name} -- {sjid}")
-            existing_seg_ids.update({str(sid): 1 for sid, *_ in sjob.result})
+            existing_seg_ids.update({str(sid): 1 for _, [sid, *_] in sjob.result})
             # Requests with new offset/requested values could (partially) reuse old results
             for r in qi.requests:
                 await r.send_segments(qi, query_job, sjid, sjob.result)
@@ -653,8 +683,9 @@ async def segment_and_meta(
         return []
     script = get_segment_meta_script(qi._config, qi.languages, batch_name, segment_ids)
     shash = hasher(script)
-    if shash not in seg_job_ids:
-        qi.segment_jobs_for_query_job[query_job.id].append(shash)
+    if shash in seg_job_ids:
+        return
+    qi.segment_jobs_for_query_job[query_job.id].append(shash)
     try:
         segment_job = Job.fetch(shash, connection=app["redis"])
         print(f"Retrieving segment query from cache: {batch_name} -- {shash}")
@@ -665,7 +696,6 @@ async def segment_and_meta(
         res = await segment_query
     for r in qi.requests:
         await r.send_segments(qi, query_job, shash, res)
-    return res
 
 
 # TODO: revise return conditions, right now it's run every time
@@ -783,10 +813,10 @@ async def query_pipeline(app: LCPApplication, qi: QueryInfo, json_query: dict) -
         # for each request, try to send the results for this batch (if not sent yet)
         for req in qi.get_running_requests():
             running_requests.append(req)
-            await req.send_query(qi, job)
             if has_kwic:
                 # Signal that this job needs lines
                 req.update_dict("lines_sent_per_job", {job_id: (0, 0)})
+            await req.send_query(qi, job)
             qi.update()
         # send sentences if needed
         if has_kwic:
@@ -809,14 +839,14 @@ async def query_pipeline(app: LCPApplication, qi: QueryInfo, json_query: dict) -
             )
             if need_segments_this_batch:
                 offset_this_batch = max(0, min_offset - lines_so_far)
-                max_this_batch = (
+                lines_this_batch = (
                     nlines
                     if qi.full
                     else min(nlines, required_before_send - lines_so_far)
                 )
                 asyncio.create_task(
                     segment_and_meta(
-                        app, qi, batch_name, job, offset_this_batch, max_this_batch
+                        app, qi, batch_name, job, offset_this_batch, lines_this_batch
                     )
                 )
         lines_so_far += nlines
@@ -831,7 +861,7 @@ async def query_pipeline(app: LCPApplication, qi: QueryInfo, json_query: dict) -
     return None
 
 
-def process_query(app, request_data) -> tuple[dict, asyncio.Task, Request]:
+def process_query(app, request_data) -> tuple[Request, QueryInfo, Any]:
     """
     Determine whether it is necessary to send queries to the DB
     and return the job info + the asyncio task + QueryInfo instance
@@ -841,7 +871,7 @@ def process_query(app, request_data) -> tuple[dict, asyncio.Task, Request]:
         f"Received new POST request: {request.id} ; {request.offset} -- {request.requested}"
     )
     if request.synchronous:
-        request.set_sync_future()
+        request.add_sync_future()
     config = app["config"][request.corpus]
     try:
         json_query = json.loads(request.query)
@@ -860,12 +890,8 @@ def process_query(app, request_data) -> tuple[dict, asyncio.Task, Request]:
     qi = QueryInfo(shash, meta_json, post_processes, app, config)
     qi.add_request(request)
     qi.update()
-    res = {
-        "status": "started",
-        "job": shash,
-    }
-    task = asyncio.create_task(query_pipeline(app, qi, json_query))
-    return (res, task, request)
+    routine = query_pipeline(app, qi, json_query)
+    return (request, qi, routine)
 
 
 async def post_query(request: web.Request) -> web.Response:
@@ -916,19 +942,35 @@ async def post_query(request: web.Request) -> web.Response:
     #     print("pushed message")
     #     raise web.HTTPForbidden(text=msg)
 
-    job_info, task, req = process_query(app, request_data)
-    qi = QueryInfo(req.hash, {}, {}, cast(LCPApplication, app), {})
+    (req, qi, routine) = process_query(app, request_data)
+    asyncio.create_task(routine)
 
     if req.synchronous:
         buffer = {}
-        while qi.has_request(req):
-            fut: CustomFuture = app["futures"][req.synchronous]
+        while 1:
+            if not qi.has_request(req) and not req.futures:
+                break
+            if not req.futures:
+                await asyncio.sleep(0.01)
+                continue
+            msg_id: str = req.futures[0]
+            fut: CustomFuture = app["futures"][msg_id]
             res = await fut
-            buffer.update(res)
-        # Delete references to any new future created for this request
-        app["futures"].pop(req.synchronous, "")
+            req.futures = req.futures[1:]
+            app["futures"].pop(msg_id)  # discard it now
+            for rtype, values in res.items():
+                if rtype == "0" or rtype in qi.stats_keys:
+                    buffer[rtype] = values
+                    continue
+                buffer[rtype] = buffer.get(rtype, []) + values
+            if not req.futures:
+                req.delete_if_done(qi)
         print(f"[{req.id}] Done with synchronous request")
         serializer = CustomEncoder()
         return web.json_response(serializer.default(buffer))
     else:
+        job_info = {
+            "status": "started",
+            "job": req.hash,
+        }
         return web.json_response(job_info)
