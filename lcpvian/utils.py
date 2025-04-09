@@ -71,6 +71,8 @@ from .typed import (
 CSV_DELIMITERS = [",", "\t"]
 CSV_QUOTES = ['"', "\b"]
 
+QUERY_TTL = int(os.getenv("QUERY_TTL", 5000))
+
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "lcpvian"
@@ -384,6 +386,14 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     If a job dies due to TTL, we send this...
     """
     await _general_error_handler("timeout", exc, request)
+
+
+def refresh_job_ttl(
+    connection: RedisConnection, job_id: str, new_ttl: int = QUERY_TTL
+) -> None:
+    connection.expire(job_id, new_ttl)
+    connection.expire(f"rq:job:{job_id}", new_ttl)
+    connection.expire(f"rq:resluts:{job_id}", new_ttl)
 
 
 def _get_status(
@@ -1259,7 +1269,7 @@ def _default_tracks(config: CorpusConfig) -> dict:
 
 def get_segment_meta_script(
     config: dict, languages: list[str], batch_name: str, segment_ids: list[str]
-) -> str:
+) -> tuple[str, list[str]]:
     schema = config["schema_path"]
     layers: dict = config["layer"]
     doc: str = config["document"]
@@ -1272,19 +1282,19 @@ def get_segment_meta_script(
         seg_table = f"{seg}{underlang}"
 
     # SEGMENT
-    # annotations: str = (
-    #     ", annotations"
-    #     if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
-    #     else ""
-    # )
+    annotations: str = (
+        ", annotations"
+        if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
+        else ""
+    )
     sids = ", ".join([f"'{sid}'" for sid in segment_ids])
     prep_table: str = (
         config["mapping"]["layer"][seg]
         .get("prepared", {})
         .get("relation", f"prepared_{seg_table}")
     )
-    seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
-    # script = f"SELECT -1::int2 AS rstype, {seg}_id AS s, id_offset, content{annotations} FROM {schema}.{seg_table} WHERE {seg}_id IN ({sids})"
+    # seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
+    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
 
     # META
     has_media = config.get("meta", config).get("mediaSlots", {})
@@ -1417,14 +1427,15 @@ def get_segment_meta_script(
     meta_select_labels = [sl.split(" AS ")[-1] for sl in selects]
 
     # SEGMENTS + META
+    preps_annotations = ", preps.annotations" if annotations else ""
     meta_array = ", ".join(f"meta.{lb}" for lb in meta_select_labels)
     script = f"""WITH preps AS ({seg_script}),
     meta AS ({meta_script})
-SELECT -1::int2 AS rstype, jsonb_build_array(preps.segment_id, preps.id_offset, preps.content, preps.annotations) FROM preps
+SELECT -1::int2 AS rstype, jsonb_build_array(preps.segment_id, preps.id_offset, preps.content{preps_annotations}) FROM preps
 UNION ALL
 SELECT -2::int2 AS rstype, jsonb_build_array({meta_array}) FROM meta;    
     """
-    return script
+    return script, meta_select_labels
 
 
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:

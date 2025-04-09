@@ -834,6 +834,7 @@ export default {
     results() {
       let start = this.resultsPerPage * (this.currentPage - 1);
       let end = start + this.resultsPerPage;
+      console.log("this.data from results", this.data, "and sentences", this.sentences);
       return this.data
         .filter((row, rowIndex) => {
           let sentenceId = row[0];
@@ -849,6 +850,8 @@ export default {
           tokenData = tokenData.map( tokenIdOrSet => tokenIdOrSet instanceof Array ? tokenIdOrSet : [tokenIdOrSet] );
           // Return a list of TokenToDisplay instances
           tokens = tokens.map( (token,idx) => new TokenToDisplay(token, startIndex + idx, tokenData, this.columnHeaders, annotations) );
+
+          console.log("returning tokens", tokens);
 
           return tokens;
           // let range = tokenData.map( (tokensArr) =>

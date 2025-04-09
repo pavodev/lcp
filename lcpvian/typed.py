@@ -345,6 +345,9 @@ class ObservableList:
         if self._observer:
             self._observer("delete", self._data, index)
 
+    def __contains__(self, item):
+        return item in _serialize_observable(self._data)
+
     def __len__(self):
         return len(self._data)
 

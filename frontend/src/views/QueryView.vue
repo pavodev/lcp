@@ -545,20 +545,13 @@
                               />
                               <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
                               {{ resultSet.name }}
-                              <small
-                                >(<span v-if="resultSet.type == 'plain'">
-                                  {{
-                                    WSDataSentences && WSDataSentences.result[index + 1]
-                                      ? WSDataSentences.result[index + 1].length
-                                      : 0
-                                  }}</span
-                                >
-                                <span v-else>{{
+                              <small>
+                                <span>{{
                                   WSDataResults && WSDataResults.result[index + 1]
                                     ? WSDataResults.result[index + 1].length
                                     : 0
                                 }}</span>
-                                )</small
+                              </small
                               >
                             </button>
                           </template>
@@ -611,8 +604,8 @@
                             </div>
                             <ResultsPlainTableView
                               v-if="plainType == 'table' || resultContainsSet(resultSet)"
-                              :data="WSDataSentences.result[index + 1]"
-                              :sentences="WSDataSentences.result[-1]"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
                               :languages="selectedLanguages"
                               :meta="WSDataMeta"
                               :attributes="resultSet.attributes"
@@ -625,8 +618,8 @@
                             />
                             <ResultsKWICView
                               v-else-if="resultContainsSet(resultSet) == false"
-                              :data="WSDataSentences.result[index + 1]"
-                              :sentences="WSDataSentences.result[-1]"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
                               :languages="selectedLanguages"
                               :meta="WSDataMeta"
                               :attributes="resultSet.attributes"
@@ -977,7 +970,6 @@ export default {
       WSDataResults: "",
       WSDataMeta: {},
       WSDataSentences: "",
-      pageSize: 100,
       nResults: 200,
       currentResults: 0,
       selectedLanguages: ["en"],
@@ -1405,7 +1397,7 @@ export default {
           this.loading = false;
         } else if (data["action"] === "query_result") {
           useWsStore().addMessageForPlayer(data)
-          // console.log("query_result", data);
+          console.log("query_result", data);
           this.updateLoading(data.status);
           if (
             this.failedStatus &&
@@ -1422,15 +1414,44 @@ export default {
           }
           this.failedStatus = false;
           data["n_results"] = data["result"].length;
-          this.WSDataResults = data;
+          this.WSDataResults.result = this.WSDataResults.result || data.result;
+          const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
+          console.log("kwic_keys", kwic_keys);
+          for (let rkey in data.result) {
+            if (!kwic_keys.includes(parseInt(rkey))) continue;
+            console.log("adding", rkey, "to", this.WSDataResults.result);
+            this.WSDataResults.result[rkey] = [
+              ...(this.WSDataResults.result[rkey]||[]),
+              ...data.result[rkey]
+            ];
+          }
           return;
-        } else if (data["action"] === "sentences") {
-          useWsStore().addMessageForPlayer(data)
-          // console.log("sentences", data);
+        } else if (data["action"] === "segments") {
+          useWsStore().addMessageForPlayer(data);
+          console.log("sentences", data);
           this.updateLoading(data.status);
+          const segment = this.selectedCorpora.corpus.firstClass.segment;
+          const meta = data.result["-2"] || []; // change this?
+          const meta_labels = ((data.result["0"] || {}).meta_labels || [])
+            .map( ml => [ml.split("_")[0],ml.split("_").slice(1,).join("_")] );
+          for (let hit_meta of meta) {
+            let segment_id = "";
+            const meta_object = {};
+            for (let n in hit_meta) {
+              const value = hit_meta[n];
+              const [layer, attr] = meta_labels[n];
+              if (layer == segment && attr == "id") {
+                segment_id = value;
+                continue;
+              }
+              meta_object[layer] = meta_object[layer] || {};
+              meta_object[layer][attr] = value;
+            }
+            this.WSDataMeta[segment_id] = meta_object;
+          }
           if (
             this.WSDataSentences &&
-            this.WSDataSentences.first_job == data.first_job &&
+            this.WSDataSentences.hash == data.hash &&
             data.full == false
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
@@ -1477,18 +1498,6 @@ export default {
           //   this.loading = false;
           // }
           return;
-        } else if (data["action"] == "meta") {
-          const meta = data.result["-2"]; // change this?
-          for (let layer in meta) {
-            this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
-            this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
-          }
-        // } else if (data["action"] === "started_export") {
-        //   this.loading = false;
-        //   useNotificationStore().add({
-        //     type: "success",
-        //     text: "Started the export process...",
-        //   });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {
@@ -1598,29 +1607,20 @@ export default {
       if (!to_export && resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
-        this.nResults = this.pageSize * 2; // We want load 2 pages at first
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
         }
       }
       let data = {
-        corpora: this.selectedCorpora.value,
+        corpus: this.selectedCorpora.value,
         query: this.query,
         user: this.userData.user.id,
         room: this.roomId,
-        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
-        total_results_requested: this.nResults,
-        stats: true,
-        resume: resumeQuery,
-        simultaneous: this.simultaneousMode,
+        requested: this.resultsPerPage * 3,
+        offset: resumeQuery ? this.WSDataResults.n_results : 0
       };
-      if (resumeQuery) {
-        data["first_job"] = this.WSDataResults.job;
-        data["previous"] = this.WSDataResults.job;
-        data["current_kwic_lines"] = this.currentResults;
-      }
       if (fullSearch) {
         data["full"] = true;
       }
@@ -1690,7 +1690,7 @@ export default {
         user: this.userData.user.id,
         room: this.roomId,
         // room: null,
-        page_size: this.pageSize,
+        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         query_name: this.queryName,
