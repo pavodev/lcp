@@ -7,7 +7,7 @@ import traceback
 from aiohttp import web
 from asyncio import Task
 from redis import Redis as RedisConnection
-from rq.job import Job
+from rq.job import get_current_job, Job
 from typing import cast, Any, Callable, Generator
 from uuid import uuid4
 
@@ -391,6 +391,7 @@ class Request:
             fut: CustomFuture = self._app["futures"][msg_id]
             fut.set_result(payload)
         else:
+            # Delegate this to sock.py
             await push_msg(
                 self._app["websockets"],
                 self.room,
@@ -727,7 +728,6 @@ async def segment_and_meta(
         await r.send_segments(qi, query_job, shash, res)
 
 
-# TODO: revise return conditions, right now it's run every time
 async def run_aggregate(
     app: LCPApplication,
     qi: QueryInfo,
@@ -889,6 +889,7 @@ async def query_pipeline(app: LCPApplication, qi: QueryInfo, json_query: dict) -
         lines_so_far += nlines
         if not qi.full and lines_so_far >= required_before_send:
             break  # we've got enough results
+        await asyncio.sleep(0.1)
     await asyncio.gather(*all_send_tasks)
     running_requests = qi.get_running_requests()
     if main_pipeline:
@@ -929,6 +930,9 @@ def process_query(app, request_data) -> tuple[Request, QueryInfo, Any]:
     qi = QueryInfo(shash, meta_json, post_processes, app, config)
     qi.add_request(request)
     qi.update()
+    # TODO: try sending this to a worker instead?
+    # no access to app: pass config and stuff directly
+    # have the job complete only when req is done
     routine = query_pipeline(app, qi, json_query)
     return (request, qi, routine)
 
@@ -937,6 +941,7 @@ def get_handle_exception(req: Request, qi: QueryInfo):
     def handle_exception(task):
         try:
             result = task.result()  # Will raise an exception if the task failed
+            print(f"[{req.id}] Callback successfull")
         except Exception as e:
             print(f"Caught exception: {e}")
             qi.running_batch = ""  # No longer running
@@ -1010,10 +1015,10 @@ async def post_query(request: web.Request) -> web.Response:
     if req.synchronous:
         buffer = {}
         while 1:
+            await asyncio.sleep(0.5)
             if not qi.has_request(req) and not req.futures:
                 break
             if not req.futures:
-                await asyncio.sleep(0.1)
                 continue
             msg_id: str = req.futures[0]
             fut: CustomFuture = app["futures"][msg_id]
