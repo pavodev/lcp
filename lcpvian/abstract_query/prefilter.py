@@ -204,9 +204,9 @@ class Prefilter:
                         conjuncts.append(stripped_c)
         ps = [pf.format(**locations) for pf in prefilters]
         conjuncts = [c.format(**locations) for c in conjuncts]
-        stringified = f"vec.vector @@ E'{' <1> '.join(ps) }'"
+        stringified = f"vec.vector @@ '{' <1> '.join(ps) }'"
         if conjuncts:
-            cond_conjuncts = [f"vec.vector @@ E'{c}'" for c in conjuncts]
+            cond_conjuncts = [f"vec.vector @@ '{c}'" for c in conjuncts]
             stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
         return stringified
 
@@ -269,12 +269,12 @@ class Prefilter:
         if "string" in right:
             pattern = right["string"]
             typ = "string"
-        if "regex" in left and "caseInsensitive" not in left["regex"]:
+        if "regex" in left:
             pattern = left["regex"]["pattern"]
-            # Prefilters *need* to be case-sensitive because of E''
+            # Prefilters are always case-sensitive
             typ = "other" if "caseInsensitive" in left["regex"] else "regex"
         if "regex" in right:
-            # Prefilters *need* to be case-sensitive because of E''
+            # Prefilters are always case-sensitive
             pattern = right["regex"]["pattern"]
             typ = "other" if "caseInsensitive" in right["regex"] else "regex"
         return (attribute, comparison["comparator"], pattern, typ)
