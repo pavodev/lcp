@@ -43,6 +43,7 @@ from .configure import _get_batches, CorpusConfig
 from .export import export
 from .query import query
 from .query_service import QueryService
+from .query_future import QueryInfo, Request
 from .utils import push_msg
 from .validate import validate
 
@@ -87,6 +88,10 @@ async def _process_message(
         if not raw:
             return None
         payload: JSONObject = json.loads(raw)
+        if "callback_query" in payload:
+            qi = QueryInfo(payload["hash"], app["redis"])
+            for req in qi.requests:
+                req.respond(payload)
         if data["msg_id"] in app["futures"]:
             # This will be read as the result of an await instruction
             fut = app["futures"].pop(data["msg_id"])

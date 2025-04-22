@@ -174,7 +174,7 @@ class LCPApplication(web.Application):
     def __init__(self, failure_cb: Callable, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._keys: dict[str, web.AppKey] = {}
-        # Needed in to_job, pass as an argument to avoid import dependency issues
+        # Needed in to_worker, pass as an argument to avoid import dependency issues
         self._general_failure = failure_cb
         return None
 
@@ -190,7 +190,7 @@ class LCPApplication(web.Application):
             return self[self._keys[a]]
         return super().__getitem__(a)
 
-    def to_job(self, fn: Callable, *args, **kwargs) -> CustomFuture:
+    def to_worker(self, fn: Callable, *args, **kwargs) -> CustomFuture:
         """
         Send a method to be exected by the worker in the background
         Return a future that resolves to the return value of the method

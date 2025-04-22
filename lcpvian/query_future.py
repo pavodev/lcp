@@ -7,6 +7,7 @@ import traceback
 from aiohttp import web
 from asyncio import Task
 from redis import Redis as RedisConnection
+from rq import Callback, Queue
 from rq.job import get_current_job, Job
 from typing import cast, Any, Callable, Generator
 from uuid import uuid4
@@ -14,6 +15,7 @@ from uuid import uuid4
 from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .authenticate import Authentication
+from .callbacks import _general_failure
 from .convert import _aggregate_results
 from .dqd_parser import convert
 from .jobfuncs import _db_query
@@ -96,8 +98,8 @@ class Request:
     Received POST requests
     """
 
-    def __init__(self, app: LCPApplication, request: str | dict = {}):
-        self._app = app
+    def __init__(self, connection: RedisConnection, request: str | dict = {}):
+        self._connection = connection
         request = cast(dict, request)
         # The attributes below are immutable
         self.id: str = str(request.get("id", uuid4()))
@@ -114,8 +116,8 @@ class Request:
         # The attributes below are dynamic and need to update redis
         self.status: str = request.get("status", "started")
         # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
-        self.lines_query_job: dict[str, tuple[int, int, int]] = request.get(
-            "lines_query_job", {}
+        self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
+            "lines_batch", {}
         )
         # keep track of which segment jobs were already sent
         self.segment_sent_jobs: dict[str, int] = request.get("segment_sent_jobs", {})
@@ -127,7 +129,7 @@ class Request:
         Update the associated redis entry
         """
         try:
-            redis = self._app["redis"]
+            redis = self._connection
             rhash = self.hash
             id = self.id
         except:
@@ -156,14 +158,14 @@ class Request:
             return super().__getattribute__(name)
         # manual re-implementation of @property decorator
         if name == "lines_sent_so_far":
-            lines_query_job = cast(dict, self.__getattribute__("lines_query_job"))
-            return sum(up for _, up, _ in lines_query_job.values())
+            lines_batch = cast(dict, self.__getattribute__("lines_batch"))
+            return sum(up for _, up, _ in lines_batch.values())
         try:
             # Try to retrieve the value from redis first
             rhash = super().__getattribute__("hash")
             id = super().__getattribute__("id")
-            app = super().__getattribute__("_app")
-            qi = _get_query_info(app["redis"], rhash)
+            connection = super().__getattribute__("_connection")
+            qi = _get_query_info(connection, rhash)
             all_requests = qi.get("requests", [])
             request: dict[str, Any] = next(
                 (r for r in all_requests if r.get("id") == id), {}
@@ -194,32 +196,41 @@ class Request:
             obj[k] = attr
         return obj
 
-    def add_sync_future(self) -> str:
-        """
-        Set the `synchronous` attribute to the key used by the app
-        to store a future resolved with the payload in the next send_*
-        """
-        assert self.synchronous, RuntimeError(
-            "Tried to add a future of a non-synchronous request"
-        )
-        fut = CustomFuture()
-        msg_id: str = str(uuid4())
-        self._app["futures"][msg_id] = fut
-        self.futures = self.futures + [msg_id]
-        return msg_id
+    # methods called from worker
+    async def respond(self, msg_id: str):
+        payload = self._connection.get(msg_id)
+        # publish_msg here
 
-    def next_future(self) -> str:
-        """
-        Get the next undone future listed in self.futures
-        """
-        assert self.synchronous, RuntimeError(
-            "Tried to get a future for a non-synchronous request"
-        )
-        try:
-            msg_id = next(m for m in self.futures if not self._app["futures"][m].done())
-        except:
-            msg_id = self.add_sync_future()
-        return msg_id
+    # methods called from app
+    async def callback():
+        pass
+
+    # def add_sync_future(self) -> str:
+    #     """
+    #     Set the `synchronous` attribute to the key used by the app
+    #     to store a future resolved with the payload in the next send_*
+    #     """
+    #     assert self.synchronous, RuntimeError(
+    #         "Tried to add a future of a non-synchronous request"
+    #     )
+    #     fut = CustomFuture()
+    #     msg_id: str = str(uuid4())
+    #     self._app["futures"][msg_id] = fut
+    #     self.futures = self.futures + [msg_id]
+    #     return msg_id
+
+    # def next_future(self) -> str:
+    #     """
+    #     Get the next undone future listed in self.futures
+    #     """
+    #     assert self.synchronous, RuntimeError(
+    #         "Tried to get a future for a non-synchronous request"
+    #     )
+    #     try:
+    #         msg_id = next(m for m in self.futures if not self._app["futures"][m].done())
+    #     except:
+    #         msg_id = self.add_sync_future()
+    #     return msg_id
 
     def is_done(self, qi: "QueryInfo") -> bool:
         queries_done: bool = qi.status == "complete" or self.status == "satisfied"
@@ -227,7 +238,7 @@ class Request:
             return False
         if not qi.kwic_keys:
             return True
-        nlines_query: int = sum(n for _, _, n in self.lines_query_job.values())
+        nlines_query: int = sum(n for _, _, n in self.lines_batch.values())
         nlines_segments: int = sum(n for n in self.segment_sent_jobs.values())
         return nlines_segments >= nlines_query
 
@@ -242,7 +253,7 @@ class Request:
         Return the offset and number of lines required in the current job
         """
         offset_and_lines_for_req = (0, 0)
-        lines_before_job, lines_job = qi.get_lines_job(job.id)
+        lines_before_job, lines_job = qi.get_lines_batch(job.id)
         if self.offset > lines_before_job + lines_job:
             return offset_and_lines_for_req
         if self.offset + self.requested < lines_before_job:
@@ -301,17 +312,18 @@ class Request:
             f"[{self.id}] Sending {len(sent_seg_ids)} segments for batch {batch_name} (hash {qi.hash}; job {query_job.id}) {to_msg}"
         )
         if self.synchronous:
-            msg_id: str = self.next_future()
-            fut: CustomFuture = self._app["futures"][msg_id]
-            fut.set_result(payload)
+            # msg_id: str = self.next_future()
+            # fut: CustomFuture = self._app["futures"][msg_id]
+            # fut.set_result(payload)
+            pass
         else:
-            await push_msg(
-                self._app["websockets"],
-                self.room,
-                payload,
-                skip=None,
-                just=(self.room, self.user),
-            )
+            # await push_msg(
+            #     self._app["websockets"],
+            #     self.room,
+            #     payload,
+            #     skip=None,
+            #     just=(self.room, self.user),
+            # )
             self.update_dict("segment_sent_jobs", {seg_job_id: len(sent_seg_ids)})
         print(f"[{self.id}] Sent {len(sent_seg_ids)} segments for batch {batch_name}")
 
@@ -320,7 +332,7 @@ class Request:
         Send the payload to the associated user
         and update the request accordingly
         """
-        if self.lines_query_job.get(job.id, (0, 0, 0))[1] > 0:
+        if self.lines_batch.get(job.id, (0, 0, 0))[1] > 0:
             # If some lines were already sent for this job
             return
         offset_this_batch, lines_this_batch = self.lines_for_job(qi, job)
@@ -336,9 +348,10 @@ class Request:
             )
             if self.synchronous:
                 # if one needs kwic lines, make sure there's a pending future for that
-                self.next_future()
+                # self.next_future()
+                pass
         self.update_dict(
-            "lines_query_job",
+            "lines_batch",
             {job.id: (offset_this_batch, lines_this_batch, n_seg_ids)},
         )
         if lines_this_batch == 0:
@@ -387,18 +400,31 @@ class Request:
             f"[{self.id}] Sending {lines_this_batch} results lines for batch {batch_name} (hash {qi.hash}; job {job.id}) {to_msg}"
         )
         if self.synchronous:
-            msg_id: str = self.next_future()
-            fut: CustomFuture = self._app["futures"][msg_id]
-            fut.set_result(payload)
+            # msg_id: str = self.next_future()
+            # fut: CustomFuture = self._app["futures"][msg_id]
+            # fut.set_result(payload)
+            pass
         else:
             # Delegate this to sock.py
-            await push_msg(
-                self._app["websockets"],
-                self.room,
-                cast(JSONObject, payload),
-                skip=None,
-                just=(self.room, self.user),
-            )
+            # await push_msg(
+            #     self._app["websockets"],
+            #     self.room,
+            #     cast(JSONObject, payload),
+            #     skip=None,
+            #     just=(self.room, self.user),
+            # )
+            pass
+
+
+async def respond_request(qhash: str, msg_id: str):
+    current_job: Job = cast(Job, get_current_job())
+    connection: RedisConnection = current_job.connection
+    qi = QueryInfo(qhash, connection=connection)
+    # TODO: read payload from redis memory here
+    payload = {}
+    # Use TaskQ gather thingy from rq here?
+    for req in qi.requests:
+        await req.respond(payload)
 
 
 class QueryInfo:
@@ -410,20 +436,23 @@ class QueryInfo:
     def __init__(
         self,
         qhash: str,
-        meta_json: dict,
-        post_processes: dict,
-        app: LCPApplication,
-        config: dict,
+        connection: RedisConnection,
+        json_query: dict | None = None,
+        meta_json: dict | None = None,
+        post_processes: dict | None = None,
+        config: dict | None = None,
     ):
-        self._app = app
-        self._connection = app["redis"]
-        self._config: dict = config
+        self._connection = connection
         self.hash = qhash
-        self.meta_json: dict = meta_json
-        self.result_sets: list = meta_json.get("result_sets", [])
-        self.meta_labels: list[str] = self.qi.get("meta_labels", [])
-        self.post_processes: dict = post_processes
-        self.languages: list[str] = self.qi.get("languages", [])
+        qi = self.qi
+        self.json_query: dict = json_query or qi.get("json_query", {})
+        self.config: dict = config or qi.get("config", {})
+        self.meta_json: dict = meta_json or qi.get("meta_json", {})
+        self.post_processes: dict = post_processes or qi.get("post_processes", {})
+        self.result_sets: list = self.meta_json.get("result_sets", [])
+        self.meta_labels: list[str] = qi.get("meta_labels", [])
+        self.languages: list[str] = qi.get("languages", [])
+        self.update()
 
     def update(self, obj: dict = {}):
         """
@@ -441,18 +470,40 @@ class QueryInfo:
             qi[k] = v
         _update_query_info(self._connection, self.hash, info=qi)
         # Update the expiration of all the related jobs
-        for qjid, _ in self.query_jobs.values():
+        for qjid, _ in self.query_batches.values():
             try:
                 refresh_job_ttl(self._connection, qjid)
             except:
                 pass
+
+    def enqueue(
+        self,
+        method,
+        *args,
+        job_id: str | None = None,
+        callback: Callable | None = None,
+        **kwargs,
+    ) -> Job:
+        q = Queue("background", connection=self._connection)
+        on_success: Callback | None = (
+            Callback(callback, QUERY_TTL) if callback else None
+        )
+        return q.enqueue(
+            method,
+            on_success=on_success,
+            on_failure=Callback(_general_failure, QUERY_TTL),
+            result_ttl=QUERY_TTL,
+            job_timeout=QUERY_TTL,
+            args=args,
+            job_id=job_id,
+        )
 
     def get_observer(self, attribute_name: str) -> Callable:
         return lambda event, value, *_: self.update({attribute_name: value})
 
     def get_jobs_batch(self, job_id: str) -> str:
         batch_name = next(
-            (bn for bn, (qjid, _) in self.query_jobs.items() if qjid == job_id), ""
+            (bn for bn, (qjid, _) in self.query_batches.items() if qjid == job_id), ""
         )
         return batch_name
 
@@ -482,19 +533,21 @@ class QueryInfo:
         self.update({"done_batches": value})
 
     @property
-    def query_jobs(self) -> dict:
+    def query_batches(self) -> dict:
         """
         Map batch names with (query_job_id, n_kwic_lines)
         """
-        query_jobs = self.qi.get("query_jobs", {})
+        query_batches = self.qi.get("query_batches", {})
         return cast(
             dict,
-            ObservableDict(observer=self.get_observer("query_jobs"), **query_jobs),
+            ObservableDict(
+                observer=self.get_observer("query_batches"), **query_batches
+            ),
         )
 
-    @query_jobs.setter
-    def query_jobs(self, value: dict):
-        self.update({"query_jobs": value})
+    @query_batches.setter
+    def query_batches(self, value: dict):
+        self.update({"query_batches": value})
 
     @property
     def segment_jobs_for_query_job(self) -> dict[str, list[str]]:
@@ -537,14 +590,14 @@ class QueryInfo:
     def get_running_requests(self) -> list[Request]:
         return [r for r in self.requests if not r.is_done(self)]
 
-    def get_lines_job(self, job_id: str) -> tuple[int, int]:
+    def get_lines_batch(self, job_id: str) -> tuple[int, int]:
         """
         Return the number of kwic lines in the batches before this one
         and the number of kwic lines in this batch
         """
         lines_before_batch: int = 0
         lines_this_batch: int = 0
-        for qjid, n in self.query_jobs.values():
+        for qjid, n in self.query_batches.values():
             if qjid == job_id:
                 lines_this_batch = n
                 break
@@ -555,19 +608,19 @@ class QueryInfo:
         """
         All the non-KWIC results
         """
-        if not self.query_jobs:
+        if not self.query_batches:
             return ([], {})
         try:
             first_job = next(
                 Job.fetch(qjid, self._connection)
-                for qjid, _ in self.query_jobs.values()
+                for qjid, _ in self.query_batches.values()
             )
             batches, stats = first_job.meta.get("stats_results", ([], {}))
             return (batches, stats)
         except:
             return ([], {})
 
-    def smart_batches(self) -> Generator[list[str | int] | None, None, None]:
+    def decide_next_batch(self, previous_batch: str | None = None) -> list:
         """
         Return the batches in an optimized ordered.
 
@@ -579,12 +632,19 @@ class QueryInfo:
         If no batch is predicted to have enough results, pick the smallest
         available (so more results go to the frontend faster).
         """
-        for batch in self.done_batches:
-            yield batch
-        if len(self.done_batches) == len(self.all_batches):
-            return
-        if not len(self.done_batches):  # return the smallest batch
-            yield self.all_batches[0]
+        if not previous_batch or not len(self.done_batches):
+            return self.all_batches[0]
+        next_batch: list = next(
+            (
+                b
+                for n, b in enumerate(self.done_batches)
+                if n > 0 and self.done_batches[n - 1][0] == previous_batch
+            ),
+            [],
+        )
+        if next_batch:
+            return next_batch
+
         buffer = 0.1  # set to zero for picking smaller batches
         while len(self.done_batches) < len(self.all_batches):
             so_far = self.total_results_so_far
@@ -596,15 +656,15 @@ class QueryInfo:
                 if batch in self.done_batches:
                     continue
                 if self.full:
-                    yield batch
-                    break
+                    return batch
                 if not first_not_done:
                     first_not_done = batch
                 expected = cast(int, batch[-1]) * proportion_that_matches
                 if float(expected) >= float(self.required + (self.required * buffer)):
-                    yield batch
-                    break
-            yield first_not_done
+                    return batch
+            return cast(list, first_not_done)
+
+        return []
 
     # Pseudo-attributes (no need to keep in sync)
     @property
@@ -614,11 +674,11 @@ class QueryInfo:
         The class Request already implements utmost recency
         """
         qi = _get_query_info(self._connection, self.hash)
-        return [Request(self._app, qr) for qr in qi.get("requests", [])]
+        return [Request(self._connection, qr) for qr in qi.get("requests", [])]
 
     @property
     def all_batches(self) -> list[list[str | int]]:
-        return _get_query_batches(self._config, self.languages)
+        return _get_query_batches(self.config, self.languages)
 
     @property
     def kwic_keys(self) -> list[str]:
@@ -664,254 +724,248 @@ class QueryInfo:
 
     @property
     def total_results_so_far(self) -> int:
-        return sum(nlines for _, nlines in self.query_jobs.values())
+        return sum(nlines for _, nlines in self.query_batches.values())
 
-
-async def segment_and_meta(
-    app: LCPApplication,
-    qi: QueryInfo,
-    batch_name: str,
-    query_job: Job,
-    offset_this_batch: int,
-    lines_this_batch: int,
-):
-    """
-    Build a query to fetch sentences, with a placeholder param :ids
-    """
-    all_segment_ids: dict[str, int] = segment_ids_in_query_job(
-        query_job.result,
-        qi.kwic_keys,
-        offset_this_batch,
-        offset_this_batch + lines_this_batch,
-    )
-    seg_job_ids = qi.segment_jobs_for_query_job.setdefault(query_job.id, [])
-    existing_seg_ids: dict[str, int] = {}
-    for sjid in seg_job_ids:
+    # methods called from worker
+    async def do_segment_and_meta(
+        self,
+        batch_name: str,
+        offset_this_batch: int,
+        lines_this_batch: int,
+    ):
+        """
+        Build a query to fetch sentences, with a placeholder param :ids
+        """
+        current_job: Job = cast(Job, get_current_job())
+        connection: RedisConnection = current_job.connection
+        all_segment_ids: dict[str, int] = segment_ids_in_query_job(
+            query_job.result,
+            self.kwic_keys,
+            offset_this_batch,
+            offset_this_batch + lines_this_batch,
+        )
+        seg_job_ids = self.segment_jobs_for_query_job.setdefault(query_job.id, [])
+        existing_seg_ids: dict[str, int] = {}
+        for sjid in seg_job_ids:
+            try:
+                # Retrieve any associated segment job query from cache
+                sjob = Job.fetch(sjid, connection)
+                refresh_job_ttl(connection, sjob.id)
+                print(f"Retrieving segment query from cache: {batch_name} -- {sjid}")
+                existing_seg_ids.update({str(sid): 1 for _, [sid, *_] in sjob.result})
+                # Requests with new offset/requested values could (partially) reuse old results
+                for r in self.requests:
+                    await r.send_segments(self, query_job, sjid, sjob.result)
+            except:
+                pass
+        if existing_seg_ids:
+            print(
+                f"Found {len(existing_seg_ids)}/{len(all_segment_ids)} segments in cache for {batch_name}"
+            )
+        segment_ids: list[str] = [
+            sid for sid in all_segment_ids if sid not in existing_seg_ids
+        ]
+        if not segment_ids:
+            return []
+        script, meta_labels = get_segment_meta_script(
+            self.config, self.languages, batch_name, segment_ids
+        )
+        self.meta_labels = meta_labels
+        self.update({"meta_labels": meta_labels})
+        shash = hasher(script)
+        if shash in seg_job_ids:
+            return
+        self.segment_jobs_for_query_job[query_job.id].append(shash)
         try:
-            # Retrieve any associated segment job query from cache
-            sjob = Job.fetch(sjid, app["redis"])
-            refresh_job_ttl(app["redis"], sjob.id)
-            print(f"Retrieving segment query from cache: {batch_name} -- {sjid}")
-            existing_seg_ids.update({str(sid): 1 for _, [sid, *_] in sjob.result})
-            # Requests with new offset/requested values could (partially) reuse old results
-            for r in qi.requests:
-                await r.send_segments(qi, query_job, sjid, sjob.result)
+            segment_job = Job.fetch(shash, connection=connection)
+            print(f"Retrieving segment query from cache: {batch_name} -- {shash}")
+            res = json.loads(json.dumps(segment_job.result, cls=CustomEncoder))
         except:
-            pass
-    if existing_seg_ids:
+            segment_query = await job_query(connection, script, job_id=shash)
+            print(f"Running new segment query for {batch_name}")
+            res = await segment_query
+        for r in self.requests:
+            await r.send_segments(self, query_job, shash, res)
+
+    async def run_aggregate(
+        self,
+        offset: int,
+        batch: list,
+    ):
+        meta_json: dict = self.meta_json
+        post_processes: dict = self.post_processes
+        job_id, _ = self.query_batches[batch[0]]
+        job: Job = Job.fetch(job_id, connection=self._connection)
+        res: list = job.result
+        stats_batches, stats_results = self.get_stats_results()
+        lines_so_far, n_res = self.get_lines_batch(job.id)
+        past_batch = json.loads(json.dumps(batch, cls=CustomEncoder)) in json.loads(
+            json.dumps(stats_batches, cls=CustomEncoder)
+        )
+        if n_res == 0 or lines_so_far + n_res < offset or past_batch:
+            return
+        new_stats_batches = [b for b in stats_batches] + [batch]
+        (_, to_send, _, _, _) = _aggregate_results(
+            res,
+            stats_results,
+            meta_json,
+            post_processes,
+            batch,
+            self.done_batches,
+        )
+        new_stats_results = {k: v for k, v in to_send.items() if k in self.stats_keys}
+        stats_keys = f"{self.hash}::stats"
+        self._connection.set(
+            stats_keys,
+            json.dumps([new_stats_batches, new_stats_results], cls=CustomEncoder),
+        )
+        self._connection.expire(stats_keys, QUERY_TTL)
+
+    async def run_query_on_batch(self, batch) -> str:
+        """
+        Send and run a SQL query againt the DB
+        then update the QueryInfo and Request's accordingly
+        and launch any required sentence/meta queries
+        """
+        current_job: Job = cast(Job, get_current_job())
+        connection: RedisConnection = current_job.connection
+        batch_name, _ = batch
+        sql_query, _, _ = json_to_sql(
+            cast(QueryJSON, self.json_query),
+            schema=self.config.get("schema_path", ""),
+            batch=batch_name,
+            config=self.config,
+            lang=self.languages[0] if self.languages else None,
+        )
+        batch_hash = hasher(sql_query)
+        res = await _db_query(sql_query)
+        self._connection.set(batch_hash, json.dumps(res, cls=CustomEncoder))
+        self._connection.expire(batch_hash, QUERY_TTL)
+        res = res if res else []
+        n_res = sum(1 if str(r) in self.kwic_keys else 0 for r, *_ in res)
+        self.query_batches[batch_name] = (batch_hash, n_res)
+        if batch not in self.done_batches:
+            self.done_batches.append(batch)
+        self.update()
+        return batch_hash
+
+    # called from the worker
+    async def callback(self, batch_name: str):
+
+        msg_id: str = str(uuid4())
+        _publish_msg(
+            self._connection,
+            {"callback_query": "main", "batch": batch_name, "hash": self.hash},
+            msg_id=msg_id,
+        )
+
+        # do next batch (if needed)
+        do_next_batch(self.hash, self._connection, batch_name)
+
+        # run needed segment+meta queries
+        lines_before, lines_now = self.get_lines_batch(batch_name)
+        lines_so_far = lines_before + lines_now
+        # send sentences if needed
+        if not self.kwic_keys:
+            return
+
+        min_offset = min(r.offset for r in self.requests)
+        # Send only if this batch exceeds the offset and this batch starts before what's required
+        need_segments_this_batch = (
+            lines_so_far > min_offset and self.required > lines_so_far
+        )
         print(
-            f"Found {len(existing_seg_ids)}/{len(all_segment_ids)} segments in cache for {batch_name}"
+            f"in has_kwic, need segments for {batch_name}?",
+            min_offset,
+            lines_so_far,
+            need_segments_this_batch,
         )
-    segment_ids: list[str] = [
-        sid for sid in all_segment_ids if sid not in existing_seg_ids
-    ]
-    if not segment_ids:
-        return []
-    script, meta_labels = get_segment_meta_script(
-        qi._config, qi.languages, batch_name, segment_ids
-    )
-    qi.meta_labels = meta_labels
-    qi.update({"meta_labels": meta_labels})
-    shash = hasher(script)
-    if shash in seg_job_ids:
-        return
-    qi.segment_jobs_for_query_job[query_job.id].append(shash)
-    try:
-        segment_job = Job.fetch(shash, connection=app["redis"])
-        print(f"Retrieving segment query from cache: {batch_name} -- {shash}")
-        res = json.loads(json.dumps(segment_job.result, cls=CustomEncoder))
-    except:
-        segment_query = app.to_job(_db_query, script, job_id=shash)
-        print(f"Running new segment query for {batch_name}")
-        res = await segment_query
-    for r in qi.requests:
-        await r.send_segments(qi, query_job, shash, res)
+        if not need_segments_this_batch:
+            return
 
-
-async def run_aggregate(
-    app: LCPApplication,
-    qi: QueryInfo,
-    offset: int,
-    batch: list,
-    meta_json: dict,
-    post_processes: dict,
-):
-    job_id, _ = qi.query_jobs[batch[0]]
-    job: Job = Job.fetch(job_id, connection=app["redis"])
-    res: list = job.result
-    stats_batches, stats_results = qi.get_stats_results()
-    lines_so_far, n_res = qi.get_lines_job(job.id)
-    past_batch = json.loads(json.dumps(batch, cls=CustomEncoder)) in json.loads(
-        json.dumps(stats_batches, cls=CustomEncoder)
-    )
-    if n_res == 0 or lines_so_far + n_res < offset or past_batch:
-        return
-    new_stats_batches = [b for b in stats_batches] + [batch]
-    (_, to_send, _, _, _) = await app.to_job(
-        _aggregate_results,
-        res,
-        stats_results,
-        meta_json,
-        post_processes,
-        batch,
-        qi.done_batches,
-    )
-    new_stats_results = {k: v for k, v in to_send.items() if k in qi.stats_keys}
-    try:
-        first_job = Job.fetch(
-            next(qjid for qjid, _ in qi.query_jobs.values()), app["redis"]
+        offset_this_batch = max(0, min_offset - lines_so_far)
+        lines_this_batch = (
+            lines_now if self.full else min(lines_now, self.required - lines_so_far)
         )
+        await self.do_segment_and_meta(
+            batch_name,
+            offset_this_batch,
+            lines_this_batch,
+        )
+
+
+async def do_batch(qhash: str, batch: list):
+    current_job: Job | None = get_current_job()
+    assert current_job, RuntimeError(f"No current jbo found for do_batch {batch}")
+    connection = current_job.connection
+    qi = QueryInfo(qhash, connection=connection)
+    batch_name = cast(str, batch[0])
+    if batch_name == qi.running_batch:
+        # This batch is already running: stop here
+        return
+    # Now this is the running batch
+    qi.running_batch = batch_name
+    try:
+        batch_hash, nlines = qi.query_batches.get(batch_name, ("", 0))
+        # refresh redis memory
+        refresh_job_ttl(connection, batch_hash)
+        print(f"Retrieving query from cache: {batch_name} -- {batch_hash}")
     except:
-        first_job = job
-    serializer = CustomEncoder()
-    first_job.meta["stats_results"] = serializer.default(
-        [new_stats_batches, new_stats_results]
-    )
-    first_job.save_meta()
+        print(f"No job in cache for {batch_name}, running it now")
+        await qi.run_query_on_batch(batch)
+        batch_hash, nlines = qi.query_batches.get(batch_name, ("", 0))
+
+    if qi.kwic_keys:
+        # Indicate asap that lines are needed for this job
+        for req in qi.get_running_requests():
+            req.update_dict("lines_batch", {batch_hash: (0, 0, qi.required + 1)})
+
+    min_offset = min(r.offset for r in qi.requests)
+    await qi.run_aggregate(min_offset, batch)
+
+    await qi.callback(batch_name)
 
 
-async def run_query_on_batch(
-    app: LCPApplication, qi: QueryInfo, json_query: dict, batch: list
-):
-    """
-    Send and run a SQL query againt the DB
-    then update the QueryInfo and Request's accordingly
-    and launch any required sentence/meta queries
-    """
-    batch_name, _ = batch
-    sql_query, _, _ = json_to_sql(
-        cast(QueryJSON, json_query),
-        schema=qi._config.get("schema_path", ""),
-        batch=batch_name,
-        config=qi._config,
-        lang=qi.languages[0] if qi.languages else None,
-    )
-    main_query = app.to_job(_db_query, sql_query, job_id=hasher(sql_query))
-    res = await main_query
-    n_res = sum(1 if str(r) in qi.kwic_keys else 0 for r, *_ in res)
-    qi.query_jobs[batch_name] = (main_query.job.id, n_res)
-    if batch not in qi.done_batches:
-        qi.done_batches.append(batch)
-    qi.update()
-    return main_query.job
+async def qi_callback(job: Job, connection: RedisConnection, result: Any):
+    qi: QueryInfo = QueryInfo(job.args[0], connection=connection)
+    await qi.callback(result)
 
 
-async def query_pipeline(app: LCPApplication, qi: QueryInfo, json_query: dict) -> None:
+def do_next_batch(
+    qhash: str, connection: RedisConnection, previous_batch_name: str | None = None
+) -> Job | None:
+    qi = QueryInfo(qhash, connection=connection)
+    next_batch = qi.decide_next_batch(previous_batch_name)
+    if not next_batch:
+        return None
+    return qi.enqueue(do_batch, qhash, next_batch, callback=qi_callback)
+
+
+def launch_query(qhash: str) -> Job | None:
     """
     Continuously sends a query to the DB until all the results are fetched
     or all the batches have been queries
     """
-    main_pipeline: bool = False if qi.running_batch else True
-    has_kwic: bool = len(qi.kwic_keys) > 0
-    running_requests: list[Request] = []
-    lines_so_far = 0
-    all_send_tasks: list[Task] = []
-    for batch in qi.smart_batches():
-        if not batch:
-            break
-        batch_name = cast(str, batch[0])
-        if main_pipeline:
-            qi.running_batch = batch_name
-        elif batch_name == qi.running_batch:
-            # Let the main pipeline run the next batches from here on out
-            print(
-                "Done with serving cached results, letting the main pipeline do its job"
-            )
-            break
-        try:
-            job_id, nlines = qi.query_jobs.get(batch_name, ("", 0))
-            job = Job.fetch(job_id, app["redis"])
-            # refresh redis memory
-            refresh_job_ttl(app["redis"], job.id)
-            print(
-                f"{'MAIN: ' if main_pipeline else ''}Retrieving query from cache: {batch_name} -- {job_id}"
-            )
-            assert job.result is not None, 1
-        except:
-            print(
-                f"{'MAIN: ' if main_pipeline else ''}No job in cache for {batch_name}, running it now"
-            )
-            job = await run_query_on_batch(app, qi, json_query, batch)
-            job_id, nlines = qi.query_jobs.get(batch_name, ("", 0))
-
-        if has_kwic:
-            # Indicate asap that lines are needed for this job
-            for req in qi.get_running_requests():
-                req.update_dict("lines_query_job", {job_id: (0, 0, qi.required + 1)})
-
-        min_offset = min(r.offset for r in running_requests) if running_requests else 0
-        await run_aggregate(app, qi, min_offset, batch, qi.meta_json, qi.post_processes)
-        required_before_send = qi.required
-        # for each request, try to send the results for this batch (if not sent yet)
-        # for req in qi.get_running_requests():
-        for req in qi.requests:
-            running_requests.append(req)
-            all_send_tasks.append(asyncio.create_task(req.send_query(qi, job)))
-            qi.update()
-        # send sentences if needed
-        if has_kwic:
-            min_offset = (
-                0 if not running_requests else min(r.offset for r in running_requests)
-            )
-            lines_with_batch = lines_so_far + nlines
-            # Send only if this batch exceeds the offset and this batch starts before what's required
-            need_segments_this_batch = (
-                lines_with_batch > min_offset and required_before_send > lines_so_far
-            )
-            print(
-                f"{'MAIN: ' if main_pipeline else ''}in has_kwic, need segments for {batch_name}?",
-                min_offset,
-                lines_so_far,
-                nlines,
-                lines_with_batch,
-                required_before_send,
-                need_segments_this_batch,
-            )
-            if need_segments_this_batch:
-                offset_this_batch = max(0, min_offset - lines_so_far)
-                lines_this_batch = (
-                    nlines
-                    if qi.full
-                    else min(nlines, required_before_send - lines_so_far)
-                )
-                all_send_tasks.append(
-                    asyncio.create_task(
-                        segment_and_meta(
-                            app,
-                            qi,
-                            batch_name,
-                            job,
-                            offset_this_batch,
-                            lines_this_batch,
-                        )
-                    )
-                )
-        lines_so_far += nlines
-        if not qi.full and lines_so_far >= required_before_send:
-            break  # we've got enough results
-        await asyncio.sleep(0.1)
-    await asyncio.gather(*all_send_tasks)
-    running_requests = qi.get_running_requests()
-    if main_pipeline:
-        qi.running_batch = ""
-    for req in running_requests:
-        if req.synchronous:
-            continue
-        req.delete_if_done(qi)
-    return None
+    current_job: Job | None = get_current_job()
+    assert current_job is not None, RuntimeError(f"No job found to launch the query")
+    connection = current_job.connection
+    return do_next_batch(qhash, connection)
 
 
-def process_query(app, request_data) -> tuple[Request, QueryInfo, Any]:
+def process_query(
+    app: LCPApplication, request_data: dict
+) -> tuple[Request, QueryInfo, Any]:
     """
     Determine whether it is necessary to send queries to the DB
     and return the job info + the asyncio task + QueryInfo instance
     """
-    request: Request = Request(app, request_data)
+    request: Request = Request(app["redis"], request_data)
     print(
         f"Received new POST request: {request.id} ; {request.offset} -- {request.requested}"
     )
     if request.synchronous:
-        request.add_sync_future()
+        # request.add_sync_future()
+        pass
     config = app["config"][request.corpus]
     try:
         json_query = json.loads(request.query)
@@ -927,17 +981,17 @@ def process_query(app, request_data) -> tuple[Request, QueryInfo, Any]:
         lang=request.languages[0] if request.languages else None,
     )
     shash = hasher(sql_query)
-    qi = QueryInfo(shash, meta_json, post_processes, app, config)
+    qi = QueryInfo(shash, app["redis"], json_query, meta_json, post_processes, config)
     qi.add_request(request)
     qi.update()
     # TODO: try sending this to a worker instead?
     # no access to app: pass config and stuff directly
     # have the job complete only when req is done
-    routine = query_pipeline(app, qi, json_query)
-    return (request, qi, routine)
+    future: CustomFuture = app.to_worker(launch_query, shash)
+    return (request, qi, future)
 
 
-def get_handle_exception(req: Request, qi: QueryInfo):
+def get_handle_exception(app: LCPApplication, req: Request, qi: QueryInfo):
     def handle_exception(task):
         try:
             result = task.result()  # Will raise an exception if the task failed
@@ -949,7 +1003,7 @@ def get_handle_exception(req: Request, qi: QueryInfo):
                 return
             asyncio.create_task(
                 push_msg(
-                    req._app["websockets"],
+                    app["websockets"],
                     req.room,
                     {"action": "failed", "status": "failed", "value": f"{e}"},
                     skip=None,
@@ -964,7 +1018,7 @@ async def post_query(request: web.Request) -> web.Response:
     """
     Main query endpoint: generate and queue up corpus queries
     """
-    app = request.app
+    app = cast(LCPApplication, request.app)
     request_data = await request.json()
     # user = request_data.get("user", "")
     # room = request_data.get("room", "")
@@ -1008,33 +1062,33 @@ async def post_query(request: web.Request) -> web.Response:
     #     print("pushed message")
     #     raise web.HTTPForbidden(text=msg)
 
-    (req, qi, routine) = process_query(app, request_data)
-    task = asyncio.create_task(routine)
-    task.add_done_callback(get_handle_exception(req, qi))
+    (req, qi, future) = process_query(app, request_data)
+    # task = asyncio.create_task(routine)
+    # task.add_done_callback(get_handle_exception(app, req, qi))
 
     if req.synchronous:
         buffer = {}
         while 1:
             await asyncio.sleep(0.5)
-            if not qi.has_request(req) and not req.futures:
+            if not qi.has_request(req):
                 break
-            if not req.futures:
-                continue
-            msg_id: str = req.futures[0]
-            fut: CustomFuture = app["futures"][msg_id]
-            res = await fut
-            req.futures = req.futures[1:]
-            app["futures"].pop(msg_id)  # discard it now
-            for rtype, values in res["result"].items():
-                if rtype == "0" or rtype in qi.stats_keys:
-                    buffer[rtype] = values
-                    continue
-                buffer[rtype] = buffer.get(rtype, []) + values
-            if res["action"] == "segments":
-                req.update_dict("segment_sent_jobs", {res["seg_job_id"]: res["n"]})
-            if not req.futures:
-                req.delete_if_done(qi)
-        buffer["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
+            # if not req.futures:
+            #     continue
+            # msg_id: str = req.futures[0]
+            # fut: CustomFuture = app["futures"][msg_id]
+            # res = await fut
+            # req.futures = req.futures[1:]
+            # app["futures"].pop(msg_id)  # discard it now
+            # for rtype, values in res["result"].items():
+            #     if rtype == "0" or rtype in qi.stats_keys:
+            #         buffer[rtype] = values
+            #         continue
+            #     buffer[rtype] = buffer.get(rtype, []) + values
+            # if res["action"] == "segments":
+            #     req.update_dict("segment_sent_jobs", {res["seg_job_id"]: res["n"]})
+            # if not req.futures:
+            #     req.delete_if_done(qi)
+        # buffer["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
         print(f"[{req.id}] Done with synchronous request")
         serializer = CustomEncoder()
         return web.json_response(serializer.default(buffer))
