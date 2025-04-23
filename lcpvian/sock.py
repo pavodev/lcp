@@ -89,9 +89,11 @@ async def _process_message(
             return None
         payload: JSONObject = json.loads(raw)
         if "callback_query" in payload:
-            qi = QueryInfo(payload["hash"], app["redis"])
-            for req in qi.requests:
-                req.respond(payload)
+            qi_hash: str = str(payload["hash"])
+            qi = QueryInfo(qi_hash, app["redis"])
+            async with asyncio.TaskGroup() as group:
+                for req in qi.requests:
+                    group.create_task(req.respond(app, payload))
         if data["msg_id"] in app["futures"]:
             # This will be read as the result of an await instruction
             fut = app["futures"].pop(data["msg_id"])
@@ -304,23 +306,23 @@ async def _handle_message(
         export_obj["config"] = app["config"][corpus_id]
         await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
 
-    if action in simples or action in ("sentences", "meta"):
-        if not payload.get("full") and (
-            action != "sentences" or len(cast(Results, payload["result"])) > 2
-        ):
-            await push_msg(
-                app["websockets"],
-                room,
-                payload,
-                skip=None,
-                just=(room, user),
-            )
-        else:
-            print(f"Not sending {action} message!")
-        if to_submit is not None:
-            await to_submit
-            to_submit = None
-        return None
+    # if action in simples or action in ("sentences", "meta"):
+    #     if not payload.get("full") and (
+    #         action != "sentences" or len(cast(Results, payload["result"])) > 2
+    #     ):
+    #         await push_msg(
+    #             app["websockets"],
+    #             room,
+    #             payload,
+    #             skip=None,
+    #             just=(room, user),
+    #         )
+    #     else:
+    #         print(f"Not sending {action} message!")
+    #     if to_submit is not None:
+    #         await to_submit
+    #         to_submit = None
+    #     return None
 
     if action in errors:
         await _handle_error(app, user, room, payload)
