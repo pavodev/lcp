@@ -34,8 +34,13 @@ export const useCorpusStore = defineStore("corpusData", {
         return response.data;
       });
     },
+    deleteQuery(user_id, room_id, query_id) {
+      httpApi.delete(`/user/${user_id}/room/${room_id}/query/${query_id}`).then((response) => {
+        return response.data;
+      });
+    },
     fetchQueries(data) {
-      httpApi.post(`/fetch`, data).then((response) => {
+      return httpApi.post(`/fetch`, data).then((response) => {
         this.fetchedQueries = response.data;
         return response.data;
       });

@@ -73,6 +73,15 @@
                 {{ $t('common-login') }}
               </a>
             </li>
+            <li class="nav-item">
+              <a
+                v-if="userData && userData.user && userData.user.displayName"
+                class="nav-link"
+                href="/user"
+              >
+                <FontAwesomeIcon :icon="['fas', 'user']" class="me-1" />
+              </a>
+            </li>
           </ul>
         </div>
       </div>

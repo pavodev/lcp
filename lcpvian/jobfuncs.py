@@ -140,6 +140,7 @@ async def _db_query(
     params: DBQueryParams = {},
     config: bool = False,
     store: bool = False,
+    delete: bool = False,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
 ) -> (
@@ -167,10 +168,10 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if store else ("_wpool" if config else "_pool")
+    name = "_upool" if (store or delete) else ("_wpool" if config else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
-    method = "begin" if store else "connect"
+    method = "begin" if (store or delete) else "connect"
 
     first_job_id = cast(str, kwargs.get("first_job", ""))
     if first_job_id:
@@ -189,9 +190,15 @@ async def _db_query(
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)
-            if store:
-                return None
-            out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
+            if store or delete:
+                # For DELETE queries, simply return None (or log res.rowcount if needed)
+                if delete:
+                    # For non-SELECT queries (store/delete), do not attempt to fetch rows.
+                    return res.rowcount
+                else:
+                    return None
+            else:
+                out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")

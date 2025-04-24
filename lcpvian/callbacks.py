@@ -808,7 +808,17 @@ def _queries(
     """
     job_kwargs: dict = cast(dict, job.kwargs)
     is_store: bool = job_kwargs.get("store", False)
-    action = "store_query" if is_store else "fetch_queries"
+    is_delete: bool = job_kwargs.get("delete", False)
+    
+    action = "fetch_queries"
+
+    if is_store:
+        action = "store_query"
+    elif is_delete:
+        action = "delete_query"
+    
+    # action = "store_query" if is_store else "fetch_queries"
+    
     room: str | None = job_kwargs.get("room")
     msg_id = str(uuid4())
     jso: dict[str, Any] = {
@@ -822,14 +832,40 @@ def _queries(
     if is_store:
         jso["query_id"] = str(job_kwargs["query_id"])
         jso.pop("queries")
+    elif is_delete:
+        jso.pop("queries")
     elif result:
         cols = ["idx", "query", "username", "room", "created_at"]
         queries: list[dict[str, Any]] = []
         for x in result:
             dct: dict[str, Any] = dict(zip(cols, x))
             queries.append(dct)
-        jso["queries"] = queries
+        jso["queries"] = json.dumps(queries, default=str)
+
     return _publish_msg(connection, jso, msg_id)
+
+def _deleted(job: Job, connection: RedisConnection, result: any) -> None:
+    """
+    Callback for successful deletion.
+    """
+    job_kwargs: dict = cast(dict, job.kwargs)
+    action = "delete_query"
+    room: str = job_kwargs.get("room") or ""
+    # Since DELETE without RETURNING doesn't provide row data, we use the original query_id.
+    deleted_idx = job_kwargs.get("idx")
+    msg_id = str(uuid4())
+    jso: dict[str, any] = {
+        "user": str(job_kwargs["user"]),
+        "room": room,
+        "idx": deleted_idx,
+        "status": "success",
+        "action": action,
+        "msg_id": msg_id,
+        "queries": '[]',
+    }
+    
+    return _publish_msg(connection, jso, msg_id)
+
 
 
 def _swissdox_to_db_file(

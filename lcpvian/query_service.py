@@ -3,7 +3,7 @@ query_service.py: control submission of RQ jobs
 
 We use RQ/Redis for long-running DB queries. The QueryService class has a method
 for each type of DB query that we need to run (query, sentence-query, upload,
-create schema, store query, fetch query, etc.). Jobs are run by a dedicated
+create schema, store query, delete_query, fetch query, etc.). Jobs are run by a dedicated
 worker process.
 
 After the job is complete, callback functions can be run by worker for success and
@@ -20,6 +20,7 @@ save ourselves from running duplicate DB queries.
 
 import json
 import os
+import uuid
 
 from collections.abc import Coroutine
 from typing import Any, final, Unpack, cast
@@ -40,6 +41,7 @@ from .callbacks import (
     _upload_failure,
     _meta,
     _queries,
+    _deleted,
     _query,
     _schema,
     _sentences,
@@ -585,25 +587,40 @@ class QueryService:
         return job
 
     def fetch_queries(
-        self, user: str, room: str, queue: str = "internal", limit: int = 10
+        self, user: str, room: str, query_type: str, queue: str = "internal", limit: int = 10
     ) -> Job:
         """
         Get previous saved queries for this user/room
         """
         params: dict[str, str] = {"user": user}
-        room_info: str = ""
-        if room:
-            room_info = " AND room = :room"
-            params["room"] = room
 
-        query = f"""SELECT * FROM lcp_user.queries
-                    WHERE username = :user {room_info}
-                    ORDER BY created_at DESC LIMIT {limit};
-                """
+        # room_info: str = ""
+        # if room:
+        #     room_info = " AND room = :room"
+        #     params["room"] = room
+
+        # query = f"""SELECT * FROM lcp_user.queries WHERE "user" = :user {room_info} ORDER BY created_at DESC LIMIT {limit};"""
+
+        if query_type:
+            params["query_type"] = query_type
+
+            query = (
+                """SELECT * FROM lcp_user.queries
+                WHERE "user" = :user AND query_type = :query_type
+                ORDER BY created_at DESC LIMIT {limit};"""
+            ).format(limit=limit)
+        else:
+            query = (
+                """SELECT * FROM lcp_user.queries
+                WHERE "user" = :user
+                ORDER BY created_at DESC LIMIT {limit};"""
+            ).format(limit=limit)
+
         opts = {
             "user": user,
             "room": room,
             "config": True,
+            "query_type": query_type
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -615,6 +632,7 @@ class QueryService:
             kwargs=opts,
         )
         return job
+    
 
     def store_query(
         self,
@@ -627,7 +645,10 @@ class QueryService:
         """
         Add a saved query to the db
         """
-        query = f"INSERT INTO lcp_user.queries VALUES(:idx, :query, :user, :room);"
+        query = (
+            'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name, query_type) '
+            'VALUES (:idx, :query, :user, :room, :query_name, :query_type);'
+        )
         kwargs = {
             "user": user,
             "room": room,
@@ -637,9 +658,11 @@ class QueryService:
         }
         params: dict[str, str | int | None | JSONObject] = {
             "idx": idx,
-            "query": query_data,
+            "query": json.dumps(query_data, default=str),
             "user": user,
             "room": room,
+            "query_name": query_data["query_name"],
+            "query_type": query_data["query_type"]
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -651,6 +674,46 @@ class QueryService:
             kwargs=kwargs,
         )
         return job
+
+    def delete_query(self, user_id: str, room_id: str, query_id: str, queue: str = "internal") -> Job:
+        """
+        Delete a query using a background job.
+        """
+        # Convert the query_id string to a UUID object for proper binding.
+        try:
+            query_uuid = uuid.UUID(query_id)
+        except ValueError:
+            raise ValueError("Invalid query id provided")
+        
+        # Build parameters with the UUID object.
+        params: dict[str, any] = {"user": user_id, "room": room_id, "idx": query_uuid}
+
+        # DELETE query without a RETURNING clause.
+        query = (
+            """DELETE FROM lcp_user.queries
+            WHERE "user" = :user
+            AND idx = :idx"""
+        )
+
+        opts = {
+            "user": user_id,
+            "room": room_id,
+            "idx": query_id,  # keep as string for logging and later use in the callback
+            "delete": True,
+            "config": True
+        }
+
+        job: Job = self.app[queue].enqueue(
+            _db_query,
+            on_success=Callback(_deleted, self.callback_timeout),
+            on_failure=Callback(_general_failure, self.callback_timeout),
+            result_ttl=self.query_ttl,
+            job_timeout=self.timeout,
+            args=(query.strip(), params),
+            kwargs=opts,
+        )
+        return job
+
 
     def update_metadata(
         self,
