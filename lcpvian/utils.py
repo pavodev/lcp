@@ -760,7 +760,6 @@ def _get_all_jobs_from_hash(
     meta_jobs: list[Job] = []
 
     main_job = Job.fetch(hash, connection=connection)
-    query_info = _get_query_info(connection, job=main_job)
     finished_jobs = [
         Job.fetch(jid, connection=connection)
         for registry in [

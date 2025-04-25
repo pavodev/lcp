@@ -1,15 +1,12 @@
 import asyncio
 import json
-import logging
 import os
-import traceback
 
 from aiohttp import web
-from asyncio import Task
 from redis import Redis as RedisConnection
 from rq import Callback, Queue
 from rq.job import get_current_job, Job
-from typing import cast, Any, Callable, Generator
+from typing import cast, Any, Callable
 from uuid import uuid4
 
 from .abstract_query.create import json_to_sql
@@ -26,10 +23,8 @@ from .utils import (
     _update_query_info,
     get_segment_meta_script,
     hasher,
-    refresh_job_ttl,
     push_msg,
     CustomEncoder,
-    CustomFuture,
     LCPApplication,
 )
 
@@ -114,15 +109,12 @@ class Request:
         self.languages: list[str] = request.get("languages", [])
         self.query: str = request.get("query", "")
         # The attributes below are dynamic and need to update redis
-        self.status: str = request.get("status", "started")
         # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
         self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
             "lines_batch", {}
         )
-        # keep track of which segment hashes were already sent
-        self.segment_sent_hashes: dict[str, int] = request.get(
-            "segment_sent_hashes", {}
-        )
+        # keep track of which hashes were already sent
+        self.sent_hashes: dict[str, int] = request.get("sent_hashes", {})
         if "hash" in request:
             self.hash: str = request["hash"]
 
@@ -209,14 +201,23 @@ class Request:
             await self.send_segments(app, qi, batch_name)
 
     def is_done(self, qi: "QueryInfo") -> bool:
-        queries_done: bool = qi.status == "complete" or self.status == "satisfied"
+        queries_done: bool = qi.status == "complete" or (
+            self.lines_sent_so_far >= self.requested
+        )
         if not queries_done:
             return False
         if not qi.kwic_keys:
             return True
-        nlines_query: int = sum(n for _, _, n in self.lines_batch.values())
-        nlines_segments: int = sum(n for n in self.segment_sent_hashes.values())
-        return nlines_segments >= nlines_query
+        all_segs_sent = True
+        for batch_hash, (_, _, req_segs) in self.lines_batch.items():
+            batch_name = qi.get_batch_from_hash(batch_hash)
+            batch_seg_hahes = qi.segment_hashes_for_batch.get(batch_name, [])
+            batch_segs_sent = (
+                sum(n for (sh, n) in self.sent_hashes.items() if sh in batch_seg_hahes)
+                >= req_segs
+            )
+            all_segs_sent = all_segs_sent and batch_segs_sent
+        return all_segs_sent
 
     def delete_if_done(self, qi: "QueryInfo"):
         if not self.is_done(qi):
@@ -224,12 +225,12 @@ class Request:
         print(f"[{self.id}] DELETE REQUEST NOW")
         qi.delete_request(self)
 
-    def lines_for_batch(self, qi: "QueryInfo", batch_hash: str) -> tuple[int, int]:
+    def lines_for_batch(self, qi: "QueryInfo", batch_name: str) -> tuple[int, int]:
         """
         Return the offset and number of lines required in the current job
         """
         offset_and_lines_for_req = (0, 0)
-        lines_before_job, lines_job = qi.get_lines_batch(batch_hash)
+        lines_before_job, lines_job = qi.get_lines_batch(batch_name)
         if self.offset > lines_before_job + lines_job:
             return offset_and_lines_for_req
         if self.offset + self.requested < lines_before_job:
@@ -249,11 +250,12 @@ class Request:
         self, app: web.Application, qi: "QueryInfo", batch_name: str
     ):
         batch_hash, _ = qi.query_batches[batch_name]
-        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_hash)
-        if lines_this_batch == 0:
-            return
+        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         seg_hashes: list[str] = [x for x in qi.segment_hashes_for_batch[batch_name]]
-        if all(x in self.segment_sent_hashes for x in seg_hashes):
+        if all(x in self.sent_hashes for x in seg_hashes):
+            return
+        if lines_this_batch == 0:
+            self.update_dict("sent_hashes", {sh: 0 for sh in seg_hashes})
             return
         batch_results: list = qi.get_from_cache(batch_hash)
         segment_ids: dict[str, int] = segment_ids_in_results(
@@ -264,6 +266,7 @@ class Request:
         )
         sent_seg_ids: dict[str, int] = {}
         results: dict[str, Any] = {}
+        sent_hashes = {}
         for seg_hash in seg_hashes:
             res: list = qi.get_from_cache(seg_hash)
             seg_ids_to_send: dict[str, int] = {}
@@ -272,15 +275,15 @@ class Request:
                     continue
                 results[str(rtype)] = results.get(str(rtype), []) + [[sid, *rem]]
                 seg_ids_to_send[sid] = 1
-            self.update_dict("segment_sent_hashes", {seg_hash: len(seg_ids_to_send)})
+            sent_hashes.update({seg_hash: len(seg_ids_to_send)})
             sent_seg_ids.update(seg_ids_to_send)
+        self.update_dict("sent_hashes", sent_hashes)
         results["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
         payload = {
             "action": "segments",
             "job": qi.hash,
             "user": self.user,
             "room": self.room,
-            "status": self.status,
             "result": results,
             "n": len(sent_seg_ids),
             "hash": self.hash,
@@ -294,10 +297,7 @@ class Request:
             f"[{self.id}] Sending {len(sent_seg_ids)} segments for batch {batch_name} (hash {qi.hash}; job {batch_hash}) {to_msg}"
         )
         if self.synchronous:
-            # msg_id: str = self.next_future()
-            # fut: CustomFuture = self._app["futures"][msg_id]
-            # fut.set_result(payload)
-            pass
+            app["query_buffers"][self.id].update(results)
         else:
             await push_msg(
                 app["websockets"],
@@ -306,8 +306,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-            self.delete_if_done(qi)
-        print(f"[{self.id}] Sent {len(sent_seg_ids)} segments for batch {batch_name}")
+        self.delete_if_done(qi)
 
     async def send_query(self, app: web.Application, qi: "QueryInfo", batch_name: str):
         """
@@ -315,13 +314,13 @@ class Request:
         and update the request accordingly
         """
         batch_hash, _ = qi.query_batches[batch_name]
-        if self.lines_batch.get(batch_hash, (0, 0, 0))[1] > 0:
+        if batch_hash in self.sent_hashes:
             # If some lines were already sent for this job
             return
         batch_res: list = qi.get_from_cache(batch_hash)
-        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_hash)
+        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         n_seg_ids: int = 0
-        if qi.kwic_keys:
+        if lines_this_batch > 0 and qi.kwic_keys:
             n_seg_ids = len(
                 segment_ids_in_results(
                     batch_res,
@@ -330,10 +329,6 @@ class Request:
                     offset_this_batch + lines_this_batch,
                 )
             )
-            if self.synchronous:
-                # if one needs kwic lines, make sure there's a pending future for that
-                # self.next_future()
-                pass
         self.update_dict(
             "lines_batch",
             {batch_hash: (offset_this_batch, lines_this_batch, n_seg_ids)},
@@ -361,15 +356,13 @@ class Request:
             if lines_so_far >= offset_this_batch + lines_this_batch:
                 continue
             results[sk].append(v)
-        if qi.status == "complete" or self.lines_sent_so_far >= self.requested:
-            self.status = "satisfied"
+        self.update_dict("sent_hashes", {batch_hash: len(results)})
         results["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
         payload = {
             "action": "query_result",
             "job": qi.hash,
             "user": self.user,
             "room": self.room,
-            "status": self.status,
             "result": results,
             "hash": self.hash,
         }
@@ -383,10 +376,7 @@ class Request:
             f"[{self.id}] Sending {lines_this_batch} results lines for batch {batch_name} (hash {qi.hash}; job {batch_hash}) {to_msg}"
         )
         if self.synchronous:
-            # msg_id: str = self.next_future()
-            # fut: CustomFuture = self._app["futures"][msg_id]
-            # fut.set_result(payload)
-            pass
+            app["query_buffers"][self.id].update(results)
         else:
             await push_msg(
                 app["websockets"],
@@ -395,7 +385,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-            self.delete_if_done(qi)
+        self.delete_if_done(qi)
 
 
 class QueryInfo:
@@ -428,12 +418,16 @@ class QueryInfo:
         self.result_sets: list = self.meta_json.get("result_sets", [])
         self.meta_labels: list[str] = qi.get("meta_labels", [])
         self.languages: list[str] = qi.get("languages", [])
-        self.update()
+        if not qi:
+            self.update()
 
     def update(self, obj: dict = {}):
         """
         Update the attributes of this instance and the entry in Redis
         """
+        if obj:
+            _update_query_info(self._connection, self.hash, info=obj)
+            return
         qi = _get_query_info(self._connection, self.hash)
         for aname in dir(self):
             if aname.startswith("_") or aname == "requests":
@@ -442,15 +436,7 @@ class QueryInfo:
             if not isinstance(attr, SERIALIZABLES):
                 continue
             qi[aname] = attr
-        for k, v in obj.items():
-            qi[k] = v
         _update_query_info(self._connection, self.hash, info=qi)
-        # Update the expiration of all the related jobs
-        for qjid, _ in self.query_batches.values():
-            try:
-                refresh_job_ttl(self._connection, qjid)
-            except:
-                pass
 
     def enqueue(
         self,
@@ -502,9 +488,12 @@ class QueryInfo:
     def get_observer(self, attribute_name: str) -> Callable:
         return lambda event, value, *_: self.update({attribute_name: value})
 
-    def get_batch_from_hash(self, job_id: str) -> str:
+    def get_batch_from_hash(self, batch_hash: str) -> str:
+        """
+        Return the batch name correpsonding to a batch query hash
+        """
         batch_name = next(
-            (bn for bn, (qjid, _) in self.query_batches.items() if qjid == job_id), ""
+            (bn for bn, (bh, _) in self.query_batches.items() if bh == batch_hash), ""
         )
         return batch_name
 
@@ -569,7 +558,7 @@ class QueryInfo:
         self.update({"segment_hashes_for_batch": value})
 
     # Methods
-    def has_request(self, request: Request, cache: bool = False):
+    def has_request(self, request: Request):
         return any(r.id == request.id for r in self.requests)
 
     def add_request(self, request: Request):
@@ -588,21 +577,18 @@ class QueryInfo:
         requests = [r.serialize() for r in self.requests if r.id != request.id]
         _update_query_info(self._connection, self.hash, info={"requests": requests})
 
-    def get_running_requests(self) -> list[Request]:
-        return [r for r in self.requests if not r.is_done(self)]
-
-    def get_lines_batch(self, batch_hash: str) -> tuple[int, int]:
+    def get_lines_batch(self, batch_name: str) -> tuple[int, int]:
         """
         Return the number of kwic lines in the batches before this one
         and the number of kwic lines in this batch
         """
         lines_before_batch: int = 0
         lines_this_batch: int = 0
-        for bh, n in self.query_batches.values():
-            if bh == batch_hash:
-                lines_this_batch = n
+        for bn, (_, nlines) in self.query_batches.items():
+            if bn == batch_name:
+                lines_this_batch = nlines
                 break
-            lines_before_batch += n
+            lines_before_batch += nlines
         return (lines_before_batch, lines_this_batch)
 
     def get_from_cache(self, key: str) -> list:
@@ -712,20 +698,15 @@ class QueryInfo:
 
     @property
     def full(self) -> bool:
-        running_requests: list[Request] = self.get_running_requests()
-        return any(r.full for r in running_requests) if running_requests else False
+        return any(r.full for r in self.requests) if self.requests else False
 
     @property
     def required(self) -> int:
         """
         The required number of results lines is the max offset+requested out of all the Request's
         """
-        # running_requests = self.get_running_requests()
-        running_requests = self.requests
         return (
-            max(r.offset + r.requested for r in running_requests)
-            if running_requests
-            else 0
+            max(r.offset + r.requested for r in self.requests) if self.requests else 0
         )
 
     @property
@@ -744,7 +725,7 @@ class QueryInfo:
         batch_hash, _ = self.query_batches[batch[0]]
         res: list = self.get_from_cache(batch_hash)
         stats_batches, stats_results = self.get_stats_results()
-        lines_so_far, n_res = self.get_lines_batch(batch_hash)
+        lines_so_far, n_res = self.get_lines_batch(batch[0])
         past_batch = json.loads(json.dumps(batch, cls=CustomEncoder)) in json.loads(
             json.dumps(stats_batches, cls=CustomEncoder)
         )
@@ -804,7 +785,7 @@ class QueryInfo:
         batch_hash, _ = self.query_batches[batch_name]
 
         # run needed segment+meta queries
-        lines_before, lines_now = self.get_lines_batch(batch_hash)
+        lines_before, lines_now = self.get_lines_batch(batch_name)
         lines_so_far = lines_before + lines_now
         # send sentences if needed
         if not self.kwic_keys:
@@ -923,11 +904,6 @@ async def do_batch(qhash: str, batch: list):
         await qi.run_query_on_batch(batch)
         batch_hash, nlines = qi.query_batches.get(batch_name, ("", 0))
 
-    if qi.kwic_keys:
-        # Indicate asap that lines are needed for this job
-        for req in qi.get_running_requests():
-            req.update_dict("lines_batch", {batch_hash: (0, 0, qi.required + 1)})
-
     min_offset = min(r.offset for r in qi.requests)
     await qi.run_aggregate(min_offset, batch)
     qi.publish(batch_name, "main")
@@ -953,7 +929,9 @@ def schedule_next_batch(
     if not next_batch:
         qi.running_batch = ""
         return None
-    return qi.enqueue(do_batch, qhash, next_batch, callback=QueryInfo.batch_callback)
+    return qi.enqueue(
+        do_batch, qhash, list(next_batch), callback=QueryInfo.batch_callback
+    )
 
 
 def process_query(
@@ -1068,31 +1046,21 @@ async def post_query(request: web.Request) -> web.Response:
     # task.add_done_callback(get_handle_exception(app, req, qi))
 
     if req.synchronous:
-        buffer = {}
+        try:
+            query_buffers = app["query_buffers"]
+        except:
+            query_buffers = {}
+            app.addkey("query_buffers", dict[str, dict], query_buffers)
+        query_buffers[req.id] = {}
         while 1:
             await asyncio.sleep(0.5)
             if not qi.has_request(req):
                 break
-            # if not req.futures:
-            #     continue
-            # msg_id: str = req.futures[0]
-            # fut: CustomFuture = app["futures"][msg_id]
-            # res = await fut
-            # req.futures = req.futures[1:]
-            # app["futures"].pop(msg_id)  # discard it now
-            # for rtype, values in res["result"].items():
-            #     if rtype == "0" or rtype in qi.stats_keys:
-            #         buffer[rtype] = values
-            #         continue
-            #     buffer[rtype] = buffer.get(rtype, []) + values
-            # if res["action"] == "segments":
-            #     req.update_dict("segment_sent_hashes", {res["seg_job_id"]: res["n"]})
-            # if not req.futures:
-            #     req.delete_if_done(qi)
-        # buffer["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
+        res = query_buffers[req.id]
+        query_buffers.pop(req.id, None)
         print(f"[{req.id}] Done with synchronous request")
         serializer = CustomEncoder()
-        return web.json_response(serializer.default(buffer))
+        return web.json_response(serializer.default(res))
     else:
         job_info = {
             "status": "started",

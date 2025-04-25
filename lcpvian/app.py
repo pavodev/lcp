@@ -64,7 +64,6 @@ from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
 from .lama import handle_lama_error
 from .video import video
-from .test_future import test_future
 
 
 # this is all just a way to find out if utils (and therefore the codebase) is a c extension
@@ -247,7 +246,6 @@ async def create_app(test: bool = False) -> web.Application:
         ("/upload", "POST", upload),
         ("/video", "GET", video),
         ("/ws", "GET", sock),
-        ("/test_future", "GET", test_future),
     ]
 
     for url, method, func in endpoints:
