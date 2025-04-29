@@ -145,6 +145,9 @@ class Request:
         )
         # keep track of which hashes were already sent
         self.sent_hashes: dict[str, int] = request.get("sent_hashes", {})
+        self.segment_lines_for_hash: dict[str, dict[int, int]] = request.get(
+            "segment_lines_for_hash", {}
+        )
         if "hash" in request:
             self.hash: str = request["hash"]
 
@@ -284,46 +287,38 @@ class Request:
         and send them to the client
         """
         print(f"[{self.id}] send segments {batch_name}")
-        batch_hash, _ = qi.query_batches[batch_name]
-        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         seg_hashes: list[str] = [x for x in qi.segment_hashes_for_batch[batch_name]]
         if all(x in self.sent_hashes for x in seg_hashes):
             return
-        if lines_this_batch == 0:
-            self.update_dict("sent_hashes", {sh: 0 for sh in seg_hashes})
-            return
-        batch_results: list = qi.get_from_cache(batch_hash)
-        segment_ids: dict[str, int] = segment_ids_in_results(
-            batch_results,
-            qi.kwic_keys,
-            offset_this_batch,
-            offset_this_batch + lines_this_batch,
-        )
-        sent_seg_ids: dict[str, int] = {}
         results: dict[str, Any] = {}
-        sent_hashes = self.sent_hashes
+        sent_hashes = {}
         for seg_hash in seg_hashes:
             if seg_hash in self.sent_hashes:
                 continue
-            print(f"[{self.id}] processing seg_hash", seg_hash)
-            res: list = qi.get_from_cache(seg_hash)
-            seg_ids_to_send: dict[str, int] = {}
-            for rtype, [sid, *rem] in res:
-                if sid not in segment_ids:
-                    continue
-                results[str(rtype)] = results.get(str(rtype), []) + [[sid, *rem]]
-                seg_ids_to_send[sid] = 1
-            sent_hashes.update({seg_hash: len(seg_ids_to_send)})
-            sent_seg_ids.update(seg_ids_to_send)
+            seg_lines: dict[int, int] = self.segment_lines_for_hash[seg_hash]
+            seg_res: list = [
+                line
+                for nline, line in enumerate(qi.get_from_cache(seg_hash))
+                if nline in seg_lines
+            ]
+            _merge_results(
+                results,
+                {
+                    "-1": [line for rtype, *line in seg_res if rtype == "-1"],
+                    "-2": [line for rtype, *line in seg_res if rtype == "-2"],
+                },
+            )
+            sent_hashes[seg_hash] = 1
         self.update_dict("sent_hashes", sent_hashes)
         results["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
+        nsegs = len(results["-1"])
         payload = {
             "action": "segments",
             "job": qi.hash,
             "user": self.user,
             "room": self.room,
             "result": results,
-            "n": len(sent_seg_ids),
+            "n": nsegs,
             "hash": self.hash,
         }
         to_msg = (
@@ -331,8 +326,9 @@ class Request:
             if self.synchronous
             else f"to user '{self.user}' room '{self.room}'"
         )
+        batch_hash, _ = qi.query_batches[batch_name]
         print(
-            f"[{self.id}] Sending {len(sent_seg_ids)} segments for batch {batch_name} (hash {qi.hash}; batch hash {batch_hash}) {to_msg}"
+            f"[{self.id}] Sending {nsegs} segments for batch {batch_name} (hash {qi.hash}; batch hash {batch_hash}) {to_msg}"
         )
         if self.synchronous:
             req_buffer = app["query_buffers"][self.id]
@@ -622,7 +618,7 @@ class QueryInfo:
     @property
     def query_batches(self) -> dict:
         """
-        Map batch names with (query_job_id, n_kwic_lines)
+        Map batch names with (batch_hash, n_kwic_lines)
         """
         query_batches = self.qi.get("query_batches", {})
         return cast(
@@ -983,6 +979,20 @@ async def do_segment_and_meta(
     except:
         print(f"Running new segment query for {batch_name} -- {shash}")
         res = await qi.query(shash, script)
+    # Calculate which lines from res should be sent to each request
+    reqs_offsets = {r.id: r.lines_for_batch(qi, batch_name) for r in qi.requests}
+    reqs_sids: dict[str, dict[str, int]] = {
+        req_id: segment_ids_in_results(batch_results, qi.kwic_keys, o, o + l)
+        for req_id, (o, l) in reqs_offsets.items()
+    }
+    reqs_nlines: dict[str, dict[int, int]] = {req_id: {} for req_id in reqs_sids}
+    for nline, (_, (sid, *_)) in res:
+        for req_id, sids in reqs_sids:
+            if sid not in sids:
+                continue
+            reqs_nlines[req_id][nline] = 1
+    for r in qi.requests:
+        r.segment_lines_for_hash[shash] = reqs_nlines[r.id]
     qi.publish(batch_name, "segments")
 
 
