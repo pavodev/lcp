@@ -55,8 +55,7 @@ def _qi_job_failure(
 ) -> None:
     qi_hash: str = job.meta.get("qi_hash", "")
     qi: QueryInfo = QueryInfo(qi_hash, connection)
-    for r in qi.requests:
-        qi.delete_request(r)
+    qi.publish("failure", "failure")
     return _general_failure(job, connection, typ, value, trace)
 
 
@@ -414,6 +413,26 @@ class Request:
             )
         self.delete_if_done(qi)
 
+    async def error(self, app: web.Application, qi: "QueryInfo"):
+        print(f"[{self.id}] Error while running the query; deleting the request now")
+        if self.synchronous:
+            req_buffer = app["query_buffers"][self.id]
+            req_buffer["error"] = 1
+        else:
+            payload = {
+                "status": "failed",
+                "kind": "error",
+                "value": "Error while running the query",
+            }
+            await push_msg(
+                app["websockets"],
+                self.room,
+                cast(JSONObject, payload),
+                skip=None,
+                just=(self.room, self.user),
+            )
+        qi.delete_request(self)
+
     async def respond(self, app: web.Application, payload: dict):
         """
         This method is called by the main app in sock.py
@@ -422,13 +441,16 @@ class Request:
         typ: str = payload["callback_query"]
         qi: QueryInfo = QueryInfo(payload["hash"], connection=self._connection)
         batch_name: str = payload["batch"]
+        if typ == "failure":
+            await self.error(app, qi)
+            return
         try:
             if typ == "main":
                 await self.send_query(app, qi, batch_name)
             elif typ == "segments":
                 await self.send_segments(app, qi, batch_name)
         except:
-            qi.delete_request(self)
+            qi.publish("failure", "failure")
 
 
 class QueryInfo:
