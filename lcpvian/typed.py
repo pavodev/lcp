@@ -248,11 +248,13 @@ class ObservableDict:
             self._observer("update", self._data)
 
     def setdefault(self, key, value):
+        if key in self._data:
+            return self._data[key]
         value = _make_observable(value, self)
-        ret = self._data.setdefault(key, value)
+        self._data[key] = value
         if self._observer:
             self._observer("setdefault", self._data)
-        return ret
+        return value
 
     def __getitem__(self, key):
         return self._data[key]

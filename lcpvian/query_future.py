@@ -316,7 +316,7 @@ class Request:
             else f"to user '{self.user}' room '{self.room}'"
         )
         print(
-            f"[{self.id}] Sending {len(sent_seg_ids)} segments for batch {batch_name} (hash {qi.hash}; job {batch_hash}) {to_msg}"
+            f"[{self.id}] Sending {len(sent_seg_ids)} segments for batch {batch_name} (hash {qi.hash}; batch hash {batch_hash}) {to_msg}"
         )
         if self.synchronous:
             req_buffer = app["query_buffers"][self.id]
@@ -358,7 +358,7 @@ class Request:
         )
         if lines_this_batch == 0:
             print(
-                f"[{self.id}] No lines required for batch {qi.get_batch_from_hash(batch_hash)} (job {batch_hash}) for this request, skipping"
+                f"[{self.id}] No lines required for batch {qi.get_batch_from_hash(batch_hash)} ({batch_hash}) for this request, skipping"
             )
             return
         _, results = qi.get_stats_results()  # fetch any stats results first
@@ -391,14 +391,13 @@ class Request:
             "result": results,
             "hash": self.hash,
         }
-        qi.update()
         to_msg = (
             "to sync request"
             if self.synchronous
             else f"to user '{self.user}' room '{self.room}'"
         )
         print(
-            f"[{self.id}] Sending {lines_this_batch} results lines for batch {batch_name} (hash {qi.hash}; job {batch_hash}) {to_msg}"
+            f"[{self.id}] Sending {lines_this_batch} results lines for batch {batch_name} ({batch_hash}; QI {qi.hash}) {to_msg}"
         )
         if self.synchronous:
             req_buffer = app["query_buffers"][self.id]
@@ -854,7 +853,6 @@ class QueryInfo:
         self.query_batches[batch_name] = (batch_hash, n_res)
         if batch not in self.done_batches:
             self.done_batches.append(batch)
-        self.update()
         return batch_hash
 
     # called from the worker
@@ -946,6 +944,7 @@ async def do_segment_and_meta(
         sid for sid in all_segment_ids if sid not in existing_seg_ids
     ]
     if not segment_ids:
+        print(f"No new segment query needed for {batch_name}")
         if existing_seg_ids:
             qi.publish(batch_name, "segments")
         return []
@@ -957,12 +956,12 @@ async def do_segment_and_meta(
     shash = hasher(script)
     if shash in seg_hashes:
         return
-    qi.segment_hashes_for_batch[batch_name].append(shash)
+    seg_hashes.append(shash)
     try:
         res = qi.get_from_cache(shash)
         print(f"Retrieved segment query from cache: {batch_name} -- {shash}")
     except:
-        print(f"Running new segment query for {batch_name}")
+        print(f"Running new segment query for {batch_name} -- {shash}")
         res = await qi.query(shash, script)
     qi.publish(batch_name, "segments")
 
@@ -1048,7 +1047,6 @@ def process_query(
     shash = hasher(sql_query)
     qi = QueryInfo(shash, app["redis"], json_query, meta_json, post_processes, config)
     qi.add_request(request)
-    qi.update()
     job: Job | None = schedule_next_batch(shash, connection=app["redis"])
     return (request, qi, job)
 
