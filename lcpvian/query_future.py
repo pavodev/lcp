@@ -1,3 +1,6 @@
+# TODO: calculate offsets+ranges in do_* worker jobs for each request # instead of
+# in the send_* main app callbacks; need to create corresponding attributes in Request
+
 import asyncio
 import json
 import os
@@ -30,6 +33,9 @@ from .utils import (
 )
 
 QUERY_TTL = int(os.getenv("QUERY_TTL", 5000))
+QUERY_TIMEOUT = int(os.getenv("QUERY_TIMEOUT", 1000))
+FULL_QUERY_TIMEOUT = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999999))
 
 SERIALIZABLES = (
     int,
@@ -55,7 +61,7 @@ def _qi_job_failure(
 ) -> None:
     qi_hash: str = job.meta.get("qi_hash", "")
     qi: QueryInfo = QueryInfo(qi_hash, connection)
-    qi.publish("failure", "failure")
+    qi.publish("failure", str(value))
     return _general_failure(job, connection, typ, value, trace)
 
 
@@ -174,10 +180,16 @@ class Request:
     def __getattribute__(self, name: str):
         if name.startswith("_"):
             return super().__getattribute__(name)
+        try:
+            full = super().__getattribute__("full")
+        except:
+            full = False
         # manual re-implementation of @property decorator
         if name == "lines_sent_so_far":
             lines_batch = cast(dict, self.__getattribute__("lines_batch"))
             return sum(up for _, up, _ in lines_batch.values())
+        elif full and name in ("requested", "offset"):
+            return 0 if name == "offset" else MAX_KWIC_LINES
         try:
             # Try to retrieve the value from redis first
             rhash = super().__getattribute__("hash")
@@ -271,6 +283,7 @@ class Request:
         Fetch the segments lines for the batch, filter the ones needed for this request
         and send them to the client
         """
+        print(f"[{self.id}] send segments {batch_name}")
         batch_hash, _ = qi.query_batches[batch_name]
         offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         seg_hashes: list[str] = [x for x in qi.segment_hashes_for_batch[batch_name]]
@@ -288,8 +301,11 @@ class Request:
         )
         sent_seg_ids: dict[str, int] = {}
         results: dict[str, Any] = {}
-        sent_hashes = {}
+        sent_hashes = self.sent_hashes
         for seg_hash in seg_hashes:
+            if seg_hash in self.sent_hashes:
+                continue
+            print(f"[{self.id}] processing seg_hash", seg_hash)
             res: list = qi.get_from_cache(seg_hash)
             seg_ids_to_send: dict[str, int] = {}
             for rtype, [sid, *rem] in res:
@@ -329,6 +345,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
+        print(f"senT segments {batch_name}")
         self.delete_if_done(qi)
 
     async def send_query(self, app: web.Application, qi: "QueryInfo", batch_name: str):
@@ -336,6 +353,7 @@ class Request:
         Fetch the query results for the batch, filter the lines needed for this request
         and send them to the client
         """
+        print(f"[{self.id}] send query {batch_name}")
         batch_hash, _ = qi.query_batches[batch_name]
         if batch_hash in self.sent_hashes:
             # If some lines were already sent for this job
@@ -412,8 +430,10 @@ class Request:
             )
         self.delete_if_done(qi)
 
-    async def error(self, app: web.Application, qi: "QueryInfo"):
-        print(f"[{self.id}] Error while running the query; deleting the request now")
+    async def error(
+        self, app: web.Application, qi: "QueryInfo", error: str = "unknown"
+    ):
+        print(f"[{self.id}] Error while running the query:", error)
         if self.synchronous:
             req_buffer = app["query_buffers"][self.id]
             req_buffer["error"] = 1
@@ -421,7 +441,7 @@ class Request:
             payload = {
                 "status": "failed",
                 "kind": "error",
-                "value": "Error while running the query",
+                "value": f"Error while running the query: {error}",
             }
             await push_msg(
                 app["websockets"],
@@ -441,15 +461,15 @@ class Request:
         qi: QueryInfo = QueryInfo(payload["hash"], connection=self._connection)
         batch_name: str = payload["batch"]
         if typ == "failure":
-            await self.error(app, qi)
+            await self.error(app, qi, payload.get("batch", "unknown"))
             return
         try:
             if typ == "main":
                 await self.send_query(app, qi, batch_name)
             elif typ == "segments":
                 await self.send_segments(app, qi, batch_name)
-        except:
-            qi.publish("failure", "failure")
+        except Exception as e:
+            qi.publish("failure", str(e))
 
 
 class QueryInfo:
@@ -516,14 +536,14 @@ class QueryInfo:
         """
         q = Queue("background", connection=self._connection)
         on_success: Callback | None = (
-            Callback(callback, QUERY_TTL) if callback else None
+            Callback(callback, QUERY_TIMEOUT) if callback else None
         )
         j = q.enqueue(
             method,
             on_success=on_success,
-            on_failure=Callback(_qi_job_failure, QUERY_TTL),
+            on_failure=Callback(_qi_job_failure, QUERY_TIMEOUT),
             result_ttl=QUERY_TTL,
-            job_timeout=QUERY_TTL,
+            job_timeout=FULL_QUERY_TIMEOUT if self.full else QUERY_TIMEOUT,
             args=args,
             job_id=job_id,
         )
