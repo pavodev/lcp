@@ -1450,7 +1450,7 @@ def get_segment_meta_script(
     meta_array = ", ".join(f"meta.{lb}" for lb in meta_select_labels)
     script = f"""WITH preps AS ({seg_script}),
     meta AS ({meta_script})
-SELECT -1::int2 AS rstype, jsonb_build_array(preps.segment_id, preps.id_offset, preps.content{preps_annotations}) FROM preps
+SELECT -1::int2 AS rstype, jsonb_build_array(preps.{seg.lower()}_id, preps.id_offset, preps.content{preps_annotations}) FROM preps
 UNION ALL
 SELECT -2::int2 AS rstype, jsonb_build_array({meta_array}) FROM meta;    
     """
