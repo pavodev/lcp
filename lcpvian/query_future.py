@@ -3,6 +3,7 @@
 
 import asyncio
 import json
+import traceback
 import os
 
 from aiohttp import web
@@ -22,9 +23,11 @@ from .dqd_parser import convert
 from .jobfuncs import _db_query
 from .typed import JSONObject, ObservableDict, ObservableList
 from .utils import (
-    _get_query_info,
     _publish_msg,
+    _get_query_info,
     _update_query_info,
+    _get_request,
+    _update_request,
     get_segment_meta_script,
     hasher,
     push_msg,
@@ -61,7 +64,8 @@ def _qi_job_failure(
 ) -> None:
     qi_hash: str = job.meta.get("qi_hash", "")
     qi: QueryInfo = QueryInfo(qi_hash, connection)
-    qi.publish("failure", str(value))
+    tb = traceback.format_exc()
+    qi.publish("\n".join([str(value), tb]), "failure")
     return _general_failure(job, connection, typ, value, trace)
 
 
@@ -126,30 +130,36 @@ class Request:
     def __init__(self, connection: RedisConnection, request: str | dict = {}):
         self._connection = connection
         request = cast(dict, request)
-        # The attributes below are immutable
-        self.id: str = str(request.get("id", uuid4()))
-        self.synchronous: bool = request.get("synchronous", False)
-        self.futures: list[str] = []
-        self.requested: int = request.get("requested", 0)
-        self.full: bool = request.get("full", False)
-        self.offset: int = request.get("offset", 0)
-        self.corpus: int = request.get("corpus", 1)
-        self.user: str = request.get("user", "")
-        self.room: str = request.get("room", "")
-        self.languages: list[str] = request.get("languages", [])
-        self.query: str = request.get("query", "")
-        # The attributes below are dynamic and need to update redis
-        # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
-        self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
-            "lines_batch", {}
-        )
-        # keep track of which hashes were already sent
-        self.sent_hashes: dict[str, int] = request.get("sent_hashes", {})
-        self.segment_lines_for_hash: dict[str, dict[int, int]] = request.get(
-            "segment_lines_for_hash", {}
-        )
-        if "hash" in request:
-            self.hash: str = request["hash"]
+        try:
+            request = _get_request(connection, request["id"])
+        except:
+            request["id"] = str(request.setdefault("id", uuid4()))
+            # The attributes below are immutable
+            self.id: str = request["id"]
+            self.synchronous: bool = request.get("synchronous", False)
+            self.futures: list[str] = []
+            self.requested: int = request.get("requested", 0)
+            self.full: bool = request.get("full", False)
+            self.offset: int = request.get("offset", 0)
+            self.corpus: int = request.get("corpus", 1)
+            self.user: str = request.get("user", "")
+            self.room: str = request.get("room", "")
+            self.languages: list[str] = request.get("languages", [])
+            self.query: str = request.get("query", "")
+            # The attributes below are dynamic and need to update redis
+            # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
+            self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
+                "lines_batch", {}
+            )
+            # keep track of which hashes were already sent
+            self.sent_hashes: dict[str, int] = request.get("sent_hashes", {})
+            self.segment_lines_for_hash: dict[str, dict[int, int]] = request.get(
+                "segment_lines_for_hash", {}
+            )
+            if "hash" in request:
+                self.hash: str = request["hash"]
+        self._full = request.get("full", False)
+        self._id = request["id"]
 
     def update(self, name: str | None = None, value: Any = None):
         """
@@ -157,19 +167,15 @@ class Request:
         """
         try:
             redis = self._connection
-            rhash = self.hash
             id = self.id
         except:
             return
-        self_serialized = self.serialize()
         if name:
-            self_serialized[name] = value
-        qi = _get_query_info(redis, rhash)
-        if not any(r.get("id") == id for r in qi.get("requests", [])):
-            return
-        all_requests = [r for r in qi.get("requests", []) if r.get("id") != id]
-        all_requests.append(self_serialized)
-        _update_query_info(redis, hash=rhash, info={"requests": all_requests})
+            _update_request(redis, id, info={"id": id, name: value})
+        else:
+            self_serialized = self.serialize()
+            self_serialized["id"] = id
+            _update_request(redis, id, info=self_serialized)
 
     def update_dict(self, attribute_name: str, update_dict: dict):
         """
@@ -184,25 +190,19 @@ class Request:
         if name.startswith("_"):
             return super().__getattribute__(name)
         try:
-            full = super().__getattribute__("full")
+            full = self._full
         except:
             full = False
         # manual re-implementation of @property decorator
         if name == "lines_sent_so_far":
-            lines_batch = cast(dict, self.__getattribute__("lines_batch"))
+            lines_batch = cast(dict, self.lines_batch)
             return sum(up for _, up, _ in lines_batch.values())
         elif full and name in ("requested", "offset"):
             return 0 if name == "offset" else MAX_KWIC_LINES
         try:
             # Try to retrieve the value from redis first
-            rhash = super().__getattribute__("hash")
-            id = super().__getattribute__("id")
             connection = super().__getattribute__("_connection")
-            qi = _get_query_info(connection, rhash)
-            all_requests = qi.get("requests", [])
-            request: dict[str, Any] = next(
-                (r for r in all_requests if r.get("id") == id), {}
-            )
+            request = _get_request(connection, self._id)
             assert name in request, Exception()
             value = request[name]
         except:
@@ -299,17 +299,20 @@ class Request:
             seg_res: list = [
                 line
                 for nline, line in enumerate(qi.get_from_cache(seg_hash))
-                if nline in seg_lines
+                if str(nline) in seg_lines
             ]
+            prep_seg_lines = [line for rtype, *line in seg_res if rtype == -1]
+            meta_lines = [line for rtype, *line in seg_res if rtype == -2]
             _merge_results(
                 results,
                 {
-                    "-1": [line for rtype, *line in seg_res if rtype == "-1"],
-                    "-2": [line for rtype, *line in seg_res if rtype == "-2"],
+                    "-1": prep_seg_lines,
+                    "-2": meta_lines,
                 },
             )
-            sent_hashes[seg_hash] = 1
+            sent_hashes[seg_hash] = len(prep_seg_lines)
         self.update_dict("sent_hashes", sent_hashes)
+        # print("after updaing sent_hashes", self.sent_hashes)
         results["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
         nsegs = len(results["-1"])
         payload = {
@@ -341,7 +344,7 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-        print(f"senT segments {batch_name}")
+        print(f"[{self.id}] sent {nsegs} segments {batch_name}")
         self.delete_if_done(qi)
 
     async def send_query(self, app: web.Application, qi: "QueryInfo", batch_name: str):
@@ -432,7 +435,7 @@ class Request:
         print(f"[{self.id}] Error while running the query:", error)
         if self.synchronous:
             req_buffer = app["query_buffers"][self.id]
-            req_buffer["error"] = 1
+            req_buffer["error"] = error
         else:
             payload = {
                 "status": "failed",
@@ -465,7 +468,8 @@ class Request:
             elif typ == "segments":
                 await self.send_segments(app, qi, batch_name)
         except Exception as e:
-            qi.publish("failure", str(e))
+            tb = traceback.format_exc()
+            qi.publish("\n".join([str(e), tb]), "failure")
 
 
 class QueryInfo:
@@ -655,19 +659,21 @@ class QueryInfo:
 
     def add_request(self, request: Request):
         request.hash = self.hash
-        serialized_requests = [
-            r.serialize() for r in self.requests if r.id != request.id
-        ]
-        serialized_requests.append(request.serialize())
-        _update_query_info(
-            self._connection, self.hash, info={"requests": serialized_requests}
-        )
+        requests = self.requests
+        if request in self.requests:
+            return
+        rids = [r.id for r in requests]
+        rids.append(request.id)
+        _update_query_info(self._connection, self.hash, info={"requests": rids})
 
     def delete_request(self, request: Request):
-        if not self.has_request(request):
-            return
-        requests = [r.serialize() for r in self.requests if r.id != request.id]
-        _update_query_info(self._connection, self.hash, info={"requests": requests})
+        rids = [r.id for r in self.requests if r.id != request.id]
+        _update_query_info(self._connection, self.hash, info={"requests": rids})
+        rkey = f"request::{request.id}"
+        try:
+            self._connection.delete(rkey)
+        except:
+            pass
 
     def get_lines_batch(self, batch_name: str) -> tuple[int, int]:
         """
@@ -757,7 +763,15 @@ class QueryInfo:
         The class Request already implements utmost recency
         """
         qi = _get_query_info(self._connection, self.hash)
-        return [Request(self._connection, qr) for qr in qi.get("requests", [])]
+        reqs = []
+        for rid in qi.get("requests", []):
+            try:
+                _get_request(self._connection, f"request::{rid}")
+                reqs.append(Request(self._connection, {"id": rid}))
+            except:
+                # Do no create a Request object if the ID isn't in redis
+                pass
+        return reqs
 
     @property
     def all_batches(self) -> list[list[str | int]]:
@@ -948,8 +962,9 @@ async def do_segment_and_meta(
     for sgh in seg_hashes:
         try:
             # Retrieve any associated segment job query from cache
-            res = qi.get_from_cache(sgh)
-            existing_seg_ids.update({str(sid): 1 for _, [sid, *_] in res})
+            res_prep = [line for rtype, line in qi.get_from_cache(sgh) if rtype == -1]
+            seg_sids = {str(sid): 1 for sid, *_ in res_prep}
+            existing_seg_ids.update(seg_sids)
         except:
             pass
     if existing_seg_ids:
@@ -961,38 +976,33 @@ async def do_segment_and_meta(
     ]
     if not segment_ids:
         print(f"No new segment query needed for {batch_name}")
-        if existing_seg_ids:
-            qi.publish(batch_name, "segments")
-        return []
-    script, meta_labels = get_segment_meta_script(
-        qi.config, qi.languages, batch_name, segment_ids
-    )
-    qi.meta_labels = meta_labels
-    qi.update({"meta_labels": meta_labels})
-    shash = hasher(script)
-    if shash in seg_hashes:
-        return
-    seg_hashes.append(shash)
-    try:
-        res = qi.get_from_cache(shash)
-        print(f"Retrieved segment query from cache: {batch_name} -- {shash}")
-    except:
+    else:
+        script, meta_labels = get_segment_meta_script(
+            qi.config, qi.languages, batch_name, segment_ids
+        )
+        qi.meta_labels = meta_labels
+        qi.update({"meta_labels": meta_labels})
+        shash = hasher(script)
         print(f"Running new segment query for {batch_name} -- {shash}")
         res = await qi.query(shash, script)
+        seg_hashes.append(shash)
     # Calculate which lines from res should be sent to each request
     reqs_offsets = {r.id: r.lines_for_batch(qi, batch_name) for r in qi.requests}
     reqs_sids: dict[str, dict[str, int]] = {
         req_id: segment_ids_in_results(batch_results, qi.kwic_keys, o, o + l)
         for req_id, (o, l) in reqs_offsets.items()
     }
-    reqs_nlines: dict[str, dict[int, int]] = {req_id: {} for req_id in reqs_sids}
-    for nline, (_, (sid, *_)) in res:
-        for req_id, sids in reqs_sids:
-            if sid not in sids:
+    for sgh in seg_hashes:
+        reqs_nlines: dict[str, dict[int, int]] = {req_id: {} for req_id in reqs_sids}
+        for nline, (_, (sid, *_)) in enumerate(qi.get_from_cache(sgh)):
+            for req_id, sids in reqs_sids.items():
+                if sid not in sids:
+                    continue
+                reqs_nlines[req_id][nline] = 1
+        for r in qi.requests:
+            if sgh in r.segment_lines_for_hash:
                 continue
-            reqs_nlines[req_id][nline] = 1
-    for r in qi.requests:
-        r.segment_lines_for_hash[shash] = reqs_nlines[r.id]
+            r.update_dict("segment_lines_for_hash", {sgh: reqs_nlines[r.id]})
     qi.publish(batch_name, "segments")
 
 

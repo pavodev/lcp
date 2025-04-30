@@ -436,16 +436,29 @@ def _get_status(
     return "partial"
 
 
+def _get_redis_obj(connection: RedisConnection, key: str) -> dict[str, Any]:
+    obj = json.loads(connection.get(key) or "{}")
+    return obj
+
+
+def _update_redis_obj(
+    connection: RedisConnection,
+    key: str,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    obj = json.loads(connection.get(key) or "{}")
+    for k, v in info.items():
+        obj[k] = v
+    connection.set(key, json.dumps(obj, cls=CustomEncoder))
+    connection.expire(key, MESSAGE_TTL)
+    return obj
+
+
 def _get_query_info(
     connection: RedisConnection, hash: str = "", job: Job | None = None
 ) -> dict[str, Any]:
-    if job:
-        job = _get_first_job(job, connection)
-    if not hash and job:
-        hash = job.id
-    qi_key = f"query_info_{hash}"
-    query_info = json.loads(connection.get(qi_key) or "{}")
-    return query_info
+    qi_key = f"query_info::{hash}"
+    return _get_redis_obj(connection, qi_key)
 
 
 def _update_query_info(
@@ -454,18 +467,25 @@ def _update_query_info(
     job: Job | None = None,
     info: dict[str, Any] = {},
 ) -> dict[str, Any]:
-    if job:
-        job = _get_first_job(job, connection)
-    if not hash and job:
-        hash = job.id
-    qi_key = f"query_info_{hash}"
-    query_info = json.loads(connection.get(qi_key) or "{}")
-    for k, v in info.items():
-        query_info[k] = v
-    query_info["hash"] = hash
-    connection.set(qi_key, json.dumps(query_info, cls=CustomEncoder))
-    connection.expire(qi_key, MESSAGE_TTL)
-    return query_info
+    qi_key = f"query_info::{hash}"
+    return _update_redis_obj(connection, qi_key, info)
+
+
+def _get_request(
+    connection: RedisConnection, hash: str = "", job: Job | None = None
+) -> dict[str, Any]:
+    qi_key = f"request::{hash}"
+    return _get_redis_obj(connection, qi_key)
+
+
+def _update_request(
+    connection: RedisConnection,
+    hash: str = "",
+    job: Job | None = None,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    qi_key = f"request::{hash}"
+    return _update_redis_obj(connection, qi_key, info)
 
 
 async def sem_coro(
