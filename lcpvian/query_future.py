@@ -301,8 +301,11 @@ class Request:
                 for nline, line in enumerate(qi.get_from_cache(seg_hash))
                 if str(nline) in seg_lines
             ]
-            prep_seg_lines = [line for rtype, *line in seg_res if rtype == -1]
-            meta_lines = [line for rtype, *line in seg_res if rtype == -2]
+            # prep_seg_lines = [line for rtype, *line in seg_res if rtype == -1]
+            prep_seg_lines = {
+                sid: line for rtype, (sid, *line) in seg_res if rtype == -1
+            }
+            meta_lines = [line for rtype, line in seg_res if rtype == -2]
             _merge_results(
                 results,
                 {

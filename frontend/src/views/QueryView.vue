@@ -969,7 +969,7 @@ export default {
       isQueryValidData: null,
       WSDataResults: "",
       WSDataMeta: {},
-      WSDataSentences: "",
+      WSDataSentences: {},
       nResults: 200,
       currentResults: 0,
       selectedLanguages: ["en"],
@@ -1414,11 +1414,15 @@ export default {
           }
           this.failedStatus = false;
           data["n_results"] = data["result"].length;
-          this.WSDataResults.result = this.WSDataResults.result || data.result;
+          if (!this.WSDataResults.result)
+            return this.WSDataResults.result = data.result;
           const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
           console.log("kwic_keys", kwic_keys);
           for (let rkey in data.result) {
-            if (!kwic_keys.includes(parseInt(rkey))) continue;
+            if (!kwic_keys.includes(parseInt(rkey))) {
+              this.WSDataResults.result[rkey] = data.result[rkey];
+              continue;
+            }
             console.log("adding", rkey, "to", this.WSDataResults.result);
             this.WSDataResults.result[rkey] = [
               ...(this.WSDataResults.result[rkey]||[]),
@@ -1428,7 +1432,6 @@ export default {
           return;
         } else if (data["action"] === "segments") {
           useWsStore().addMessageForPlayer(data);
-          console.log("sentences", data);
           this.updateLoading(data.status);
           const segment = this.selectedCorpora.corpus.firstClass.segment;
           const meta = data.result["-2"] || []; // change this?
@@ -1440,10 +1443,8 @@ export default {
             for (let n in hit_meta) {
               const value = hit_meta[n];
               const [layer, attr] = meta_labels[n];
-              if (layer == segment && attr == "id") {
+              if (layer == segment && attr == "id")
                 segment_id = value;
-                continue;
-              }
               meta_object[layer] = meta_object[layer] || {};
               meta_object[layer][attr] = value;
             }
@@ -1452,7 +1453,7 @@ export default {
           if (
             this.WSDataSentences &&
             this.WSDataSentences.hash == data.hash &&
-            data.full == false
+            !data.full
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0 && key in data.result) {
