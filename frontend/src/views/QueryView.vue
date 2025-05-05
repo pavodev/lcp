@@ -523,6 +523,7 @@
                               :id="`nav-results-tabs-${index}`"
                               data-bs-toggle="tab"
                               :data-bs-target="`#nav-results-${index}`"
+                              @click.stop.prevent="activeResultIndex = (index+1)"
                               type="button"
                               role="tab"
                               :aria-controls="`nav-results-${index}`"
@@ -971,7 +972,7 @@ export default {
       WSDataMeta: {},
       WSDataSentences: {},
       nResults: 200,
-      currentResults: 0,
+      activeResultIndex: 1,
       selectedLanguages: ["en"],
       queryName: "",
       nExport: 200,
@@ -1228,17 +1229,22 @@ export default {
       }
     },
     updatePage(currentPage) {
-      let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      // console.log(
-      //   "PageUpdate",
-      //   newNResults,
-      //   this.nResults,
-      //   this.WSDataSentences
-      // );
+      const allNonActiveResults = Object.entries(this.nKwics)
+        .filter(r=>String(r[0])!=String(this.activeResultIndex))
+        .reduce((v,s)=>s+(v[1]||[]).length,0);
+      const newNResults = allNonActiveResults + this.resultsPerPage * Math.max(currentPage + 1, 3);
+      const allActiveResults = Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0);
+      console.log(
+        "PageUpdate",
+        this.nKwics,
+        this.activeResultIndex,
+        allNonActiveResults,
+        newNResults,
+        allActiveResults,
+        this.WSDataResults.more_data_available
+      );
       if (
-        newNResults > this.nResults &&
-        (!this.WSDataSentences ||
-          (this.WSDataSentences && this.WSDataSentences.more_data_available))
+        newNResults > allActiveResults && this.WSDataSentences && this.WSDataResults.more_data_available
       ) {
         // console.log("Submit");
         this.nResults = newNResults;
@@ -1413,7 +1419,8 @@ export default {
             console.log("SQL", data.consoleSQL);
           }
           this.failedStatus = false;
-          data["n_results"] = data["result"].length;
+          for (let p of ["batches_done", "total_results_so_far", "projected_results", "more_data_available"])
+            this.WSDataResults[p] = data[p];
           if (!this.WSDataResults.result)
             return this.WSDataResults.result = data.result;
           const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
@@ -1423,7 +1430,6 @@ export default {
               this.WSDataResults.result[rkey] = data.result[rkey];
               continue;
             }
-            console.log("adding", rkey, "to", this.WSDataResults.result);
             this.WSDataResults.result[rkey] = [
               ...(this.WSDataResults.result[rkey]||[]),
               ...data.result[rkey]
@@ -1460,8 +1466,6 @@ export default {
                 this.WSDataSentences.result[key] = this.WSDataSentences.result[
                   key
                 ].concat(data.result[key]);
-                this.nResults = this.WSDataSentences.result[key].length;
-                this.currentResults = this.WSDataSentences.result[key].length;
               }
             });
             if (-1 in data.result) {
@@ -1481,13 +1485,8 @@ export default {
                 (_resultSet, index) => {
                   if (_resultSet.type == "plain") {
                     let resultIndex = index + 1;
-                    if (!(resultIndex in this.WSDataSentences.result)) {
+                    if (!(resultIndex in this.WSDataSentences.result))
                       this.WSDataSentences.result[resultIndex] = [];
-                    }
-                    this.nResults =
-                      this.WSDataSentences.result[resultIndex].length;
-                    this.currentResults =
-                      this.WSDataSentences.result[resultIndex].length;
                   }
                 }
               );
@@ -1619,8 +1618,8 @@ export default {
         user: this.userData.user.id,
         room: this.roomId,
         languages: this.selectedLanguages,
-        requested: this.resultsPerPage * 3,
-        offset: resumeQuery ? this.WSDataResults.n_results : 0
+        requested: this.resultsPerPage * (resumeQuery ? 1 : 3),
+        offset: resumeQuery ? Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0) : 0
       };
       if (fullSearch) {
         data["full"] = true;
@@ -1757,6 +1756,16 @@ export default {
         return Math.max(this.percentageDone, this.percentageWordsDone);
       else return this.percentageDone;
     },
+    nKwics() {
+      const kwic_keys = ((this.WSDataResults.result[0]||{}).result_sets||[])
+        .map((rs,n)=>rs.type=="plain"?n+1:-1)
+        .filter(n=>n>0);
+      return Object.fromEntries(
+        Object.entries(this.WSDataResults.result)
+          .filter(r=>kwic_keys.includes(parseInt(r[0])))
+          .map(([rkey,results])=>[rkey,results.length])
+      );
+    }
   },
   mounted() {
     // this.userId = this.userData.user.id;

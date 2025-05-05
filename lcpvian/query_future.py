@@ -279,6 +279,41 @@ class Request:
         offset_and_lines_for_req = (offset_for_req, lines_for_req)
         return offset_and_lines_for_req
 
+    def get_payload(self, qi: "QueryInfo", batch_name: str = "") -> dict:
+        ret: dict = {
+            "job": qi.hash,
+            "user": self.user,
+            "room": self.room,
+            "hash": self.hash,
+            "status": "satisfied" if self.is_done(qi) else "started",
+        }
+        if (
+            ret["status"] == "satisfied"
+            and qi.status == "complete"
+            and batch_name == qi.done_batches[-1][0]
+        ):
+            ret["status"] = "finished"
+        if not batch_name:
+            batch_name = qi.done_batches[-1][0]
+        lines_before_batch, lines_this_batch = qi.get_lines_batch(batch_name)
+        ret["total_results_so_far"] = lines_before_batch + lines_this_batch
+        done_batches = []
+        for name, n in qi.done_batches:
+            done_batches.append([name, n])
+            if name == batch_name:
+                break
+        done_words = sum(int(n) for (_, n) in done_batches)
+        total_words = sum(int(n) for (_, n) in qi.all_batches)
+        ret["percentage_words_done"] = 100.0 * done_words / total_words
+        len_done_batches = len(done_batches)
+        len_all_batches = len(qi.all_batches)
+        ret["batches_done"] = f"{len_done_batches}/{len_all_batches}"
+        ret["percentage_done"] = 100.0 * len_done_batches / len_all_batches
+        ret["projected_results"] = int(
+            100 * (ret["total_results_so_far"] / ret["percentage_words_done"])
+        )
+        return ret
+
     async def send_segments(
         self, app: web.Application, qi: "QueryInfo", batch_name: str
     ):
@@ -318,15 +353,10 @@ class Request:
         # print("after updaing sent_hashes", self.sent_hashes)
         results["0"] = {"result_sets": qi.result_sets, "meta_labels": qi.meta_labels}
         nsegs = len(results["-1"])
-        payload = {
-            "action": "segments",
-            "job": qi.hash,
-            "user": self.user,
-            "room": self.room,
-            "result": results,
-            "n": nsegs,
-            "hash": self.hash,
-        }
+        payload = self.get_payload(qi, batch_name)
+        payload.update({"action": "segments", "result": results, "n_results": nsegs})
+        if not self.is_done(qi):
+            payload["more_data_available"] = True
         to_msg = (
             "to sync request"
             if self.synchronous
@@ -403,14 +433,12 @@ class Request:
             results.update(stats_res)
         except:
             pass
-        payload = {
-            "action": "query_result",
-            "job": qi.hash,
-            "user": self.user,
-            "room": self.room,
-            "result": results,
-            "hash": self.hash,
-        }
+        payload = self.get_payload(qi, batch_name)
+        payload.update({"action": "query_result", "result": results})
+        more_in_batch = (
+            offset_this_batch + lines_this_batch < qi.get_lines_batch(batch_name)[1]
+        )
+        payload["more_data_available"] = more_in_batch
         to_msg = (
             "to sync request"
             if self.synchronous
@@ -575,6 +603,8 @@ class QueryInfo:
         """
         Notify the app that results are available
         """
+        if typ == "failure":
+            self.running_batch = ""
         msg_id: str = str(uuid4())
         _publish_msg(
             self._connection,
@@ -1015,7 +1045,7 @@ async def do_batch(qhash: str, batch: list):
     and aggregate the results for stats if needed
     """
     current_job: Job | None = get_current_job()
-    assert current_job, RuntimeError(f"No current jbo found for do_batch {batch}")
+    assert current_job, RuntimeError(f"No current job found for do_batch {batch}")
     connection = current_job.connection
     qi = QueryInfo(qhash, connection=connection)
     batch_name = cast(str, batch[0])
@@ -1057,6 +1087,12 @@ def schedule_next_batch(
     if not next_batch:
         qi.running_batch = ""
         return None
+    min_offset = min(r.offset for r in qi.requests)
+    while min_offset > 0 and list(next_batch) in qi.done_batches:
+        lines_before_batch, lines_next_batch = qi.get_lines_batch(next_batch[0])
+        if min_offset <= lines_before_batch + lines_next_batch:
+            break
+        next_batch = qi.decide_next_batch(next_batch[0])
     return qi.enqueue(
         do_batch, qhash, list(next_batch), callback=QueryInfo.batch_callback
     )
