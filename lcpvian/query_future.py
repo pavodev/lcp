@@ -147,6 +147,7 @@ class Request:
             self.languages: list[str] = request.get("languages", [])
             self.query: str = request.get("query", "")
             # The attributes below are dynamic and need to update redis
+            self.all_queries_done: bool = request.get("all_queries_done", False)
             # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
             self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
                 "lines_batch", {}
@@ -229,15 +230,12 @@ class Request:
             obj[k] = attr
         return obj
 
-    def is_done(self, qi: "QueryInfo") -> bool:
+    def is_done(self, qi: "QueryInfo", batch_name: str = "") -> bool:
         """
         A request is done if the qi is complete (exhausted all batches)
         or if the number of lines sent reaches the requested amount
         """
-        queries_done: bool = qi.status == "complete" or (
-            self.lines_sent_so_far >= self.requested
-        )
-        if not queries_done:
+        if not self.all_queries_done:
             return False
         if not qi.kwic_keys:
             return True
@@ -252,8 +250,8 @@ class Request:
             all_segs_sent = all_segs_sent and batch_segs_sent
         return all_segs_sent
 
-    def delete_if_done(self, qi: "QueryInfo"):
-        if not self.is_done(qi):
+    def delete_if_done(self, qi: "QueryInfo", batch_name: str = ""):
+        if not self.is_done(qi, batch_name):
             return
         print(f"[{self.id}] DELETE REQUEST NOW")
         qi.delete_request(self)
@@ -285,12 +283,12 @@ class Request:
             "user": self.user,
             "room": self.room,
             "hash": self.hash,
-            "status": "satisfied" if self.is_done(qi) else "started",
+            "status": "satisfied" if self.is_done(qi, batch_name) else "started",
         }
         if (
             ret["status"] == "satisfied"
             and qi.status == "complete"
-            and batch_name == qi.done_batches[-1][0]
+            and self.all_queries_done
         ):
             ret["status"] = "finished"
         if not batch_name:
@@ -355,7 +353,7 @@ class Request:
         nsegs = len(results["-1"])
         payload = self.get_payload(qi, batch_name)
         payload.update({"action": "segments", "result": results, "n_results": nsegs})
-        if not self.is_done(qi):
+        if not self.is_done(qi, batch_name):
             payload["more_data_available"] = True
         to_msg = (
             "to sync request"
@@ -378,7 +376,6 @@ class Request:
                 just=(self.room, self.user),
             )
         print(f"[{self.id}] sent {nsegs} segments {batch_name}")
-        self.delete_if_done(qi)
 
     async def send_query(self, app: web.Application, qi: "QueryInfo", batch_name: str):
         """
@@ -386,12 +383,16 @@ class Request:
         and send them to the client
         """
         print(f"[{self.id}] send query {batch_name}")
+        if qi.status == "complete" and batch_name == qi.done_batches[-1][0]:
+            self.all_queries_done = True
         batch_hash, _ = qi.query_batches[batch_name]
-        if batch_hash in self.sent_hashes:
-            # If some lines were already sent for this job
-            return
         batch_res: list = qi.get_from_cache(batch_hash)
         offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
+        if batch_hash in self.sent_hashes:
+            # If some lines were already sent for this job
+            if self.lines_sent_so_far >= self.requested:
+                self.all_queries_done = True
+            return
         n_seg_ids: int = 0
         if lines_this_batch > 0 and qi.kwic_keys:
             n_seg_ids = len(
@@ -406,11 +407,13 @@ class Request:
             "lines_batch",
             {batch_hash: (offset_this_batch, lines_this_batch, n_seg_ids)},
         )
-        if lines_this_batch == 0:
-            print(
-                f"[{self.id}] No lines required for batch {qi.get_batch_from_hash(batch_hash)} ({batch_hash}) for this request, skipping"
-            )
-            return
+        if self.lines_sent_so_far >= self.requested:
+            self.all_queries_done = True
+        # if lines_this_batch == 0:
+        #     print(
+        #         f"[{self.id}] No lines required for batch {qi.get_batch_from_hash(batch_hash)} ({batch_hash}) for this request, skipping"
+        #     )
+        #     return
         _, results = qi.get_stats_results()  # fetch any stats results first
         lines_so_far = -1
         for k, v in batch_res:
@@ -458,7 +461,6 @@ class Request:
                 skip=None,
                 just=(self.room, self.user),
             )
-        self.delete_if_done(qi)
 
     async def error(
         self, app: web.Application, qi: "QueryInfo", error: str = "unknown"
@@ -498,6 +500,7 @@ class Request:
                 await self.send_query(app, qi, batch_name)
             elif typ == "segments":
                 await self.send_segments(app, qi, batch_name)
+            self.delete_if_done(qi, batch_name)
         except Exception as e:
             tb = traceback.format_exc()
             qi.publish("\n".join([str(e), tb]), "failure")
@@ -521,6 +524,7 @@ class QueryInfo:
         json_query: dict | None = None,
         meta_json: dict | None = None,
         post_processes: dict | None = None,
+        languages: list[str] | None = None,
         config: dict | None = None,
     ):
         self._connection = connection
@@ -532,7 +536,7 @@ class QueryInfo:
         self.post_processes: dict = post_processes or qi.get("post_processes", {})
         self.result_sets: list = self.meta_json.get("result_sets", [])
         self.meta_labels: list[str] = qi.get("meta_labels", [])
-        self.languages: list[str] = qi.get("languages", [])
+        self.languages: list[str] = languages or qi.get("languages", [])
         if not qi:
             self.update()
 
@@ -942,7 +946,9 @@ class QueryInfo:
         min_offset = min(r.offset for r in self.requests)
         # Send only if this batch exceeds the offset and this batch starts before what's required
         need_segments_this_batch = (
-            lines_so_far > min_offset and self.required > lines_before
+            lines_now > 0
+            and lines_so_far >= min_offset
+            and self.required > lines_before
         )
         print(
             f"need segments for {batch_name}?",
@@ -1124,7 +1130,15 @@ def process_query(
         lang=request.languages[0] if request.languages else None,
     )
     shash = hasher(sql_query)
-    qi = QueryInfo(shash, app["redis"], json_query, meta_json, post_processes, config)
+    qi = QueryInfo(
+        shash,
+        app["redis"],
+        json_query,
+        meta_json,
+        post_processes,
+        request.languages,
+        config,
+    )
     qi.add_request(request)
     job: Job | None = schedule_next_batch(shash, connection=app["redis"])
     return (request, qi, job)

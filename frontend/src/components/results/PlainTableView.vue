@@ -559,7 +559,16 @@ export default {
       this.closePopover();
       resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
       const sentenceId = this.data[resultIndex][0];
-      this.currentMeta = this.meta[sentenceId];
+      this.currentMeta = {...this.meta[sentenceId]};
+      for (let layer in this.currentMeta) {
+        const submeta = this.currentMeta[layer].meta;
+        if (!submeta || (this.corpora.corpus.mapping[layer]||{}).hasMeta === false) continue
+        delete this.currentMeta[layer].meta;
+        for (let k in submeta) {
+          if (k in this.currentMeta[layer]) continue;
+          this.currentMeta[layer][k] = submeta[k];
+        }
+      }
       this.popoverY = event.clientY + 10;
       this.popoverX = event.clientX + 10;
     },
@@ -800,18 +809,19 @@ export default {
     },
     meta_render(meta_value) {
       let ret = "";
+      let meta_obj = null;
       try {
-        let metaJSON = JSON.parse(meta_value.replace(/'/gi, '"'))
-        if (Array.isArray(metaJSON)) {
-          ret = metaJSON.join(", ")
-        }
-        else {
-          ret = Utils.dictToStr(metaJSON, {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
-        }
+        meta_obj = JSON.parse(meta_value.replace(/'/gi, '"'))
       }
       catch {
-        ret = meta_value;
+        meta_obj = meta_value;
       }
+      if (Array.isArray(meta_obj))
+        ret = meta_obj.join(", ")
+      else if (typeof(meta_obj) == "string")
+        ret = meta_obj
+      else
+        ret = Utils.dictToStr(meta_obj, {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
       return ret;
     }
   },

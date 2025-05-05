@@ -1307,10 +1307,9 @@ def get_segment_meta_script(
         else ""
     )
     sids = ", ".join([f"'{sid}'" for sid in segment_ids])
-    prep_table: str = (
-        config["mapping"]["layer"][seg]
-        .get("prepared", {})
-        .get("relation", f"prepared_{seg_table}")
+    seg_mapping = _get_mapping(seg, config, batch_name, lang)
+    prep_table: str = seg_mapping.get("prepared", {}).get(
+        "relation", f"prepared_{seg_table}"
     )
     # seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
     seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"

@@ -1419,8 +1419,20 @@ export default {
             console.log("SQL", data.consoleSQL);
           }
           this.failedStatus = false;
-          for (let p of ["batches_done", "total_results_so_far", "projected_results", "more_data_available"])
+          for (let p of [
+            "batches_done",
+            "total_results_so_far",
+            "projected_results",
+            "more_data_available",
+            "percentage_done",
+            "percentage_words_done"
+          ]) {
+            if (parseInt(data.batches_done||0) < parseInt(this.WSDataResults.batches_done||0))
+              break;
             this.WSDataResults[p] = data[p];
+          }
+          this.percentageDone = this.WSDataResults.percentage_done || 0;
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done || 0;
           if (!this.WSDataResults.result)
             return this.WSDataResults.result = data.result;
           const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
@@ -1492,8 +1504,6 @@ export default {
               );
             }
           }
-          this.percentageDone = data.percentage_done;
-          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
