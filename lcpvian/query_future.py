@@ -147,7 +147,6 @@ class Request:
             self.languages: list[str] = request.get("languages", [])
             self.query: str = request.get("query", "")
             # The attributes below are dynamic and need to update redis
-            self.all_queries_done: bool = request.get("all_queries_done", False)
             # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
             self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
                 "lines_batch", {}
@@ -230,12 +229,25 @@ class Request:
             obj[k] = attr
         return obj
 
+    def all_queries_done(self, qi: "QueryInfo") -> bool:
+        if self.lines_sent_so_far >= self.requested:
+            return True
+        if qi.status != "complete":
+            return False
+        relevant_batches: list[str] = []
+        nlines = 0
+        for batch_hash, n in qi.query_batches.values():
+            if nlines >= self.offset:
+                relevant_batches.append(batch_hash)
+            nlines += n
+        return all(bh in self.sent_hashes for bh in relevant_batches)
+
     def is_done(self, qi: "QueryInfo", batch_name: str = "") -> bool:
         """
         A request is done if the qi is complete (exhausted all batches)
         or if the number of lines sent reaches the requested amount
         """
-        if not self.all_queries_done:
+        if not self.all_queries_done(qi):
             return False
         if not qi.kwic_keys:
             return True
@@ -288,7 +300,7 @@ class Request:
         if (
             ret["status"] == "satisfied"
             and qi.status == "complete"
-            and self.all_queries_done
+            and self.all_queries_done(qi)
         ):
             ret["status"] = "finished"
         if not batch_name:
@@ -383,16 +395,12 @@ class Request:
         and send them to the client
         """
         print(f"[{self.id}] send query {batch_name}")
-        if qi.status == "complete" and batch_name == qi.done_batches[-1][0]:
-            self.all_queries_done = True
         batch_hash, _ = qi.query_batches[batch_name]
-        batch_res: list = qi.get_from_cache(batch_hash)
-        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         if batch_hash in self.sent_hashes:
             # If some lines were already sent for this job
-            if self.lines_sent_so_far >= self.requested:
-                self.all_queries_done = True
             return
+        batch_res: list = qi.get_from_cache(batch_hash)
+        offset_this_batch, lines_this_batch = self.lines_for_batch(qi, batch_name)
         n_seg_ids: int = 0
         if lines_this_batch > 0 and qi.kwic_keys:
             n_seg_ids = len(
@@ -407,8 +415,6 @@ class Request:
             "lines_batch",
             {batch_hash: (offset_this_batch, lines_this_batch, n_seg_ids)},
         )
-        if self.lines_sent_so_far >= self.requested:
-            self.all_queries_done = True
         # if lines_this_batch == 0:
         #     print(
         #         f"[{self.id}] No lines required for batch {qi.get_batch_from_hash(batch_hash)} ({batch_hash}) for this request, skipping"
