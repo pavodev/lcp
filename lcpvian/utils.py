@@ -171,11 +171,9 @@ class CustomFuture(asyncio.Future):
 
 class LCPApplication(web.Application):
 
-    def __init__(self, failure_cb: Callable, *args, **kwargs) -> None:
+    def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self._keys: dict[str, web.AppKey] = {}
-        # Needed in to_worker, pass as an argument to avoid import dependency issues
-        self._general_failure = failure_cb
         return None
 
     def addkey(self, name: str, kind: Any, value: Any) -> None:
@@ -189,31 +187,6 @@ class LCPApplication(web.Application):
             assert isinstance(a, str)
             return self[self._keys[a]]
         return super().__getitem__(a)
-
-    def to_worker(self, fn: Callable, *args, **kwargs) -> CustomFuture:
-        """
-        Send a method to be exected by the worker in the background
-        Return a future that resolves to the return value of the method
-        """
-        fut: CustomFuture = CustomFuture()
-        msg_id = str(uuid4())
-        self["futures"][msg_id] = fut
-        job_id: str | None = kwargs.pop("job_id", None)
-        serializer = CustomEncoder()
-        new_args = [serializer.default(a) for a in args]
-        new_kwargs = {k: serializer.default(v) for k, v in kwargs.items()}
-        job = self["background"].enqueue(
-            fn,
-            on_success=Callback(_futurecb, 5000),
-            on_failure=Callback(self._general_failure, 5000),
-            job_id=job_id,
-            args=new_args,
-            kwargs=new_kwargs,
-        )
-        job.meta["msg_id"] = msg_id
-        job.save_meta()
-        fut.job = job
-        return fut
 
 
 class Interrupted(Exception):
@@ -1284,6 +1257,28 @@ def _default_tracks(config: CorpusConfig) -> dict:
     segment: str = config["firstClass"]["segment"]
     ret["layers"] = {segment: {}}
     return ret
+
+
+def _get_query_batches(
+    config: dict,
+    languages: list[str],
+) -> list[list[str | int]]:
+    """
+    Get a list of tuples in the format of (batch_suffix, size) to be queried
+    """
+    out: list[list[str | int]] = []
+    all_languages = ["en", "de", "fr", "ca", "it", "rm"]
+    all_langs = tuple([f"_{la}" for la in all_languages])
+    langs = tuple([f"_{la}" for la in languages])
+    batches = config["_batches"]
+    for name, size in batches.items():
+        stripped = name.rstrip("0123456789")
+        if stripped.endswith("rest"):
+            stripped = stripped[:-4]
+        if not stripped.endswith(langs) and stripped.endswith(all_langs):
+            continue
+        out.append([name, size])
+    return sorted(out, key=lambda x: x[-1])
 
 
 def get_segment_meta_script(

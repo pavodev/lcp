@@ -43,7 +43,7 @@ from .configure import _get_batches, CorpusConfig
 from .export import export
 from .query import query
 from .query_service import QueryService
-from .query_future import QueryInfo, Request
+from .query_classes import QueryInfo
 from .utils import push_msg
 from .validate import validate
 
@@ -94,11 +94,6 @@ async def _process_message(
             async with asyncio.TaskGroup() as group:
                 for req in qi.requests:
                     group.create_task(req.respond(app, payload))
-        if data["msg_id"] in app["futures"]:
-            # This will be read as the result of an await instruction
-            fut = app["futures"].pop(data["msg_id"])
-            fut.set_result(payload)
-            return
         if "user" in data or "room" in data:
             # If the incoming data contains fresher information than from redis memory,
             # (as determined by the presence of a user/room in data)
