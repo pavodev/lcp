@@ -38,14 +38,16 @@ def _next_line(inp: dict[str, TextIOWrapper | str | int], indented_layers: list[
     """
     Move the input to the next line and fills the details
     """
-    inp["line"] = cast(TextIOWrapper, inp["io"]).readline()
-    if not inp["line"]:
+    line: str = cast(str, cast(TextIOWrapper, inp["io"]).readline())
+    inp["line"] = line
+    if not line:
         return
     inp["char_range"] = int(
-        (re.search(r"char_range=\"\[(\d+),(\d+)\)\"", inp["line"]) or [0, 0])[1]
+        (re.search(r"char_range=\"\[(\d+),(\d+)\)\"", line) or [0, 0])[1]
     )
-    inp["layer"] = cast(str, (re.match(r"<([^>\s]+)", inp["line"]) or ["", ""])[1])
-    inp["embedding"] = indented_layers.index(inp["layer"])
+    layer: str = cast(str, (re.match(r"<([^>\s]+)", line) or ["", ""])[1])
+    inp["layer"] = layer
+    inp["embedding"] = indented_layers.index(layer)
 
 
 def _sorter(
@@ -83,7 +85,6 @@ def _paste_file(
 
 
 class Exporter:
-    format = "plain"
 
     def __init__(self, request: Request, qi: QueryInfo) -> None:
         self._request: Request = request
@@ -132,18 +133,18 @@ class Exporter:
         offset = request.offset
         requested = request.requested
         full = request.full
-        epath = cls.get_dl_path_from_hash(request.hash, offset, requested, full)
         try:
             exporter = cls(request, qi)
-            await exporter.process_lines(payload, epath)
+            wpath = exporter.get_working_path()
+            await exporter.process_lines(payload)
             if not request.is_done(qi):
                 return
             # each payload needs corresponding *_query/*_segments subfolders
             qb_hashes = [bh for bh, _ in qi.query_batches.values()]
-            for h in request.sent_hashes:
-                if h not in qb_hashes:
+            for h, nlines in request.sent_hashes.items():
+                if h not in qb_hashes or nlines <= 0:
                     continue
-                hpath = os.path.join(epath, h)
+                hpath = os.path.join(wpath, h)
                 if not os.path.exists(f"{hpath}_query"):
                     return
                 seg_exists = os.path.exists(f"{hpath}_segments")
@@ -153,7 +154,7 @@ class Exporter:
             await exporter.finalize()
             shutil.rmtree(exporter.get_working_path())
             for h in request.sent_hashes:
-                hpath = os.path.join(epath, h)
+                hpath = os.path.join(wpath, h)
                 if os.path.exists(f"{hpath}_query"):
                     os.rmdir(f"{hpath}_query")
                 if os.path.exists(f"{hpath}_segments"):
@@ -169,7 +170,9 @@ class Exporter:
                 offset=offset,
                 requested=requested,
                 delivered=delivered,
-                path=os.path.join(epath, "results.xml"),
+                path=cls.get_dl_path_from_hash(
+                    qhash, offset, requested, full, filename=True
+                ),
             )
             qi.publish(
                 "placeholder",
@@ -177,7 +180,7 @@ class Exporter:
                 {"action": "export_complete", "callback_query": None},
             )
         except Exception as e:
-            shutil.rmtree(epath)
+            shutil.rmtree(cls.get_dl_path_from_hash(qhash, offset, requested, full))
             raise e
 
     def get_working_path(self, subdir: str = "") -> str:
@@ -542,7 +545,7 @@ class Exporter:
             output.write("</results>")
         print(f"[Export {self._request.id}] Complete (QI {self._request.hash})")
 
-    async def process_lines(self, payload: dict, epath: str) -> None:
+    async def process_lines(self, payload: dict) -> None:
         """
         Take a payload and call process_query or process_segments
         """
@@ -551,11 +554,7 @@ class Exporter:
         batch_hash = self._qi.query_batches[batch_name][0]
         if action == "query_result":
             await self.process_query(payload, batch_hash)
-            query_path = os.path.join(epath, f"{batch_hash}_query")
-            if not os.path.exists(query_path):
-                os.mkdir(query_path)  # signal the payload was processed
+            self.get_working_path(f"{batch_hash}_query")  # creates dir
         elif action == "segments":
             await self.process_segments(payload, batch_hash)
-            segments_path = os.path.join(epath, f"{batch_hash}_segments")
-            if not os.path.exists(segments_path):
-                os.mkdir(segments_path)  # signal the payload was processed
+            self.get_working_path(f"{batch_hash}_segments")  # creates dir

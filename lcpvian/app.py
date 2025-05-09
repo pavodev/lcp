@@ -49,7 +49,8 @@ from .export import download_export
 
 from .api import api_query
 from .callbacks import _general_failure
-from .exporter_future import Exporter
+from .exporter_future import Exporter as ExporterXML
+from .exporter_future_swissdox import Exporter as ExporterSwissdox
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -285,7 +286,7 @@ async def create_app(test: bool = False) -> web.Application:
             retry=retry_policy,
         ),
     )
-    app.addkey("exporters", dict, {"xml": Exporter})
+    app.addkey("exporters", dict, {"xml": ExporterXML, "swissdox": ExporterSwissdox})
 
     if REDIS_SHARED_DB_INDEX > -1:
         shared_redis_url: str = f"{REDIS_SHARED_URL}/{REDIS_SHARED_DB_INDEX}"

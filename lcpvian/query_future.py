@@ -256,10 +256,14 @@ def process_query(
         )
         if os.path.exists(epath):
             shutil.rmtree(epath)
+        xp_format: str = request.to_export.get("format", "xml") or "xml"
+        ext: str = ".db" if xp_format == "swissdox" else ".xml"
         filename: str = cast(str, request.to_export.get("filename", ""))
         cshortname = config.get("shortname")
         if not filename:
-            filename = f"{cshortname} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}.xml"
+            filename = (
+                f"{cshortname} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}{ext}"
+            )
         filename = sanitize_filename(filename)
         corpus_folder = sanitize_filename(cshortname or config.get("project_id", ""))
         userpath: str = os.path.join(corpus_folder, filename)
@@ -267,7 +271,7 @@ def process_query(
         while os.path.exists(os.path.join(RESULTS_USERS, request.user, userpath)):
             suffix += 1
             userpath = os.path.join(
-                corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}).xml"
+                corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}){ext}"
             )
         app["internal"].enqueue(
             _handle_export,  # init_export
@@ -276,7 +280,7 @@ def process_query(
             ),
             result_ttl=EXPORT_TTL,
             job_timeout=EXPORT_TTL,
-            args=(shash, "xml", True, request.offset, request.requested),
+            args=(shash, xp_format, True, request.offset, request.requested),
             kwargs={
                 "user_id": request.user,
                 "userpath": userpath,

@@ -77,7 +77,7 @@ class Request:
     Received POST requests
     """
 
-    def __init__(self, connection: RedisConnection, request: str | dict = {}):
+    def __init__(self, connection: RedisConnection, request: dict = {}):
         self._connection = connection
         request = cast(dict, request)
         try:
@@ -328,7 +328,8 @@ class Request:
             f"[{self.id}] Sending {nsegs} segments for batch {batch_name} (hash {qi.hash}; batch hash {batch_hash}) {to_msg}"
         )
         if self.to_export:
-            export = app["exporters"]["xml"].export
+            xp_format = self.to_export.get("format", "xml") or "xml"
+            export = app["exporters"][xp_format].export
             qi.enqueue(export, self.id, self.hash, payload)
         elif self.synchronous:
             req_buffer = app["query_buffers"][self.id]
@@ -406,7 +407,8 @@ class Request:
             f"[{self.id}] Sending {lines_this_batch} results lines for batch {batch_name} ({batch_hash}; QI {qi.hash}) {to_msg}"
         )
         if self.to_export:
-            export = app["exporters"]["xml"].export
+            xp_format = self.to_export.get("format", "xml") or "xml"
+            export = app["exporters"][xp_format].export
             qi.enqueue(export, self.id, self.hash, payload)
         elif self.synchronous:
             req_buffer = app["query_buffers"][self.id]
