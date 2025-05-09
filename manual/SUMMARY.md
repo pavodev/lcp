@@ -17,4 +17,6 @@
 * [Corpus management](corpus_management.md)
 * [Importing](importing.md)
     * [Tutorial](import_tutorial.md)
+        * [Part 1](import_tutorial_part1.md)
+        * [Part 2](import_tutorial_part2.md)
 * [Exporting](exporting.md)
