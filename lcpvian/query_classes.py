@@ -580,20 +580,26 @@ class QueryInfo:
         self.set_cache(qhash, res)
         return res
 
-    def publish(self, batch_name: str, typ: str):
+    def publish(self, batch_name: str, typ: str, custom_payload: dict[str, Any] = {}):
         """
         Notify the app that results are available
         """
         if typ == "failure":
             self.running_batch = ""
         msg_id: str = str(uuid4())
+        payload: dict[str, Any] = {
+            "callback_query": typ,
+            "batch": batch_name,
+            "hash": self.hash,
+        }
+        for k, v in custom_payload.items():
+            if v is None:
+                payload.pop(k, None)
+                continue
+            payload[k] = v
         _publish_msg(
             self._connection,
-            {
-                "callback_query": typ,
-                "batch": batch_name,
-                "hash": self.hash,
-            },
+            payload,
             msg_id=msg_id,
         )
 

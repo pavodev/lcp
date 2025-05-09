@@ -1,105 +1,85 @@
-# TODO: create one directory per batch in request.sent_hashes
-# once request.is_done() and all the directories have stats+kwic files,
-# concatenate them in a single file and delete the request
-
+import datetime
+import json
 import lxml.etree
 import os
+import re
 import shutil
 
-from dataclasses import dataclass
+from functools import cmp_to_key
+from io import TextIOWrapper
 from lxml.builder import E
 from rq.job import get_current_job, Job
 from typing import Any, cast
 
-# from xml.sax.saxutils import escape, quoteattr, XMLGenerator
+from xml.sax.saxutils import escape, quoteattr
 
+from .jobfuncs import _handle_export
 from .query_classes import Request, QueryInfo
 from .typed import CorpusConfig
-from .utils import _layer_contains
+from .utils import _get_mapping
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
-CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
 
 
-def _format_kwic(
-    args: list, columns: list, sentences: dict[str, tuple], result_meta: dict, config={}
-) -> tuple[str, str, dict, list, list]:
-    """
-    Return (kwic_name, sid, matches, tokens, annotations) for (sid,[tokens])+
-    """
-    kwic_name: str = result_meta.get("name", "")
-    attributes: list = result_meta.get("attributes", [])
-    entities_attributes: dict = next(
-        (x for x in attributes if x.get("name", "") == "entities"), dict({})
+def _node_to_string(node, prefix: str = "") -> str:
+    ret = lxml.etree.tostring(
+        node, encoding="unicode", pretty_print="True"  # type: ignore
     )
-    entities: list = entities_attributes.get("data", [])
-    sid, matches, *frame_range = (
-        args  # TODO: pass doc info to compute timestamp from frame_range
+    if prefix:
+        ret = re.sub(r"(^|\n)(.)", "\\1  \\2", ret)
+    return ret
+
+
+def _get_indent(n: int) -> str:
+    return "    " + "".join("  " for _ in range(n))
+
+
+def _next_line(inp: dict[str, TextIOWrapper | str | int], indented_layers: list[str]):
+    """
+    Move the input to the next line and fills the details
+    """
+    inp["line"] = cast(TextIOWrapper, inp["io"]).readline()
+    if not inp["line"]:
+        return
+    inp["char_range"] = int(
+        (re.search(r"char_range=\"\[(\d+),(\d+)\)\"", inp["line"]) or [0, 0])[1]
     )
-    first_token_id, prep_seg, annotations = sentences[sid]
-    matching_entities: dict[str, int | list[int]] = {}
-    for n in entities:
-        n_type = n.get("type", "")
-        is_span = n_type in ("sequence", "set") or (
-            config.get("layer", {}).get(n_type, {}).get("contains", "").lower()
-            == config["token"].lower()
-        )
-        if is_span:
-            matching_entities[n["name"]] = []
-        else:
-            matching_entities[n["name"]] = 0
-
-    tokens: list[dict] = list()
-    for n, token in enumerate(prep_seg):
-        token_id = int(first_token_id) + n
-        for n_m, m in enumerate(matches):
-            if isinstance(m, int):
-                if m == token_id:
-                    matching_entities[entities[n_m]["name"]] = cast(int, token_id)
-            elif isinstance(m, list):
-                if token_id in m:
-                    me: list[int] = cast(
-                        list[int], matching_entities[entities[n_m]["name"]]
-                    )
-                    me.append(token_id)
-        token_dict = {columns[n_col]: col for n_col, col in enumerate(token)}
-        token_dict["token_id"] = token_id
-        tokens.append(token_dict)
-    return (kwic_name, sid, matching_entities, tokens, annotations)
+    inp["layer"] = cast(str, (re.match(r"<([^>\s]+)", inp["line"]) or ["", ""])[1])
+    inp["embedding"] = indented_layers.index(inp["layer"])
 
 
-@dataclass()
-class Token:
+def _sorter(
+    inp1: dict[str, TextIOWrapper | str | int],
+    inp2: dict[str, TextIOWrapper | str | int],
+):
     """
-    Private class representing a token
+    Sort inputs based on the line's character range + level of embedding
     """
+    if not inp2["line"]:
+        return -1
+    if not inp1["line"]:
+        return 1
+    c1 = cast(int, inp1["char_range"])
+    c2 = cast(int, inp2["char_range"])
+    e1 = cast(int, inp1["embedding"])
+    e2 = cast(int, inp2["embedding"])
+    if c1 < c2:
+        return -1
+    if c1 > c2:
+        return 1
+    if e1 > e2:
+        return -1
+    return 1
 
-    id: int
-    form: str
-    match_label: str
-    attributes: dict[str, Any]
 
-
-@dataclass()
-class Segment:
-    """
-    Private class representing a segment
-    """
-
-    id: str
-
-
-@dataclass()
-class KwicLine:
-    """
-    A KWIC line has tokens (including hits) and is attached to a segment
-    It has a name (specified by the query)
-    """
-
-    tokens: list[Token]
-    segment: Segment
-    meta: dict[str, Any]
-    name: str
+def _paste_file(
+    output: TextIOWrapper,
+    fn: str,
+    prefix: str = "",
+):
+    with open(fn, "r") as input:
+        while line := input.readline():
+            output.write(prefix + line)
 
 
 class Exporter:
@@ -110,14 +90,21 @@ class Exporter:
         self._qi: QueryInfo = qi
         self._config: dict = qi.config
         seg_layer: str = self._config["segment"]
-        seg_mapping: dict[str, Any] = self._config["mapping"]["layer"][seg_layer]
-        self._column_headers = seg_mapping["prepared"]["columnHeaders"]
+        seg_mapping: dict[str, Any] = _get_mapping(
+            seg_layer, qi.config, "", qi.languages[0]
+        )
+        self._column_headers: list[str] = seg_mapping["prepared"]["columnHeaders"]
+        self._form_index = self._column_headers.index("form")
         self._results_info: list[dict[str, Any]] = []
         self._info: dict[str, Any] = {}
 
     @staticmethod
     def get_dl_path_from_hash(
-        hash: str, offset: int = 0, requested: int = 0, full: bool = False
+        hash: str,
+        offset: int = 0,
+        requested: int = 0,
+        full: bool = False,
+        filename: bool = False,
     ) -> str:
         hash_folder = os.path.join(RESULTS_DIR, hash)
         xml_folder = os.path.join(hash_folder, "xml")
@@ -130,21 +117,28 @@ class Exporter:
         requested_folder = os.path.join(offset_folder, str(requested))
         if not os.path.exists(requested_folder):
             os.makedirs(requested_folder)
+        if filename:
+            requested_folder = os.path.join(requested_folder, "results.xml")
         return requested_folder
 
     @classmethod
     async def export(cls, request_id: str, qhash: str, payload: dict) -> None:
+        """
+        Entrypoint to export a payload; run finalize if all the payloads have been processed
+        """
         job: Job = cast(Job, get_current_job())
         request: Request = Request(job.connection, {"id": request_id})
         qi: QueryInfo = QueryInfo(qhash, job.connection)
-        epath = cls.get_dl_path_from_hash(
-            request.hash, request.offset, request.requested, request.full
-        )
+        offset = request.offset
+        requested = request.requested
+        full = request.full
+        epath = cls.get_dl_path_from_hash(request.hash, offset, requested, full)
         try:
             exporter = cls(request, qi)
             await exporter.process_lines(payload, epath)
             if not request.is_done(qi):
                 return
+            # each payload needs corresponding *_query/*_segments subfolders
             qb_hashes = [bh for bh, _ in qi.query_batches.values()]
             for h in request.sent_hashes:
                 if h not in qb_hashes:
@@ -155,16 +149,58 @@ class Exporter:
                 seg_exists = os.path.exists(f"{hpath}_segments")
                 if qi.kwic_keys and not seg_exists:
                     return
-            await exporter.finalize(epath)
+            delivered = request.lines_sent_so_far
+            await exporter.finalize()
+            shutil.rmtree(exporter.get_working_path())
+            for h in request.sent_hashes:
+                hpath = os.path.join(epath, h)
+                if os.path.exists(f"{hpath}_query"):
+                    os.rmdir(f"{hpath}_query")
+                if os.path.exists(f"{hpath}_segments"):
+                    os.rmdir(f"{hpath}_segments")
             print(
                 f"Exporting complete for request {request.id} (hash: {request.hash}) ; DELETED REQUEST"
             )
             qi.delete_request(request)
+            await _handle_export(  # finish_export
+                qi.hash,
+                "xml",
+                create=False,
+                offset=offset,
+                requested=requested,
+                delivered=delivered,
+                path=os.path.join(epath, "results.xml"),
+            )
+            qi.publish(
+                "placeholder",
+                "export",
+                {"action": "export_complete", "callback_query": None},
+            )
         except Exception as e:
             shutil.rmtree(epath)
             raise e
 
-    async def process_query(self, payload: dict, epath: str, batch_hash: str) -> None:
+    def get_working_path(self, subdir: str = "") -> str:
+        """
+        The working path will be deleted after finalizing the results file
+        """
+        epath = Exporter.get_dl_path_from_hash(
+            self._request.hash,
+            self._request.offset,
+            self._request.requested,
+            self._request.full,
+        )
+        retpath = os.path.join(epath, ".working")
+        if subdir:
+            retpath = os.path.join(retpath, subdir)
+        if not os.path.exists(retpath):
+            os.makedirs(retpath)
+        return retpath
+
+    async def process_query(self, payload: dict, batch_hash: str) -> None:
+        """
+        Write the stats file the hit files as applicable
+        """
         print(
             f"[Export {self._request.id}] Process query {batch_hash} (QI {self._request.hash})"
         )
@@ -176,118 +212,350 @@ class Exporter:
                     for k in self._qi.stats_keys
                 ]
             )
-            stats_path: str = os.path.join(epath, "stats.xml")
+            # Just update the main stats.xml file at the root of the working path
+            stats_path: str = os.path.join(self.get_working_path(), "stats.xml")
             with open(stats_path, "w") as stats_output:
-                stats_str = lxml.etree.tostring(
-                    stats, encoding="unicode", pretty_print="True"  # type: ignore
-                )
+                stats_str = _node_to_string(stats)
                 stats_output.write(stats_str)
-        if self._qi.kwic_keys:
-            bpath = os.path.join(epath, batch_hash)
-            if not os.path.exists(bpath):
-                os.mkdir(bpath)
-            kwics = E.kwic(
-                *[
-                    E.result(
-                        *[
-                            E.seg(*[E.w(str(t), id=str(t)) for t in tokens], id=sid)
-                            for sid, tokens in res[k]
-                        ]
-                    )
-                    for k in self._qi.kwic_keys
-                ]
+        for k in self._qi.kwic_keys:
+            # Prepare all the info before looping over the results
+            k_in_rs = int(k) - 1
+            kwic_name = self._qi.result_sets[k_in_rs]["name"]
+            matches_info = next(
+                a["data"]
+                for a in self._qi.result_sets[k_in_rs]["attributes"]
+                if a["name"] == "entities"
             )
-            kwic_path: str = os.path.join(bpath, "kwic.xml")
-            with open(kwic_path, "w") as kwic_output:
-                kwic_str = lxml.etree.tostring(
-                    kwics, encoding="unicode", pretty_print="True"  # type: ignore
-                )
-                kwic_output.write(kwic_str)
+            for sid, matches in res[k]:
+                prefix = sid[0:3]
+                seg_path: str = self.get_working_path(prefix)
+                fpath = os.path.join(seg_path, f"{sid}_kwic.xml")
+                with open(fpath, "a") as kwic_output:
+                    kwic_output.write(f"<match name={quoteattr(kwic_name)}>\n")
+                    matches_line = "\n".join(
+                        f"  <{minfo['type']} name={quoteattr(minfo['name'])} refers_to={quoteattr(str(mid))} />"
+                        for mid, minfo in zip(matches, matches_info)
+                    )
+                    kwic_output.write(str(matches_line) + "\n")
+                    kwic_output.write(f"</match>\n")
 
     def format_tokens(self, offset: int, tokens: list) -> Any:
-        tok = self._config["token"]
-        return [getattr(E, tok)(t[0], id=str(offset + n)) for n, t in enumerate(tokens)]
+        config = self._config
+        tok = config["token"]
+        return [
+            getattr(E, tok)(
+                t[self._form_index],
+                id=str(offset + n),
+                **{k: str(v) for k, v in zip(self._column_headers, t) if k != "form"},
+            )
+            for n, t in enumerate(tokens)
+        ]
 
-    async def process_segments(
-        self, payload: dict, epath: str, batch_hash: str
-    ) -> None:
+    def write_containees(
+        self,
+        output,
+        all_layers: dict,
+        ordered_containers: dict,
+        layer: str,
+        ids: dict[str, int],
+    ):
+        """
+        Write all the units in IDS and their contained units, recursively, ordered by char_range
+        """
+        units = [all_layers[layer][cid] for cid in ids]
+        units.sort(key=lambda x: int(x.get("char_range", "[0,0)")[1:].split(",")[0]))
+        for unit in units:
+            attr_str = " ".join(
+                f"{escape(k)}={quoteattr(str(v))}" for k, v in unit.items()
+            )
+            output.write(f"\n<{layer} {attr_str}>")
+            if layer not in ordered_containers:
+                continue
+            contained_layer, containees_by_cid = ordered_containers[layer]
+            self.write_containees(
+                output,
+                all_layers,
+                ordered_containers,
+                contained_layer,
+                containees_by_cid[unit["id"]],
+            )
+
+    async def process_segments(self, payload: dict, batch_hash: str) -> None:
+        """
+        Write one file per doc in meta with the contained layers ordered by char_range
+        Write one file per segment with the content of prepared_segment
+        The doc files are in batch-specific subfolders to avoid parallel io conflicts
+        Seg files are specific to their batch so there's no risk of io conflicts
+        """
         print(
             f"[Export {self._request.id}] Process segments for {batch_hash} (QI {self._request.hash})"
         )
-        bpath = os.path.join(epath, batch_hash)
-        if not os.path.exists(bpath):
-            os.mkdir(bpath)
+        work_path = self.get_working_path(batch_hash)
         res = payload.get("result", [])
         meta_labels = self._qi.meta_labels
+        layers_in_meta: set[str] = {l.split("_", 1)[0] for l in meta_labels}
         config = cast(CorpusConfig, self._config)
         doc = config["document"]
         seg = config["segment"]
-        doc_id = f"{doc}_id"
-        seg_id = f"{seg}_id"
-        all_docs = {}
+        all_layers: dict[str, dict[str, dict]] = {l: {} for l in layers_in_meta}
+        # all_layers:
+        # {
+        #     "Document": {
+        #         "docid1": {"a1": "v1", "a2": "v2", etc.}
+        #     })
+        # }
+        ordered_containers: dict[str, tuple[str, dict[str, dict[str, int]]]] = {}
+        # ordered_containers:
+        # {
+        #     "Document": ("Division", {
+        #         "docid1": {"divid1": 1, "divid2": 1},
+        #         "docid2": {"divid3": 1, "divid4": 1}
+        #     }),
+        #     "Division": ("Segment", {
+        #         "divid1": {"segid1": 1, "segid2": 1}
+        #         "divid2": {"segid3": 1, "segid4": 1}
+        #     })
+        # }
+        current_layer = last_container = doc
+        while 1:
+            current_layer = config["layer"].get(current_layer, {}).get("contains", "")
+            if not current_layer:
+                break
+            if current_layer in layers_in_meta:
+                ordered_containers[last_container] = (current_layer, {})
+                last_container = current_layer
+        layer_to_container = {y: x for x, (y, _) in ordered_containers.items()}
+        unordered_layers_by_doc: dict[str, dict[str, dict[str, int]]] = {
+            k: {} for k in layers_in_meta if k not in layer_to_container and k != doc
+        }
+        # unordered_layers_by_doc:
+        # {
+        #     "Namedentity": {
+        #        "docid1": {"neid1": 1, "neid2": 1, etc.}
+        #     }
+        # }
+        # META
         for meta_line in res["-2"]:
-            ids = {k: v for k, v in zip(meta_labels, meta_line) if k.endswith("_id")}
-            doc_tree = all_docs.get(ids[doc_id]) or lxml.etree.ElementTree(
-                lxml.etree.XML(f"<{doc}></{doc}>", parser=None)
-            )
-            all_docs[ids[doc_id]] = doc_tree
-            doc_root = doc_tree.getroot()
-            for layer_attr, value in zip(meta_labels, meta_line):
-                if layer_attr == doc_id:
+            layer_to_attrs = {
+                l: {
+                    meta_labels[n].split("_", 1)[1]: v
+                    for n, v in enumerate(meta_line)
+                    if meta_labels[n].startswith(f"{l}_")
+                }
+                for l in layers_in_meta
+            }
+            doc_id = layer_to_attrs[doc]["id"]
+            for l in layers_in_meta:
+                lid = layer_to_attrs[l]["id"]
+                all_layers[l][lid] = layer_to_attrs[l]
+                if l == doc:
                     continue
-                layer, attr = layer_attr.split("_", 1)
-                attrs = [(attr, value)]
-                if isinstance(value, dict):
-                    attrs = [(f"{attr}_{k}", v) for k, v in value.items()]
-                node = doc_root
-                if layer != doc:
-                    if not _layer_contains(config, doc, layer):
-                        continue
-                    layer_id = ids[f"{layer}_id"]
-                    node = doc_root.find(f".//{layer}[@id='{layer_id}']")
-                    if node is None:
-                        node = lxml.etree.XML(
-                            f"<{layer} id='{layer_id}'></{layer}>", parser=None
+                if c := layer_to_container.get(l):
+                    cid = layer_to_attrs[c].get("id", "")
+                    oc = ordered_containers[c][1].setdefault(cid, {})
+                    oc[lid] = 1
+                else:
+                    ulbc = unordered_layers_by_doc[l].setdefault(doc_id, {})
+                    ulbc[lid] = 1
+            # SEGMENTS
+            sid = layer_to_attrs[seg]["id"]
+            offset, tokens, *annotations = res["-1"][sid]
+            prefix = sid[0:3]
+            seg_path = self.get_working_path(prefix)
+            fpath = os.path.join(seg_path, f"{sid}.xml")
+            with open(fpath, "w") as seg_output:
+                for token in self.format_tokens(offset, tokens):
+                    seg_output.write(_node_to_string(token))
+        for doc_id, attrs in all_layers[doc].items():
+            fpath = os.path.join(work_path, f"{doc_id}.xml")
+            with open(fpath, "w") as doc_output:
+                attr_str = " ".join(
+                    f"{escape(k)}={quoteattr(str(v))}" for k, v in attrs.items()
+                )
+                doc_output.write(f"<{doc} {attr_str}>")
+                # contained layers (div, segs, etc.)
+                contained_layer, containees_by_doc_id = ordered_containers[doc]
+                self.write_containees(
+                    doc_output,
+                    all_layers,
+                    ordered_containers,
+                    contained_layer,
+                    containees_by_doc_id[doc_id],
+                )
+                # undordered layers (named entity)
+                for unordered_layer in unordered_layers_by_doc:
+                    for ul_id in unordered_layers_by_doc[unordered_layer][doc_id]:
+                        ul_attrs = all_layers[unordered_layer][ul_id]
+                        ul_attr_str = " ".join(
+                            f"{escape(k)}={quoteattr(str(v))}"
+                            for k, v in ul_attrs.items()
                         )
-                        doc_root.append(node)
-                for a, v in attrs:
-                    if not node.get(a):
-                        node.set(a, str(v))
-            seg_node = doc_root.find(f".//{seg}[@id='{ids[seg_id]}']")
-            offset, tokens = res["-1"][ids[seg_id]]
-            for token in self.format_tokens(offset, tokens):
-                seg_node.append(token)
-        for id, tree in all_docs.items():
-            with open(os.path.join(bpath, f"{id}.xml"), "w") as doc_output:
-                doc_output.write(lxml.etree.tostring(tree, encoding="unicode", pretty_print="True"))  # type: ignore
-        # segments = E.segments(
-        #     *[
-        #         self.format_segment(sid, offset, tokens)
-        #         for sid, (offset, tokens) in res["-1"].items()
-        #     ]
-        # )
-        # segments_path: str = os.path.join(bpath, "segments.xml")
-        # with open(segments_path, "a") as segments_output:
-        #     segments_str = lxml.etree.tostring(
-        #         segments, encoding="unicode", pretty_print="True"  # type: ignore
-        #     )
-        #     segments_output.write(segments_str)
+                        doc_output.write(f"\n<{unordered_layer} {ul_attr_str}>")
+        print(
+            f"[Export {self._request.id}] Done processing segments for {batch_hash} (QI {self._request.hash})"
+        )
 
-    async def finalize(self, epath: str) -> None:
-        print(f"Finalize export for {self._request.id} (hash: {self._request.hash})")
+    async def finalize(self) -> None:
+        """
+        Go through the files generated by each payload and concatenate them
+        For kwics, the lines need to be ordered by char_range + depth of embedding
+        """
+        print(f"[Export {self._request.id}] Finalizing... (QI {self._request.hash})")
+        req = self._request
+        opath = self.get_dl_path_from_hash(
+            req.hash,
+            req.offset,
+            req.requested,
+            req.full,
+        )
+        wpath = self.get_working_path()
+        with open(os.path.join(opath, "results.xml"), "w") as output:
+            output.write('<?xml version="1.0" encoding="utf_8"?>\n')
+            output.write("<results>\n")
+            config = self._config
+            last_payload = {}
+            for batch_hash in req.lines_batch:
+                batch_name = self._qi.get_batch_from_hash(batch_hash)
+                last_payload = req.get_payload(self._qi, batch_name)
+                if last_payload["status"] == "finished":
+                    break
+            corpus_node = E.corpus(
+                *[
+                    getattr(E, k)(str(v))
+                    for k, v in config["meta"].items()
+                    if k not in ("sample_query",)
+                ]
+            )
+            output.write(_node_to_string(corpus_node, prefix="  "))
+            query_node = E.query(
+                E.date(str(datetime.datetime.now(datetime.UTC))),
+                E.offset(str(req.offset)),
+                E.requested(str(req.requested)),
+                E.full(str(req.full)),
+                E.delivered(str(req.lines_sent_so_far)),
+                E.coverage(str(last_payload["percentage_done"])),
+                E.json("\n" + json.dumps(self._qi.json_query, indent=2) + "\n  "),
+            )
+            output.write(_node_to_string(query_node, prefix="  "))
+            # STATS
+            if self._qi.stats_keys:
+                output.write("  <stats>\n")
+                with open(os.path.join(wpath, "stats.xml"), "r") as stats_input:
+                    while line := stats_input.readline():
+                        output.write("    " + line)
+                output.write("  </stats>\n")
+            if not self._qi.kwic_keys:
+                print(f"[Export {self._request.id}] Complete (QI {self._request.hash})")
+                return
+            # KWICS
+            layers_in_meta: set[str] = {
+                l.split("_", 1)[0] for l in self._qi.meta_labels
+            }
+            current_layer = config["document"]
+            indented_layers: list[str] = [current_layer]
+            while current_layer := (
+                config["layer"].get(current_layer, {}).get("contains", "")
+            ):
+                if current_layer not in layers_in_meta:
+                    continue
+                indented_layers.append(current_layer)
+            output.write("  <matches>\n")
+            # associate each doc with all its files from all the batch subfolders
+            doc_files: dict[str, list[str]] = {}
+            all_batches = [bh for (bh, _) in self._qi.query_batches.values()]
+            for b in all_batches:
+                bpath = os.path.join(wpath, b)
+                if not os.path.exists(bpath):
+                    continue
+                for filename in os.listdir(bpath):
+                    paths: list[str] = doc_files.setdefault(filename, [])
+                    paths.append(bpath)
+            # for each doc, go through the files in parallel, one line at a time
+            # based on the char_range of the line and the embedding level
+            for doc_file, paths in doc_files.items():
+                # handler to read the files in parallel (see _next_line)
+                inputs: list[dict[str, TextIOWrapper | str | int]] = [
+                    {
+                        "io": open(os.path.join(p, doc_file), "r"),
+                        "line": "",
+                        "layer": "",
+                        "char_range": 0,
+                    }
+                    for p in paths
+                ]
+                try:
+                    # First line is document
+                    for i in inputs:
+                        _next_line(i, indented_layers)
+                    line = cast(str, inputs[0]["line"])
+                    output.write("    " + line)
+                    layers_to_close = [inputs[0]["layer"]]
+                    # Now proceed with the actual lines
+                    for i in inputs:
+                        _next_line(i, indented_layers)
+                    embedding_from = 0
+                    while 1:
+                        # _sorter ensures the first input always has the lowest char_range + deepest embedding
+                        inputs.sort(key=cmp_to_key(_sorter))
+                        inp = inputs[0]
+                        line = cast(str, inp["line"])
+                        if not line:
+                            break  # we're done: we've read all the lines
+                        embedding = cast(int, inp["embedding"])
+                        # close any embedded node
+                        while embedding_from >= embedding and layers_to_close:
+                            layer_to_close = layers_to_close.pop()
+                            ind = _get_indent(embedding_from)
+                            output.write(f"{ind}</{layer_to_close}>\n")
+                            embedding_from += -1
+                        ind = _get_indent(embedding)
+                        output.write(f"{ind}{line}")
+                        if inp["layer"] == config["segment"]:
+                            # insert the content of the corresponding segment files
+                            sid = (re.search(r" id=\"([^\"]+)\"", line) or ("", ""))[1]
+                            sprefix = sid[0:3]
+                            kwicfn = os.path.join(wpath, sprefix, f"{sid}_kwic.xml")
+                            if os.path.exists(kwicfn):
+                                output.write(f"{_get_indent(embedding+1)}<hits>\n")
+                                _paste_file(output, kwicfn, _get_indent(embedding + 2))
+                                output.write(f"{_get_indent(embedding+1)}</hits>\n")
+                            fn = os.path.join(wpath, sprefix, f"{sid}.xml")
+                            if os.path.exists(fn):
+                                _paste_file(output, fn, _get_indent(embedding + 1))
+                        # we'll need to close this later
+                        layers_to_close.append(inp["layer"])
+                        embedding_from = embedding
+                        _next_line(inp, indented_layers)
+                    # close any pending node
+                    while layers_to_close:
+                        layer_to_close = layers_to_close.pop()
+                        embedding = indented_layers.index(cast(str, layer_to_close))
+                        ind = _get_indent(embedding)
+                        output.write(f"{ind}</{layer_to_close}>\n")
+                except Exception as e:
+                    raise e
+                finally:
+                    # make sure to always close all the input files
+                    for i in inputs:
+                        cast(TextIOWrapper, i["io"]).close()
+            output.write("  </matches>\n")
+            output.write("</results>")
+        print(f"[Export {self._request.id}] Complete (QI {self._request.hash})")
 
     async def process_lines(self, payload: dict, epath: str) -> None:
-
+        """
+        Take a payload and call process_query or process_segments
+        """
         action = payload.get("action", "")
         batch_name = payload.get("batch_name", "")
         batch_hash = self._qi.query_batches[batch_name][0]
         if action == "query_result":
-            await self.process_query(payload, epath, batch_hash)
+            await self.process_query(payload, batch_hash)
             query_path = os.path.join(epath, f"{batch_hash}_query")
             if not os.path.exists(query_path):
-                os.mkdir(query_path)
+                os.mkdir(query_path)  # signal the payload was processed
         elif action == "segments":
-            await self.process_segments(payload, epath, batch_hash)
+            await self.process_segments(payload, batch_hash)
             segments_path = os.path.join(epath, f"{batch_hash}_segments")
             if not os.path.exists(segments_path):
-                os.mkdir(segments_path)
+                os.mkdir(segments_path)  # signal the payload was processed

@@ -197,18 +197,18 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 async def download_export(request: web.Request) -> web.FileResponse:
     filepath = ""
-    hash = request.rel_url.query["hash"]
+    qhash = request.rel_url.query["hash"]
     format = request.rel_url.query["format"]
     offset = request.rel_url.query.get("offset", "0")
     requested = request.rel_url.query.get("requested", "0")
     full = cast(bool, request.rel_url.query.get("full", False))
     if format == "swissdox":
         results_path = str(os.environ.get("RESULTS_PATH", "results"))
-        filepath = os.path.join(results_path, hash, offset, "swissdox.db")
+        filepath = os.path.join(results_path, qhash, offset, "swissdox.db")
     else:
-        exporter_class = Exporter.get_exporter_class(format)
+        exporter_class = request.app["exporters"][format]
         filepath = exporter_class.get_dl_path_from_hash(
-            hash, cast(int, offset), cast(int, requested), full
+            qhash, cast(int, offset), cast(int, requested), full, filename=True
         )
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
     # TODO: check user access to file

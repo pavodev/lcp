@@ -6,23 +6,31 @@ import os
 import shutil
 
 from aiohttp import web
+from datetime import datetime
 from redis import Redis as RedisConnection
+from rq import Callback
 from rq.job import get_current_job, Job
 from typing import cast, Any
 
 from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .authenticate import Authentication
+from .callbacks import _general_failure
 from .dqd_parser import convert
-from .exporter_future import Exporter
+from .jobfuncs import _handle_export
 from .query_classes import QueryInfo, Request
 from .utils import (
+    sanitize_filename,
     _get_query_batches,
     get_segment_meta_script,
     hasher,
+    push_msg,
     CustomEncoder,
     LCPApplication,
 )
+
+EXPORT_TTL = 5000
+RESULTS_USERS = os.environ.get("RESULTS_USERS", os.path.join("results", "users"))
 
 
 def batch_callback(job: Job, connection: RedisConnection, batch_name: str):
@@ -241,12 +249,40 @@ def process_query(
         config,
     )
     qi.add_request(request)
-    if request.to_export:
+    if request.to_export and request.user:
+        # TODO: move this into the exporter script instead?
         epath = app["exporters"]["xml"].get_dl_path_from_hash(
             shash, request.offset, request.requested, request.full
         )
         if os.path.exists(epath):
             shutil.rmtree(epath)
+        filename: str = cast(str, request.to_export.get("filename", ""))
+        cshortname = config.get("shortname")
+        if not filename:
+            filename = f"{cshortname} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}.xml"
+        filename = sanitize_filename(filename)
+        corpus_folder = sanitize_filename(cshortname or config.get("project_id", ""))
+        userpath: str = os.path.join(corpus_folder, filename)
+        suffix: int = 0
+        while os.path.exists(os.path.join(RESULTS_USERS, request.user, userpath)):
+            suffix += 1
+            userpath = os.path.join(
+                corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}).xml"
+            )
+        app["internal"].enqueue(
+            _handle_export,  # init_export
+            on_failure=Callback(
+                _general_failure,
+            ),
+            result_ttl=EXPORT_TTL,
+            job_timeout=EXPORT_TTL,
+            args=(shash, "xml", True, request.offset, request.requested),
+            kwargs={
+                "user_id": request.user,
+                "userpath": userpath,
+                "corpus_id": request.corpus,
+            },
+        )
     job: Job | None = schedule_next_batch(shash, connection=app["redis"])
     return (request, qi, job)
 
@@ -300,6 +336,14 @@ async def post_query(request: web.Request) -> web.Response:
     #     raise web.HTTPForbidden(text=msg)
 
     (req, qi, job) = process_query(app, request_data)
+    if req.to_export and req.user:
+        await push_msg(
+            app["websockets"],
+            req.room,
+            {"action": "started_export", "format": "xml"},
+            skip=None,
+            just=(req.room, req.user),
+        )
 
     if req.synchronous:
         try:

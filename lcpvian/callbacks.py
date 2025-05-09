@@ -826,10 +826,11 @@ def _export_notifs(
             destfn = os.path.join(user_folder, normfn)
             if not os.path.exists(os.path.dirname(destfn)):
                 os.makedirs(os.path.dirname(destfn))
-            if os.path.exists(destfn):
-                os.remove(destfn)
-            os.symlink(os.path.abspath(srcfn), destfn)
-
+            if not os.path.exists(destfn) and not os.path.islink(destfn):
+                try:
+                    os.symlink(os.path.abspath(srcfn), destfn)
+                except Exception as e:
+                    print(f"Problem with creating symlink {srcfn}->{destfn}", e)
             user_id = res[4]
             msg_id = str(uuid4())
             jso = {

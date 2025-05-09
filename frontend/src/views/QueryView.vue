@@ -1634,12 +1634,8 @@ export default {
       if (fullSearch) {
         data["full"] = true;
       }
-      if (to_export) {
+      if (to_export)
         data["to_export"] = to_export;
-        this.nExport = Number((String(this.nExport) || "200").replace(/\D/,''));
-        if (isNaN(this.nExport)) this.nExport = 200;
-        data["total_results_requested"] = this.nExport;
-      }
       console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
