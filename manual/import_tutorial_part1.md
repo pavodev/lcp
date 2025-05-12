@@ -5,7 +5,7 @@
   <img src="images/tuto_io.png" alt="Input to Output" width="1827"/>
 </p>
 
-The image above show the first lines of a transcript file on the left (our input) and what we want to obtain in _videoScope_ (our output). To do so, we need to go through 3 main steps:
+The image above shows, on the left, the first lines of a transcript file (our input) and, one the right, what we want to obtain in _videoScope_ (our output). To do so, we need to go through 3 main steps:
 
  - **Segmentation**
  - **Linearization**
@@ -28,7 +28,7 @@ SRT files often have one sentence per numbered block, as in the image above (one
 In addition, each segment is further divided into _tokens_. **Tokens typically correspond to words**, which roughly correspond to space-separated bits of text in the input.
 
 {% hint style="warning" %}
-**Using just space characters as token delimiters is too simplistic**: as visible in this example, written English has cases like `shouldn't`, which arguably corresponds to two tokens (`should` and `not`). For the sake of simplicity, we will use `'` as a delimiter and accordingly map `shouldn't` to two tokens with the forms `shouldn` and `t`.
+**Using just space characters as token delimiters is too simplistic**: as visible in this example, written English has cases like `shouldn't`, which arguably corresponds to two tokens (`should` and `not`). For the sake of simplicity, we will also use `'` as a delimiter and accordingly map `shouldn't` to two tokens with the forms `shouldn` and `t`.
 {% endhint %}
 
 ## Linearization
@@ -59,9 +59,9 @@ In this case, the `frame_range` column reports pairs of integers, which correspo
 As visible in the image above, LCP does not directly store tokens along with their form: instead, **tokens are associated with a form index, which are themselves associated with strings of text**.
 
 {% hint style="info" %}
-For example, token 3 (from the first segment) and token 22 (from the second segment) share the same index (`3`) because they both have the form `t`.
+For example, token 3 (from the first segment) and token 22 (from the second segment) share the same form index (`3`) because they both have the form `t`.
 {% endhint %}
 
-In the next part, we will first generate the CSV files illustrated above (in order: `segment.csv`, `token.csv` and `token_form.csv`) in addition to one more required CSV file for the tokens (`token_lemma.csv`, a copy of `token_form.csv`) and one CSV file for the documents (the videos).
+In the next part, we will first generate the CSV files illustrated above (in order: `segment.csv`, `token.csv` and `token_form.csv`) as well as one more required CSV file for the tokens (`token_lemma.csv`, a copy of `token_form.csv`) and one CSV file for the documents (the transcripts/videos).
 
 Then we will add annotations to the data: (1) we will report which tokens were identified using `'` as a delimiter, and (2) we will associate each segment with its original text (including the delimiter characters) for display purposes. As a result, (1) `token.csv` will have additional columns, and (2) we will generate a file named `segment_original.csv` (and add a corresponding column to `segment.csv`).
