@@ -12,7 +12,7 @@ The image above shows, on the left, the first lines of a transcript file (our in
  - **Alignment**
 
 <p>
-  <img src="images/tuto_steps.png" alt="Input to Output" width="1595"/>
+  <img src="images/tuto_steps.png" alt="Segmentation, Linearization, Alignment" width="1595"/>
 </p>
 
 ## Segmentation
