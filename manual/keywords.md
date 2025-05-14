@@ -1,6 +1,7 @@
 # DQD keywords
 
  - [`@`](at.md)
+ - [`%`](percent.md)
  <!-- - [`group`](group.md) -->
  - [`results`](results.md)
     - [`plain`](results.md#plain)
