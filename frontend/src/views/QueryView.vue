@@ -1459,11 +1459,16 @@ export default {
             let segment_id = "";
             const meta_object = {};
             for (let n in hit_meta) {
-              const value = hit_meta[n];
+              let value = hit_meta[n];
               const [layer, attr] = meta_labels[n];
               if (layer == segment && attr == "id")
                 segment_id = value;
               meta_object[layer] = meta_object[layer] || {};
+              if (attr.endsWith("_range")) {
+                const ranges = value.match(/\[(\d+),(\d+)\)/);
+                if (ranges)
+                  value = [parseInt(ranges[1]),parseInt(ranges[2])];
+              }
               meta_object[layer][attr] = value;
             }
             this.WSDataMeta[segment_id] = meta_object;

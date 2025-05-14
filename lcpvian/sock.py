@@ -301,23 +301,23 @@ async def _handle_message(
         export_obj["config"] = app["config"][corpus_id]
         await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
 
-    # if action in simples or action in ("sentences", "meta"):
-    #     if not payload.get("full") and (
-    #         action != "sentences" or len(cast(Results, payload["result"])) > 2
-    #     ):
-    #         await push_msg(
-    #             app["websockets"],
-    #             room,
-    #             payload,
-    #             skip=None,
-    #             just=(room, user),
-    #         )
-    #     else:
-    #         print(f"Not sending {action} message!")
-    #     if to_submit is not None:
-    #         await to_submit
-    #         to_submit = None
-    #     return None
+    if action in simples:  # or action in ("sentences", "meta"):
+        # if not payload.get("full") and (
+        #     action != "sentences" or len(cast(Results, payload["result"])) > 2
+        # ):
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
+        )
+        # else:
+        #     print(f"Not sending {action} message!")
+        # if to_submit is not None:
+        #     await to_submit
+        #     to_submit = None
+        return None
 
     if action in errors:
         await _handle_error(app, user, room, payload)

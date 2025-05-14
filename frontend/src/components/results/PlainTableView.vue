@@ -682,11 +682,16 @@ export default {
       if (!meta) return "";
       const doc_meta = meta[this.corpora.corpus.firstClass.document];
       if (!doc_meta) return "";
-      const media = doc_meta.media;
+      let media = doc_meta.media;
       if (!media) return "";
+      try {
+        media = JSON.parse(media)
+      } catch {
+        null;
+      }
       const media_name = Object.keys(this.corpora.corpus.meta.mediaSlots||{'':0})[0];
       if (!media_name) return "";
-      return JSON.parse(media)[media_name];
+      return media[media_name];
     },
     showAudio(resultIndex) {
       let retval = false;
