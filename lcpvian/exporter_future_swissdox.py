@@ -172,8 +172,9 @@ class Exporter:
             with open(aid_file, "r") as aid_input:
                 while line := aid_input.readline():
                     article_ids.add(line.strip())
+        schema: str = self._qi.config["schema_path"]
         query = (
-            f"""SELECT * FROM main.export_to_swissdoxviz('swissdox_1', :article_ids);"""
+            f"""SELECT * FROM main.export_to_swissdoxviz('{schema}', :article_ids);"""
         )
         print(
             f"[SWISSDOX Export {self._request.id}] Running query with {len(article_ids)} article IDs"

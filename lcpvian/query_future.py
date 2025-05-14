@@ -342,10 +342,11 @@ async def post_query(request: web.Request) -> web.Response:
 
     (req, qi, job) = process_query(app, request_data)
     if req.to_export and req.user:
+        xpformat = req.to_export.get("format", "xml") or "xml"
         await push_msg(
             app["websockets"],
             req.room,
-            {"action": "started_export", "format": "xml"},
+            {"action": "started_export", "format": xpformat},
             skip=None,
             just=(req.room, req.user),
         )

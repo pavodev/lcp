@@ -221,6 +221,8 @@ class Exporter:
                 stats_str = _node_to_string(stats)
                 stats_output.write(stats_str)
         for k in self._qi.kwic_keys:
+            if k not in res:
+                continue
             # Prepare all the info before looping over the results
             k_in_rs = int(k) - 1
             kwic_name = self._qi.result_sets[k_in_rs]["name"]
