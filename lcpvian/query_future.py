@@ -238,6 +238,7 @@ def process_query(
         config=config,
         lang=request.languages[0] if request.languages else None,
     )
+    print("SQL query:", sql_query)
     shash = hasher(sql_query)
     qi = QueryInfo(
         shash,
