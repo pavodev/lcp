@@ -21,6 +21,10 @@ from .utils import _get_mapping
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
 
+def _xml_attr(s: str) -> str:
+    return escape(s.replace("(", "").replace(")", "").replace(" ", "_"))
+
+
 def _node_to_string(node, prefix: str = "") -> str:
     ret = lxml.etree.tostring(
         node, encoding="unicode", pretty_print="True"  # type: ignore
@@ -251,7 +255,11 @@ class Exporter:
             getattr(E, tok)(
                 t[self._form_index],
                 id=str(offset + n),
-                **{k: str(v) for k, v in zip(self._column_headers, t) if k != "form"},
+                **{
+                    _xml_attr(k): quoteattr(str(v))
+                    for k, v in zip(self._column_headers, t)
+                    if k != "form"
+                },
             )
             for n, t in enumerate(tokens)
         ]
@@ -271,7 +279,7 @@ class Exporter:
         units.sort(key=lambda x: int(x.get("char_range", "[0,0)")[1:].split(",")[0]))
         for unit in units:
             attr_str = " ".join(
-                f"{escape(k)}={quoteattr(str(v))}" for k, v in unit.items()
+                f"{_xml_attr(k)}={quoteattr(str(v))}" for k, v in unit.items()
             )
             output.write(f"\n<{layer} {attr_str}>")
             if layer not in ordered_containers:
@@ -375,7 +383,7 @@ class Exporter:
             fpath = os.path.join(work_path, f"{doc_id}.xml")
             with open(fpath, "w") as doc_output:
                 attr_str = " ".join(
-                    f"{escape(k)}={quoteattr(str(v))}" for k, v in attrs.items()
+                    f"{_xml_attr(k)}={quoteattr(str(v))}" for k, v in attrs.items()
                 )
                 doc_output.write(f"<{doc} {attr_str}>")
                 # contained layers (div, segs, etc.)
@@ -392,7 +400,7 @@ class Exporter:
                     for ul_id in unordered_layers_by_doc[unordered_layer][doc_id]:
                         ul_attrs = all_layers[unordered_layer][ul_id]
                         ul_attr_str = " ".join(
-                            f"{escape(k)}={quoteattr(str(v))}"
+                            f"{_xml_attr(k)}={quoteattr(str(v))}"
                             for k, v in ul_attrs.items()
                         )
                         doc_output.write(f"\n<{unordered_layer} {ul_attr_str}>")

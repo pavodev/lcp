@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+import logging
 import os
 import shutil
 
@@ -304,47 +305,45 @@ async def post_query(request: web.Request) -> web.Response:
     """
     app = cast(LCPApplication, request.app)
     request_data = await request.json()
-    # user = request_data.get("user", "")
-    # room = request_data.get("room", "")
-    # corpus = request_data.get("corpus", "")
-    # if request_data.get("api"):
-    #     room = "api"
-    #     request_data["room"] = room
-    #     request_data["to_export"] = request_data.get("to_export") or {"format": "xml"}
-    # # Check permission
-    # authenticator = cast(Authentication, app["auth_class"](app))
-    # user_data: dict = {}
-    # if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
-    #     user_data = await authenticator.check_api_key(request)
-    # else:
-    #     user_data = await authenticator.user_details(request)
-    # app_type = str(request_data.get("appType", "lcp"))
-    # app_type = (
-    #     "lcp"
-    #     if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"}
-    #     else app_type
-    # )
-    # allowed = authenticator.check_corpus_allowed(
-    #     str(corpus), app["config"][str(corpus)], user_data, app_type, get_all=False
-    # )
-    # if not allowed:
-    #     fail: dict[str, str] = {
-    #         "status": "403",
-    #         "error": "Forbidden",
-    #         "action": "query_error",
-    #         "user": user,
-    #         "room": room,
-    #         "info": "Attempted access to an unauthorized corpus",
-    #     }
-    #     msg = "Attempted access to an unauthorized corpus"
-    #     # # alert everyone possible about this problem:
-    #     print(msg)
-    #     logging.error(msg, extra=fail)
-    #     payload = cast(JSONObject, fail)
-    #     just: tuple[str, str] = (room, user or "")
-    #     await push_msg(app["websockets"], room, payload, just=just)
-    #     print("pushed message")
-    #     raise web.HTTPForbidden(text=msg)
+
+    user = request_data.get("user", "")
+    room = request_data.get("room", "")
+    corpus = request_data.get("corpus", "")
+    if request_data.get("api"):
+        room = "api"
+        request_data["room"] = room
+    # Check permission
+    authenticator = cast(Authentication, app["auth_class"](app))
+    user_data: dict = {}
+    if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
+        user_data = await authenticator.check_api_key(request)
+    else:
+        user_data = await authenticator.user_details(request)
+    app_type = str(request_data.get("appType", "lcp"))
+    app_type = (
+        "lcp"
+        if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"}
+        else app_type
+    )
+    allowed = authenticator.check_corpus_allowed(
+        str(corpus), app["config"][str(corpus)], user_data, app_type, get_all=False
+    )
+    if not allowed:
+        fail: dict[str, str] = {
+            "status": "403",
+            "error": "Forbidden",
+            "action": "query_error",
+            "user": user,
+            "room": room,
+            "info": "Attempted access to an unauthorized corpus",
+        }
+        msg = "Attempted access to an unauthorized corpus"
+        # # alert everyone possible about this problem:
+        print(msg)
+        logging.error(msg, extra=fail)
+        just: tuple[str, str] = (room, user or "")
+        await push_msg(app["websockets"], room, cast(dict, fail), just=just)
+        raise web.HTTPForbidden(text=msg)
 
     (req, qi, job) = process_query(app, request_data)
     if req.to_export and req.user:

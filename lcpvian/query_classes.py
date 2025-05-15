@@ -96,7 +96,10 @@ class Request:
             self.room: str = request.get("room", "")
             self.languages: list[str] = request.get("languages", [])
             self.query: str = request.get("query", "")
-            self.to_export: dict | None = request.get("to_export", None)
+            to_export = request.get("to_export", None)
+            if not isinstance(to_export, dict):
+                to_export = {"format": "xml"} if to_export else {}
+            self.to_export: dict | None = to_export
             # The attributes below are dynamic and need to update redis
             # job1: [200,400,30] --> sent lines 200 through 400, need 30 segments
             self.lines_batch: dict[str, tuple[int, int, int]] = request.get(
