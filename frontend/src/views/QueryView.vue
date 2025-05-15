@@ -984,6 +984,7 @@ export default {
       percentageTotalDone: 0,
       percentageWordsDone: 0,
       loading: false,
+      requestId: "",
       stats: null,
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
@@ -1647,6 +1648,7 @@ export default {
         this.loading = true;
         this.percentageDone = 0.001;
         this.percentageWordsDone = 0;
+        this.requestId = retval.request;
       }
 
       // console.log(document.querySelector("button#nav-results-tab"))
@@ -1669,6 +1671,7 @@ export default {
       this.failedStatus = false;
       useWsStore().sendWSMessage({
         action: "stop",
+        request: this.requestId
       });
       this.loading = false;
     },

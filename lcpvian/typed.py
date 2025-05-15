@@ -241,6 +241,12 @@ class ObservableDict:
         if self._observer:
             self._observer("set", self._data, key)
 
+    def pop(self, key, default):
+        value = self._data.pop(key, default)
+        if self._observer:
+            self._observer("pop", self._data)
+        return value
+
     def update(self, *args, **kwargs):
         kwargs = {k: _make_observable(v, self) for k, v in kwargs.items()}
         self._data.update(*args, **kwargs)

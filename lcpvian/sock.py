@@ -43,7 +43,7 @@ from .configure import _get_batches, CorpusConfig
 from .export import export
 from .query import query
 from .query_service import QueryService
-from .query_classes import QueryInfo
+from .query_classes import QueryInfo, Request
 from .utils import push_msg
 from .validate import validate
 
@@ -548,15 +548,11 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     if request.app["mypy"]:
         while True:
             msg = await ws.receive()
-            await _handle_sock(
-                ws, msg, sockets, request.app["query_service"], request.app["config"]
-            )
+            await _handle_sock(ws, msg, sockets, request.app)
     else:
         # mypyc bug?
         async for msg in ws:
-            await _handle_sock(
-                ws, msg, sockets, request.app["query_service"], request.app["config"]
-            )
+            await _handle_sock(ws, msg, sockets, request.app)
 
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
@@ -565,11 +561,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
 
 async def _handle_sock(
-    ws: web.WebSocketResponse,
-    msg: WSMessage,
-    sockets: Websockets,
-    qs: QueryService,
-    conf: dict[str, Any],
+    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, app: web.Application
 ) -> None:
     """
     Handle an incoming message based on its `action`
@@ -578,6 +570,8 @@ async def _handle_sock(
     * query has enough results, so stop it (in simultaneous mode only)
     * user joins/leaves room
     """
+    qs: QueryService = app["query_service"]
+    conf: dict[str, Any] = app["config"]
     if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
         try:
             await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
@@ -629,16 +623,29 @@ async def _handle_sock(
 
     # query is stopped, automatically or manually
     elif action == "stop":
-        jobs = qs.cancel_running_jobs(user_id, session_id)
-        jobs = list(set(jobs))
-        if jobs:
-            response = {
-                "status": "stopped",
-                "n": len(jobs),
-                "action": "stopped",
-                # "jobs": jobs,
-            }
-            await push_msg(sockets, session_id, response, just=ident)
+        request_id = payload.get("request", "")
+        if not request_id:
+            return
+        req: None | Request
+        try:
+            req = Request(app["redis"], {"id": request_id})
+        except:
+            req = None
+        if not req:
+            return
+        qi: QueryInfo = QueryInfo(req.hash, app["redis"])
+        qi.stop_request(req)
+        # jobs = qs.cancel_running_jobs(user_id, session_id)
+        # jobs = list(set(jobs))
+        # if jobs:
+        response = {
+            "request": request_id,
+            "status": "stopped",
+            # "n": len(jobs),
+            "action": "stopped",
+            # "jobs": jobs,
+        }
+        await push_msg(sockets, session_id, response, just=ident)
 
     # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":

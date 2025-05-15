@@ -98,6 +98,8 @@ async def do_segment_and_meta(
     )
     connection = current_job.connection
     qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return
     batch_hash, _ = qi.query_batches[batch_name]
     batch_results: list = qi.get_from_cache(batch_hash)
 
@@ -165,6 +167,8 @@ async def do_batch(qhash: str, batch: list):
     assert current_job, RuntimeError(f"No current job found for do_batch {batch}")
     connection = current_job.connection
     qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return
     batch_name = cast(str, batch[0])
     if batch_name == qi.running_batch:
         # This batch is already running: stop here
@@ -195,6 +199,8 @@ def schedule_next_batch(
     and return the corresponding job (None if no next batch)
     """
     qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return None
     if previous_batch_name:
         lines_before, lines_batch = qi.get_lines_batch(previous_batch_name)
         if lines_before + lines_batch >= qi.required:
@@ -368,8 +374,5 @@ async def post_query(request: web.Request) -> web.Response:
         serializer = CustomEncoder()
         return web.json_response(serializer.default(res))
     else:
-        job_info = {
-            "status": "started",
-            "job": req.hash,
-        }
+        job_info = {"status": "started", "job": req.hash, "request": req.id}
         return web.json_response(job_info)

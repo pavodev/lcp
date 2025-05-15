@@ -5,6 +5,7 @@ import os
 from aiohttp import web
 from redis import Redis as RedisConnection
 from rq import Callback, Queue
+from rq.command import send_stop_job_command
 from rq.job import Job
 from types import TracebackType
 from typing import cast, Any, Callable
@@ -549,6 +550,15 @@ class QueryInfo:
         Can be called either from the main app or from a worker
         """
         q = Queue("background", connection=self._connection)
+        enqueued_job_ids = [jid for jid in self.enqueued_jobs]
+        # Clear any job that needs to be cleared
+        for jid in enqueued_job_ids:
+            try:
+                job = Job.fetch(jid, self._connection)
+                if not (job.is_started or job.is_scheduled or job.is_queued):
+                    self.enqueued_jobs.pop(jid, "")
+            except:
+                self.enqueued_jobs.pop(jid, "")
         on_success: Callback | None = (
             Callback(callback, QUERY_TIMEOUT) if callback else None
         )
@@ -563,6 +573,7 @@ class QueryInfo:
         )
         j.meta["qi_hash"] = self.hash  # used in failure callback
         j.save_meta()
+        self.enqueued_jobs[j.id] = 1
         return j
 
     def set_cache(self, key: str, data: Any):
@@ -621,6 +632,20 @@ class QueryInfo:
         return batch_name
 
     # Getters and setters to keep in sync with redis
+    @property
+    def enqueued_jobs(self) -> dict[str, int]:
+        enqueued_jobs = self.qi.get("enqueued_jobs", {})
+        return cast(
+            dict[str, int],
+            ObservableDict(
+                **enqueued_jobs, observer=self.get_observer("enqueued_jobs")
+            ),
+        )
+
+    @enqueued_jobs.setter
+    def enqueued_jobs(self, value: dict[str, int]):
+        self.update({"enqueued_jobs": value})
+
     @property
     def running_batch(self) -> str:
         return self.qi.get("running_batch", "")
@@ -696,6 +721,24 @@ class QueryInfo:
             self._connection.delete(rkey)
         except:
             pass
+
+    def stop_request(self, request: Request):
+        """
+        Stop an active request and cancels any related active query as applicable
+        """
+        self.delete_request(request)
+        if self.requests:
+            return
+        jids = [jid for jid in self.enqueued_jobs]
+        for jid in jids:
+            try:
+                job = Job.fetch(jid, self._connection)
+                if job.is_started or job.is_scheduled or job.is_queued:
+                    job.cancel()
+                    send_stop_job_command(self._connection, jid)
+                    self.enqueued_jobs.pop(jid, "")
+            except:
+                self.enqueued_jobs.pop(jid, "")
 
     def get_lines_batch(self, batch_name: str) -> tuple[int, int]:
         """
