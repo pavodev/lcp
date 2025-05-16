@@ -46,6 +46,7 @@ from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
+from .fcs import get_fcs
 
 from .api import api_query
 from .callbacks import _general_failure
@@ -227,6 +228,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
         ("/download_export", "GET", download_export),
+        ("/fcs-endpoint", "GET", get_fcs),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),

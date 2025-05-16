@@ -268,14 +268,14 @@ class Request:
             if name == batch_name:
                 break
         done_words = sum(int(n) for (_, n) in done_batches)
-        total_words = sum(int(n) for (_, n) in qi.all_batches)
+        total_words = sum(int(n) for (_, n) in qi.all_batches) or 1
         ret["percentage_words_done"] = 100.0 * done_words / total_words
         len_done_batches = len(done_batches)
         len_all_batches = len(qi.all_batches)
         ret["batches_done"] = f"{len_done_batches}/{len_all_batches}"
         ret["percentage_done"] = 100.0 * len_done_batches / len_all_batches
         ret["projected_results"] = int(
-            100 * (ret["total_results_so_far"] / ret["percentage_words_done"])
+            100 * (ret["total_results_so_far"] / (ret["percentage_words_done"] or 100))
         )
         return ret
 
