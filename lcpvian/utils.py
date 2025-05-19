@@ -1318,9 +1318,8 @@ def get_segment_meta_script(
     parents_with_attributes.update(
         {k: 1 for k in parents_of_seg if layers[k].get("attributes")}
     )
-    # Make sure to include Document in there, even if it's not a parent of Segment
-    if has_media or layers[doc].get("attributes"):
-        parents_with_attributes[doc] = 1
+    # Make sure to always include Document in there
+    parents_with_attributes[doc] = 1
 
     selects = []
     joins: dict[str, int] = {}
@@ -1330,14 +1329,15 @@ def get_segment_meta_script(
         layer_mapping = config["mapping"]["layer"].get(layer, {})
         mapping_attrs = layer_mapping.get("attributes", {})
         partitions = None if layer == seg else layer_mapping.get("partitions")
-        alignment = {} if layer == seg else layer_mapping.get("alignment", {})
-        relation = alignment.get("relation", None)
+        alignment = layer_mapping.get("alignment", {})
+        alignment_relation = {} if layer == seg else alignment.get("relation", None)
+        relation = alignment_relation
         if not relation and layer != seg:
             relation = layer_mapping.get("relation", layer.lower())
         if not relation and lang and partitions:
             relation = partitions.get(lang, {}).get("relation")
         prefix_id: str = layer.lower()
-        if alignment:
+        if layer != seg and alignment:
             prefix_id = "alignment"
         # Select the ID
         iddotref = f"{alias}.{prefix_id}_id"
@@ -1392,13 +1392,13 @@ def get_segment_meta_script(
             if not interim_relation:
                 # This should never happen?
                 continue
-            if alignment and relation:
+            if alignment_relation:
                 # The partition table is aligned to a main document table
                 joins[
                     f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
                 ] = 1
                 joins[
-                    f"{schema}.{relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
+                    f"{schema}.{alignment_relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
                 ] = 1
                 char_range_table = f"{alias}_{lang}"
             else:
@@ -1448,6 +1448,7 @@ SELECT -1::int2 AS rstype, jsonb_build_array(preps.{seg.lower()}_id, preps.id_of
 UNION ALL
 SELECT -2::int2 AS rstype, jsonb_build_array({meta_array}) FROM meta;    
     """
+    print("segment_meta_script", script)
     return script, meta_select_labels
 
 

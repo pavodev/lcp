@@ -88,6 +88,19 @@ def _paste_file(
             output.write(prefix + line)
 
 
+def _get_top_layer(config: CorpusConfig, restrict: set = set()) -> str:
+    top_layer = config["document"]
+    while 1:
+        container: str | None = next(
+            (x for x, y in config["layer"].items() if y.get("contains") == top_layer),
+            None,
+        )
+        if container is None or container not in restrict:
+            break
+        top_layer = container
+    return top_layer
+
+
 class Exporter:
 
     def __init__(self, request: Request, qi: QueryInfo) -> None:
@@ -256,7 +269,7 @@ class Exporter:
                 t[self._form_index],
                 id=str(offset + n),
                 **{
-                    _xml_attr(k): quoteattr(str(v))
+                    _xml_attr(k): quoteattr(str(json.loads(v)))
                     for k, v in zip(self._column_headers, t)
                     if k != "form"
                 },
@@ -308,7 +321,6 @@ class Exporter:
         meta_labels = self._qi.meta_labels
         layers_in_meta: set[str] = {l.split("_", 1)[0] for l in meta_labels}
         config = cast(CorpusConfig, self._config)
-        doc = config["document"]
         seg = config["segment"]
         all_layers: dict[str, dict[str, dict]] = {l: {} for l in layers_in_meta}
         # all_layers:
@@ -329,7 +341,8 @@ class Exporter:
         #         "divid2": {"segid3": 1, "segid4": 1}
         #     })
         # }
-        current_layer = last_container = doc
+        top_layer = _get_top_layer(config, restrict=layers_in_meta)
+        current_layer = last_container = top_layer
         while 1:
             current_layer = config["layer"].get(current_layer, {}).get("contains", "")
             if not current_layer:
@@ -338,8 +351,10 @@ class Exporter:
                 ordered_containers[last_container] = (current_layer, {})
                 last_container = current_layer
         layer_to_container = {y: x for x, (y, _) in ordered_containers.items()}
-        unordered_layers_by_doc: dict[str, dict[str, dict[str, int]]] = {
-            k: {} for k in layers_in_meta if k not in layer_to_container and k != doc
+        unordered_layers_by_top: dict[str, dict[str, dict[str, int]]] = {
+            k: {}
+            for k in layers_in_meta
+            if k not in layer_to_container and k != top_layer
         }
         # unordered_layers_by_doc:
         # {
@@ -357,18 +372,18 @@ class Exporter:
                 }
                 for l in layers_in_meta
             }
-            doc_id = layer_to_attrs[doc]["id"]
+            top_id = layer_to_attrs[top_layer]["id"]
             for l in layers_in_meta:
                 lid = layer_to_attrs[l]["id"]
                 all_layers[l][lid] = layer_to_attrs[l]
-                if l == doc:
+                if l == top_layer:
                     continue
                 if c := layer_to_container.get(l):
                     cid = layer_to_attrs[c].get("id", "")
                     oc = ordered_containers[c][1].setdefault(cid, {})
                     oc[lid] = 1
                 else:
-                    ulbc = unordered_layers_by_doc[l].setdefault(doc_id, {})
+                    ulbc = unordered_layers_by_top[l].setdefault(top_id, {})
                     ulbc[lid] = 1
             # SEGMENTS
             sid = layer_to_attrs[seg]["id"]
@@ -379,25 +394,25 @@ class Exporter:
             with open(fpath, "w") as seg_output:
                 for token in self.format_tokens(offset, tokens):
                     seg_output.write(_node_to_string(token))
-        for doc_id, attrs in all_layers[doc].items():
-            fpath = os.path.join(work_path, f"{doc_id}.xml")
+        for top_id, attrs in all_layers[top_layer].items():
+            fpath = os.path.join(work_path, f"{top_id}.xml")
             with open(fpath, "w") as doc_output:
                 attr_str = " ".join(
                     f"{_xml_attr(k)}={quoteattr(str(v))}" for k, v in attrs.items()
                 )
-                doc_output.write(f"<{doc} {attr_str}>")
+                doc_output.write(f"<{top_layer} {attr_str}>")
                 # contained layers (div, segs, etc.)
-                contained_layer, containees_by_doc_id = ordered_containers[doc]
+                contained_layer, containees_by_top_id = ordered_containers[top_layer]
                 self.write_containees(
                     doc_output,
                     all_layers,
                     ordered_containers,
                     contained_layer,
-                    containees_by_doc_id[doc_id],
+                    containees_by_top_id[top_id],
                 )
                 # undordered layers (named entity)
-                for unordered_layer in unordered_layers_by_doc:
-                    for ul_id in unordered_layers_by_doc[unordered_layer][doc_id]:
+                for unordered_layer in unordered_layers_by_top:
+                    for ul_id in unordered_layers_by_top[unordered_layer][top_id]:
                         ul_attrs = all_layers[unordered_layer][ul_id]
                         ul_attr_str = " ".join(
                             f"{_xml_attr(k)}={quoteattr(str(v))}"
@@ -464,7 +479,9 @@ class Exporter:
             layers_in_meta: set[str] = {
                 l.split("_", 1)[0] for l in self._qi.meta_labels
             }
-            current_layer = config["document"]
+            current_layer = _get_top_layer(
+                cast(CorpusConfig, config), restrict=layers_in_meta
+            )
             indented_layers: list[str] = [current_layer]
             while current_layer := (
                 config["layer"].get(current_layer, {}).get("contains", "")
@@ -529,7 +546,7 @@ class Exporter:
                             sprefix = sid[0:3]
                             kwicfn = os.path.join(wpath, sprefix, f"{sid}_kwic.xml")
                             if os.path.exists(kwicfn):
-                                output.write(f"{_get_indent(embedding+1)}<hits>\n")
+                                output.write(f"\n{_get_indent(embedding+1)}<hits>\n")
                                 _paste_file(output, kwicfn, _get_indent(embedding + 2))
                                 output.write(f"{_get_indent(embedding+1)}</hits>\n")
                             fn = os.path.join(wpath, sprefix, f"{sid}.xml")

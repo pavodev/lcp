@@ -1644,8 +1644,10 @@ export default {
       if (fullSearch) {
         data["full"] = true;
       }
-      if (to_export)
+      if (to_export) {
         data["to_export"] = to_export;
+        data["requested"] = Math.max(this.nExport, 1);
+      }
       console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
       if (retval.status == "started") {
