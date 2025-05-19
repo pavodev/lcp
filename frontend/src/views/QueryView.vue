@@ -1380,8 +1380,6 @@ export default {
           console.log("query stored", data);
           return;
         } else if (data["action"] == "export_complete") {
-          this.loading = false;
-          this.percentageDone = this.WSDataResults.percentage_done;
           const info = {
             hash: data.hash,
             format: data.format,
@@ -1393,17 +1391,21 @@ export default {
           useWsStore().addMessageForPlayer(data)
           return;
         } else if (data["action"] === "stopped") {
-          if (data["n"]) {
+          if (data.request) {
             console.log("queries stopped", data);
             useNotificationStore().add({
               type: "success",
               text: "Query stopped",
             });
             this.loading = false;
+            if (this.requestId == data.request)
+              this.requestId = null;
           }
           return;
         } else if (data["action"] == "started_export") {
           this.loading = false;
+          if (this.requestId == data.request)
+            this.requestId = null;
         } else if (data["action"] === "query_result") {
           useWsStore().addMessageForPlayer(data)
           console.log("query_result", data);
@@ -1671,11 +1673,13 @@ export default {
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
+      this.loading = false;
+      if (!this.requestId)
+        return;
       useWsStore().sendWSMessage({
         action: "stop",
         request: this.requestId
       });
-      this.loading = false;
     },
     enough(job) {
       useWsStore().sendWSMessage({

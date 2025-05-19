@@ -351,7 +351,7 @@ async def post_query(request: web.Request) -> web.Response:
         await push_msg(
             app["websockets"],
             req.room,
-            {"action": "started_export", "format": xpformat},
+            {"action": "started_export", "format": xpformat, "request": req.id},
             skip=None,
             just=(req.room, req.user),
         )
