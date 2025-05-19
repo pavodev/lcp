@@ -1,53 +1,59 @@
 import asyncio
 import json
+import os
 
 from aiohttp import web
 from typing import cast
 
 from .authenticate import Authentication
+from .cqp_to_json import full_cqp_to_json
+from .textsearch_to_json import textsearch_to_json
 from .query_classes import QueryInfo, Request
 from .query_future import process_query
 from .utils import LCPApplication
 
+FCS_HOST = "catchphrase.linguistik.uzh.ch"
+FCS_PORT = "9090"
+FCS_DB = "LCP public corpora"
+PID_PREFIX = "https://catchphrase.linguistik.uzh.ch/query/"
+DEFAULT_MAX_KWIC_LINES = os.getenv("DEFAULT_MAX_KWIC_LINES", 9999)
 
-def _make_json_query(query: str, tok: str, seg: str) -> str:
-    json_query: dict[str, list[dict]] = {
-        "query": [{"unit": {"layer": seg, "label": "s"}}],
-        "results": [{"label": "kwic", "resultsPlain": {"context": ["s"]}}],
-    }
-    words = query.split()
-    assert len(words) > 0, RuntimeError("Cannot perform a search with no word")
-    wunits = [
-        {
-            "unit": {
-                "layer": tok,
-                "label": f"t{n}",
-                "partOf": [{"partOfStream": "s"}],
-                "constraints": [
-                    {
-                        "comparison": {
-                            "left": {"reference": "form"},
-                            "comparator": "=",
-                            "right": {"string": w},
-                        }
-                    }
-                ],
-            }
-        }
-        for n, w in enumerate(words, start=1)
-    ]
-    if len(wunits) == 1:
-        json_query["query"].append(wunits[0])
-        json_query["results"][0]["resultsPlain"]["entities"] = ["t1"]
-    else:
-        seq = {
-            "sequence": {"partOf": [{"partOfStream": "s"}]},
-            "label": "seq",
-            "members": wunits,
-        }
-        json_query["query"].append(seq)
-        json_query["results"][0]["resultsPlain"]["entities"] = ["seq"]
-    return json.dumps(json_query)
+
+def _get_cid_from_pid(pid: str) -> str:
+    prefix_less = pid[len(PID_PREFIX) :]
+    return "".join(
+        x for n, x in enumerate(prefix_less, start=1) if "/" not in prefix_less[:n]
+    )
+
+
+def _get_iso639_3(lang: str) -> str:
+    if lang == "en":
+        return "eng"
+    if lang == "de":
+        return "deu"
+    if lang == "fr":
+        return "fra"
+    if lang == "it":
+        return "ita"
+    if lang == "rm":
+        return "roh"
+    if lang == "ro":
+        return "ron"
+    return ""
+
+
+def _get_languages_from_partitions(partitions: dict) -> str:
+    lg_template = """          <ed:Languages>
+            {languages}
+          </ed:Languages>"""
+    languages = "<ed:Language>eng</ed:Language>"
+    if values := partitions.get("values", []):
+        languages = "\n            ".join(
+            f"<ed:Language>{_get_iso639_3(lg)}</ed:Language>"
+            for lg in values
+            if _get_iso639_3(lg)
+        )
+    return lg_template.format(languages=languages)
 
 
 async def _check_request_complete(qi: QueryInfo, request: Request):
@@ -74,7 +80,7 @@ def _make_search_response(buffers, request_ids: dict[str, dict]) -> str:
         form_id = column_names.index("form")
         if "1" not in payload or "-1" not in payload:
             continue
-        for sid, hits in payload["1"]:
+        for rp, (sid, hits) in enumerate(payload["1"], start=1):
             offset, tokens, *annotations = payload["-1"][sid]
             prep_seg = ""
             in_hit = False
@@ -96,14 +102,14 @@ def _make_search_response(buffers, request_ids: dict[str, dict]) -> str:
                 prep_seg += token_str
             prep_seg = prep_seg.strip()
             if in_hit:
-                prep_seg += "</hits:Hist>"
+                prep_seg += "</hits:Hit>"
             records.append(
                 f"""
     <sruc:record>
       <sru:recordSchema>http://clarin.eu/fcs/resource</sru:recordSchema>
       <sru:recordPacking>xml</sru:recordPacking>
       <sru:recordData>
-        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="https://catchphrase.linguistik.uzh.ch/query/{cid}/{shortname}">
+        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="{PID_PREFIX}{cid}/{shortname}">
           <fcs:ResourceFragment>
             <fcs:DataView type="application/x-clarin-fcs-hits+xml">
               <hits:Result xmlns:hits="http://clarin.eu/fcs/dataview/hits">
@@ -113,7 +119,7 @@ def _make_search_response(buffers, request_ids: dict[str, dict]) -> str:
           </fcs:ResourceFragment>
         </fcs:Resource>
       </sru:recordData>
-      <sru:recordPosition>1</sru:recordPosition>
+      <sru:recordPosition>{rp}</sru:recordPosition>
     </sru:record>"""
             )
     resp += f"""
@@ -129,14 +135,22 @@ async def search_retrieve(
     operation: str = "searchRetrieve",
     version: str = "1.2",
     query: str = "",
+    queryType: str = "",
     maximumRecords: str = "",
     **extra_params,
 ) -> str:
     authenticator = cast(Authentication, app["auth_class"](app))
-    public_corpora = {
+
+    resources = [
+        _get_cid_from_pid(pid)
+        for pid in extra_params.get("x-fcs-context", "").split(",")
+        if pid
+    ]
+    corpora: dict[str, dict] = {
         cid: conf
         for cid, conf in app["config"].items()
-        if authenticator.check_corpus_allowed(cid, conf, {}, "lcp", get_all=False)
+        if (not resources or cid in resources)
+        and authenticator.check_corpus_allowed(cid, conf, {}, "lcp", get_all=False)
     }
     try:
         requested: int = int(maximumRecords)
@@ -152,10 +166,7 @@ async def search_retrieve(
 
     request_ids: dict[str, dict] = {}
     async with asyncio.TaskGroup() as tg:
-        for cid, conf in public_corpora.items():
-            tok: str = conf["token"]
-            seg: str = conf["segment"]
-            json_query: str = _make_json_query(query, tok, seg)
+        for cid, conf in corpora.items():
             langs = ["en"]
             partitions = conf.get("partitions", {})
             if (
@@ -165,6 +176,11 @@ async def search_retrieve(
             ):
                 continue  # only do English for now
                 # langs = [next(x for x in partitions["values"])]
+            json_query: str = json.dumps(
+                full_cqp_to_json(query, conf)
+                if queryType == "cql"
+                else textsearch_to_json(query, conf)
+            )
             (req, qi, job) = process_query(
                 app,
                 {
@@ -183,6 +199,72 @@ async def search_retrieve(
     return _make_search_response(query_buffers, request_ids)
 
 
+async def explain(app: LCPApplication, **extra_params) -> str:
+    first_half: str = f"""<?xml version='1.0' encoding='utf-8'?>
+<sru:explainResponse xmlns:sru="http://www.loc.gov/zing/srw/">
+  <sru:version>1.2</sru:version>
+  <sru:record>
+    <sru:recordSchema>http://explain.z3950.org/dtd/2.0/</sru:recordSchema>
+    <sru:recordPacking>xml</sru:recordPacking>
+    <sru:recordData>
+      <zr:explain xmlns:zr="http://explain.z3950.org/dtd/2.0/">
+        <zr:serverInfo protocol="SRU" version="1.2" transport="http">
+          <zr:host>{FCS_HOST}</zr:host>
+          <zr:port>{FCS_PORT}</zr:port>
+          <zr:database>{FCS_DB}</zr:database>
+        </zr:serverInfo>
+        <zr:databaseInfo>
+          <zr:title lang="en" primary="true">{FCS_DB}</zr:title>
+          <zr:description lang="en" primary="true">The corpora publicly available at the LCP.</zr:description>
+        </zr:databaseInfo>
+        <zr:schemaInfo>
+          <zr:schema identifier="http://clarin.eu/fcs/resource" name="fcs">
+            <zr:title lang="en" primary="true">CLARIN-CH Federated Content Search</zr:title>
+          </zr:schema>
+        </zr:schemaInfo>
+        <zr:configInfo>
+          <zr:default type="numberOfRecords">50</zr:default>
+          <zr:setting type="maximumRecords">{DEFAULT_MAX_KWIC_LINES}</zr:setting>
+        </zr:configInfo>
+      </zr:explain>
+    </sru:recordData>
+  </sru:record>"""
+    second_half = "</sru:explainResponse>"
+    if "x-fcs-endpoint-description" in extra_params:
+        authenticator = cast(Authentication, app["auth_class"](app))
+        resources_list: list[str] = [
+            f"""      <ed:Resource pid="{PID_PREFIX}{cid}/{conf['shortname']}">
+          <ed:Title xml:lang="en">{conf['shortname']}</ed:Title>
+          <ed:Description xml:lang="en">{conf['description']}</ed:Description>
+          <ed:LandingPageURI>{PID_PREFIX}{cid}/{conf['shortname']}</ed:LandingPageURI>
+          {_get_languages_from_partitions(conf.get('partitions', {}))}
+          <ed:AvailableDataViews ref="hits"/>
+        </ed:Resource>"""
+            for cid, conf in app["config"].items()
+            if authenticator.check_corpus_allowed(cid, conf, {}, "lcp", get_all=False)
+        ]
+        resources_str = "\n        ".join(resources_list)
+        second_half = f"""  <sru:echoedExplainRequest>
+    <sru:version>1.2</sru:version>
+    <sru:baseUrl>http://repos.example.org/fcs-endpoint</sru:baseUrl>
+  </sru:echoedExplainRequest>
+  <sru:extraResponseData>
+    <ed:EndpointDescription xmlns:ed="http://clarin.eu/fcs/endpoint-description" version="2">
+      <ed:Capabilities>
+        <ed:Capability>http://clarin.eu/fcs/capability/basic-search</ed:Capability>
+      </ed:Capabilities>
+      <ed:SupportedDataViews>
+        <ed:SupportedDataView id="hits" delivery-policy="send-by-default">application/x-clarin-fcs-hits+xml</ed:SupportedDataView>
+      </ed:SupportedDataViews>
+      <ed:Resources>
+        {resources_str}
+      </ed:Resources>
+    </ed:EndpointDescription>
+  </sru:extraResponseData>
+</sru:explainResponse>"""
+    return first_half + "\n" + second_half
+
+
 async def get_fcs(request: web.Request) -> web.Response:
     app = cast(LCPApplication, request.app)
     q = request.rel_url.query
@@ -190,7 +272,6 @@ async def get_fcs(request: web.Request) -> web.Response:
     resp: str = ""
     if operation == "searchRetrieve":
         resp = await search_retrieve(app, **q)
-    # elif operation == "explain":
-    #     resp = await explain(app, **q)
+    elif operation == "explain":
+        resp = await explain(app, **q)
     return web.Response(body=resp, content_type="application/xml")
-    # return web.json_response(resp)
