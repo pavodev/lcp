@@ -1338,6 +1338,8 @@ export default {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
+          if (data.kind == "cqp" && !data.valid)
+            data.error = "Incomplete query or invalid CQP syntax";
           this.isQueryValidData = data;
           return;
         }
@@ -1689,6 +1691,10 @@ export default {
         query = this.queryDQD + "\n";
       if (this.currentTab == "cqp")
         query = this.cqp;
+      if (!query || query.match(/^(\s|\n)+$/)) {
+        this.isQueryValidData = {valid: true};
+        return;
+      }
       useWsStore().sendWSMessage({
         action: "validate",
         query: query,
