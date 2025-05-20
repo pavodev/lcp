@@ -95,7 +95,7 @@ class Exporter:
             for h in request.sent_hashes:
                 hpath = os.path.join(wpath, f"{h}_segments")
                 if os.path.exists(hpath):
-                    os.rmdir(hpath)
+                    shutil.rmtree(hpath)
             print(
                 f"SWISSDOX Exporting complete for request {request.id} (hash: {request.hash}) ; DELETED REQUEST"
             )
