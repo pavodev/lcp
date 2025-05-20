@@ -37,10 +37,12 @@ Look at upload._get_progress to understand how the pgoress info is parsed
 
 """
 
+import csv
 import importlib
+
+import importlib.util
 import json
 import os
-import re
 
 from collections.abc import Callable, Coroutine, Sequence
 from io import BytesIO
@@ -57,11 +59,27 @@ from sqlalchemy.sql import text
 from .configure import CorpusTemplate, Meta
 from .typed import JSONObject, MainCorpus, Params, RunScript
 from .utils import (
+    copy_to_table,
     _format_config_query,
     format_query_params,
     gather,
     _schema_from_corpus_name,
 )
+
+# passing the file name and path as argument
+lcpcli_spec = importlib.util.spec_from_file_location(
+    "lcpcli",
+    os.path.join(
+        os.path.split(os.path.dirname(__file__))[0],
+        "lcpcli",
+        "lcpcli",
+        "check_files.py",
+    ),
+)
+assert lcpcli_spec, RuntimeError("Could not find LCPCLI")
+assert lcpcli_spec.loader, RuntimeError("Could not find a loader for LCPCLI")
+lcpcli = importlib.util.module_from_spec(lcpcli_spec)
+lcpcli_spec.loader.exec_module(lcpcli)
 
 
 class SQLstats:
@@ -130,7 +148,12 @@ class Table:
 
 class Importer:
     def __init__(
-        self, pool: AsyncEngine, data: JSONObject, project_dir: str, debug: bool = False
+        self,
+        pool: AsyncEngine,
+        data: JSONObject,
+        project_dir: str,
+        debug: bool = False,
+        **kwargs,
     ) -> None:
         """
         Manage the import of a corpus into the DB via async postgres connection
@@ -167,6 +190,10 @@ class Importer:
         self.max_bytes = int(max(0, self.max_gb) * 1e9)
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 300))
         self.debug = debug
+        self.filenames_to_delimiters_quotes: dict[str, tuple[str, str]] = {}
+        self.force_delimiter: str = cast(str, kwargs.get("delimiter", ""))
+        self.force_quote: str = cast(str, kwargs.get("quote", ""))
+        self.force_escape: str | None = kwargs.get("escape") or None
         # self.drops: list[str] = cast(list[str], data.get("drops", []))
         return None
 
@@ -241,15 +268,16 @@ class Importer:
                 if not data or not data.strip():
                     return None
                 try:
-                    await raw.cursor()._connection.copy_to_table(
+                    await copy_to_table(
+                        raw.cursor()._connection,
                         table,
-                        source=BytesIO(data),
-                        schema_name=schema,
-                        columns=columns,
-                        delimiter="\t",
-                        quote="\b",
-                        format="csv",
+                        BytesIO(data),
+                        schema,
+                        columns,
                         timeout=self.upload_timeout,
+                        force_delimiter=(self.force_delimiter or ","),
+                        force_quote=(self.force_quote or '"'),
+                        force_escape=self.force_escape,
                     )
                 except Exception as e:
                     print(f"Failed to copy table {table} with columns {columns}")
@@ -269,7 +297,15 @@ class Importer:
 
         self.update_progress(f":progress:{headlen}:{tot}:{base}:")
         tab = base.split(".")[0]
-        table = Table(self.schema, tab, headers.decode("utf-8").strip().split("\t"))
+        parsed_headers = next(
+            csv.reader(
+                [headers.decode("utf-8")],
+                delimiter=self.force_delimiter or ",",
+                quotechar=self.force_quote or '"',
+                escapechar=self.force_escape,
+            )
+        )
+        table = Table(self.schema, tab, parsed_headers)
         script = self.sql.check_tbl(table.schema, table.name)
         exists = cast(list[tuple[bool]], await self.run_script(script, give=True))
         if exists[0][0] is False:
@@ -295,15 +331,16 @@ class Importer:
                     await f.seek(start)
                     data = await f.read(chunk)
                     try:
-                        await raw.cursor()._connection.copy_to_table(
+                        await copy_to_table(
+                            raw.cursor()._connection,
                             table.name,
-                            source=BytesIO(data),
-                            schema_name=self.schema,
-                            columns=table.columns,
-                            delimiter="\t",
-                            quote="\b",
-                            format="csv",
+                            BytesIO(data),
+                            self.schema,
+                            cast(list[str], table.columns),
                             timeout=self.upload_timeout,
+                            force_delimiter=(self.force_delimiter or ","),
+                            force_quote=(self.force_quote or '"'),
+                            force_escape=self.force_escape,
                         )
                     except Exception as e:
                         print(
@@ -327,120 +364,17 @@ class Importer:
         ]
         self.corpus_size = sum(s[1] for s in sizes)
 
-        token_anchoring = self.template["layer"][
-            self.template["firstClass"]["token"]
-        ].get("anchoring", {})
-
         # Do some checks on the layer files
-        for layer, layer_attrs in self.template["layer"].items():
-            lowlayer = layer.lower()
-            fpath = os.path.join(
-                path,
-                lowlayer
-                + (
-                    "0.csv"
-                    if layer
-                    in (
-                        self.template["firstClass"]["token"],
-                        self.template["firstClass"]["segment"],
-                    )
-                    else ".csv"
-                ),
-            )
-            if not os.path.exists(fpath):
-                fpath = fpath.replace(".csv", ".tsv")
-            assert os.path.exists(fpath), FileNotFoundError(
-                f"Could not find a file named {lowlayer}.csv for layer '{layer}'"
-            )
-            if layer_attrs.get("layerType") == "relation":
-                continue
-            with open(fpath, "r") as layer_file:
-                columns = layer_file.readline().rstrip().split("\t")
-                assert lowlayer + "_id" in columns, ReferenceError(
-                    f"Column '{lowlayer}_id' missing from file {lowlayer}.csv"
-                )
-                anchoring = layer_attrs.get("anchoring", {})
-                anchored_stream = (
-                    anchoring.get("stream")
-                    or layer in self.template["firstClass"]
-                    and token_anchoring.get("stream")
-                )
-                anchored_time = (
-                    anchoring.get("time")
-                    or layer in self.template["firstClass"]
-                    and token_anchoring.get("time")
-                )
-                assert not anchored_stream or "char_range" in columns, ReferenceError(
-                    f"Column 'char_range' missing from file {lowlayer}.csv"
-                )
-                assert not anchored_time or "frame_range" in columns, ReferenceError(
-                    f"Column 'frame_range' missing from file {lowlayer}.csv"
-                )
-                if layer != self.template["firstClass"]["document"]:
-                    continue
-                # self.partition_on_doc_range(
-                #     columns,
-                #     "char_range" if anchored_stream else "frame_range",
-                #     layer_file,
-                # )
+        checker = lcpcli.Checker(
+            self.template,
+            quote=self.force_quote or '"',
+            delimter=self.force_delimiter or ",",
+            escape=self.force_escape,
+        )
+        checker.run_checks(path, full=True, add_zero=True)
 
         await self.process_data(sizes, self._copy_tbl, *(self.corpus_size,))
         return None
-
-    def partition_on_doc_range(
-        self, columns: list[str], anchoring: str, file: Any
-    ) -> None:
-        ncol: int = next(n for n, col in enumerate(columns) if col == anchoring)
-        ranges: list[tuple[int, int]] = []
-
-        while line := file.readline():
-            range_min, range_max = [
-                int(i)
-                for i in line.split("\t")[ncol].lstrip("[ ").rstrip(") ").split(",")
-            ]
-            ranges.append((range_min, range_max))
-
-        ranges = sorted(ranges, key=lambda r: r[0])
-        num_partitions = 10
-        partition_ranges: list[tuple[int, int]] = []
-
-        for np in range(num_partitions - 1):  # split n-1 times to get n partitions
-            last_iteration = np == (num_partitions - 2)
-            if len(ranges) == 1:
-                partition_ranges.append((ranges[0][0], ranges[-1][1]))
-                ranges = []
-            if not ranges:
-                break
-            mid_r = ranges[0][0] + ((ranges[-1][1] - ranges[0][0]) / 2)
-            # include in left as long as 'mid' falls further than the range's mid-point
-            left_ranges = [
-                r for r in ranges if r[1] < mid_r or (mid_r - r[0] > r[1] - mid_r)
-            ]
-            right_ranges = [r for r in ranges if r not in left_ranges]
-            if last_iteration:
-                more_chars_in_left = (left_ranges[-1][1] - left_ranges[0][0]) > (
-                    right_ranges[-1][1] - right_ranges[0][0]
-                )
-                first_ranges = left_ranges if more_chars_in_left else right_ranges
-                second_ranges = right_ranges if more_chars_in_left else left_ranges
-                partition_ranges.append((first_ranges[0][0], first_ranges[-1][1]))
-                partition_ranges.append((second_ranges[0][0], second_ranges[-1][1]))
-                ranges = []
-            else:
-                # Keep as many documents as possible in the next range, to maximize the chances of further splitting
-                more_docs_in_left = len(left_ranges) > len(right_ranges)
-                ranges_to_add = right_ranges if more_docs_in_left else left_ranges
-                partition_ranges.append((ranges_to_add[0][0], ranges_to_add[-1][1]))
-                ranges = left_ranges if more_docs_in_left else right_ranges
-
-        for first_layer in cast(dict[str, str], self.template["firstClass"]).values():
-            for n, pr in enumerate(partition_ranges, start=1):
-                suffix = str(n)
-                if n == len(partition_ranges):
-                    suffix = "rest"
-                print(
-                    f"CREATE TABLE {first_layer.lower()}{suffix} PARTITION OF document FOR VALUES FROM ('[{pr[0]},{pr[0]+1})'::int4range) TO ('[{pr[1]-1},{pr[1]})'::int4range)"
-                )
 
     async def process_data(
         self,
@@ -651,7 +585,6 @@ res => plain
         Run the entire import pipeline: add data, set indices, grant rights
         """
         await self.import_corpus()
-        self.token_count = await self.get_token_count()
         pro = f":progress:1:{self.num_extras}:extras:"
         cons = "\n".join(self.constraints)
         self.update_progress(f"Setting constraints...\n{cons}")
@@ -662,6 +595,7 @@ res => plain
             await self.run_script(strung)
         await self.prepare_segments(progress=pro)
         await self.collocations()
+        self.token_count = await self.get_token_count()
         self.update_progress(f"Granting select privileges for querying...")
         await self.run_script(self.grant_query_select)
         self.update_progress(f"Privileges granted!")

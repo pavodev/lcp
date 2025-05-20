@@ -3,6 +3,7 @@ utils.py: all miscellaneous helpers and tools used by backend
 """
 
 import asyncio
+import csv
 import json
 import logging
 import math
@@ -13,11 +14,12 @@ import shutil
 import traceback
 
 from dotenv import load_dotenv
-from asyncpg import Range, Box
+from asyncpg import Connection, Range, Box
 from collections import Counter
 from collections.abc import Awaitable, Callable, Coroutine, Mapping
 from datetime import date, datetime
 from hashlib import md5
+from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
 from rq.registry import FinishedJobRegistry
@@ -56,6 +58,9 @@ from .typed import (
     QueryArgs,
     Websockets,
 )
+
+CSV_DELIMITERS = [",", "\t"]
+CSV_QUOTES = ['"', "\b"]
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
@@ -238,7 +243,11 @@ def setup() -> None:
         )
 
 
-def sanitize_xml_attribute_name(name):
+def sanitize_filename(filename: str) -> str:
+    return re.sub(r"^[ .]|[/<>:\"\\|?*]+|[ .]$", "_", filename)
+
+
+def sanitize_xml_attribute_name(name: str) -> str:
     # Replace invalid characters with an underscore
     # Invalid characters include anything that is not a valid XML character
     name = re.sub(r"[^a-zA-Z0-9_.-]", "_", name)
@@ -1077,7 +1086,6 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             for attr, v in attributes.items()
             if attr not in relational_attributes and v.get("type") != "vector"
         ]
-        nbit: int = cast(int, layer_info[layer].get("nlabels", 1))
         for attr, v in relational_attributes.items():
             # Quote attribute name (is arbitrary)
             attr_mapping = mapping_attrs.get(attr, {})
@@ -1090,6 +1098,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
             dotref = f"{alias_attr_table}.{attr_name}"
             sel = f"{dotref} AS {layer}_{attr}"
             if v.get("type") == "labels":
+                nbit: int = cast(int, attributes[attr].get("nlabels", 1))
                 on_cond = (
                     f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
                 )
@@ -1160,3 +1169,30 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     )
     print("meta script", script)
     return script
+
+
+async def copy_to_table(
+    connection: Connection,
+    table: str,
+    source: BytesIO,
+    schema: str,
+    columns: list[str],
+    timeout=0,
+    force_delimiter: str | None = None,
+    force_quote: str | None = None,
+    force_escape: str | None = None,
+) -> None:
+    if timeout == 0:
+        timeout = os.getenv("UPLOAD_TIMEOUT", 300)
+    await connection.copy_to_table(
+        table,
+        source=source,
+        schema_name=schema,
+        columns=columns,
+        delimiter=(force_delimiter or ","),
+        quote=(force_quote or '"'),
+        escape=(force_escape or force_quote or None),
+        format="csv",
+        timeout=timeout,
+    )
+    return None

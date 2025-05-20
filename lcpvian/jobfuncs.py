@@ -45,7 +45,7 @@ async def _upload_data(
     #     template["project"] = project
 
     upool = get_current_job()._upool  # type: ignore
-    importer = Importer(upool, data, corpus, debug)
+    importer = Importer(upool, data, corpus, debug, **kwargs)
     extra = {"user": user, "room": room, "project": project}
     row: MainCorpus | None = None
     try:
@@ -70,7 +70,6 @@ async def _handle_export(
     query_hash: str,
     format: str,
     create: bool = True,
-    user: str = "",
     offset: int = 0,
     requested: int = 0,
     **kwargs: int | str | None,
@@ -78,25 +77,28 @@ async def _handle_export(
     """
     To be run by rq worker, create/update entry in main.exports table
     """
-
     export_query: str
     export_params = {
         "query_hash": query_hash,
         "format": format,
         "offset": offset,
         "requested": requested,
-        "user_id": user,
     }
     if create:
-        export_query = "CALL main.init_export('{query_hash}', '{format}', {offset}, {requested}, '{user_id}', FALSE);"
+        export_params["user_id"] = kwargs.get("user_id", "")
+        export_params["userpath"] = kwargs.get("userpath", "export")
+        export_params["corpus_id"] = kwargs.get("corpus_id", 0)
+        export_query = "CALL main.init_export('{query_hash}', '{format}', {offset}, {requested}, '{user_id}', FALSE, '{userpath}', {corpus_id});"
     else:
+        # if path := kwargs.get("path"):
+        #     RESULTS_DIR = os.getenv("RESULTS_USERS", os.path.join("results","users/"))
         export_query = "CALL main.finish_export('{query_hash}', '{format}', {offset}, {requested}, {delivered});"
         export_params.pop("user_id", "")
         export_params["delivered"] = kwargs.get("delivered", 0)
 
     query = export_query.format(**export_params)
 
-    async with get_current_job()._pool.begin() as conn:  # type: ignore
+    async with get_current_job()._wpool.begin() as conn:  # type: ignore
         raw = await conn.get_raw_connection()
         con = raw._connection
         async with con.transaction():
@@ -141,6 +143,9 @@ async def _db_query(
     config: bool = False,
     store: bool = False,
     delete: bool = False,
+    is_main: bool = False,  # is the query related to the schame 'main'?
+    is_import: bool = False,  # is the query related to the import pipeline?
+    has_return: bool = True,
     document: bool = False,
     **kwargs: str | None | int | float | bool | list[str],
 ) -> (
@@ -168,10 +173,10 @@ async def _db_query(
             return None
         params = {"ids": ids}
 
-    name = "_upool" if (store or delete) else ("_wpool" if config else "_pool")
+    name = "_upool" if (store or delete or is_import) else ("_wpool" if (config or is_main) else "_pool")
     job = get_current_job()
     pool = getattr(job, name)
-    method = "begin" if (store or delete) else "connect"
+    method = "begin" if (store or delete or is_import) else "connect"
 
     first_job_id = cast(str, kwargs.get("first_job", ""))
     if first_job_id:
@@ -190,6 +195,7 @@ async def _db_query(
     async with getattr(pool, method)() as conn:
         try:
             res = await conn.execute(text(query), params)
+
             if store or delete:
                 # For DELETE queries, simply return None (or log res.rowcount if needed)
                 if delete:
@@ -197,8 +203,12 @@ async def _db_query(
                     return res.rowcount
                 else:
                     return None
-            else:
-                out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
+
+            if is_import or not has_return:
+                return None
+
+            out: list[tuple[Any, ...]] = [tuple(i) for i in res.fetchall()]
+
             return out
         except SQLAlchemyError as err:
             print(f"SQL error: {err}")

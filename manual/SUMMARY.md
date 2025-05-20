@@ -16,4 +16,5 @@
 * [Corpora in LCP](corpora_in_lcp.md)
 * [Corpus management](corpus_management.md)
 * [Importing](importing.md)
+    * [Tutorial](import_tutorial.md)
 * [Exporting](exporting.md)
