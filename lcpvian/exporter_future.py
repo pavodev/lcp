@@ -233,13 +233,28 @@ class Exporter:
             f"[Export {self._request.id}] Process query {batch_hash} (QI {self._request.hash})"
         )
         res = payload.get("result", [])
-        if self._qi.stats_keys:
-            stats = E.stats(
-                *[
-                    E.result(*[E.entry(":".join(str(x) for x in l)) for l in res[k]])
-                    for k in self._qi.stats_keys
-                ]
+        all_stats = []
+        for k in self._qi.stats_keys:
+            if k not in res:
+                continue
+            k_in_rs = int(k) - 1
+            stats_name = self._qi.result_sets[k_in_rs]["name"]
+            stats_type = self._qi.result_sets[k_in_rs]["type"]
+            stats_attrs = [
+                x["name"] for x in self._qi.result_sets[k_in_rs]["attributes"]
+            ]
+            all_stats.append(
+                getattr(E, stats_type)(
+                    *[
+                        getattr(E, aname)(str(aval))
+                        for l in res[k]
+                        for aname, aval in zip(stats_attrs, l)
+                    ],
+                    name=stats_name,
+                )
             )
+        if all_stats:
+            stats = E.stats(*[E.observation(x) for x in all_stats])
             # Just update the main stats.xml file at the root of the working path
             stats_path: str = os.path.join(self.get_working_path(), "stats.xml")
             with open(stats_path, "w") as stats_output:
