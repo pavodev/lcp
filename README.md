@@ -392,3 +392,7 @@ The docker-compose.yml file defines several services:
 
 ## Configuration
 The configuration for each service is specified in the `docker-compose.yml` file. Make sure to update the `.env.docker` file with your specific environment variables as needed.
+
+# License
+
+This program is free software: you can redistribute it and/or modify it under the terms of the CC BY-NC-SA License (see https://creativecommons.org/licenses/by-nc-sa/4.0/deed.en). This licence allows users to use the work in any manner provided that such use is not commercial. If the user creates a new (derivative) work that they want to license, they must select the same license, i.e. CC BY-NC-SA (in the same or a later version). This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY.

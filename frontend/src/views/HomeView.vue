@@ -139,7 +139,7 @@
                       <span class="badge text-bg-primary me-1 tooltips" :title="$t('common-word-count')"
                       >{{
                         nFormatter(
-                          calculateSum(Object.values(corpus.token_counts))
+                          calculateSum(Object.entries(corpus.token_counts).filter(kv=>kv[0].endsWith("0")).map(kv=>kv[1]))
                         )
                       }}</span>
                       <span

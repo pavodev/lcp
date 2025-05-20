@@ -288,6 +288,8 @@ class Column(DDL):
         """
         if self.constrs.get("primary_key", False):
             return ""
+        elif self.type == "jsonb":
+            return ""
         elif self.type in ("int4range", "int8range", "point", "box"):
             return self._idx_constr.format("USING gist", self.name)
         elif self.type == "tsvector":
@@ -533,7 +535,7 @@ class CTProcessor:
 
     @staticmethod
     def _order_ct_layers(
-        layers: dict[str, dict[str, Any]]
+        layers: dict[str, dict[str, Any]],
     ) -> dict[str, dict[str, Any]]:
         # check if all layers referred to do exist
         referred = set([ref for v in layers.values() if (ref := v.get("contains"))])
@@ -697,16 +699,20 @@ class CTProcessor:
                 table_cols.append(Column(attr, "main.vector", nullable=nullable))
 
             elif typ == "labels":
-                assert "nlabels" in self.layers[entity_name], AttributeError(
-                    f"Attribute {attr} is of type labels but no number of distinct labels was provided for entity type {entity_name}"
+                entity_attrs = self.layers[entity_name].get("attributes", {})
+                assert attr in entity_attrs, ReferenceError(
+                    f"Could not find attribute {attr} on {entity_name}"
                 )
-                nbit = self.layers[entity_name]["nlabels"]
+                assert "nlabels" in entity_attrs[attr], AttributeError(
+                    f"Attribute {entity_name}->{attr} is of type labels but no number of distinct labels was provided for it"
+                )
+                nbit = entity_attrs[attr]["nlabels"]
                 assert str(nbit).isnumeric(), TypeError(
-                    f"The value of {entity_name}'s 'nlabels' should be an integer; got '{nbit}' instead"
+                    f"The value of {entity_name}->{attr}'s 'nlabels' should be an integer; got '{nbit}' instead"
                 )
                 table_cols.append(Column(attr, f"bit({nbit})", nullable=nullable))
                 # Create lookup table if needed
-                label_lookup_table_name = f"{entity_name.lower()}_labels"
+                label_lookup_table_name = f"{entity_name.lower()}_{attr.lower()}"
                 map_attr[attr] = {"name": label_lookup_table_name, "type": "relation"}
                 if label_lookup_table_name not in [t.name for t in tables]:
                     inttype = "int2"
@@ -719,7 +725,7 @@ class CTProcessor:
                             f"Cannot accommodate more than 9223372036854775807 distinct labels"
                         )
                     label_lookup_table = Table(
-                        "labels",
+                        label_lookup_table_name,
                         [
                             Column("bit", inttype, primary_key=True),
                             Column("label", "text", unique=True),
@@ -728,12 +734,14 @@ class CTProcessor:
                     )
                     tables.append(label_lookup_table)
 
-            elif not typ and attr == "meta":
+            elif attr == "meta":
                 table_cols.append(Column(attr, "jsonb", nullable=nullable))
                 entity_mapping["hasMeta"] = True
 
             else:
-                raise Exception(f"unknown type for attribute: '{attr}'")
+                raise Exception(
+                    f"unknown type for attribute: '{entity_name}'->'{attr}'"
+                )
 
         if map_attr:
             entity_mapping["attributes"] = cast(JSONObject, map_attr)

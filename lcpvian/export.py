@@ -1,4 +1,7 @@
+import os
+
 from aiohttp import web
+from datetime import datetime
 from rq import Callback
 from rq.connections import get_current_connection
 from rq.job import Job
@@ -6,38 +9,28 @@ from typing import Any, cast
 
 from .callbacks import _export_complete, _general_failure
 from .exporter import Exporter
-from .exporter_xml import ExporterXml
 from .jobfuncs import _handle_export
 from .swissdox import export_swissdox
-from .typed import JSONObject
+from .typed import Batch, JSONObject
 from .utils import (
     _determine_language,
     _get_all_jobs_from_hash,
     push_msg,
     format_meta_lines,
+    sanitize_filename,
 )
-import os
 
 EXPORT_TTL = 5000
+RESULTS_USERS = os.environ.get("RESULTS_USERS", os.path.join("results", "users"))
 
 # See at the bottom for the definition of the class Export
-
-
-def get_exporter_class(format: str) -> type[Exporter]:
-    assert format in ("dump", "xml"), TypeError(
-        f"The export format {format} is not supported"
-    )
-    exp_class = Exporter
-    if format == "xml":
-        exp_class = ExporterXml
-    return exp_class
 
 
 async def exporter(
     hash: str, config: dict[str, Any], format: str, partition: str = "", **kwargs
 ) -> None:
     connection = get_current_connection()
-    exp_class = get_exporter_class(format)
+    exp_class = Exporter.get_exporter_class(format)
     total_requested = kwargs.get("total_results_requested", 200)
     offset = kwargs.get("offset", 0)
     full = kwargs.get("full", False)
@@ -51,14 +44,19 @@ async def exporter(
         full=full,
     )
     await exp_instance.export()
-    await _handle_export(
+    await _handle_export(  # finish_export
         hash,
         format,
         create=False,
-        user=kwargs.get("user", ""),
         offset=exp_instance._offset,
         requested=exp_instance._total_results_requested,
         delivered=exp_instance.n_results,
+        path=exp_class.get_dl_path_from_hash(
+            hash,
+            exp_instance._offset,
+            exp_instance._total_results_requested,
+            exp_instance._full,
+        ),
     )
 
 
@@ -74,17 +72,34 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     requested = payload.get("total_results_requested", 0)
 
     print("Ready to start exporting")
-    corpus_conf = payload.get("config", {})
+    corpus_conf: dict = cast(dict, payload.get("config", {}))
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
     first_job = Job.fetch(first_job_id, connection=app["redis"])
     hash: str = first_job.id
+    batch: Batch = cast(dict, first_job.kwargs).get("current_batch", (0, "", "", 0))
 
+    filename: str = cast(str, payload.get("filename", ""))
+    extension: str = "db" if export_format == "swissdox" else export_format
+    if not filename:
+        filename = f"{corpus_conf.get('shortname')} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}.{extension}"
+    filename = sanitize_filename(filename)
+    corpus_folder = sanitize_filename(
+        corpus_conf.get("shortname") or corpus_conf["project_id"]
+    )
+    userpath: str = os.path.join(corpus_folder, filename)
+    suffix: int = 0
+    while os.path.exists(os.path.join(RESULTS_USERS, user, userpath)):
+        suffix += 1
+        userpath = os.path.join(
+            corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}).{extension}"
+        )
     init_export_job = app["internal"].enqueue(
-        _handle_export,
+        _handle_export,  # init_export
         on_failure=Callback(_general_failure, EXPORT_TTL),
         result_ttl=EXPORT_TTL,
         job_timeout=EXPORT_TTL,
-        args=(hash, export_format, True, user, offset, requested),
+        args=(hash, export_format, True, offset, requested),
+        kwargs={"user_id": user, "userpath": userpath, "corpus_id": batch[0]},
     )
 
     depends_on = [
@@ -96,8 +111,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
     job: Job
     if export_format == "swissdox":
-        batch: str = cast(dict, first_job.kwargs).get("current_batch", ["", "", ""])[2]
-        underlang = _determine_language(batch) or ""
+        underlang = _determine_language(batch[2]) or ""
         if underlang:
             underlang = f"_{underlang}"
         article_ids: set[str] = set()
@@ -115,9 +129,20 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
             "room": room,
             "project_id": str(conf.get("project_id", "all")),
             "corpus_name": str(conf.get("shortname", "swissdox")),
+            "hash": hash,
+            "userpath": userpath,
         }
         job = await export_swissdox(
             app["redis"], [a for a in article_ids], **swissdox_kwargs  # type: ignore
+        )
+        app["background"].enqueue(
+            _handle_export,  # finish export
+            on_failure=Callback(_general_failure, EXPORT_TTL),
+            result_ttl=EXPORT_TTL,
+            depends_on=job.id,
+            job_timeout=EXPORT_TTL,
+            args=(hash, export_format, False, offset, requested),
+            kwargs={"delivered": 200},
         )
     else:
         rest: dict[str, Any] = {}
@@ -177,7 +202,7 @@ async def download_export(request: web.Request) -> web.FileResponse:
         results_path = str(os.environ.get("RESULTS_PATH", "results"))
         filepath = os.path.join(results_path, hash, offset, "swissdox.db")
     else:
-        exporter_class = get_exporter_class(format)
+        exporter_class = Exporter.get_exporter_class(format)
         filepath = exporter_class.get_dl_path_from_hash(
             hash, cast(int, offset), cast(int, requested), full
         )
