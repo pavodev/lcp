@@ -64,6 +64,10 @@ from .typed import (
 from .utils import (
     _default_tracks,
     _get_status,
+    _delete_request_info,
+    _get_request_info,
+    _get_query_info,
+    _update_query_info,
     _format_config_query,
     _set_config,
     _sign_payload,
@@ -98,7 +102,9 @@ class QueryService:
         """
         Get the stored messages related to a query and send them to frontend
         """
-        msg = job.meta["latest_stats_message"]
+        query_info = _get_query_info(self.app["redis"], job=job)
+
+        msg = query_info["latest_stats_message"]
         print(f"Retrieving stats message: {msg}")
         jso = self.app["redis"].get(msg)
 
@@ -106,68 +112,70 @@ class QueryService:
             return False
 
         payload: JSONObject = json.loads(jso)
-        _sign_payload(payload, kwargs)
-        total_requested = cast(int, payload.get("total_results_requested", 0))
-        status = _get_status(
-            cast(int, payload.get("total_results_so_far", 0)),
-            done_batches=cast(list, payload.get("done_batches")),
-            all_batches=cast(list, payload.get("all_batches")),
-            total_results_requested=total_requested,
-            search_all=cast(bool, payload.get("search_all", False)),
-            full=cast(bool, payload.get("full", False)),
-            time_so_far=cast(float, payload.get("total_duration", 0)),
-        )
-        if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
-            status = "finished"
-        payload["status"] = status
 
-        # we may have to apply the latest post-processes...
-        pps = cast(
-            dict[int, Any], kwargs["post_processes"] or payload["post_processes"]
-        )
-        # json serialises the Results keys to strings, so we have to convert
-        # them back into int for the Results object to be correctly typed:
-        full_res = cast(dict[str, ResultsValue], payload["full_result"])
-        res = cast(Results, {int(k): v for k, v in full_res.items()})
-        if pps and pps != cast(dict[int, Any], payload["post_processes"]):
-            filtered = _apply_filters(res, pps)
-            payload["result"] = cast(JSONObject, filtered)
-        payload["no_restart"] = True
-        self.app["redis"].expire(msg, self.query_ttl)
-        strung: str = json.dumps(payload, cls=CustomEncoder)
-
-        failed = False
-        tasks: list[Coroutine[None, None, None]] = [
-            self.app["aredis"].publish(PUBSUB_CHANNEL, strung)
-        ]
-
-        sent_and_meta_msgs = {
-            **job.meta.get("sent_job_ws_messages", {}),
-            **job.meta.get("meta_job_ws_messages", {}),
-        }
-
-        for msg in sent_and_meta_msgs:
-            print(f"Retrieving sentences or metadata message: {msg}")
-            jso = self.app["redis"].get(msg)
-            if jso is None:
-                failed = True
-                continue
-            payload = json.loads(jso)
-            _sign_payload(payload, kwargs)
-            payload["no_update_progress"] = True
-            payload["no_restart"] = True
-            payload["status"] = status
-            self.app["redis"].expire(msg, self.query_ttl)
-            task = self.app["aredis"].publish(
-                PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
+        success = True
+        for request_info in _get_request_info(self.app["redis"], query_info["hash"]):
+            status = _get_status(
+                query_info,
+                request_info,
+                search_all=cast(bool, request_info.get("search_all", False)),
             )
-            tasks.append(task)
+            if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
+                status = "finished"
+            payload["status"] = status
 
-        if not failed:
-            for task in tasks:
-                await task
-            return True
-        return False
+            # we may have to apply the latest post-processes...
+            pps = cast(dict[int, Any], query_info.get("post_processes", {}))
+            # json serialises the Results keys to strings, so we have to convert
+            # them back into int for the Results object to be correctly typed:
+            full_res = cast(dict[str, ResultsValue], query_info["all_non_kwic_results"])
+            res = cast(Results, {int(k): v for k, v in full_res.items()})
+            if pps:
+                filtered = _apply_filters(res, pps)
+                payload["result"] = cast(JSONObject, filtered)
+            payload["no_restart"] = True
+            self.app["redis"].expire(msg, self.query_ttl)
+            _sign_payload(payload, request_info)
+            strung: str = json.dumps(payload, cls=CustomEncoder)
+
+            failed = False
+            tasks: list[Coroutine[None, None, None]] = [
+                self.app["aredis"].publish(PUBSUB_CHANNEL, strung)
+            ]
+
+            sent_and_meta_msgs = {
+                **query_info.get("sent_job_ws_messages", {}),
+                **query_info.get("meta_job_ws_messages", {}),
+            }
+
+            for msg in sent_and_meta_msgs:
+                print(f"Retrieving sentences or metadata message: {msg}")
+                jso = self.app["redis"].get(msg)
+                if jso is None:
+                    failed = True
+                    continue
+                payload = json.loads(jso)
+                _sign_payload(payload, request_info)
+                payload["no_update_progress"] = True
+                payload["no_restart"] = True
+                payload["status"] = status
+                self.app["redis"].expire(msg, self.query_ttl)
+                task = self.app["aredis"].publish(
+                    PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
+                )
+                tasks.append(task)
+
+            if failed:
+                success = False
+            else:
+                for task in tasks:
+                    await task
+                # if status in ("finished", "satisfied"):
+                #     _delete_request_info(self.app["connection"], request_info)
+
+        if success:
+            _update_query_info(self.app["redis"], job=job, info={"running": False})
+        return success
 
     async def query(
         self,
@@ -217,17 +225,19 @@ class QueryService:
             first_job = Job.fetch(first_job_id, connection=self.app["redis"])
             is_first = first_job.id == job.id
             self.app["redis"].expire(job.id, self.query_ttl)
+            print(f"FOUND JOB IN CACHE: {str(job.id)} FOR {hashed}")
             if job.get_status() == "finished":
                 job_for_send_all_data = job if is_first else first_job
                 success = await self.send_all_data(job_for_send_all_data, **kwargs)
                 if success:
                     return job, None
+                query_info = _get_query_info(self.app["redis"], job=job)
                 query_kwargs = {
-                    "post_processes": kwargs["post_processes"],
-                    "current_kwic_lines": kwargs["current_kwic_lines"],
+                    "post_processes": query_info["post_processes"],
+                    "current_kwic_lines": query_info["current_kwic_lines"],
                     "from_memory": True,
                 }
-                _sign_payload(query_kwargs, kwargs)
+                _sign_payload(query_kwargs, query_info)
                 _query(job, self.app["redis"], job.result, **query_kwargs)
                 return job, False
         except NoSuchJobError:

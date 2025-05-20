@@ -82,6 +82,7 @@ const Utils = {
       return date ? moment(date).format(format) : '';
     },
     dictToStr: (dict,{replaceYesNo, addTitles, reorder} = {}) => {
+      if (!dict) return "";
       // default values
       replaceYesNo = replaceYesNo === undefined ? true : replaceYesNo;
       addTitles = addTitles === undefined ? false : addTitles;

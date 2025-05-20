@@ -1,14 +1,7 @@
-SELECT -2::int2 AS rstype,
-       s.Segment_id AS seg_id,
-       Document.document_id AS Document_id,
-       Document."meta"::JSONB AS Document_meta,
-       Document."char_range" AS Document_char_range,
-       s.segment_id AS Segment_id,
-       s."char_range" AS Segment_char_range
-FROM bnc1.segmentrest s
-LEFT JOIN bnc1.document Document ON Document.char_range @> s.char_range
-WHERE s.Segment_id = ANY(:ids)
-GROUP BY Document.document_id,
-         Document."char_range",
-         s.segment_id,
-         s."char_range";
+SELECT
+    s.Segment_id AS seg_id, Document.document_id AS Document_id, Document."meta"::jsonb AS Document_meta, Document."char_range" AS Document_char_range, s.segment_id AS Segment_id, s."char_range" AS Segment_char_range
+FROM
+    preps
+    LEFT JOIN bnc1.document Document ON Document.char_range @> s.char_range
+GROUP BY
+    Document.document_id, Document."char_range", s.segment_id, s."char_range"

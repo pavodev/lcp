@@ -48,8 +48,15 @@ from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
 from .configure import CorpusConfig
 from .dqd_parser import convert
-from .typed import Batch, JSONObject, Query, QueryArgs, Results
-from .utils import _determine_language, push_msg, _meta_query, hasher
+from .typed import Batch, JSONObject, Query, RequestInfo, Results
+from .utils import (
+    _determine_language,
+    push_msg,
+    _meta_query,
+    hasher,
+    _update_query_info,
+    _get_query_info,
+)
 
 QI_KWARGS = dict(kw_only=True, slots=True)
 DEFAULT_MAX_KWIC_LINES = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
@@ -62,7 +69,7 @@ class QueryIteration:
     """
 
     config: dict[str, CorpusConfig]
-    user: str
+    user: str | None
     room: str | None
     query: str
     corpora: list[int]
@@ -70,7 +77,7 @@ class QueryIteration:
     total_results_requested: int
     needed: int
     page_size: int
-    languages: set[str]
+    languages: list[str]
     simultaneous: str
     sentences: bool
     app: Application
@@ -81,7 +88,7 @@ class QueryIteration:
     total_duration: float = 0.0
     done_batches: list[Batch] = field(default_factory=list)
     total_results_so_far: int = 0
-    existing_results: Results = field(default_factory=dict)
+    all_non_kwic_results: Results = field(default_factory=dict)
     job: Job | None = None
     job_id: str = ""
     from_memory: bool = False
@@ -146,7 +153,7 @@ class QueryIteration:
     def _get_query_batches(
         corpora: list[int],
         config: dict[str, CorpusConfig],
-        languages: set[str],
+        languages: list[str],
     ) -> list[Batch]:
         """
         Get a list of tuples in the format of (corpus, batch, size) to be queried
@@ -187,8 +194,7 @@ class QueryIteration:
         if not isinstance(corp, list):
             corp = [corp]
         corpora_to_use = [int(i) for i in corp]
-        langs = [i.strip() for i in request_data.get("languages", ["en"])]
-        languages = set(langs)
+        languages = [i.strip() for i in request_data.get("languages", ["en"])]
         total_requested = request_data.get("total_results_requested", 1000)
         previous = request_data.get("previous", "")
         first_job_id = ""
@@ -199,8 +205,9 @@ class QueryIteration:
             prev = Job.fetch(previous, connection=app["redis"])
             prev_kwargs: dict[str, Any] = cast(dict[str, Any], prev.kwargs)
             first_job_id = prev_kwargs.get("first_job") or previous
-            total_duration = prev_kwargs.get("total_duration", 0.0)
-            total_results_so_far = prev.meta.get("total_results_so_far", 0)
+            query_info = _get_query_info(connection=app["redis"], job=prev)
+            total_duration = query_info.get("total_duration", 0.0)
+            total_results_so_far = query_info.get("total_results_so_far", 0)
             needed = -1  # to be figured out later
         sim = request_data.get("simultaneous", False)
         all_batches = cls._get_query_batches(corpora_to_use, app["config"], languages)
@@ -224,7 +231,7 @@ class QueryIteration:
             "page_size": request_data.get("page_size", 20),
             "all_batches": all_batches,
             "sentences": request_data.get("sentences", True),
-            "languages": set(langs),
+            "languages": languages,
             "full": full,
             "query": request_data["query"],
             "resume": request_data.get("resume", False),
@@ -277,19 +284,75 @@ class QueryIteration:
         self.word_count = total
         return None
 
-    def get_query_args(self) -> QueryArgs:
-        query_args_keys = QueryArgs.__required_keys__.union(QueryArgs.__optional_keys__)
-        qi_args = QueryArgs(
-            **{k: getattr(self, k) for k in query_args_keys if k != "hash"}  # type: ignore
+    def qi_param_from_info(self, param: str) -> Any:
+        translation = {"original_query": "query", "meta_json": "meta"}
+        return getattr(self, translation.get(param, param), "")
+
+    def get_request_info(self) -> RequestInfo:
+        request_info_keys = RequestInfo.__required_keys__.union(
+            RequestInfo.__optional_keys__
+        )
+        qi_args = RequestInfo(
+            **{k: self.qi_param_from_info(k) for k in request_info_keys if k not in ("hash",)}  # type: ignore
         )
         qi_args["hash"] = hasher(self.sql)
         return qi_args
 
-    async def submit_query(self) -> tuple[Job, bool | None]:
+    def set_query_info(self) -> dict[str, Any]:
+        """
+        Sets/update the query's info in the first job's meta
+        These values should not include offset, number requested, user, etc.
+        """
+        hash = hasher(self.sql)
+        qi_hash = self.first_job or hash
+        _query_info = _get_query_info(self.app["redis"], hash=qi_hash)
+        if _query_info:
+            # Only update the current batch
+            return _update_query_info(
+                self.app["redis"],
+                hash=qi_hash,
+                info={"current_batch": self.current_batch},
+            )
+        info: dict[str, Any] = {
+            "original_query": self.query,
+            "done_batches": self.done_batches,
+            "all_batches": self.all_batches,
+            "current_batch": self.current_batch,
+            "total_results_so_far": self.total_results_so_far,
+            "corpora": self.corpora,
+            "all_non_kwic_results": self.all_non_kwic_results,
+            "sentences": self.sentences,
+            "page_size": self.page_size,
+            "post_processes": self.post_processes,
+            "debug": self.app["_debug"],
+            "languages": list(self.languages),
+            "simultaneous": self.simultaneous,
+            "total_duration": self.total_duration,
+            "current_kwic_lines": self.current_kwic_lines,
+            "dqd": self.dqd,
+            "first_job": self.first_job,
+            "jso": self.jso,
+            "sql": self.sql,
+            "meta_json": self.meta,
+            "word_count": self.word_count,
+        }
+        return _update_query_info(self.app["redis"], hash=hash, info=info)
+
+    async def submit_query(self) -> tuple[Job | None, bool | None]:
         """
         Helper to submit a query job to the Query Service
         """
         job: Job
+
+        hash = hasher(self.sql)
+        query_info = _get_query_info(self.app["redis"], hash=self.first_job or hash)
+        if query_info.get("running") and hash == query_info.get("hash"):
+            # Do not start a new query stream while one is ongoing
+            return None, None
+        _update_query_info(
+            self.app["redis"], hash=self.first_job or hash, info={"running": True}
+        )
+
         # if self.offset > 0 and not self.full and not self.resume:
         load_more_from_cache: bool = self.resume and self.offset > 0
         if load_more_from_cache:
@@ -303,38 +366,14 @@ class QueryIteration:
         parent = self.job_id if self.job is not None else None
 
         query_kwargs = dict(
-            original_query=self.query,
-            user=self.user,
-            room=self.room,
             needed=self.needed,
             total_results_requested=self.total_results_requested,
-            done_batches=self.done_batches,
-            all_batches=self.all_batches,
-            current_batch=self.current_batch,
-            total_results_so_far=self.total_results_so_far,
-            corpora=self.corpora,
-            existing_results=self.existing_results,
-            sentences=self.sentences,
-            page_size=self.page_size,
-            post_processes=self.post_processes,
-            debug=self.app["_debug"],
             resume=self.resume,
-            languages=list(self.languages),
-            simultaneous=self.simultaneous,
             full=self.full,
-            total_duration=self.total_duration,
-            current_kwic_lines=self.current_kwic_lines,
-            dqd=self.dqd,
-            first_job=self.first_job,
-            jso=self.jso,
-            sql=self.sql,
             offset=self.offset,
-            meta_json=self.meta,
-            word_count=self.word_count,
             parent=parent,
+            first_job=self.first_job,
         )
-        if self.to_export:
-            query_kwargs["to_export"] = self.to_export
 
         queue = self.get_queue()
 
@@ -464,56 +503,57 @@ class QueryIteration:
         job_id = cast(str, manual["job"])
         job = Job.fetch(job_id, connection=app["redis"])
 
+        query_info = _get_query_info(app["redis"], job=job)
+
         done_batches = [
-            tuple(i) for i in cast(list[Sequence[str | int]], manual["done_batches"])
+            tuple(i)
+            for i in cast(list[Sequence[str | int]], query_info["done_batches"])
         ]
-        cur = cast(Sequence[int | str], manual["current_batch"])
+        cur = cast(Sequence[int | str], query_info["current_batch"])
         # sorry about this:
         current: Batch = (int(cur[0]), str(cur[1]), str(cur[2]), int(cur[3]))
         if current not in done_batches:
             done_batches.append(current)
         all_batches = [
-            tuple(i) for i in cast(list[Sequence[int | str]], manual["all_batches"])
+            tuple(i) for i in cast(list[Sequence[int | str]], query_info["all_batches"])
         ]
 
-        corpora_to_use = cast(list[int], manual["corpora"])
+        corpora_to_use = cast(list[int], query_info["corpora"])
 
         tot_req = cast(int, manual["total_results_requested"])
-        tot_so_far = cast(int, manual["total_results_so_far"])
+        tot_so_far = cast(int, query_info["total_results_so_far"])
         needed = tot_req - tot_so_far if tot_req > 0 else -1
         from_memory = manual.get("from_memory", False)
         sentences = manual.get("sentences", True)
 
-        kwargs = cast(dict[str, Any], job.kwargs)
-
         details = {
+            "user": "",
+            "room": "",
             "corpora": corpora_to_use,
-            "existing_results": manual.get("full_result", manual["result"]),
-            "user": manual["user"],
-            "room": manual["room"],
+            "all_non_kwic_results": manual.get("all_non_kwic_results", {}),
             "job": job,
             "app": app,
-            "jso": kwargs["jso"],
+            "jso": query_info["jso"],
             "job_id": manual["job"],
             "config": app["config"],
             "full": manual.get("full", False),
-            "word_count": manual["word_count"],
-            "simultaneous": manual.get("simultaneous", ""),
+            "word_count": query_info["word_count"],
+            "simultaneous": query_info.get("simultaneous", ""),
             "needed": needed,
             "previous": manual.get("previous", ""),
-            "page_size": kwargs.get("page_size", 20),
+            "page_size": query_info.get("page_size", 20),
             "resume": manual.get("resume", False),
             "total_results_requested": tot_req,
             "first_job": manual["first_job"],
-            "query": kwargs["original_query"],
+            "query": query_info["original_query"],
             "sentences": sentences,
             "from_memory": from_memory,
             "offset": manual["offset"],
             "total_duration": manual["total_duration"],
             "all_batches": all_batches,
-            "current_kwic_lines": manual["current_kwic_lines"],
+            "current_kwic_lines": query_info["current_kwic_lines"],
             "total_results_so_far": tot_so_far,
-            "languages": set(cast(list[str], manual["languages"])),
+            "languages": cast(list, query_info["languages"]),
             "done_batches": done_batches,
             "to_export": manual.get("to_export", {}),
         }
@@ -597,7 +637,7 @@ class QueryIteration:
         msg: dict[str, str] = {
             "status": "error",
             "action": action,
-            "user": self.user,
+            "user": self.user or "",
             "room": self.room or "",
             "info": info,
         }
@@ -607,6 +647,6 @@ class QueryIteration:
         # logging.error(err, extra=msg)
         payload = cast(JSONObject, msg)
         room: str = self.room or ""
-        just: tuple[str, str] = (room, self.user)
+        just: tuple[str, str] = (room, self.user or "")
         await push_msg(self.app["websockets"], room, payload, just=just)
         return web.json_response(msg)

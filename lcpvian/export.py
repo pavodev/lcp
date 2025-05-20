@@ -15,6 +15,7 @@ from .typed import Batch, JSONObject
 from .utils import (
     _determine_language,
     _get_all_jobs_from_hash,
+    _get_query_info,
     push_msg,
     format_meta_lines,
     sanitize_filename,
@@ -76,7 +77,7 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     # Retrieve the first job to get the list of all the sentence and meta jobs that export_dump depends on (also batch for swissdox)
     first_job = Job.fetch(first_job_id, connection=app["redis"])
     hash: str = first_job.id
-    batch: Batch = cast(dict, first_job.kwargs).get("current_batch", (0, "", "", 0))
+    batch: str = cast(dict, first_job.kwargs).get("current_batch", (0, "", "", 0))
 
     filename: str = cast(str, payload.get("filename", ""))
     extension: str = "db" if export_format == "swissdox" else export_format
@@ -110,15 +111,18 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
     depends_on.append(init_export_job.id)
 
     job: Job
+    query_info = _get_query_info(app["redis"], hash=hash)
     if export_format == "swissdox":
-        underlang = _determine_language(batch[2]) or ""
+        _, _, batch, *_ = query_info.get("current_batch", ["", "", ""])
+        underlang = _determine_language(batch) or ""
         if underlang:
             underlang = f"_{underlang}"
         article_ids: set[str] = set()
         _, _, meta_jobs = _get_all_jobs_from_hash(first_job_id, app["redis"])
         for j in meta_jobs:
-            mjk = cast(dict, j.kwargs)
-            segs_to_meta = format_meta_lines(cast(str, mjk.get("meta_query")), j.result)
+            segs_to_meta = format_meta_lines(
+                cast(str, cast(dict, j.kwargs).get("meta_query")), j.result
+            )
             incoming_arids: set[str] = {
                 str(v["Article"]["id"]) for v in cast(dict, segs_to_meta).values()
             }
@@ -193,18 +197,18 @@ async def export(app: web.Application, payload: JSONObject, first_job_id: str) -
 
 async def download_export(request: web.Request) -> web.FileResponse:
     filepath = ""
-    hash = request.rel_url.query["hash"]
+    qhash = request.rel_url.query["hash"]
     format = request.rel_url.query["format"]
     offset = request.rel_url.query.get("offset", "0")
     requested = request.rel_url.query.get("requested", "0")
     full = cast(bool, request.rel_url.query.get("full", False))
     if format == "swissdox":
         results_path = str(os.environ.get("RESULTS_PATH", "results"))
-        filepath = os.path.join(results_path, hash, offset, "swissdox.db")
+        filepath = os.path.join(results_path, qhash, offset, "swissdox.db")
     else:
-        exporter_class = Exporter.get_exporter_class(format)
+        exporter_class = request.app["exporters"][format]
         filepath = exporter_class.get_dl_path_from_hash(
-            hash, cast(int, offset), cast(int, requested), full
+            qhash, cast(int, offset), cast(int, requested), full, filename=True
         )
     assert os.path.exists(filepath), FileNotFoundError("Could not find the export file")
     # TODO: check user access to file

@@ -324,12 +324,22 @@
                     <div class="col-12" v-if="WSDataResults && WSDataResults.result">
                       <nav>
                         <div class="nav nav-tabs" id="nav-results-tabs" role="tablist">
-                          <template v-for="(resultSet, index) in WSDataResults.result['0']
-                            .result_sets">
-                            <button class="nav-link" :class="index == 0 ? 'active' : ''"
-                              :id="`nav-results-tabs-${index}`" data-bs-toggle="tab"
-                              :data-bs-target="`#nav-results-${index}`" type="button" role="tab"
-                              :aria-controls="`nav-results-${index}`" aria-selected="true" :key="`result-btn-${index}`"
+                          <template
+                            v-for="(resultSet, index) in WSDataResults.result['0']
+                              .result_sets"
+                          >
+                            <button
+                              class="nav-link"
+                              :class="index == 0 ? 'active' : ''"
+                              :id="`nav-results-tabs-${index}`"
+                              data-bs-toggle="tab"
+                              :data-bs-target="`#nav-results-${index}`"
+                              @click.stop.prevent="activeResultIndex = (index+1)"
+                              type="button"
+                              role="tab"
+                              :aria-controls="`nav-results-${index}`"
+                              aria-selected="true"
+                              :key="`result-btn-${index}`"
                               v-if="
                                 (resultSet.type == 'plain' &&
                                   WSDataSentences &&
@@ -341,18 +351,14 @@
                                 :icon="['fas', 'circle-nodes']" />
                               <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
                               {{ resultSet.name }}
-                              <small>(<span v-if="resultSet.type == 'plain'">
-                                  {{
-                                    WSDataSentences && WSDataSentences.result[index + 1]
-                                      ? WSDataSentences.result[index + 1].length
-                                      : 0
-                                  }}</span>
-                                <span v-else>{{
+                              <small>
+                                <span>{{
                                   WSDataResults && WSDataResults.result[index + 1]
                                     ? WSDataResults.result[index + 1].length
                                     : 0
                                 }}</span>
-                                )</small>
+                              </small
+                              >
                             </button>
                           </template>
                         </div>
@@ -382,16 +388,32 @@
                                 KWIC
                               </a>
                             </div>
-                            <ResultsPlainTableView v-if="plainType == 'table' || resultContainsSet(resultSet)"
-                              :data="WSDataSentences.result[index + 1]" :sentences="WSDataSentences.result[-1]"
-                              :languages="selectedLanguages" :meta="WSDataMeta" :attributes="resultSet.attributes"
-                              :corpora="selectedCorpora" @updatePage="updatePage" @playMedia="playMedia"
-                              @hoverResultLine="hoverResultLine" :resultsPerPage="resultsPerPage" :loading="loading" />
-                            <ResultsKWICView v-else-if="resultContainsSet(resultSet) == false"
-                              :data="WSDataSentences.result[index + 1]" :sentences="WSDataSentences.result[-1]"
-                              :languages="selectedLanguages" :meta="WSDataMeta" :attributes="resultSet.attributes"
-                              :corpora="selectedCorpora" @updatePage="updatePage" :resultsPerPage="resultsPerPage"
-                              :loading="loading" />
+                            <ResultsPlainTableView
+                              v-if="plainType == 'table' || resultContainsSet(resultSet)"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
+                              :languages="selectedLanguages"
+                              :meta="WSDataMeta"
+                              :attributes="resultSet.attributes"
+                              :corpora="selectedCorpora"
+                              @updatePage="updatePage"
+                              @playMedia="playMedia"
+                              @hoverResultLine="hoverResultLine"
+                              :resultsPerPage="resultsPerPage"
+                              :loading="loading"
+                            />
+                            <ResultsKWICView
+                              v-else-if="resultContainsSet(resultSet) == false"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
+                              :languages="selectedLanguages"
+                              :meta="WSDataMeta"
+                              :attributes="resultSet.attributes"
+                              :corpora="selectedCorpora"
+                              @updatePage="updatePage"
+                              :resultsPerPage="resultsPerPage"
+                              :loading="loading"
+                            />
                           </span>
                           <ResultsTableView v-else-if="resultSet.type != 'plain'"
                             :data="WSDataResults.result[index + 1]" :languages="selectedLanguages"
@@ -702,10 +724,9 @@ export default {
       isQueryValidData: null,
       WSDataResults: "",
       WSDataMeta: {},
-      WSDataSentences: "",
-      pageSize: 100,
+      WSDataSentences: {},
       nResults: 200,
-      currentResults: 0,
+      activeResultIndex: 1,
       selectedLanguages: ["en"],
       queryName: "",
       nExport: 200,
@@ -717,6 +738,7 @@ export default {
       percentageTotalDone: 0,
       percentageWordsDone: 0,
       loading: false,
+      requestId: "",
       stats: null,
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
@@ -969,17 +991,22 @@ export default {
       }
     },
     updatePage(currentPage) {
-      let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      // console.log(
-      //   "PageUpdate",
-      //   newNResults,
-      //   this.nResults,
-      //   this.WSDataSentences
-      // );
+      const allNonActiveResults = Object.entries(this.nKwics)
+        .filter(r=>String(r[0])!=String(this.activeResultIndex))
+        .reduce((v,s)=>s+(v[1]||[]).length,0);
+      const newNResults = allNonActiveResults + this.resultsPerPage * Math.max(currentPage + 1, 3);
+      const allActiveResults = Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0);
+      console.log(
+        "PageUpdate",
+        this.nKwics,
+        this.activeResultIndex,
+        allNonActiveResults,
+        newNResults,
+        allActiveResults,
+        this.WSDataResults.more_data_available
+      );
       if (
-        newNResults > this.nResults &&
-        (!this.WSDataSentences ||
-          (this.WSDataSentences && this.WSDataSentences.more_data_available))
+        newNResults > allActiveResults && this.WSDataSentences && this.WSDataResults.more_data_available
       ) {
         // console.log("Submit");
         this.nResults = newNResults;
@@ -1072,6 +1099,8 @@ export default {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
+          if (data.kind == "cqp" && !data.valid)
+            data.error = "Incomplete query or invalid CQP syntax";
           this.isQueryValidData = data;
           return;
         }
@@ -1141,8 +1170,6 @@ export default {
 
           return;
         } else if (data["action"] == "export_complete") {
-          this.loading = false;
-          this.percentageDone = this.WSDataResults.percentage_done;
           const info = {
             hash: data.hash,
             format: data.format,
@@ -1154,20 +1181,24 @@ export default {
           useWsStore().addMessageForPlayer(data)
           return;
         } else if (data["action"] === "stopped") {
-          if (data["n"]) {
+          if (data.request) {
             console.log("queries stopped", data);
             useNotificationStore().add({
               type: "success",
               text: "Query stopped",
             });
             this.loading = false;
+            if (this.requestId == data.request)
+              this.requestId = null;
           }
           return;
         } else if (data["action"] == "started_export") {
           this.loading = false;
+          if (this.requestId == data.request)
+            this.requestId = null;
         } else if (data["action"] === "query_result") {
           useWsStore().addMessageForPlayer(data)
-          // console.log("query_result", data);
+          console.log("query_result", data);
           this.updateLoading(data.status);
           if (
             this.failedStatus &&
@@ -1183,25 +1214,70 @@ export default {
             console.log("SQL", data.consoleSQL);
           }
           this.failedStatus = false;
-          data["n_results"] = data["result"].length;
-          this.WSDataResults = data;
+          for (let p of [
+            "batches_done",
+            "total_results_so_far",
+            "projected_results",
+            "more_data_available",
+            "percentage_done",
+            "percentage_words_done"
+          ]) {
+            if (parseInt(data.batches_done||0) < parseInt(this.WSDataResults.batches_done||0))
+              break;
+            this.WSDataResults[p] = data[p];
+          }
+          this.percentageDone = this.WSDataResults.percentage_done || 0;
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done || 0;
+          if (!this.WSDataResults.result)
+            return this.WSDataResults.result = data.result;
+          const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
+          console.log("kwic_keys", kwic_keys);
+          for (let rkey in data.result) {
+            if (!kwic_keys.includes(parseInt(rkey))) {
+              this.WSDataResults.result[rkey] = data.result[rkey];
+              continue;
+            }
+            this.WSDataResults.result[rkey] = [
+              ...(this.WSDataResults.result[rkey]||[]),
+              ...data.result[rkey]
+            ];
+          }
           return;
-        } else if (data["action"] === "sentences") {
-          useWsStore().addMessageForPlayer(data)
-          // console.log("sentences", data);
+        } else if (data["action"] === "segments") {
+          useWsStore().addMessageForPlayer(data);
           this.updateLoading(data.status);
+          const segment = this.selectedCorpora.corpus.firstClass.segment;
+          const meta = data.result["-2"] || []; // change this?
+          const meta_labels = ((data.result["0"] || {}).meta_labels || [])
+            .map( ml => [ml.split("_")[0],ml.split("_").slice(1,).join("_")] );
+          for (let hit_meta of meta) {
+            let segment_id = "";
+            const meta_object = {};
+            for (let n in hit_meta) {
+              let value = hit_meta[n];
+              const [layer, attr] = meta_labels[n];
+              if (layer == segment && attr == "id")
+                segment_id = value;
+              meta_object[layer] = meta_object[layer] || {};
+              if (attr.endsWith("_range")) {
+                const ranges = value.match(/\[(\d+),(\d+)\)/);
+                if (ranges)
+                  value = [parseInt(ranges[1]),parseInt(ranges[2])];
+              }
+              meta_object[layer][attr] = value;
+            }
+            this.WSDataMeta[segment_id] = meta_object;
+          }
           if (
             this.WSDataSentences &&
-            this.WSDataSentences.first_job == data.first_job &&
-            data.full == false
+            this.WSDataSentences.hash == data.hash &&
+            !data.full
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0 && key in data.result) {
                 this.WSDataSentences.result[key] = this.WSDataSentences.result[
                   key
                 ].concat(data.result[key]);
-                this.nResults = this.WSDataSentences.result[key].length;
-                this.currentResults = this.WSDataSentences.result[key].length;
               }
             });
             if (-1 in data.result) {
@@ -1221,36 +1297,17 @@ export default {
                 (_resultSet, index) => {
                   if (_resultSet.type == "plain") {
                     let resultIndex = index + 1;
-                    if (!(resultIndex in this.WSDataSentences.result)) {
+                    if (!(resultIndex in this.WSDataSentences.result))
                       this.WSDataSentences.result[resultIndex] = [];
-                    }
-                    this.nResults =
-                      this.WSDataSentences.result[resultIndex].length;
-                    this.currentResults =
-                      this.WSDataSentences.result[resultIndex].length;
                   }
                 }
               );
             }
           }
-          this.percentageDone = data.percentage_done;
-          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
           return;
-        } else if (data["action"] == "meta") {
-          const meta = data.result["-2"]; // change this?
-          for (let layer in meta) {
-            this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
-            this.WSDataMeta[layer] = { ...this.WSDataMeta[layer], ...meta[layer] };
-          }
-          // } else if (data["action"] === "started_export") {
-          //   this.loading = false;
-          //   useNotificationStore().add({
-          //     type: "success",
-          //     text: "Started the export process...",
-          //   });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {
@@ -1360,37 +1417,26 @@ export default {
       if (!to_export && resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
-        this.nResults = this.pageSize * 2; // We want load 2 pages at first
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
         }
       }
       let data = {
-        corpora: this.selectedCorpora.value,
+        corpus: this.selectedCorpora.value,
         query: this.query,
         user: this.userData.user.id,
         room: this.roomId,
-        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
-        total_results_requested: this.nResults,
-        stats: true,
-        resume: resumeQuery,
-        simultaneous: this.simultaneousMode,
+        requested: this.resultsPerPage * (resumeQuery ? 1 : 3),
+        offset: resumeQuery ? Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0) : 0
       };
-      if (resumeQuery) {
-        data["first_job"] = this.WSDataResults.job;
-        data["previous"] = this.WSDataResults.job;
-        data["current_kwic_lines"] = this.currentResults;
-      }
       if (fullSearch) {
         data["full"] = true;
       }
       if (to_export) {
         data["to_export"] = to_export;
-        this.nExport = Number((String(this.nExport) || "200").replace(/\D/, ''));
-        if (isNaN(this.nExport)) this.nExport = 200;
-        data["total_results_requested"] = this.nExport;
+        data["requested"] = Math.max(this.nExport, 1);
       }
       console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
@@ -1398,6 +1444,7 @@ export default {
         this.loading = true;
         this.percentageDone = 0.001;
         this.percentageWordsDone = 0;
+        this.requestId = retval.request;
       }
 
       // console.log(document.querySelector("button#nav-results-tab"))
@@ -1418,10 +1465,13 @@ export default {
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
+      this.loading = false;
+      if (!this.requestId)
+        return;
       useWsStore().sendWSMessage({
         action: "stop",
+        request: this.requestId
       });
-      this.loading = false;
     },
     enough(job) {
       useWsStore().sendWSMessage({
@@ -1437,6 +1487,10 @@ export default {
         query = this.queryDQD + "\n";
       if (this.currentTab == "cqp")
         query = this.cqp;
+      if (!query || query.match(/^(\s|\n)+$/)) {
+        this.isQueryValidData = {valid: true};
+        return;
+      }
       useWsStore().sendWSMessage({
         action: "validate",
         query: query,
@@ -1467,7 +1521,7 @@ export default {
         user: this.userData.user.id,
         room: this.roomId,
         // room: null,
-        page_size: this.pageSize,
+        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         query_name: this.queryName,
@@ -1566,6 +1620,17 @@ export default {
         query_name: q.query?.query_name || "",
       })).filter((q) => q.query?.query_type === this.currentTab);
     },
+
+    nKwics() {
+      const kwic_keys = ((this.WSDataResults.result[0]||{}).result_sets||[])
+        .map((rs,n)=>rs.type=="plain"?n+1:-1)
+        .filter(n=>n>0);
+      return Object.fromEntries(
+        Object.entries(this.WSDataResults.result)
+          .filter(r=>kwic_keys.includes(parseInt(r[0])))
+          .map(([rkey,results])=>[rkey,results.length])
+      );
+    }
   },
   mounted() {
     // this.userId = this.userData.user.id;
