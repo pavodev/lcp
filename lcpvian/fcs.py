@@ -4,6 +4,7 @@ import os
 
 from aiohttp import web
 from typing import cast
+from xml.sax.saxutils import escape
 
 from .authenticate import Authentication
 from .cqp_to_json import full_cqp_to_json
@@ -85,7 +86,7 @@ def _make_search_response(buffers, request_ids: dict[str, dict]) -> str:
             prep_seg = ""
             in_hit = False
             for n, token in enumerate(tokens):
-                token_str = token[form_id]
+                token_str = escape(token[form_id])
                 is_hit = offset + n in hits or offset + n in [
                     y for x in hits if isinstance(x, list) for y in x
                 ]
@@ -136,7 +137,8 @@ async def search_retrieve(
     version: str = "1.2",
     query: str = "",
     queryType: str = "",
-    maximumRecords: str = "",
+    maximumRecords: str | int = "",
+    startRecord: str | int = 0,
     **extra_params,
 ) -> str:
     authenticator = cast(Authentication, app["auth_class"](app))
@@ -157,6 +159,11 @@ async def search_retrieve(
         requested = min(requested, 50)
     except:
         requested = 50
+    try:
+        startRecord = int(startRecord)
+        startRecord = max(0, startRecord)
+    except:
+        startRecord = 0
 
     try:
         query_buffers = app["query_buffers"]
@@ -188,7 +195,7 @@ async def search_retrieve(
                     "corpus": cid,
                     "query": json_query,
                     "languages": langs,
-                    "offset": 0,
+                    "offset": startRecord,
                     "requested": requested,
                     "synchronous": True,
                 },
@@ -266,10 +273,20 @@ async def explain(app: LCPApplication, **extra_params) -> str:
 
 
 async def get_fcs(request: web.Request) -> web.Response:
+    resp: str = ""
     app = cast(LCPApplication, request.app)
     q = request.rel_url.query
     operation = q["operation"]
-    resp: str = ""
+    if not q.get("query", "").strip():
+        # http://clarin.eu/fcs/diagnostic/10
+        resp = """<diagnostics>
+    <diagnostic xmlns="info:srw/xmlns/1/sru-1-2-diagnostic">
+        <uri>http://clarin.eu/fcs/diagnostic/10</uri>
+        <details>10</details>
+        <message>No query found in the request.</message>
+    </diagnostic>
+</diagnostics>"""
+        return web.Response(body=resp, content_type="application/xml")
     if operation == "searchRetrieve":
         resp = await search_retrieve(app, **q)
     elif operation == "explain":
