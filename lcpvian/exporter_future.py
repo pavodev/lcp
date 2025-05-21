@@ -246,15 +246,19 @@ class Exporter:
             all_stats.append(
                 getattr(E, stats_type)(
                     *[
-                        getattr(E, aname)(str(aval))
+                        E.observation(
+                            *[
+                                getattr(E, aname)(str(aval))
+                                for aname, aval in zip(stats_attrs, l)
+                            ]
+                        )
                         for l in res[k]
-                        for aname, aval in zip(stats_attrs, l)
                     ],
                     name=stats_name,
                 )
             )
         if all_stats:
-            stats = E.stats(*[E.observation(x) for x in all_stats])
+            stats = E.stats(*all_stats)
             # Just update the main stats.xml file at the root of the working path
             stats_path: str = os.path.join(self.get_working_path(), "stats.xml")
             with open(stats_path, "w") as stats_output:
