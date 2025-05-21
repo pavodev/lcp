@@ -66,7 +66,7 @@ async def _check_request_complete(qi: QueryInfo, request: Request):
 
 
 def _make_search_response(
-    buffers, request_ids: dict[str, dict], offset: int = 0
+    buffers, request_ids: dict[str, dict], startRecord: int = 0
 ) -> str:
     resp = """<?xml version='1.0' encoding='utf-8'?>
 <sru:searchRetrieveResponse xmlns:sru="http://www.loc.gov/zing/srw/">
@@ -122,7 +122,7 @@ def _make_search_response(
           </fcs:ResourceFragment>
         </fcs:Resource>
       </sru:recordData>
-      <sru:recordPosition>{offset+rp}</sru:recordPosition>
+      <sru:recordPosition>{startRecord+rp}</sru:recordPosition>
     </sru:record>"""
             )
     resp += f"""
@@ -205,7 +205,7 @@ async def search_retrieve(
             query_buffers[req.id] = {}
             request_ids[req.id] = {"cid": cid, "conf": conf}
             tg.create_task(_check_request_complete(qi, req))
-    return _make_search_response(query_buffers, request_ids, offset=startRecord)
+    return _make_search_response(query_buffers, request_ids, startRecord=startRecord)
 
 
 async def explain(app: LCPApplication, **extra_params) -> str:
