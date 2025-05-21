@@ -14,9 +14,9 @@ from .query_future import process_query
 from .utils import LCPApplication
 
 FCS_HOST = "catchphrase.linguistik.uzh.ch"
-FCS_PORT = "9090"
+FCS_PORT = "443"
 FCS_DB = "LCP public corpora"
-PID_PREFIX = "https://catchphrase.linguistik.uzh.ch/query/"
+PID_PREFIX = f"https://{FCS_HOST}/query/"
 DEFAULT_MAX_KWIC_LINES = os.getenv("DEFAULT_MAX_KWIC_LINES", 9999)
 
 
