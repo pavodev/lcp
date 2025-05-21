@@ -1,6 +1,10 @@
 <template>
   <footer>
-    <img class="logo" src="../assets/logos/uzh.svg" alt="UZH">
+    <div class="logo__container">
+      <img class="logo" src="../assets/logos/uzh.svg" alt="UZH">
+      <div class="logo__divider"></div>
+      <img class="logo" src="../assets/logos/usi.svg" alt="USI">
+    </div>
     <hr>
     Copyright &copy; 2024 LiRI 
     | 
@@ -12,6 +16,20 @@
 .logo {
   height: 60px;
 }
+
+.logo__container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.logo__divider {
+  height: 60px;
+  border-right: 1px solid white;
+}
+
 footer {
   text-align: center;
   width: 100%;
@@ -21,8 +39,19 @@ footer {
   color: #fff;
   background-color: #2a7f62;
 }
+
 hr {
   margin-top: 30px;
+}
+
+@media (max-width: 500px) {
+  .logo__container {
+    flex-direction: column;
+  }
+
+  .logo__divider {
+    display: none;
+  }
 }
 </style>
 

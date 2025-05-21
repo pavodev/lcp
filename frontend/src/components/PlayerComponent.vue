@@ -631,8 +631,10 @@ export default {
           // TODO: replace what's hard-coded in this with reading 'tracks' from corpus_template
           let document_id = parseInt(this.currentDocument[0])
           if (!(this.selectedCorpora.value in { 115: 1 })) { // old tangram exception
-            // TODO[URGENT]: hardcoded if there is no tracks
-            let tracks = this.selectedCorpora.corpus.tracks || { "layers": { "Utterance": { "split": [] } } };
+            const segment_name = this.selectedCorpora.corpus.firstClass.segment;
+            let tracks = this.selectedCorpora.corpus.tracks || {"layers": {}};
+            if (Object.keys(tracks.layers).length == 0)
+              tracks.layers[segment_name] = {split: []};
             // console.log("CRP", this.selectedCorpora, data.document.layers)
             dataToShow = {
               layers: Object.fromEntries(Object.entries(tracks.layers).map((e, n) => [n + 1, Object({ name: e[0] })])),

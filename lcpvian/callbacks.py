@@ -32,6 +32,8 @@ from .convert import (
     _apply_filters,
     _get_all_sents,
 )
+from .exporter import Exporter
+from .jobfuncs import _handle_export
 from .typed import (
     BaseArgs,
     Batch,
@@ -66,6 +68,7 @@ from .utils import (
 
 PUBSUB_LIMIT = int(os.getenv("PUBSUB_LIMIT", 31999999))
 MESSAGE_TTL = int(os.getenv("REDIS_WS_MESSSAGE_TTL", 5000))
+RESULTS_SWISSDOX = os.environ.get("RESULTS_SWISSDOX", "results/swissdox")
 
 
 def _query(
@@ -875,37 +878,47 @@ def _swissdox_to_db_file(
 ) -> None:
     print("export complete!")
     j_kwargs = cast(dict, job.kwargs)
-    project_id = j_kwargs.get("project_id", "swissdox")
-    project_path = os.path.join(os.environ.get("RESULTS_PATH", "results"), project_id)
-    if not os.path.exists(project_path):
-        os.mkdir(project_path)
-    corpus_name = j_kwargs.get("name", "swissdox")
-    path = os.path.join(project_path, corpus_name)
-    if not os.path.exists(path):
-        os.mkdir(path)
-    elif os.path.exists(os.path.join(path, "swissdox.db")):
-        os.remove(os.path.join(path, "swissdox.db"))
+    hash = j_kwargs.get("hash", "swissdox")
+    dest_folder = os.path.join(RESULTS_SWISSDOX, "exports")
+    if not os.path.exists(dest_folder):
+        os.makedirs(dest_folder)
+    dest = os.path.join(dest_folder, f"{hash}.db")
+    if os.path.exists(dest):
+        os.remove(dest)
 
     for table_name, index_col, data in job.result:
-        df = pandas.DataFrame.from_dict(data)
-        df.set_index(index_col)
-        con = duckdb.connect(
-            database=os.path.join(path, "swissdox.db"), read_only=False
+        df = pandas.DataFrame.from_dict(
+            {cname: cvalue if cvalue else [] for cname, cvalue in data.items()}
         )
+        df.set_index(index_col)
+        con = duckdb.connect(database=dest, read_only=False)
         con.execute(f"CREATE TABLE {table_name} AS SELECT * FROM df")
 
     user = j_kwargs.get("user")
     room = j_kwargs.get("room")
+
     if user and room:
+        userpath = os.path.join(RESULTS_SWISSDOX, user)
+        if not os.path.exists(userpath):
+            os.makedirs(userpath)
+        cname = j_kwargs.get("name", "swissdox")
+        original_userpath = j_kwargs.get("userpath", "")
+        if not original_userpath:
+            original_userpath = f"{cname}_{str(datetime.now()).split('.')[0]}.db"
+        fn = os.path.basename(original_userpath)
+        userdest = os.path.join(userpath, fn)
+        if os.path.exists(userdest):
+            os.remove(userdest)
+        os.symlink(os.path.abspath(dest), userdest)
         msg_id = str(uuid4())
         jso: dict[str, Any] = {
             "user": user,
             "room": room,
-            "action": "export_link",
+            "action": "export_complete",
             "msg_id": msg_id,
             "format": "swissdox",
-            "hash": project_id,
-            "offset": corpus_name,
+            "hash": hash,
+            "offset": 0,
             "total_results_requested": 200,
         }
         _publish_msg(connection, jso, msg_id)
@@ -933,7 +946,7 @@ def _export_complete(
         jso: dict[str, Any] = {
             "user": user,
             "room": room,
-            "action": "export_link",
+            "action": "export_complete",
             "msg_id": msg_id,
             "format": format,
             "hash": hash,
@@ -949,12 +962,16 @@ def _export_notifs(
     connection: RedisConnection,
     result: list | None,
 ) -> None:
+    if not result:
+        return None
+    RESULTS_USERS = os.environ.get("RESULTS_USERS", os.path.join("results", "users"))
     j_kwargs: dict = cast(dict, job.kwargs)
     user = j_kwargs.get("user", "")
     hash = j_kwargs.get("hash", "")
+    jso: dict[str, Any]
     if user:
         msg_id = str(uuid4())
-        jso: dict[str, Any] = {
+        jso = {
             "user": user,
             "action": "export_notifs",
             "msg_id": msg_id,
@@ -962,7 +979,37 @@ def _export_notifs(
         }
         _publish_msg(connection, jso, msg_id)
     elif hash:
-        pass
+        for res in result:
+            (_, _, _, _, user_id, format, offset, requested, _, fn, _, _) = res
+            full = requested <= 0
+            exp_class = Exporter.get_exporter_class(format)
+            user_folder = os.path.join(RESULTS_USERS, user_id)
+            srcfn = exp_class.get_dl_path_from_hash(hash, offset, requested, full)
+            # TODO: maybe create an ExporterSwissdox class?
+            if format == "swissdox":
+                srcfn = os.path.join(
+                    RESULTS_SWISSDOX,
+                    "exports",
+                    f"{hash}.db",
+                )
+            normfn = os.path.normpath(fn)
+            destfn = os.path.join(user_folder, normfn)
+            if not os.path.exists(os.path.dirname(destfn)):
+                os.makedirs(os.path.dirname(destfn))
+            if os.path.exists(destfn):
+                os.remove(destfn)
+            os.symlink(os.path.abspath(srcfn), destfn)
+
+            user_id = res[4]
+            msg_id = str(uuid4())
+            jso = {
+                "user": user_id,
+                "action": "export_notifs",
+                "msg_id": msg_id,
+                "exports": [res],
+            }
+            _publish_msg(connection, jso, msg_id)
+            continue
     return None
 
 

@@ -1,8 +1,7 @@
 import os
 
 from redis import Redis as RedisConnection
-from rq.job import Job
-from typing import Any, cast
+from typing import cast
 from xml.sax.saxutils import escape, quoteattr
 
 from .exporter import Exporter
@@ -18,6 +17,7 @@ def xmlattr(val: str) -> str:
 
 
 class ExporterXml(Exporter):
+    format = "xml"
 
     def __init__(
         self,
@@ -39,22 +39,16 @@ class ExporterXml(Exporter):
     ) -> str:
         filename = "results.xml"
         hash_folder = os.path.join(RESULTS_DIR, hash)
-        if not os.path.exists(hash_folder):
-            os.mkdir(hash_folder)
         xml_folder = os.path.join(hash_folder, "xml")
-        if not os.path.exists(xml_folder):
-            os.mkdir(xml_folder)
         if full:
             full_folder = os.path.join(xml_folder, "full")
             if not os.path.exists(full_folder):
-                os.mkdir(full_folder)
+                os.makedirs(full_folder)
             return os.path.join(full_folder, filename)
         offset_folder = os.path.join(xml_folder, str(offset))
-        if not os.path.exists(offset_folder):
-            os.mkdir(offset_folder)
         requested_folder = os.path.join(offset_folder, str(requested))
         if not os.path.exists(requested_folder):
-            os.mkdir(requested_folder)
+            os.makedirs(requested_folder)
         filepath = os.path.join(requested_folder, filename)
         return filepath
 
