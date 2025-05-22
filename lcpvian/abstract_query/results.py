@@ -902,7 +902,7 @@ WHERE {entity}.char_range && contained_token.char_range
         """
         Generate the IS NULL lines for unused fields in collocation queries (uncubing)
         """
-        fields: set[str] = set()
+        fields: dict[str, int] = {}
         att: str
         data: dict[str, str | bool | dict[str, JSONObject]]
         config: dict[str, Any] = cast(dict[str, Any], self.config)
@@ -914,7 +914,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 continue
             if data["type"] in ("text", "dict"):
                 field = field + "_id"
-            fields.add(field)
+            fields[field] = 1
         if self.lang:
             for lay, info in layers_config.items():
                 named = self.token + "@" + self.lang
@@ -926,7 +926,7 @@ WHERE {entity}.char_range && contained_token.char_range
                         continue
                     if data["type"] in ("text", "jsonb"):
                         field = field + "_id"
-                    fields.add(field)
+                    fields[field] = 1
 
         if not fields:
             return ""

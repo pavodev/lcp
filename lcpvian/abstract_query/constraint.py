@@ -1274,7 +1274,7 @@ def process_set(
 
     joins: Joins = {}
 
-    conditions: set[str] = set()
+    conditions: dict[str, int] = {}
     if attribute == "___tokenid___":
         field = cast(str, config["token"]).lower() + "_id"
     elif (
@@ -1326,19 +1326,19 @@ def process_set(
             for join_condition in v:
                 if not isinstance(join_condition, str):
                     continue
-                conditions.add(join_condition)
+                conditions[join_condition] = 1
         cond = conn_obj.conditions() if conn_obj else ""
         if cond:
-            conditions.add(cond)
+            conditions[cond] = 1
 
     if config["layer"][lay].get("contains") == config["token"]:
         joins[f"{schema}.{from_table} {from_label}"] = True
-        conditions.add(f"{from_label}.char_range && anonymous_set_t.char_range")
+        conditions[f"{from_label}.char_range && anonymous_set_t.char_range"] = 1
         from_table = batch
         from_label = "anonymous_set_t"
 
     strung_joins = _joinstring(joins)
-    strung_conds = "WHERE " + " AND ".join(conditions) if conditions else ""
+    strung_conds = "WHERE " + " AND ".join(x for x in conditions) if conditions else ""
 
     formed = f"""
               (SELECT array_agg({from_label}.{field})

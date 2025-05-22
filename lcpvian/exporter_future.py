@@ -21,6 +21,14 @@ from .utils import _get_mapping
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
 
+def _token_value(val: str) -> str:
+    try:
+        ret = json.loads(val)
+    except:
+        ret = val
+    return str(ret)
+
+
 def _xml_attr(s: str) -> str:
     return escape(s.replace("(", "").replace(")", "").replace(" ", "_"))
 
@@ -173,9 +181,9 @@ class Exporter:
             for h in request.sent_hashes:
                 hpath = os.path.join(wpath, h)
                 if os.path.exists(f"{hpath}_query"):
-                    os.rmdir(f"{hpath}_query")
+                    shutil.rmtree(f"{hpath}_query")
                 if os.path.exists(f"{hpath}_segments"):
-                    os.rmdir(f"{hpath}_segments")
+                    shutil.rmtree(f"{hpath}_segments")
             print(
                 f"Exporting complete for request {request.id} (hash: {request.hash}) ; DELETED REQUEST"
             )
@@ -225,13 +233,32 @@ class Exporter:
             f"[Export {self._request.id}] Process query {batch_hash} (QI {self._request.hash})"
         )
         res = payload.get("result", [])
-        if self._qi.stats_keys:
-            stats = E.stats(
-                *[
-                    E.result(*[E.entry(":".join(str(x) for x in l)) for l in res[k]])
-                    for k in self._qi.stats_keys
-                ]
+        all_stats = []
+        for k in self._qi.stats_keys:
+            if k not in res:
+                continue
+            k_in_rs = int(k) - 1
+            stats_name = self._qi.result_sets[k_in_rs]["name"]
+            stats_type = self._qi.result_sets[k_in_rs]["type"]
+            stats_attrs = [
+                x["name"] for x in self._qi.result_sets[k_in_rs]["attributes"]
+            ]
+            all_stats.append(
+                getattr(E, stats_type)(
+                    *[
+                        E.observation(
+                            *[
+                                getattr(E, aname)(str(aval))
+                                for aname, aval in zip(stats_attrs, l)
+                            ]
+                        )
+                        for l in res[k]
+                    ],
+                    name=stats_name,
+                )
             )
+        if all_stats:
+            stats = E.stats(*all_stats)
             # Just update the main stats.xml file at the root of the working path
             stats_path: str = os.path.join(self.get_working_path(), "stats.xml")
             with open(stats_path, "w") as stats_output:
@@ -253,13 +280,13 @@ class Exporter:
                 seg_path: str = self.get_working_path(prefix)
                 fpath = os.path.join(seg_path, f"{sid}_kwic.xml")
                 with open(fpath, "a") as kwic_output:
-                    kwic_output.write(f"<match name={quoteattr(kwic_name)}>\n")
+                    kwic_output.write(f"<hit name={quoteattr(kwic_name)}>\n")
                     matches_line = "\n".join(
                         f"  <{minfo['type']} name={quoteattr(minfo['name'])} refers_to={quoteattr(str(mid))} />"
                         for mid, minfo in zip(matches, matches_info)
                     )
                     kwic_output.write(str(matches_line) + "\n")
-                    kwic_output.write(f"</match>\n")
+                    kwic_output.write(f"</hit>\n")
 
     def format_tokens(self, offset: int, tokens: list) -> Any:
         config = self._config
@@ -269,7 +296,7 @@ class Exporter:
                 t[self._form_index],
                 id=str(offset + n),
                 **{
-                    _xml_attr(k): quoteattr(str(json.loads(v)))
+                    _xml_attr(k): quoteattr(_token_value(v))
                     for k, v in zip(self._column_headers, t)
                     if k != "form"
                 },
@@ -489,7 +516,7 @@ class Exporter:
                 if current_layer not in layers_in_meta:
                     continue
                 indented_layers.append(current_layer)
-            output.write("  <matches>\n")
+            output.write("  <plain>\n")
             # associate each doc with all its files from all the batch subfolders
             doc_files: dict[str, list[str]] = {}
             all_batches = [bh for (bh, _) in self._qi.query_batches.values()]
@@ -555,7 +582,10 @@ class Exporter:
                         # we'll need to close this later
                         layers_to_close.append(inp["layer"])
                         embedding_from = embedding
-                        _next_line(inp, indented_layers)
+                        for x in inputs:
+                            if x["line"] != line:
+                                continue
+                            _next_line(x, indented_layers)
                     # close any pending node
                     while layers_to_close:
                         layer_to_close = layers_to_close.pop()
@@ -568,7 +598,7 @@ class Exporter:
                     # make sure to always close all the input files
                     for i in inputs:
                         cast(TextIOWrapper, i["io"]).close()
-            output.write("  </matches>\n")
+            output.write("  </plain>\n")
             output.write("</results>")
         print(f"[Export {self._request.id}] Complete (QI {self._request.hash})")
 
