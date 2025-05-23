@@ -46,8 +46,12 @@ from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
+from .fcs import get_fcs
 
 from .api import api_query
+from .callbacks import _general_failure
+from .exporter_future import Exporter as ExporterXML
+from .exporter_future_swissdox import Exporter as ExporterSwissdox
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
@@ -55,6 +59,7 @@ from .project import project_create, project_update
 from .project import project_users_invite, project_users
 from .project import project_users_invitation_remove, project_user_update
 from .query import query, refresh_config
+from .query_future import post_query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
 from .store import fetch_queries, store_query, delete_query
@@ -223,6 +228,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
         ("/download_export", "GET", download_export),
+        ("/fcs-endpoint", "GET", get_fcs),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),
@@ -238,6 +244,7 @@ async def create_app(test: bool = False) -> web.Application:
             project_users_invitation_remove,
         ),
         ("/query", "POST", query),
+        ("/query_future", "POST", post_query),
         ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
         ("/user/{user_id}/room/{room_id}/query/{query_id}", "DELETE", delete_query),
@@ -282,6 +289,7 @@ async def create_app(test: bool = False) -> web.Application:
             retry=retry_policy,
         ),
     )
+    app.addkey("exporters", dict, {"xml": ExporterXML, "swissdox": ExporterSwissdox})
 
     if REDIS_SHARED_DB_INDEX > -1:
         shared_redis_url: str = f"{REDIS_SHARED_URL}/{REDIS_SHARED_DB_INDEX}"

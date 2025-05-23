@@ -8,7 +8,12 @@ from redis import Redis as RedisConnection
 from rq.job import Job
 from typing import Any, cast
 
-from .utils import _get_all_jobs_from_hash, _get_prep_segment, format_meta_lines
+from .utils import (
+    _get_all_jobs_from_hash,
+    _get_prep_segment,
+    format_meta_lines,
+    _get_query_info,
+)
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 CHUNKS = 1000000  # SIZE OF CHUNKS TO STREAM, IN # OF CHARACTERS
@@ -110,6 +115,7 @@ class Exporter:
     ) -> None:
         self._hash: str = hash
         self._config: dict = config
+        self._query_info = _get_query_info(connection, hash=hash)
         self._total_results_requested = total_results_requested
         self._offset = offset
         self._full = full
@@ -169,12 +175,12 @@ class Exporter:
             self._info["name"] = self._config["meta"].get(
                 "name", self._config["shortname"]
             )
-            self._info["word_count"] = lj_payload["word_count"]
+            self._info["word_count"] = self._query_info["word_count"]
             self._info["percentage"] = sum(
-                x[3] for x in lj_payload["done_batches"]
-            ) / sum(x[3] for x in lj_payload["all_batches"])
+                x[3] for x in self._query_info["done_batches"]
+            ) / sum(x[3] for x in self._query_info["all_batches"])
             self._info["projected"] = lj_payload["projected_results"]
-            self._info["query"] = lj_payload["jso"]
+            self._info["query"] = self._query_info["jso"]
             self._info["submitted_at"] = str(self._query_jobs[0].enqueued_at)
             completed_at = self._query_jobs[-1].ended_at
             if self._sentence_jobs:
@@ -190,9 +196,7 @@ class Exporter:
             return []
         if not self._results_info:
             job = self._query_jobs[0]
-            results_info = (
-                cast(dict, job.kwargs).get("meta_json", {}).get("result_sets", [])
-            )
+            results_info = self._query_info.get("meta_json", {}).get("result_sets", [])
             self._results_info = [
                 {**r, "res_index": n} for n, r in enumerate(results_info, start=1)
             ]
@@ -278,13 +282,12 @@ class Exporter:
     async def kwic(self) -> None:
         buffer: str = ""
         for j in self._query_jobs:
-            j_kwargs = cast(dict, j.kwargs)
-            if "current_batch" not in j_kwargs:
+            if "current_batch" not in self._query_info:
                 continue
             segment_mapping = self._config["mapping"]["layer"][self._config["segment"]]
             columns: list = []
-            if "partitions" in segment_mapping and "languages" in j_kwargs:
-                lg = j_kwargs["languages"][0]
+            if "partitions" in segment_mapping and "languages" in self._query_info:
+                lg = self._query_info["languages"][0]
                 columns = segment_mapping["partitions"].get(lg)["prepared"][
                     "columnHeaders"
                 ]
@@ -320,7 +323,7 @@ class Exporter:
                 )
                 formatted_meta.update(incoming_meta)
 
-            meta = j_kwargs.get("meta_json", {}).get("result_sets", [])
+            meta = self._query_info.get("meta_json", {}).get("result_sets", [])
             kwic_indices = [
                 n + 1 for n, o in enumerate(meta) if o.get("type") == "plain"
             ]
@@ -372,9 +375,8 @@ class Exporter:
         # )
 
     async def non_kwic(self) -> None:
-        job = self._query_jobs[0]
-        meta = cast(dict, job.kwargs).get("meta_json", {}).get("result_sets", {})
-        for n_type, data in job.meta.get("all_non_kwic_results", {}).items():
+        meta = self._query_info.get("meta_json", {}).get("result_sets", {})
+        for n_type, data in self._query_info.get("all_non_kwic_results", {}).items():
             if n_type in (0, -1):
                 continue
             info: dict = meta[n_type - 1]
@@ -414,15 +416,13 @@ class Exporter:
             + f"\n"
         )
 
-        meta = cast(dict, first_job.kwargs).get("meta_json", {}).get("result_sets", {})
+        meta = self._query_info.get("meta_json", {}).get("result_sets", {})
         # Write KWIC results
         if next((m for m in meta if m.get("type") == "plain"), None):
             await self.kwic()
 
         # Write non-KWIC results
-        for n_type, data in (
-            cast(dict, first_job.meta).get("all_non_kwic_results", {}).items()
-        ):
+        for n_type, data in self._query_info.get("all_non_kwic_results", {}).items():
             if n_type in (0, -1):
                 continue
             info: dict = meta[n_type - 1]

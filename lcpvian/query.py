@@ -30,7 +30,13 @@ from .authenticate import Authentication
 from .log import logged
 from .qi import QueryIteration
 from .typed import Batch, Iteration, JSONObject
-from .utils import _set_query_args, ensure_authorised, push_msg
+from .utils import (
+    _set_request_info,
+    ensure_authorised,
+    push_msg,
+    _get_query_info,
+    _update_query_info,
+)
 
 
 async def _do_resume(qi: QueryIteration) -> QueryIteration:
@@ -46,10 +52,10 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
     """
     prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    pjkwargs = cast(dict, prev_job.kwargs)
-    dones = cast(list[tuple[int, str, str, int]], pjkwargs["done_batches"])
+    query_info = _get_query_info(qi.app["redis"], job=prev_job)
+    dones = cast(list[tuple[int, str, str, int]], query_info["done_batches"])
     done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
-    so_far = cast(int, prev_job.meta["total_results_so_far"])
+    so_far = cast(int, query_info["total_results_so_far"])
     tot_req = qi.total_results_requested
     prev_total = qi.current_kwic_lines
 
@@ -63,7 +69,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
     left_in_batch = prev_batch_results - qi.offset
     not_enough = left_in_batch < need_now
 
-    prev = cast(Batch, tuple(pjkwargs["current_batch"]))
+    prev = cast(Batch, tuple(query_info["current_batch"]))
     previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
     if previous_batch not in done_batches:
         done_batches.append(previous_batch)
@@ -100,7 +106,7 @@ async def _do_resume(qi: QueryIteration) -> QueryIteration:
 
 
 async def _query_iteration(
-    qi: QueryIteration, it: int
+    qi: QueryIteration, it: int, set_request_info: bool
 ) -> QueryIteration | web.Response:
     """
     Oversee the querying of a single batch:
@@ -143,6 +149,10 @@ async def _query_iteration(
             return await qi.no_batch()
 
     qi.make_query()
+    qi.set_query_info()
+    if set_request_info:
+        request_info = qi.get_request_info()
+        _set_request_info(qi.app["redis"], request_info)
 
     # print query info to terminal for first batch only
     if not it and not qi.job and not qi.resume:
@@ -153,6 +163,9 @@ async def _query_iteration(
 
     # organise and submit query to rq via query service
     query_job, do_sents = await qi.submit_query()
+
+    if not query_job:
+        return qi
 
     # simultaneous query setup for next iteration -- plz improve
     divv = (it + 1) % max_jobs if max_jobs > 0 else -1
@@ -261,7 +274,7 @@ async def query(
                 "status": "403",
                 "error": "Forbidden",
                 "action": "query_error",
-                "user": qi.user,
+                "user": qi.user or "",
                 "room": qi.room or "",
                 "info": "Attempted access to an unauthorized corpus",
             }
@@ -271,7 +284,7 @@ async def query(
             logging.error(msg, extra=fail)
             payload = cast(JSONObject, fail)
             room: str = qi.room or ""
-            just: tuple[str, str] = (room, qi.user)
+            just: tuple[str, str] = (room, qi.user or "")
             await push_msg(qi.app["websockets"], room, payload, just=just)
             print("pushed message")
             raise web.HTTPForbidden(text=msg)
@@ -282,16 +295,12 @@ async def query(
     out: Iteration
 
     try:
-        set_qi_args = False
+        set_request_info = True if not manual else False
         for it in range(iterations):
-            qi = await _query_iteration(qi, it)
+            qi = await _query_iteration(qi, it, set_request_info)
+            set_request_info = False  # only set it once
             if not isinstance(qi, QueryIteration):
                 return qi
-            # Set qi_args on the first non-manual request
-            if not manual and not set_qi_args:
-                qi_args = qi.get_query_args()
-                _set_query_args(app["redis"], qi_args)
-                set_qi_args = True
             http_response.append(qi.job_info)
     except Exception as err:
         qi = cast(QueryIteration, qi)
@@ -301,7 +310,7 @@ async def query(
             "action": "query_error",
             "type": str(type(err)),
             "traceback": tb,
-            "user": qi.user,
+            "user": qi.user or "",
             "room": qi.room or "",
             "info": f"Could not create query: {str(err)}",
         }
@@ -311,7 +320,7 @@ async def query(
         logging.error(msg, extra=fail)
         payload = cast(JSONObject, fail)
         room = qi.room or ""
-        just = (room, qi.user)
+        just = (room, qi.user or "")
         await push_msg(qi.app["websockets"], room, payload, just=just)
         return web.json_response(fail)
 
