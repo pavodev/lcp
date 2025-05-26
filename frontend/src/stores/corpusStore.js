@@ -19,7 +19,7 @@ export const useCorpusStore = defineStore("corpusData", {
   getters: {
     getLicenseByTag: (state) => {
       return (tag) => {
-        return state.licenses.find(license => license.tag === tag)
+        return state.licenses.find(license => license.tag === tag) || {url: ""}
       }
     },
   },
