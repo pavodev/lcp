@@ -427,7 +427,7 @@ import config from "@/config";
 
 class TokenToDisplay {
   constructor(tokenArray, index, groups, columnHeaders, annotations) {
-    if (!(tokenArray instanceof Array) || tokenArray.length < 2)
+    if (!(tokenArray instanceof Array) || tokenArray.length < 1)
       throw Error(`Invalid format for token ${JSON.stringify(tokenArray)}`);
     if (isNaN(Number(index)) || index<=0)
       throw Error(`Invalid index (${index}) for token ${JSON.stringify(tokenArray)}`);
