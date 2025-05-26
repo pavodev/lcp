@@ -1042,6 +1042,10 @@ class CTProcessor:
                 },
             )
             rel_cols.append(dep_column)
+            for an, at in lay_conf.get("attributes", {}).items():
+                if at.get("type") != "categorical":
+                    continue
+                rel_cols_names.append(an)
 
         mapd: dict[str, Any] = self.globals.mapping
         tokname = self.globals.base_map["token"]
