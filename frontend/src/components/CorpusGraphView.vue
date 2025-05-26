@@ -168,7 +168,7 @@ export default {
               let warnings = [];
               let possibleValues = Object.keys(attribute_props);
               if (attribute_props.values instanceof Array && attribute_props.values.length>0) {
-                possibleValues = attribute_props.values.filter(v=>v.match(/^[^'"()]+$/));
+                possibleValues = attribute_props.values.filter(v=>v.match(/^[^'"()[]<>]+$/));
                 if (possibleValues.length != attribute_props.values.length)
                   warnings.push("values with special characters not listed");
               }
