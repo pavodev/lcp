@@ -874,10 +874,6 @@ class CTProcessor:
         self.globals.tables += tables
         self.globals.types += types
 
-        # Discard left_anchor and right_anchor in corpus_template
-        l_params["attributes"].pop("left_anchor")
-        l_params["attributes"].pop("right_anchor")
-
     def _get_relation_col(self, rel_structure: dict[str, str]) -> Column:
         name = rel_structure["name"]
         table_name = self.globals.layers[rel_structure["entity"]]["table_name"]
@@ -948,8 +944,14 @@ class CTProcessor:
         # corpus_version = str(self.corpus_version)
         schema_name: str = self.schema_name
         project_id: str = self.project_id
-        corpus_template: str = json.dumps(self.corpus_temp)
-
+        copy_corpus_temp: dict[str, Any] = json.loads(json.dumps(self.corpus_temp))
+        # remove any left_anchor/right_anchor for the relational layers
+        for lname, lattrs in cast(dict, copy_corpus_temp)["layer"].items():
+            if lattrs.get("layerType") != "relation":
+                continue
+            lattrs["attributes"].pop("left_anchor", "")
+            lattrs["attributes"].pop("right_anchor", "")
+        corpus_template: str = json.dumps(copy_corpus_temp)
         # scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
         scm: str = self.ddl.create_scm(schema_name, project_id, corpus_template)
         self.globals.schema.append(scm)
