@@ -144,7 +144,6 @@ An updated python script that implements time alignment can be found [here](http
 <div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
 <span style="color: darkorange; font-weight: bold;">( ! ) </span>
 Make sure to <a href="https://drive.switch.ch/index.php/s/v3uxBpNkeYuyPE2" target="_blank">download</a> and place the files <code>database_explorer.mp4</code> and <code>presenter_pro.mp4</code> in your folder so they can be included in the output folder and uploaded to <em>>videoScope</em>.
-</div>
 
 (The MP4 files next to `convert.py` in the repository are empty, placeholder files and will not play back in _videoScope_.)
-{% endhint %}
+</div>
