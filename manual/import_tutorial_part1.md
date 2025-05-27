@@ -21,17 +21,17 @@ In LCP, the source text needs to be _segmented_: segments will be the space with
 
 SRT files often have one sentence per numbered block, as in the image above (one sentence in the two text lines of block 1, another sentence in the two text lines of block 2).
 
-{% hint style="warning" %}
-**Sentences and blocks don't always align**: some sentences will span multiple blocks in an SRT file, and some blocks will contain multiple sentences. This will be something to keep in mind when processing the data
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span><strong>Sentences and blocks don't always align</strong>: some sentences will span multiple blocks in an SRT file, and some blocks will contain multiple sentences. This will be something to keep in mind when processing the data
+</div>
 
 ## Tokenization
 
 In addition, each segment is further divided into _tokens_. **Tokens typically correspond to words**, which roughly correspond to space-separated bits of text in the input.
 
-{% hint style="warning" %}
-**Using just space characters as token delimiters is too simplistic**: as visible in this example, written English has cases like `shouldn't`, which arguably corresponds to two tokens (`should` and `not`). For the sake of simplicity, we will also use `'` as a delimiter and accordingly map `shouldn't` to two tokens with the forms `shouldn` and `t`.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span><strong>Using just space characters as token delimiters is too simplistic</strong>: as visible in this example, written English has cases like <code>shouldn't</code>, which arguably corresponds to two tokens (<code>should</code> and <code>not</code>). For the sake of simplicity, we will also use <code>'</code> as a delimiter and accordingly map `shouldn't` to two tokens with the forms <code>shouldn</code> and <code>t</code>.
+</div>
 
 ## Time alignment
 
@@ -39,13 +39,15 @@ Time alignment is the process of reporting **where the units previously defined 
 
 SRT files do not provide a good estimate for timecode for words, but we can use the blocks' timecodes to align the segments.
 
-{% hint style="info" %}
-LCP uses a convention of 25 frames per second for time-alignment purposes, which is the format in which we will report time alignment values.
-{% endhint %}
 
-{% hint style="warning" %}
-**Rembember that sentences and blocks don't always align** so using the blocks' time codes is only an _approximation_ of when sentences start and end.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+LCP uses a convention of <strong>25 frames per second</strong> for time-alignment purposes, which is the format in which we will report time alignment values.
+</div>
+
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span><strong>Rembember that sentences and blocks don't always align</strong> so using the blocks' time codes is only an <em>approximation</em> of when sentences start and end.
+</div>
 
 # Plan
 
