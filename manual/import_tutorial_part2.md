@@ -68,9 +68,10 @@ with open("database_explorer.srt", "r") as input:
 clip.make()
 ```
 
-{% hint style="info" %}
-Note that `.Sentence` can be called either on `clip`, as in this snippet, or on `corpus`, which is the method used in the hello-world example (resp. `.Segment`). In the hello-world, the segment is created directly as an argument of `corpus.Document` and, as such, belongs to it; here, the script does not pass sentences as direct arguments of the clip; instead, the sentences are created on the fly, which why it is necessary to call `.Sentence` on `clip`.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+Note that <code>.Sentence</code> can be called either on <code>clip</code>, as in this snippet, or on <code>corpus</code>, which is the method used in the hello-world example (resp. <code>.Segment</code>). In the hello-world, the segment is created directly as an argument of <code>corpus.Document</code> and, as such, belongs to it; here, the script does not pass sentences as direct arguments of the clip; instead, the sentences are created on the fly, which why it is necessary to call <code>.Sentence</code> on <code>clip</code>.
+</div>
 
 Although functional, the snippet above outputs unusable data: becaue each line is mapped to one sentence, some will consist just of a block number, some of timestamps, and many actually correspond to chunks of sentences distributed over multiple transcriptoin blocks.
 
@@ -82,9 +83,10 @@ Although functional, the snippet above outputs unusable data: becaue each line i
 
 Whenever the script hits a sentence delimiter, it creates a new sentence with `sentence = clip.Sentence()`, and whenever it processes a word, it adds it to the current sentence with `sentence.Word(w)`.
 
-{% hint style="info" %}
-The same is true of `.Sentence` and `.Word`: each can be called on `corpus` or on their parent (respectively, `clip` and `segment`) depending on whether you decide to pass them as direct arguments of their parent.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+The same is true of <code>.Sentence</code> and <code>.Word</code>: each can be called on <code>corpus</code> or on their parent (respectively, <code>clip</code> and <code>segment</code>) depending on whether you decide to pass them as direct arguments of their parent.
+</div>
 
 ## Import
 
@@ -101,9 +103,10 @@ You should get a confirmation message, and your corpus should now be visible in 
 
 To parse multilpe SRT files, the edits to the script are minimal: one just needs to iterate over the SRT files to create a dedicated instance of `Clip` for each, and one can also report the name of the file for reference purposes, as in: `clip = corpus.Clip(name="database_explorer")`.
 
-{% hint style="info" %}
-One can pass arbitrary keyword arguments to define attributes, as illustrated here with `name="database_explorer"`. Another option is to set the attribute on the instance, as in `clip.name = "database_explorer"`. This applies to all entities, not just to documents.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+One can pass arbitrary keyword arguments to define attributes, as illustrated here with <code>name="database_explorer"</code>. Another option is to set the attribute on the instance, as in <code>clip.name = "database_explorer"</code>. This applies to all entities, not just to documents.
+</div>
 
 An updated version of the script that processes all the SRT documents in the working directory can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/all_documents/convert.py).
 
@@ -122,22 +125,26 @@ The original text of the sentence is set as `sentence.original = original` (wher
 
 Associating a document with a video only takes one command: `clip.set_media("clip", "database_explorer.mp4")`.
 
-{% hint style="info" %}
-The first argument of `set_media` is a string defining the name of the _media slot_ for the media file. Unlike this corpus, some video corpora can have more than one video per document; for example, scenes could be filmed from two different angles in parallel, resulting in two video files per document, so that one media slot could be named `"left"` and the other `"right"`.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+The first argument of <code>set_media</code> is a string defining the name of the <em>media slot</em> for the media file. Unlike this corpus, some video corpora can have more than one video per document; for example, scenes could be filmed from two different angles in parallel, resulting in two video files per document, so that one media slot could be named <code>"left"</code> and the other <code>"right"</code>.
+</div>
 
 The challenging part is time alignment. Command-wise, it again only takes one line to align a segment: `sentence.set_time(0, 25)`. This would align the sentence from 0s to 1s (remember that LCP uses a convention of 25 frames per second).
 
 We will use the timestamps of the transcription blocks to time-align the sentences, while leaving the words unaligned. Because **some sentences can span multiple blocks**, and **each block can contain more than one sentence**, we have to be smart about it: only when we hit a sentence delimiter do we use the start timecode of the block as the start of the _next_ sentence, otherwise we need to use the start timecode of the _first_ block in which the sentence starts.
 
-{% hint style="info" %}
-Because we process multiple videos, we also need to offset the time-alignment of each successive clip by the duration of the preceding ones. Failing to do so would cause sentences _from different video clips_ to overlap in LCP, which would undermine the value of time-based queries.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+Because we process multiple videos, we also need to offset the time-alignment of each successive clip by the duration of the preceding ones. Failing to do so would cause sentences <em>from different video clips</em> to overlap in LCP, which would undermine the value of time-based queries.
+</div>
 
 An updated python script that implements time alignment can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/video/convert.py). 
 
-{% hint style="warning" %}
-Make sure to [download](https://drive.switch.ch/index.php/s/v3uxBpNkeYuyPE2) and place the files `database_explorer.mp4` and `presenter_pro.mp4` in your folder so they can be included in the output folder and uploaded to _videoScope_.
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span>
+Make sure to <a href="https://drive.switch.ch/index.php/s/v3uxBpNkeYuyPE2" target="_blank">download</a> and place the files <code>database_explorer.mp4</code> and <code>presenter_pro.mp4</code> in your folder so they can be included in the output folder and uploaded to <em>>videoScope</em>.
+</div>
 
 (The MP4 files next to `convert.py` in the repository are empty, placeholder files and will not play back in _videoScope_.)
 {% endhint %}
