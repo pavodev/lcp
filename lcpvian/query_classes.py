@@ -588,11 +588,11 @@ class QueryInfo:
         self._connection.expire(key, QUERY_TTL)
         return cast(list, json.loads(res_json))
 
-    async def query(self, qhash: str, script: str) -> Any:
+    async def query(self, qhash: str, script: str, params: dict = {}) -> Any:
         """
         Helper to make sure the results are stored in redis
         """
-        res = await _db_query(script)
+        res = await _db_query(script, params=params)
         self.set_cache(qhash, res)
         return res
 

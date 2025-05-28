@@ -1282,7 +1282,7 @@ def _get_query_batches(
 
 
 def get_segment_meta_script(
-    config: dict, languages: list[str], batch_name: str, segment_ids: list[str]
+    config: dict, languages: list[str], batch_name: str
 ) -> tuple[str, list[str]]:
     schema = config["schema_path"]
     layers: dict = config["layer"]
@@ -1301,13 +1301,12 @@ def get_segment_meta_script(
         if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
         else ""
     )
-    sids = ", ".join([f"'{sid}'" for sid in segment_ids])
     seg_mapping = _get_mapping(seg, config, batch_name, lang)
     prep_table: str = seg_mapping.get("prepared", {}).get(
         "relation", f"prepared_{seg_table}"
     )
     # seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
-    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
+    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id = ANY(:sids)"
 
     # META
     has_media = config.get("meta", config).get("mediaSlots", {})

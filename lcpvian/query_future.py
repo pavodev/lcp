@@ -131,13 +131,13 @@ async def do_segment_and_meta(
         print(f"No new segment query needed for {batch_name}")
     else:
         script, meta_labels = get_segment_meta_script(
-            qi.config, qi.languages, batch_name, segment_ids
+            qi.config, qi.languages, batch_name
         )
         qi.meta_labels = meta_labels
         qi.update({"meta_labels": meta_labels})
         shash = hasher(script)
         print(f"Running new segment query for {batch_name} -- {shash}")
-        res = await qi.query(shash, script)
+        res = await qi.query(shash, script, params={"sids": segment_ids})
         seg_hashes.append(shash)
     # Calculate which lines from res should be sent to each request
     reqs_offsets = {r.id: r.lines_for_batch(qi, batch_name) for r in qi.requests}

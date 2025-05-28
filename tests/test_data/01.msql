@@ -1,7 +1,12 @@
-SELECT
-    s.Segment_id AS seg_id, Document.document_id AS Document_id, Document."meta"::jsonb AS Document_meta, Document."char_range" AS Document_char_range, s.segment_id AS Segment_id, s."char_range" AS Segment_char_range
+WITH preps AS (SELECT Segment_id, id_offset, content FROM bnc1.prepared_segment WHERE Segment_id = ANY(:sids)),
+    meta AS (SELECT
+    s.segment_id AS Segment_id, s."char_range" AS Segment_char_range, Document.document_id AS Document_id, Document."meta"::jsonb AS Document_meta, Document."char_range" AS Document_char_range
 FROM
     preps
+    LEFT JOIN bnc1.segmentrest s ON s.Segment_id = preps.Segment_id
     LEFT JOIN bnc1.document Document ON Document.char_range @> s.char_range
 GROUP BY
-    Document.document_id, Document."char_range", s.segment_id, s."char_range"
+    s.segment_id, s."char_range", Document.document_id, Document."char_range")
+SELECT -1::int2 AS rstype, jsonb_build_array(preps.segment_id, preps.id_offset, preps.content) FROM preps
+UNION ALL
+SELECT -2::int2 AS rstype, jsonb_build_array(meta.Segment_id, meta.Segment_char_range, meta.Document_id, meta.Document_meta, meta.Document_char_range) FROM meta;
