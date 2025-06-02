@@ -10,7 +10,7 @@ from .authenticate import Authentication
 from .cqp_to_json import full_cqp_to_json
 from .textsearch_to_json import textsearch_to_json
 from .query_classes import QueryInfo, Request
-from .query_future import process_query
+from .query import process_query
 from .utils import LCPApplication
 
 FCS_HOST = "catchphrase.linguistik.uzh.ch"
@@ -108,7 +108,7 @@ def _make_search_response(
                 prep_seg += "</hits:Hit>"
             records.append(
                 f"""
-    <sruc:record>
+    <sru:record>
       <sru:recordSchema>http://clarin.eu/fcs/resource</sru:recordSchema>
       <sru:recordPacking>xml</sru:recordPacking>
       <sru:recordData>
@@ -279,18 +279,19 @@ async def get_fcs(request: web.Request) -> web.Response:
     app = cast(LCPApplication, request.app)
     q = request.rel_url.query
     operation = q["operation"]
-    if not q.get("query", "").strip():
-        # http://clarin.eu/fcs/diagnostic/10
-        resp = """<diagnostics>
-    <diagnostic xmlns="info:srw/xmlns/1/sru-1-2-diagnostic">
-        <uri>http://clarin.eu/fcs/diagnostic/10</uri>
-        <details>10</details>
-        <message>No query found in the request.</message>
-    </diagnostic>
-</diagnostics>"""
-        return web.Response(body=resp, content_type="application/xml")
-    if operation == "searchRetrieve":
-        resp = await search_retrieve(app, **q)
-    elif operation == "explain":
+    resp: str
+    if operation == "explain":
         resp = await explain(app, **q)
+    elif operation == "searchRetrieve":
+        if not q.get("query", "").strip():
+            # http://clarin.eu/fcs/diagnostic/10
+            resp = """<diagnostics>
+        <diagnostic xmlns="info:srw/xmlns/1/sru-1-2-diagnostic">
+            <uri>http://clarin.eu/fcs/diagnostic/10</uri>
+            <details>10</details>
+            <message>No query found in the request.</message>
+        </diagnostic>
+    </diagnostics>"""
+        else:
+            resp = await search_retrieve(app, **q)
     return web.Response(body=resp, content_type="application/xml")
