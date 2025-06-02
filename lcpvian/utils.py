@@ -3,7 +3,6 @@ utils.py: all miscellaneous helpers and tools used by backend
 """
 
 import asyncio
-import csv
 import json
 import logging
 import math
@@ -23,7 +22,6 @@ from hashlib import md5
 from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
-from rq import Callback
 from rq.exceptions import NoSuchJobError
 from rq.registry import FinishedJobRegistry
 
@@ -598,6 +596,16 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     app["redis"].expire("app_config", MESSAGE_TTL)
 
     return None
+
+
+@ensure_authorised
+async def refresh_config(request: web.Request) -> web.Response:
+    """
+    Force a refresh of the config via the /config endpoint
+    """
+    qs = request.app["query_service"]
+    job: Job = await qs.get_config(force_refresh=True)
+    return web.json_response({"job": str(job.id)})
 
 
 subtype: TypeAlias = list[dict[str, str]]

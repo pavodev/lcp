@@ -25,7 +25,7 @@ export const useCorpusStore = defineStore("corpusData", {
   },
   actions: {
     async fetchQuery(data) {
-      let response = await httpApi.post(`/query_future`, data)
+      let response = await httpApi.post(`/query`, data)
       this.queryData = await response.data;
       return this.queryData
     },

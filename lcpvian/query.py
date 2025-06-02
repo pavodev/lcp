@@ -1,340 +1,375 @@
-"""
-query.py: The /query POST endpoint
-
-When user submits a new query or resumes an existing one, the /query endpoint
-calls the `query()` async function.
-
-The logic is basically:
-
-    1. Create a QueryIteration object from the POST data (qi.py)
-    2. Submit a query and/or sentences query
-    3. The callbacks for these queries publish the result as JSON (callbacks.py)
-    4. Listener hears these messages, sends them to relevant users (sock.py)
-    5. If query is not finished, the query() function is called again, but with
-       data passed in manually rather than through HTTP request.
-    6. Process repeats until query is satisfied/finished
-
-"""
-
+import asyncio
 import json
 import logging
 import os
-import traceback
-
-from typing import cast
+import shutil
 
 from aiohttp import web
-from rq.job import Job
+from datetime import datetime
+from redis import Redis as RedisConnection
+from rq import Callback
+from rq.job import get_current_job, Job
+from typing import cast, Any
 
+from .abstract_query.create import json_to_sql
+from .abstract_query.typed import QueryJSON
 from .authenticate import Authentication
-from .log import logged
-from .qi import QueryIteration
-from .typed import Batch, Iteration, JSONObject
+from .callbacks import _general_failure
+from .dqd_parser import convert
+from .jobfuncs import _handle_export
+from .query_classes import QueryInfo, Request
 from .utils import (
-    _set_request_info,
-    ensure_authorised,
+    sanitize_filename,
+    _get_query_batches,
+    get_segment_meta_script,
+    hasher,
     push_msg,
-    _get_query_info,
-    _update_query_info,
+    CustomEncoder,
+    LCPApplication,
 )
 
+EXPORT_TTL = 5000
+RESULTS_USERS = os.environ.get("RESULTS_USERS", os.path.join("results", "users"))
 
-async def _do_resume(qi: QueryIteration) -> QueryIteration:
+
+def batch_callback(job: Job, connection: RedisConnection, batch_name: str):
     """
-    Resume a query, or decide that we need to query the next batch
-
-    When resuming, there are two or three possible situations we could be in:
-
-    1. we have already got enough results via previous sql queries to fill
-       the request, we just haven't sent them yet
-    2. we have not got enough results, so we need to query this batch and the next one
-    3? we had exactly the right number of results ... edge case
-
+    Publish a message that we got some results (to be captured by the requests)
+    then schedule the query on the next batch
+    and run the appropriate segment/meta queries now (if applicable)
     """
-    prev_job = Job.fetch(qi.previous, connection=qi.app["redis"])
-    query_info = _get_query_info(qi.app["redis"], job=prev_job)
-    dones = cast(list[tuple[int, str, str, int]], query_info["done_batches"])
-    done_batches: list[Batch] = [(a, b, c, d) for a, b, c, d in dones]
-    so_far = cast(int, query_info["total_results_so_far"])
-    tot_req = qi.total_results_requested
-    prev_total = qi.current_kwic_lines
 
-    prev_batch_results = cast(int, prev_job.meta["results_this_batch"])
-    need_now = tot_req - prev_total
+    if not batch_name:
+        return
 
-    next_offset = cast(int, prev_job.meta["offset_for_next_time"])
-    latest_offset = cast(int, prev_job.meta.get("latest_offset", 0))
-    qi.offset = max(latest_offset, next_offset)
+    qhash: str = job.args[0]
+    qi: QueryInfo = QueryInfo(qhash, connection)
 
-    left_in_batch = prev_batch_results - qi.offset
-    not_enough = left_in_batch < need_now
+    # do next batch (if needed)
+    schedule_next_batch(qhash, connection, batch_name)
 
-    prev = cast(Batch, tuple(query_info["current_batch"]))
-    previous_batch: Batch = (prev[0], prev[1], prev[2], prev[3])
-    if previous_batch not in done_batches:
-        done_batches.append(previous_batch)
-    qi.done_batches = done_batches
+    # run needed segment+meta queries
+    lines_before, lines_now = qi.get_lines_batch(batch_name)
+    lines_so_far = lines_before + lines_now
+    # send sentences if needed
+    if not qi.kwic_keys:
+        return
 
-    max_kwic = int(os.getenv("DEFAULT_MAX_KWIC_LINES", 9999))
+    min_offset = min(r.offset for r in qi.requests)
+    # Send only if this batch exceeds the offset and this batch starts before what's required
+    need_segments_this_batch = (
+        lines_now > 0 and lines_so_far >= min_offset and qi.required > lines_before
+    )
+    print(
+        f"need segments for {batch_name}?",
+        min_offset,
+        lines_so_far,
+        need_segments_this_batch,
+    )
+    if not need_segments_this_batch:
+        return
 
-    all_batches_queried = len(done_batches) >= len(qi.all_batches)
+    offset_this_batch = max(0, min_offset - lines_so_far)
+    lines_this_batch = (
+        lines_now if qi.full else min(lines_now, qi.required - lines_before)
+    )
+    qi.enqueue(
+        do_segment_and_meta,
+        qi.hash,
+        batch_name,
+        offset_this_batch,
+        lines_this_batch,
+    )
 
-    is_last = prev_total + left_in_batch > max_kwic
 
-    if prev_total >= max_kwic and not qi.full:
-        qi.needed = 0
-        qi.no_more_data = True
-        return qi
-    if qi.total_results_so_far >= tot_req:
-        qi.needed = tot_req - prev_total
-    elif not_enough and not all_batches_queried and not is_last:
-        qi.needed = left_in_batch
-        qi.start_query_from_sents = True
-    elif not_enough and (all_batches_queried or is_last):
-        qi.needed = left_in_batch
-        qi.no_more_data = True
-        return qi
+async def do_segment_and_meta(
+    qhash: str,
+    batch_name: str,
+    offset_this_batch: int,
+    lines_this_batch: int,
+):
+    """
+    Fetch from cache or run a segment+meta query on the given batch
+    """
+    current_job: Job | None = get_current_job()
+    assert current_job, RuntimeError(
+        f"No current jbo found for do_segment_and_meta {batch_name}"
+    )
+    connection = current_job.connection
+    qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return
+    batch_hash, _ = qi.query_batches[batch_name]
+    batch_results: list = qi.get_from_cache(batch_hash)
+
+    all_segment_ids: dict[str, int] = qi.segment_ids_in_results(
+        batch_results,
+        qi.kwic_keys,
+        offset_this_batch,
+        offset_this_batch + lines_this_batch,
+    )
+    seg_hashes = qi.segment_hashes_for_batch.setdefault(batch_name, [])
+    existing_seg_ids: dict[str, int] = {}
+    for sgh in seg_hashes:
+        try:
+            # Retrieve any associated segment job query from cache
+            res_prep = [line for rtype, line in qi.get_from_cache(sgh) if rtype == -1]
+            seg_sids = {str(sid): 1 for sid, *_ in res_prep}
+            existing_seg_ids.update(seg_sids)
+        except:
+            pass
+    if existing_seg_ids:
+        print(
+            f"Found {len(existing_seg_ids)}/{len(all_segment_ids)} segments in cache for {batch_name}"
+        )
+    segment_ids: list[str] = [
+        sid for sid in all_segment_ids if sid not in existing_seg_ids
+    ]
+    if not segment_ids:
+        print(f"No new segment query needed for {batch_name}")
     else:
-        raise ValueError("Backend error. Please debug")
-
-    if qi.full:
-        qi.start_query_from_sents = True
-
-    qi.total_results_so_far = so_far
-
-    return qi
-
-
-async def _query_iteration(
-    qi: QueryIteration, it: int, set_request_info: bool
-) -> QueryIteration | web.Response:
-    """
-    Oversee the querying of a single batch:
-
-        * Set up data needed for resumed queries
-        * Decide batch to query this time
-        * Submit actual query
-        * Optionally, submit sentences query
-        * Prepare for next iteration if need be
-    """
-    max_jobs = int(os.getenv("MAX_SIMULTANEOUS_JOBS_PER_USER", -1))
-
-    # handle resumed queries -- figure out if we need to query new batch
-    if qi.resume:
-        qi = await _do_resume(qi)
-        if qi.needed <= 0 and qi.no_more_data:
-            return await qi.no_batch()
-    else:
-        qi.offset = 0
-
-    jobs: dict[str, str | list[str] | bool] = {}
-
-    qi.current_batch = qi.decide_batch()
-
-    if not qi.current_batch and qi.no_more_data:
-        return await qi.no_batch()
-
-    # Handle cases where the query was canceled or stopped prematurely
-    if qi.first_job:
-        first_job: Job = Job.fetch(qi.first_job, connection=qi.app["redis"])
-        first_job_status = first_job.get_status(refresh=True)
-        if (
-            first_job_status in ("stopped", "canceled")
-            or qi.first_job in qi.app["canceled"]
-        ):
-            if qi.first_job not in qi.app["canceled"]:
-                qi.app["canceled"].append(qi.first_job)
-            qi.app["query_service"].cancel_running_jobs(qi.user, qi.room)
-            print(f"Query was stopped: {qi.first_job} -- preventing update")
-            return await qi.no_batch()
-
-    qi.make_query()
-    qi.set_query_info()
-    if set_request_info:
-        request_info = qi.get_request_info()
-        _set_request_info(qi.app["redis"], request_info)
-
-    # print query info to terminal for first batch only
-    if not it and not qi.job and not qi.resume:
-        query_type = "DQD" if qi.dqd else "JSON"
-        form = json.dumps(qi.jso, indent=4)
-        print(f"Detected query type: {query_type}")
-        print(f"DQD:\n\n{qi.dqd}\n\nJSON:\n\n{form}\n\nSQL:\n\n{qi.sql}")
-
-    # organise and submit query to rq via query service
-    query_job, do_sents = await qi.submit_query()
-
-    if not query_job:
-        return qi
-
-    # simultaneous query setup for next iteration -- plz improve
-    divv = (it + 1) % max_jobs if max_jobs > 0 else -1
-    if qi.job and qi.simultaneous and it and max_jobs > 0 and not divv:
-        if query_job.id not in qi.dep_chain:
-            qi.dep_chain.append(query_job.id)
-
-    assert qi.current_batch is not None
-    schema_table = ".".join(qi.current_batch[1:3])
-
-    if (
-        qi.current_batch is not None
-        and qi.job is not None
-        and do_sents
-        and not qi.resume
-    ):
-        print(f"\nNow querying: {schema_table} ... {query_job.id}")
-
-    # prepare and submit sentences query
-    if do_sents and (qi.sentences or qi.resume):
-        sents_jobs = qi.submit_sents(do_sents)
-
-    jobs = {
-        "status": "started",
-        "job": qi.job_id if qi.job else qi.previous,
+        script, meta_labels = get_segment_meta_script(
+            qi.config, qi.languages, batch_name
+        )
+        qi.meta_labels = meta_labels
+        qi.update({"meta_labels": meta_labels})
+        shash = hasher(script)
+        print(f"Running new segment query for {batch_name} -- {shash}")
+        res = await qi.query(shash, script, params={"sids": segment_ids})
+        seg_hashes.append(shash)
+    # Calculate which lines from res should be sent to each request
+    reqs_offsets = {r.id: r.lines_for_batch(qi, batch_name) for r in qi.requests}
+    reqs_sids: dict[str, dict[str, int]] = {
+        req_id: qi.segment_ids_in_results(batch_results, qi.kwic_keys, o, o + l)
+        for req_id, (o, l) in reqs_offsets.items()
     }
+    for sgh in seg_hashes:
+        reqs_nlines: dict[str, dict[int, int]] = {req_id: {} for req_id in reqs_sids}
+        for nline, (_, (sid, *_)) in enumerate(qi.get_from_cache(sgh)):
+            for req_id, sids in reqs_sids.items():
+                if sid not in sids:
+                    continue
+                reqs_nlines[req_id][nline] = 1
+        for r in qi.requests:
+            if sgh in r.segment_lines_for_hash:
+                continue
+            r.update_dict("segment_lines_for_hash", {sgh: reqs_nlines[r.id]})
+    qi.publish(batch_name, "segments")
 
-    if qi.sentences and do_sents:
-        jobs.update({"sentences": True, "sentences_jobs": sents_jobs})
 
-    qi.job_info = jobs
+async def do_batch(qhash: str, batch: list):
+    """
+    Fetch from cache or run a main query on a batch from within a worker
+    and aggregate the results for stats if needed
+    """
+    current_job: Job | None = get_current_job()
+    assert current_job, RuntimeError(f"No current job found for do_batch {batch}")
+    connection = current_job.connection
+    qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return
+    batch_name = cast(str, batch[0])
+    if batch_name == qi.running_batch:
+        # This batch is already running: stop here
+        return
+    # Now this is the running batch
+    qi.running_batch = batch_name
+    try:
+        batch_hash, _ = qi.query_batches[batch_name]
+        qi.get_from_cache(batch_hash)
+        print(f"Retrieved query from cache: {batch_name} -- {batch_hash}")
+    except:
+        print(f"No job in cache for {batch_name}, running it now")
+        await qi.run_query_on_batch(batch)
+        batch_hash, _ = qi.query_batches.get(batch_name, ("", 0))
+    min_offset = min(r.offset for r in qi.requests)
+    await qi.run_aggregate(min_offset, batch)
+    qi.publish(batch_name, "main")
+    return batch_name
 
-    if qi.simultaneous and qi.current_batch is not None:
-        qi.done_batches.append(qi.current_batch)
-        qi.current_batch = None
 
-    return qi
+def schedule_next_batch(
+    qhash: str,
+    connection: RedisConnection,
+    previous_batch_name: str | None = None,
+) -> Job | None:
+    """
+    Find the next batch to run based on the previous one
+    and return the corresponding job (None if no next batch)
+    """
+    qi = QueryInfo(qhash, connection=connection)
+    if not qi.requests:
+        return None
+    if previous_batch_name:
+        lines_before, lines_batch = qi.get_lines_batch(previous_batch_name)
+        if lines_before + lines_batch >= qi.required:
+            qi.running_batch = ""
+            return None
+    next_batch = qi.decide_next_batch(previous_batch_name)
+    if not next_batch:
+        qi.running_batch = ""
+        return None
+    min_offset = min(r.offset for r in qi.requests)
+    while min_offset > 0 and list(next_batch) in qi.done_batches:
+        lines_before_batch, lines_next_batch = qi.get_lines_batch(next_batch[0])
+        if min_offset <= lines_before_batch + lines_next_batch:
+            break
+        next_batch = qi.decide_next_batch(next_batch[0])
+    return qi.enqueue(do_batch, qhash, list(next_batch), callback=batch_callback)
 
 
-@ensure_authorised
-@logged
-async def query(
-    request: web.Request,
-    manual: JSONObject | None = None,
-    app: web.Application | None = None,
-    api: bool = False,
-) -> web.Response:
+def process_query(
+    app: LCPApplication, request_data: dict
+) -> tuple[Request, QueryInfo, Any]:
+    """
+    Determine whether it is necessary to send queries to the DB
+    and return the job info + the asyncio task + QueryInfo instance
+    """
+    request: Request = Request(app["redis"], request_data)
+    print(
+        f"Received new POST request: {request.id} ; {request.offset} -- {request.requested}"
+    )
+    config = app["config"][request.corpus]
+    try:
+        json_query = json.loads(request.query)
+        json_query = json.loads(json.dumps(json_query, sort_keys=True))
+    except json.JSONDecodeError:
+        json_query = convert(request.query, config)
+    all_batches = _get_query_batches(config, request.languages)
+    sql_query, meta_json, post_processes = json_to_sql(
+        cast(QueryJSON, json_query),
+        schema=config.get("schema_path", ""),
+        batch=cast(str, all_batches[0][0]),
+        config=config,
+        lang=request.languages[0] if request.languages else None,
+    )
+    print("SQL query:", sql_query)
+    shash = hasher(sql_query)
+    qi = QueryInfo(
+        shash,
+        app["redis"],
+        json_query,
+        meta_json,
+        post_processes,
+        request.languages,
+        config,
+    )
+    qi.add_request(request)
+    if request.to_export and request.user:
+        # TODO: move this into the exporter script instead?
+        epath = app["exporters"]["xml"].get_dl_path_from_hash(
+            shash, request.offset, request.requested, request.full
+        )
+        if os.path.exists(epath):
+            shutil.rmtree(epath)
+        xp_format: str = request.to_export.get("format", "xml") or "xml"
+        ext: str = ".db" if xp_format == "swissdox" else ".xml"
+        filename: str = cast(str, request.to_export.get("filename", ""))
+        cshortname = config.get("shortname")
+        if not filename:
+            filename = (
+                f"{cshortname} {datetime.now().strftime('%Y-%m-%d %I:%M%p')}{ext}"
+            )
+        filename = sanitize_filename(filename)
+        corpus_folder = sanitize_filename(cshortname or config.get("project_id", ""))
+        userpath: str = os.path.join(corpus_folder, filename)
+        suffix: int = 0
+        while os.path.exists(os.path.join(RESULTS_USERS, request.user, userpath)):
+            suffix += 1
+            userpath = os.path.join(
+                corpus_folder, f"{os.path.splitext(filename)[0]} ({suffix}){ext}"
+            )
+        app["internal"].enqueue(
+            _handle_export,  # init_export
+            on_failure=Callback(
+                _general_failure,
+            ),
+            result_ttl=EXPORT_TTL,
+            job_timeout=EXPORT_TTL,
+            args=(shash, xp_format, True, request.offset, request.requested),
+            kwargs={
+                "user_id": request.user,
+                "userpath": userpath,
+                "corpus_id": request.corpus,
+            },
+        )
+    job: Job | None = schedule_next_batch(shash, connection=app["redis"])
+    return (request, qi, job)
+
+
+async def post_query(request: web.Request) -> web.Response:
     """
     Main query endpoint: generate and queue up corpus queries
-
-    Actual DB queries are done in the worker process, managed by RQ/Redis. Once
-    these jobs are submitted, we return an HTTP response with the job id,
-    so that the frontend knows the query has started and its job id.
-
-    This endpoint can be manually triggered for queries over multiple batches. When
-    that happpens, `manual` is a dict with the needed data and the app is passed in
-    as a kwarg.
-
-    Because data can come in either through a request or through a dict, we normalise
-    by creating a utils.QueryIteration dataclass. Use this to keep the namespace of this
-    function from growing any larger...
-
-    On any serious error, we send a failure message to the user and log the
-    error to sentry if configured.
-
-    Simultaneous mode is currently not used, but can be enabled in .env . In
-    this mode, multiple query requests can be sent simultaneously, rather than
-    one at a time. This is experimental, it will probably remain unused.
     """
-    qi: QueryIteration | web.Response
-    # Turn request or manual dict into a QueryIteration object
-    if manual is not None and isinstance(app, web.Application):
-        # 'request' comes from sock.py, it is a non-first iteration
-        qi = await QueryIteration.from_manual(manual, app)
+    app = cast(LCPApplication, request.app)
+    request_data = await request.json()
+
+    user = request_data.get("user", "")
+    room = request_data.get("room", "")
+    corpus = request_data.get("corpus", "")
+    if request_data.get("api"):
+        room = "api"
+        request_data["room"] = room
+    # Check permission
+    authenticator = cast(Authentication, app["auth_class"](app))
+    user_data: dict = {}
+    if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
+        user_data = await authenticator.check_api_key(request)
     else:
-        # request is from the frontend, most likely a new query...
-        request_data = await request.json()
-        app = request.app
-        if api:
-            request_data["room"] = "api"
-            request_data["to_export"] = request_data.get("to_export") or {
-                "format": "xml"
-            }
-        qi = await QueryIteration.from_request(request_data, app, api=api)
-        # Check permission
-        authenticator = cast(Authentication, app["auth_class"](app))
-        user_data: dict = {}
-        if "X-API-Key" in request.headers and "X-API-Secret" in request.headers:
-            user_data = await authenticator.check_api_key(request)
-        else:
-            user_data = await authenticator.user_details(request)
-        app_type = str(request_data.get("appType", "lcp"))
-        app_type = (
-            "lcp"
-            if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"}
-            else app_type
-        )
-        allowed = all(
-            authenticator.check_corpus_allowed(
-                str(cid), qi.config[str(cid)], user_data, app_type, get_all=False
-            )
-            for cid in qi.corpora
-        )
-        if not allowed:
-            fail: dict[str, str] = {
-                "status": "403",
-                "error": "Forbidden",
-                "action": "query_error",
-                "user": qi.user or "",
-                "room": qi.room or "",
-                "info": "Attempted access to an unauthorized corpus",
-            }
-            msg = "Attempted access to an unauthorized corpus"
-            # # alert everyone possible about this problem:
-            print(msg)
-            logging.error(msg, extra=fail)
-            payload = cast(JSONObject, fail)
-            room: str = qi.room or ""
-            just: tuple[str, str] = (room, qi.user or "")
-            await push_msg(qi.app["websockets"], room, payload, just=just)
-            print("pushed message")
-            raise web.HTTPForbidden(text=msg)
-
-    # prepare for query iterations (just one if not simultaneous mode)
-    iterations = len(qi.all_batches) if qi.simultaneous else 1
-    http_response: list[dict[str, str | bool | list[str]]] = []
-    out: Iteration
-
-    try:
-        set_request_info = True if not manual else False
-        for it in range(iterations):
-            qi = await _query_iteration(qi, it, set_request_info)
-            set_request_info = False  # only set it once
-            if not isinstance(qi, QueryIteration):
-                return qi
-            http_response.append(qi.job_info)
-    except Exception as err:
-        qi = cast(QueryIteration, qi)
-        tb = traceback.format_exc()
-        fail = {
-            "status": "error",
+        user_data = await authenticator.user_details(request)
+    app_type = str(request_data.get("appType", "lcp"))
+    app_type = (
+        "lcp"
+        if app_type not in {"lcp", "videoscope", "soundscript", "catchphrase"}
+        else app_type
+    )
+    allowed = authenticator.check_corpus_allowed(
+        str(corpus), app["config"][str(corpus)], user_data, app_type, get_all=False
+    )
+    if not allowed:
+        fail: dict[str, str] = {
+            "status": "403",
+            "error": "Forbidden",
             "action": "query_error",
-            "type": str(type(err)),
-            "traceback": tb,
-            "user": qi.user or "",
-            "room": qi.room or "",
-            "info": f"Could not create query: {str(err)}",
+            "user": user,
+            "room": room,
+            "info": "Attempted access to an unauthorized corpus",
         }
-        msg = f"Error: {err} ({qi.user}/{qi.room})"
-        # alert everyone possible about this problem:
-        print(f"{msg}:\n\n{tb}")
+        msg = "Attempted access to an unauthorized corpus"
+        # # alert everyone possible about this problem:
+        print(msg)
         logging.error(msg, extra=fail)
-        payload = cast(JSONObject, fail)
-        room = qi.room or ""
-        just = (room, qi.user or "")
-        await push_msg(qi.app["websockets"], room, payload, just=just)
-        return web.json_response(fail)
+        just: tuple[str, str] = (room, user or "")
+        await push_msg(app["websockets"], room, cast(dict, fail), just=just)
+        raise web.HTTPForbidden(text=msg)
 
-    if qi.simultaneous:
-        return web.json_response(http_response)
+    (req, qi, job) = process_query(app, request_data)
+    if req.to_export and req.user:
+        xpformat = req.to_export.get("format", "xml") or "xml"
+        await push_msg(
+            app["websockets"],
+            req.room,
+            {"action": "started_export", "format": xpformat, "request": req.id},
+            skip=None,
+            just=(req.room, req.user),
+        )
+
+    if req.synchronous:
+        try:
+            query_buffers = app["query_buffers"]
+        except:
+            query_buffers = {}
+            app.addkey("query_buffers", dict[str, dict], query_buffers)
+        query_buffers[req.id] = {}
+        while 1:
+            await asyncio.sleep(0.5)
+            if not qi.has_request(req):
+                break
+        res = query_buffers[req.id]
+        query_buffers.pop(req.id, None)
+        print(f"[{req.id}] Done with synchronous request")
+        serializer = CustomEncoder()
+        return web.json_response(serializer.default(res))
     else:
-        return web.json_response(http_response[0])
-
-
-@ensure_authorised
-async def refresh_config(request: web.Request) -> web.Response:
-    """
-    Force a refresh of the config via the /config endpoint
-    """
-    qs = request.app["query_service"]
-    job: Job = await qs.get_config(force_refresh=True)
-    return web.json_response({"job": str(job.id)})
+        job_info = {"status": "started", "job": req.hash, "request": req.id}
+        return web.json_response(job_info)
