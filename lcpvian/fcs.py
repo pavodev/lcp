@@ -128,7 +128,7 @@ def _make_search_response(
     resp += f"""
   <sru:numberOfRecords>{len(records)}</sru:numberOfRecords>
   <sru:records>{''.join(records)}
-  <sru:/records>
+  </sru:records>
 </sru:searchRetrieveResponse>"""
     return resp
 
