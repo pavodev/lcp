@@ -10,6 +10,7 @@ from redis import Redis as RedisConnection
 from rq import Callback
 from rq.job import get_current_job, Job
 from typing import cast, Any
+from uuid import uuid4
 
 from .abstract_query.create import json_to_sql
 from .abstract_query.typed import QueryJSON
@@ -108,24 +109,18 @@ async def do_segment_and_meta(
         offset_this_batch,
         offset_this_batch + lines_this_batch,
     )
-    seg_hashes = qi.segment_hashes_for_batch.setdefault(batch_name, [])
-    existing_seg_ids: dict[str, int] = {}
-    for sgh in seg_hashes:
-        try:
-            # Retrieve any associated segment job query from cache
-            res_prep = [line for rtype, line in qi.get_from_cache(sgh) if rtype == -1]
-            seg_sids = {str(sid): 1 for sid, *_ in res_prep}
-            existing_seg_ids.update(seg_sids)
-        except:
-            pass
-    if existing_seg_ids:
+    segments_this_batch = qi.segments_for_batch.get(batch_name, {})
+    existing_sids: dict[str, int] = {
+        sid: 1 for _, sids in segments_this_batch.items() for sid in sids
+    }
+    needed_sids: dict[str, int] = {
+        sid: 1 for sid in all_segment_ids if sid not in existing_sids
+    }
+    if existing_sids:
         print(
-            f"Found {len(existing_seg_ids)}/{len(all_segment_ids)} segments in cache for {batch_name}"
+            f"Found {len(existing_sids)}/{len(all_segment_ids)} segments in cache for {batch_name}"
         )
-    segment_ids: list[str] = [
-        sid for sid in all_segment_ids if sid not in existing_seg_ids
-    ]
-    if not segment_ids:
+    if not needed_sids:
         print(f"No new segment query needed for {batch_name}")
     else:
         script, meta_labels = get_segment_meta_script(
@@ -133,27 +128,28 @@ async def do_segment_and_meta(
         )
         qi.meta_labels = meta_labels
         qi.update({"meta_labels": meta_labels})
-        shash = hasher(script)
-        print(f"Running new segment query for {batch_name} -- {shash}")
-        res = await qi.query(shash, script, params={"sids": segment_ids})
-        seg_hashes.append(shash)
+        squery_id = str(uuid4())
+        print(f"Running new segment query for {batch_name} -- {squery_id}")
+        await qi.query(squery_id, script, params={"sids": [sid for sid in needed_sids]})
+        segments_this_batch = {squery_id: needed_sids, **segments_this_batch}
+        qi.segments_for_batch[batch_name] = segments_this_batch
     # Calculate which lines from res should be sent to each request
     reqs_offsets = {r.id: r.lines_for_batch(qi, batch_name) for r in qi.requests}
     reqs_sids: dict[str, dict[str, int]] = {
         req_id: qi.segment_ids_in_results(batch_results, qi.kwic_keys, o, o + l)
         for req_id, (o, l) in reqs_offsets.items()
     }
-    for sgh in seg_hashes:
+    for sqid in segments_this_batch:
         reqs_nlines: dict[str, dict[int, int]] = {req_id: {} for req_id in reqs_sids}
-        for nline, (_, (sid, *_)) in enumerate(qi.get_from_cache(sgh)):
+        for nline, (_, (sid, *_)) in enumerate(qi.get_from_cache(sqid)):
             for req_id, sids in reqs_sids.items():
                 if sid not in sids:
                     continue
                 reqs_nlines[req_id][nline] = 1
         for r in qi.requests:
-            if sgh in r.segment_lines_for_hash:
+            if sqid in r.segment_lines_for_hash:
                 continue
-            r.update_dict("segment_lines_for_hash", {sgh: reqs_nlines[r.id]})
+            r.update_dict("segment_lines_for_hash", {sqid: reqs_nlines[r.id]})
     qi.publish(batch_name, "segments")
 
 
