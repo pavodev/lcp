@@ -64,7 +64,7 @@ arg: quantification
 constraints : (constraint _NL*)+                     // skip: constraint
 args : (constraint _NL*)+                            // skip: constraint
 
-members : ((unit|sequence) _NL*)+
+members : ((unit|sequence|logical_expression) _NL*)+
 set : "set"(part_of)? label? _NL _INDENT members _DEDENT
 sequence : "sequence"(part_of)? label? repetition? _NL _INDENT members _DEDENT
 
