@@ -179,7 +179,7 @@ def _bound_label(
                 if _bound_label(label, m, tmp_in_scope):
                     return True
         if "logicalExpression" in obj:
-            logic = obj["logicalExpresion"]
+            logic = obj["logicalExpression"]
             tmp_in_scope = (
                 logic.get("naryOperator") == "OR" or logic.get("unaryOperator") == "NOT"
             )

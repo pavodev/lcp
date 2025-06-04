@@ -68,7 +68,7 @@ def _where_conditions_from_constraints(
     return (all_conditions, left_joins, cons.references)
 
 
-def _prefilter(conf: Config, subseq: list[Unit]) -> str:
+def _prefilter(conf: Config, subseq: list[Unit | Disjunction]) -> str:
     seq: dict = {"sequence": {"members": [s.obj for s in subseq]}}
     p = Prefilter([seq], conf, dict(), "")  # has_segment (remove?)
     return p._condition()
@@ -388,8 +388,8 @@ class Cte:
                     }
                 }
                 name_seq: str = (
-                    state.unit.parent_sequence.label
-                    if state.unit and state.unit.parent_sequence
+                    state.unit.parent_member.label
+                    if state.unit and isinstance(state.unit.parent_member, Sequence)
                     else self.sequence.sequence.query_data.unique_label(
                         references=references
                     )
@@ -567,7 +567,7 @@ class SQLSequence:
             self._members = []
             # for m in self.sequence.members:
             for m in Member.from_obj(
-                obj=self.sequence.obj, parent_sequence=self.sequence
+                obj=self.sequence.obj, parent_member=self.sequence
             ):
                 if isinstance(m, Unit):
                     self._members.append(m)
@@ -754,9 +754,12 @@ class SQLSequence:
         return (ret[0], ret[1], refs)
 
     def prefilters(self) -> set[str]:
-        prefilters: list[list[Unit]] = [[]]
+        prefilters: list[list[Unit | Disjunction]] = [[]]
         for e in self.sequence.fixed_subsequences():
             if isinstance(e, Unit):
+                prefilters[-1].append(e)
+            elif isinstance(e, Disjunction):
+                # note: fixed_subsequences only returns disjuctions with fixed disjuncts of the same length
                 prefilters[-1].append(e)
             elif isinstance(e, int):
                 if e == 0:
@@ -823,11 +826,11 @@ class SQLSequence:
                 last_fixed_token = m
                 min_separation = 0
                 max_separation = 0
-                if m.parent_sequence:
-                    self._sequence_references[m.parent_sequence.label] = (
-                        self._sequence_references.get(m.parent_sequence.label, [])
+                if isinstance(m.parent_member, Sequence):
+                    self._sequence_references[m.parent_member.label] = (
+                        self._sequence_references.get(m.parent_member.label, [])
                     )
-                    self._sequence_references[m.parent_sequence.label].append(m)
+                    self._sequence_references[m.parent_member.label].append(m)
 
             elif isinstance(m, Disjunction):
                 # For now, treat all disjunctions as requiring a CTE
@@ -882,7 +885,7 @@ class SQLSequence:
             l: str = token.internal_label
             part_of: list[dict[str, str]] = token.obj["unit"].get("partOf", [])
             if not part_of:
-                tok_par_seq = token.parent_sequence
+                tok_par_seq = cast(Sequence, token.parent_member)
                 if tok_par_seq:
                     part_of = tok_par_seq.obj["sequence"].get("partOf", [])
                 if not part_of:
@@ -974,7 +977,7 @@ class SQLSequence:
                     "partOf", {}
                 )
                 if not sub_member_part_of:
-                    sub_member_sequence = m.parent_sequence
+                    sub_member_sequence = cast(Sequence, m.parent_member)
                     if sub_member_sequence:
                         sub_member_part_of = sub_member_sequence.obj["sequence"].get(
                             "partOf", []

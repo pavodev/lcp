@@ -747,7 +747,6 @@ class QueryMaker:
 
         schema_prefix: str = f"{self.schema}."
         base: str = f"{schema_prefix}{table} {label}".lower()
-
         prefilters: set[str] = {
             p
             for s in self.sqlsequences

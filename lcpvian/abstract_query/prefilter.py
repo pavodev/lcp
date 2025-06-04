@@ -122,12 +122,21 @@ class SingleNode:
 
 class Conjuncted:
     """
-    A sequence of objects held together within an AND/OR expression
+    A set of constraints held together within an AND/OR expression
     """
 
     def __init__(self, conj: str | None, items: Sequence[SingleNode | Self]) -> None:
         self.conj = conj
         self.items = items
+
+
+class Disjunction:
+    """
+    Sequences units of the same, fixed length
+    """
+
+    def __init__(self, units: Sequence[Sequence[SingleNode | Conjuncted]]) -> None:
+        self.units = units
 
 
 class Prefilter:
@@ -210,13 +219,13 @@ class Prefilter:
             stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
         return stringified
 
-    def initialise(self, query_json: QueryPart) -> list[SingleNode | Conjuncted | None]:
+    def initialise(
+        self, query_json: QueryPart
+    ) -> list[SingleNode | Conjuncted | Disjunction | None]:
         """
         todo: update this for latest query json
         """
-        # query_json = query_json["query"]
-        list_nodes: list[SingleNode | Conjuncted | None] = []
-        count = 0
+        list_nodes: list[SingleNode | Conjuncted | Disjunction | None] = []
         for obj in query_json:
             if not isinstance(obj, dict):
                 continue
@@ -225,16 +234,60 @@ class Prefilter:
             seq = cast(dict[str, JSON], obj["sequence"])
             members = cast(list[dict[str, JSON]], seq["members"])
             for member in members:
+                if "logicalExpression" in member:
+                    logic = cast(dict, member["logicalExpression"])
+                    assert logic.get("naryOperator") == "OR", RuntimeError(
+                        "Cannot build prefix for non-OR matrix logical expression"
+                    )
+                    log_members = logic.get("args", [])
+                    all_tokens = all("unit" in x for x in log_members)
+                    all_sequences = all("sequence" in x for x in log_members)
+                    assert all_tokens or all_sequences, RuntimeError(
+                        "Cannot build OR prefix if not all members are units or all are sequences"
+                    )
+                    units: Sequence[Sequence[SingleNode | Conjuncted]] = []
+                    if all_tokens:
+                        tmp_units = [
+                            [
+                                self._process_unit(
+                                    cast(dict, x["units"]).get("constraints", [])
+                                )
+                            ]
+                            for x in log_members
+                        ]
+                        units = cast(
+                            Sequence[Sequence[SingleNode | Conjuncted]],
+                            [x for x in tmp_units if x is not None],
+                        )
+                    elif all_sequences:
+                        assert all(
+                            "unit" in y
+                            for x in log_members
+                            for y in x["sequence"].get("members", [])
+                        ), RuntimeError(
+                            "Can only build a prefix for disjunctions of sequences that exclusively contain units"
+                        )
+                        tmp_units = [
+                            [
+                                self._process_unit(
+                                    cast(dict, y["unit"]).get("constraints", [])
+                                )
+                                for y in x["sequence"].get("members", [])
+                            ]
+                            for x in log_members
+                        ]
+                        units = cast(
+                            Sequence[Sequence[SingleNode | Conjuncted]],
+                            [x for x in tmp_units if x is not None],
+                        )
+                    list_nodes.append(Disjunction(units))
+                    continue
                 if "unit" not in member:
                     continue  # TODO: handle nested sequences
                 cons = cast(
                     list[dict[str, Any]],
                     cast(dict, member["unit"]).get("constraints", []),
                 )
-                # if not cons:
-                #     count += 1
-                #     continue
-                # res = self._process_unit(cons)
                 res = None  # No constraints
                 if cons:
                     res = self._process_unit(cons)
@@ -244,8 +297,6 @@ class Prefilter:
     def _prefilter_conjuncts(self) -> list[str]:
         first_pass = self.initialise(self.query_json)
         return self._stringify_nodes(first_pass)
-        # strung: list[str] = self._stringify_nodes(first_pass)
-        # return self._finalise_prefilters(strung)
 
     def _condition(self) -> str:
         return self._stringify(self._prefilter_conjuncts())
@@ -308,7 +359,7 @@ class Prefilter:
         self, filt: list[dict[str, Any]], kind: str
     ) -> Conjuncted | None:
         """
-        Try to make prefilters from this OR-conjuncted token
+        Try to make prefilters from this AND/OR-conjuncted token
         """
         matches: list[SingleNode | Conjuncted] = []
 
@@ -348,7 +399,7 @@ class Prefilter:
         raise NotImplementedError("should not be here")
 
     def _stringify_nodes(
-        self, prefilter: list[Conjuncted | SingleNode | None]
+        self, prefilter: list[Conjuncted | SingleNode | Disjunction | None]
     ) -> list[str]:
         """
         Create the prefilter string from a single item in the defaultdict value
@@ -360,7 +411,14 @@ class Prefilter:
                 continue
 
             single = []
-            if isinstance(prefilt, Conjuncted):
+            if isinstance(prefilt, Disjunction):
+                disj = " | ".join(
+                    " <1> ".join(self._as_string(u) for u in units)
+                    for units in prefilt.units
+                )
+                all_made.append(f"({disj})")
+                continue
+            elif isinstance(prefilt, Conjuncted):
                 connective = prefilt.conj
                 items = prefilt.items
             else:

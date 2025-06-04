@@ -1,0 +1,56 @@
+// Adapted from https://www.loc.gov/standards/sru/cql/spec.html
+
+sorted_query : prefix_assignment sorted_query
+            | scoped_clause ["sortby" sort_spec]
+
+sort_spec    : sort_spec single_spec | single_spec
+
+single_spec  : index [modifier_list]
+
+cql_query    : prefix_assignment cql_query
+            | scoped_clause
+
+prefix_assignment : ">" prefix "=" uri
+                 | ">" uri
+
+scoped_clause : scoped_clause boolean_group search_clause
+             | search_clause
+
+boolean_group : boolean [modifier_list]
+
+boolean      : "and" | "AND" | "or" | "OR" | "not" | "NOT" | "prox" | "PROX"
+
+search_clause : "(" cql_query ")"
+             | index relation search_term
+             | search_term
+
+relation     : comparitor [modifier_list]
+
+comparitor 	 : comparitor_symbol | named_comparitor
+
+comparitor_symbol : "=" | ">" | "<" | ">=" | "<=" | "<>" | "=="
+
+named_comparitor : identifier
+
+modifier_list    : modifier_list modifier | modifier
+
+modifier        : "/" modifier_name [comparitor_symbol modifier_value]
+
+prefix         : term
+uri            : term
+modifier_name  : term
+modifier_value : term
+search_term    : term
+index          : term
+
+term           : identifier | "and" | "AND" | "or" | "OR" | "not" | "NOT" | "prox" | "PROX" | "sortby" | "SORTBY"
+
+identifier     : char_string1 | char_string2
+char_string1   : CHARSTRING1
+char_string2   : CHARSTRING2
+
+CHARSTRING1 : /[^\s)(=><"\/]+/
+CHARSTRING2 : /"([^"]|\")+"/
+
+%import common.WS
+%ignore WS

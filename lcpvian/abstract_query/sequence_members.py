@@ -16,25 +16,29 @@ from .utils import Config, QueryData, _parse_repetition
 
 class Member:
 
-    def __init__(self, obj: dict, parent_sequence: Sequence | None, depth: int = 0):
+    def __init__(self, obj: dict, parent_member: Member | None, depth: int = 0):
         self.obj: dict = obj
-        self.parent_sequence: Sequence | None = parent_sequence
+        self.parent_member: Member | None = parent_member
         self.depth: int = depth
         self.min_length: int = 0
         self.max_length: int = 0
         self.need_cte: bool = False
-        if isinstance(parent_sequence, Sequence):
-            parent_sequence.members.append(self)
+        self.members: list[Member] = []  # Empty for tokens
+        if parent_member and self not in parent_member.members:
+            parent_member.members.append(self)
 
     @staticmethod
     def from_obj(
         obj: dict,
-        parent_sequence: Sequence,
+        parent_member: Member | None,
         depth: int = 0,
         flatten_sequences: bool = True,
     ) -> list[Member]:
         if "unit" in obj:
-            return [Unit(obj, parent_sequence, depth)]
+            assert parent_member is not None, RuntimeError(
+                "Units in sequences cannot lack a parent member"
+            )
+            return [Unit(obj, cast(Member, parent_member), depth)]
 
         elif logic := obj.get("logicalExpression"):
             operator = logic.get("naryOperator", "")
@@ -56,6 +60,9 @@ class Member:
                         }
                     }
                 ]
+                assert parent_member is not None, RuntimeError(
+                    "Units in sequences cannot lack a parent member"
+                )
                 return [
                     Unit(
                         {
@@ -64,21 +71,27 @@ class Member:
                                 "constraints": disjunction_constraints,
                             }
                         },
-                        parent_sequence,
+                        cast(Member, parent_member),
                         depth,
                     )
                 ]
             else:
-                return [Disjunction(obj, parent_sequence, depth)]
+                disj = Disjunction(obj, parent_member, depth)
+                return [disj]
 
         elif "sequence" in obj:
+            assert parent_member is not None, RuntimeError(
+                "Tried to create a sub-sequence without a parent member"
+            )
+            top_sequence: Sequence = parent_member.get_top_sequence()
+
             if not flatten_sequences:
                 return [
                     Sequence(
-                        parent_sequence.query_data,
-                        parent_sequence.conf,
+                        top_sequence.query_data,
+                        top_sequence.conf,
                         obj,
-                        parent_sequence,
+                        parent_member,
                         depth,
                         flatten=False,
                     )
@@ -91,10 +104,10 @@ class Member:
             if mini == 0:
                 return [
                     Sequence(
-                        parent_sequence.query_data,
-                        parent_sequence.conf,
+                        top_sequence.query_data,
+                        top_sequence.conf,
                         obj,
-                        parent_sequence,
+                        parent_member,
                         depth,
                     )
                 ]
@@ -111,10 +124,10 @@ class Member:
                     }
                 }
                 optional_sequence: Sequence = Sequence(
-                    parent_sequence.query_data,
-                    parent_sequence.conf,
+                    top_sequence.query_data,
+                    top_sequence.conf,
                     newseqobj,
-                    parent_sequence,
+                    parent_member,
                     depth + 1,
                 )
                 # The members must appear min: return them as individual members
@@ -133,11 +146,22 @@ class Member:
         else:
             raise TypeError(f"Unsupported type of sequence member: {obj}")
 
+    def get_top_sequence(self) -> Sequence:
+        if not self.parent_member:
+            assert isinstance(self, Sequence), RuntimeError(
+                "Found a member without a top sequence"
+            )
+            return self
+        top_sequence: Member | Sequence = self.parent_member
+        while top_sequence.parent_member:
+            top_sequence = top_sequence.parent_member
+        return cast(Sequence, top_sequence)
+
     def get_all_parent_sequences(self) -> list[Sequence]:
         ret: list[Sequence] = []
-        if isinstance(self.parent_sequence, Sequence):
-            ret.append(self.parent_sequence)
-            ret += self.parent_sequence.get_all_parent_sequences()
+        if isinstance(self.parent_member, Sequence):
+            ret.append(self.parent_member)
+            ret += self.parent_member.get_all_parent_sequences()
         return ret
 
     def get_all_units(self) -> list[Unit]:
@@ -160,17 +184,18 @@ class Unit(Member):
     def __init__(
         self,
         obj: dict,
-        parent_sequence: Sequence,
+        parent_member: Member,
         depth: int = 0,
     ):
-        super().__init__(obj, parent_sequence, depth)
-        query_data: QueryData = parent_sequence.query_data
-        unit_layer = parent_sequence.conf.config["firstClass"]["token"]
+        super().__init__(obj, parent_member, depth)
+        top_sequence: Sequence = self.get_top_sequence()
+        query_data: QueryData = top_sequence.query_data
+        unit_layer = top_sequence.conf.config["firstClass"]["token"]
         self.label: str = str(obj["unit"].get("label", ""))
         self.internal_label = self.label
         sequence_unit_labels = [
             cast(Unit, u).internal_label
-            for u in parent_sequence.members
+            for u in top_sequence.members
             if isinstance(u, Unit)
         ]
         if not self.label or self.label in sequence_unit_labels:
@@ -184,9 +209,22 @@ class Unit(Member):
         for c in self.obj["unit"].get("constraints", []):
             if "comparison" not in c:
                 continue
-            cs.append(
-                f"{c['comparison'].get('entity','.')}{c['comparison'].get('operator','=')}{next(v for k,v in c['comparison'].items() if k.endswith('Comparison'))}"
-            )
+            comp = c["comparison"]
+            left: str = "."
+            for lt in ("function", "reference", "attribute", "string", "regex", "math"):
+                try:
+                    left = comp["left"][lt]
+                    continue
+                except:
+                    pass
+            right: str = "."
+            for lt in ("function", "reference", "attribute", "string", "regex", "math"):
+                try:
+                    right = comp["right"][lt]
+                    continue
+                except:
+                    pass
+            cs.append(f"{left}{comp['comparator']}{right}")
         return cs
 
     def __str__(self) -> str:
@@ -198,23 +236,23 @@ class Unit(Member):
 
 
 class Disjunction(Member):
-    def __init__(self, obj: dict, parent_sequence: Sequence, depth: int = 0):
-        super().__init__(obj, parent_sequence, depth)
+    def __init__(self, obj: dict, parent_member: Member | None, depth: int = 0):
+        super().__init__(obj, parent_member, depth)
         args: list = obj["logicalExpression"].get("args", [])
         # Don't extract units from sub-sequences when those are inside a disjunction (otherwise they would become disjuncts too!)
-        self.members: list[Member] = [
-            x
+        members = [
+            m
             for a in args
-            for x in Member.from_obj(
+            for m in Member.from_obj(
                 a,
-                parent_sequence,
+                self,
                 depth + 1,
                 flatten_sequences=False,
             )
         ]
-        self.min_length: int = min(sm.min_length for sm in self.members)
+        self.min_length: int = min(sm.min_length for sm in members)
         self.max_length: int = 0
-        for sm in self.members:
+        for sm in members:
             if sm.max_length == -1:
                 self.max_length = -1
                 break
@@ -231,12 +269,12 @@ class Sequence(Member):
         query_data: QueryData,
         conf: Config,
         obj: dict,
-        parent_sequence: Sequence | None = None,
+        parent_member: Member | None = None,
         depth: int = 0,
         flatten: bool = False,
         # sequence_references: dict[str, list] = dict(),
     ):
-        super().__init__(obj, parent_sequence, depth)
+        super().__init__(obj, parent_member, depth)
 
         self.query_data: QueryData = query_data
         self.conf: Config = conf
@@ -291,9 +329,9 @@ class Sequence(Member):
         """Whether this sentence include the member anywhere down the pipe"""
         if member in self.members:
             return True
-        parent_sequence: Sequence | None = member.parent_sequence
+        parent_sequence: Member | None = member.parent_member
         while parent_sequence and parent_sequence is not self:
-            parent_sequence = parent_sequence.parent_sequence
+            parent_sequence = parent_sequence.parent_member
         return parent_sequence is self
 
     def labeled_unbound_child_sequences(self) -> list[Sequence]:
@@ -317,7 +355,7 @@ class Sequence(Member):
         """All the fixed subsequences that can be built from this sequence (for prefiltering purposes)"""
         if self.repetition[0] == 0:
             return [-1]
-        subseq: list[int | Unit] = []
+        subseq: list[int | Unit | Disjunction] = []
         sep: int = 0
         for m in self.members:
             if isinstance(m, Unit):
@@ -325,10 +363,23 @@ class Sequence(Member):
                 subseq.append(m)
                 sep = 0
             elif isinstance(m, Disjunction):
-                if m.min_length > 0 and m.max_length == m.min_length and sep >= 0:
-                    sep += m.min_length
-                else:
+                fixed_disjunction = m.min_length > 0 and m.max_length == m.min_length
+                if not fixed_disjunction:
                     sep = -1
+                else:
+                    all_tokens = all(isinstance(x, Unit) for x in m.members)
+                    all_fixed_sequences = all(
+                        isinstance(x, Sequence)
+                        and x.is_simple()
+                        and x.repetition == (1, 1)
+                        for x in m.members
+                    )
+                    if all_tokens or all_fixed_sequences:
+                        subseq.append(sep)
+                        subseq.append(m)
+                        sep = 0
+                    elif sep >= 0:
+                        sep += m.min_length
             elif isinstance(m, Sequence):
                 for e in m.fixed_subsequences():
                     if isinstance(e, int):
