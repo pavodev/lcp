@@ -199,7 +199,7 @@
         },
         "quantifier": {
             "type": "string",
-            "pattern": "((EXISTS(~|\u00ac|!|not )?)|((~|\u00ac|!|not )?ALL))"
+            "pattern": "((EXISTS(~|\u00ac|!|not )?)|(ALL(~|\u00ac|!|not )?))"
         },
         "quantification": {
             "type": "object",
@@ -580,6 +580,11 @@
                 },
                 {
                     "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
                         "logicalExpression"
                     ]
                 },
@@ -595,6 +600,9 @@
                 },
                 "unit": {
                     "$ref": "#/$defs/unit"
+                },
+                "sequence": {
+                    "$ref": "#/$defs/sequence"
                 },
                 "logicalExpression": {
                     "$ref": "#/$defs/logicalExpression"
@@ -619,6 +627,11 @@
                 },
                 {
                     "required": [
+                        "sequence"
+                    ]
+                },
+                {
+                    "required": [
                         "logicalExpression"
                     ]
                 },
@@ -634,6 +647,9 @@
                 },
                 "unit": {
                     "$ref": "#/$defs/unit"
+                },
+                "sequence": {
+                    "$ref": "#/$defs/sequence"
                 },
                 "logicalExpression": {
                     "$ref": "#/$defs/logicalExpression"

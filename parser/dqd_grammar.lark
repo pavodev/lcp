@@ -55,10 +55,12 @@ logical_expression : unary_operator _NL _INDENT arg _NL* _DEDENT
 unit : layer(part_of)? label? _NL (_INDENT constraints? _DEDENT)?
 constraint : quantification
            | unit
+           | sequence
            | logical_expression
            | comparison
 arg: quantification
            | unit
+           | sequence
            | logical_expression
            | comparison
 constraints : (constraint _NL*)+                     // skip: constraint
