@@ -475,9 +475,20 @@ class Cte:
         else:
             where_union = f"WHERE {where_union}" if where_union else ""
 
+        select_fixed_tokens = (
+            "\n"
+            + ", ".join(
+                [
+                    "{table}." + t.internal_label + " " + t.internal_label
+                    for t, _, _, _ in self.sequence.fixed_tokens
+                ]
+            )
+            + ","
+            if self.sequence.fixed_tokens
+            else ""
+        )
         retval: str = f"""traversal{n} AS (
-        SELECT  prev_cte.{part_of},
-                {', '.join(['prev_cte.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
+        SELECT  prev_cte.{part_of},{select_fixed_tokens.format(table='prev_cte')}
                 {start_id}           start_id,
                 token.{tok}_id           id,
                 transition{n}.dest_state    state,
@@ -488,10 +499,10 @@ class Cte:
         {where_start}"""
 
         if where_union:
+
             retval += f"""
         UNION ALL
-        SELECT  traversal{n}.{part_of},
-                {', '.join(['traversal'+str(n)+'.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
+        SELECT  traversal{n}.{part_of},{select_fixed_tokens.format(table='traversal'+str(n))}
                 traversal{n}.start_id,
                 token.token_id   id,
                 transition{n}.dest_state,

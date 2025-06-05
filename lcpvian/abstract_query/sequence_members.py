@@ -351,7 +351,7 @@ class Sequence(Member):
                 subseq += m.labeled_unbound_child_sequences()
         return subseq
 
-    def fixed_subsequences(self) -> list[int | Unit]:
+    def fixed_subsequences(self) -> list[int | Unit | Disjunction]:
         """All the fixed subsequences that can be built from this sequence (for prefiltering purposes)"""
         if self.repetition[0] == 0:
             return [-1]
@@ -363,23 +363,23 @@ class Sequence(Member):
                 subseq.append(m)
                 sep = 0
             elif isinstance(m, Disjunction):
-                fixed_disjunction = m.min_length > 0 and m.max_length == m.min_length
-                if not fixed_disjunction:
-                    sep = -1
-                else:
-                    all_tokens = all(isinstance(x, Unit) for x in m.members)
-                    all_fixed_sequences = all(
-                        isinstance(x, Sequence)
-                        and x.is_simple()
-                        and x.repetition == (1, 1)
-                        for x in m.members
+                all_fixed = all(
+                    (
+                        isinstance(x, Unit)
+                        or (
+                            isinstance(x, Sequence)
+                            and x.is_simple()
+                            and x.repetition == (1, 1)
+                        )
                     )
-                    if all_tokens or all_fixed_sequences:
-                        subseq.append(sep)
-                        subseq.append(m)
-                        sep = 0
-                    elif sep >= 0:
-                        sep += m.min_length
+                    for x in m.members
+                )
+                if all_fixed:
+                    subseq.append(sep)
+                    subseq.append(m)
+                    sep = 0
+                elif sep >= 0:
+                    sep += m.min_length
             elif isinstance(m, Sequence):
                 for e in m.fixed_subsequences():
                     if isinstance(e, int):
@@ -392,7 +392,7 @@ class Sequence(Member):
 
         subseq.append(sep)
 
-        repeated_subseq: list[int | Unit] = [
+        repeated_subseq: list[int | Unit | Disjunction] = [
             x for a in [subseq for _ in range(self.repetition[0])] for x in a
         ]
 

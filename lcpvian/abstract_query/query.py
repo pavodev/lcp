@@ -442,27 +442,27 @@ class QueryMaker:
 
             # If this sequence has a user-provided label, select the tokens it contains
             if not s.sequence.anonymous:
-                min: str = (
-                    f"___lasttable___.{next(t.internal_label for t,_,_,_ in s.fixed_tokens)}"
-                )
-                max: str = (
-                    f"___lasttable___.{next(t.internal_label for t,_,_,_ in reversed(s.fixed_tokens))}"
-                )
+                min_ref: str = ""
+                max_ref: str = ""
                 if s.ctes:
                     # If the first CTE comes first in the sequence, start_id is the main sequence's min token_id
                     if not s.ctes[0].prev_fixed_token:
-                        min = f"___lasttable___.start_id"
+                        min_ref = f"___lasttable___.start_id"
                     # If the last CTE comes last in the sequence, id is the main sequence's max token_id
                     if not s.ctes[-1].next_fixed_token:
-                        max = f"___lasttable___.id"
+                        max_ref = f"___lasttable___.id"
+                if not min_ref:
+                    min_ref = f"___lasttable___.{next(t.internal_label for t,_,_,_ in s.fixed_tokens)}"
+                if not max_ref:
+                    max_ref = f"___lasttable___.{next(t.internal_label for t,_,_,_ in reversed(s.fixed_tokens))}"
 
                 min_label: str = self.r.unique_label(f"min_{s.sequence.label}")
                 max_label: str = self.r.unique_label(f"max_{s.sequence.label}")
 
                 s_part_of = s.get_first_stream_part_of()
                 sequence_ranges[s.sequence.label] = (
-                    f"{min} as {min_label}",
-                    f"{max} as {max_label}",
+                    f"{min_ref} as {min_label}",
+                    f"{max_ref} as {max_label}",
                     s_part_of,
                 )
 
@@ -751,7 +751,7 @@ class QueryMaker:
             p
             for s in self.sqlsequences
             for p in s.prefilters()
-            if s.get_first_stream_part_of() == label
+            if s.get_first_stream_part_of() == label and p.strip()
         }
         if self.has_fts and prefilters:
             batch_suffix = _get_batch_suffix(self.batch, self.n_batches)

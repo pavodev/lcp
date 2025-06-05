@@ -240,46 +240,37 @@ class Prefilter:
                         "Cannot build prefix for non-OR matrix logical expression"
                     )
                     log_members = logic.get("args", [])
-                    all_tokens = all("unit" in x for x in log_members)
-                    all_sequences = all("sequence" in x for x in log_members)
-                    assert all_tokens or all_sequences, RuntimeError(
-                        "Cannot build OR prefix if not all members are units or all are sequences"
+                    all_unit_or_sequence = all(
+                        "unit" in x or "sequence" in x for x in log_members
+                    )
+                    assert all_unit_or_sequence, RuntimeError(
+                        "Cannot build OR prefix if some members are not units or sequences"
                     )
                     units: Sequence[Sequence[SingleNode | Conjuncted]] = []
-                    if all_tokens:
-                        tmp_units = [
-                            [
-                                self._process_unit(
-                                    cast(dict, x["units"]).get("constraints", [])
-                                )
-                            ]
-                            for x in log_members
+                    assert all(
+                        "unit" in y
+                        for x in [lm for lm in log_members if "sequence" in lm]
+                        for y in x["sequence"].get("members", [])
+                    ), RuntimeError(
+                        "Can only build a prefix for disjunctions of sequences that exclusively contain units"
+                    )
+                    tmp_units = [
+                        [
+                            self._process_unit(
+                                cast(dict, y["unit"]).get("constraints", [])
+                            )
+                            for y in (
+                                x["sequence"].get("members", [])
+                                if "sequence" in x
+                                else [x]  # single unit
+                            )
                         ]
-                        units = cast(
-                            Sequence[Sequence[SingleNode | Conjuncted]],
-                            [x for x in tmp_units if x is not None],
-                        )
-                    elif all_sequences:
-                        assert all(
-                            "unit" in y
-                            for x in log_members
-                            for y in x["sequence"].get("members", [])
-                        ), RuntimeError(
-                            "Can only build a prefix for disjunctions of sequences that exclusively contain units"
-                        )
-                        tmp_units = [
-                            [
-                                self._process_unit(
-                                    cast(dict, y["unit"]).get("constraints", [])
-                                )
-                                for y in x["sequence"].get("members", [])
-                            ]
-                            for x in log_members
-                        ]
-                        units = cast(
-                            Sequence[Sequence[SingleNode | Conjuncted]],
-                            [x for x in tmp_units if x is not None],
-                        )
+                        for x in log_members
+                    ]
+                    units = cast(
+                        Sequence[Sequence[SingleNode | Conjuncted]],
+                        [x for x in tmp_units if x is not None],
+                    )
                     list_nodes.append(Disjunction(units))
                     continue
                 if "unit" not in member:
