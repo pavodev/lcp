@@ -73,7 +73,7 @@ def _export_notifs(
             full = requested <= 0
             exp_class = ExporterSwissdox if format == "swissdox" else ExporterXml
             user_folder = os.path.join(RESULTS_USERS, user_id)
-            srcfn = exp_class.get_dl_path_from_hash(hash, offset, requested, full)
+            srcfn = exp_class.get_dl_path_from_hash(hash, offset, requested, full)  # type: ignore
             # TODO: maybe create an ExporterSwissdox class?
             if format == "swissdox":
                 srcfn = os.path.join(

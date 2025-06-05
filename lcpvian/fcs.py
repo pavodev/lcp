@@ -279,7 +279,6 @@ async def get_fcs(request: web.Request) -> web.Response:
     app = cast(LCPApplication, request.app)
     q = request.rel_url.query
     operation = q["operation"]
-    resp: str
     if operation == "explain":
         resp = await explain(app, **q)
     elif operation == "searchRetrieve":

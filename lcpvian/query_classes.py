@@ -208,7 +208,7 @@ class Request:
         all_segs_sent = True
         for batch_hash, (_, _, req_segs) in self.lines_batch.items():
             batch_name = qi.get_batch_from_hash(batch_hash)
-            batch_seg_hashes = qi.segments_for_batch.get(batch_name, [])
+            batch_seg_hashes = qi.segments_for_batch.get(batch_name, {})
             batch_segs_sent = (
                 sum(n for (sh, n) in self.sent_hashes.items() if sh in batch_seg_hashes)
                 >= req_segs
