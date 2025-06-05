@@ -411,6 +411,7 @@ class Cte:
         tok: str = "token",
         batch_suffix: str = "_enrest",
         seg: str = "segment",
+        additional_selects: list[str] = [],
     ) -> str:
         n: str = str(self.n)
         part_of: str = self.sequence.get_first_stream_part_of()
@@ -487,6 +488,11 @@ class Cte:
             if self.sequence.fixed_tokens
             else ""
         )
+        for slc in additional_selects:
+            select_fixed_tokens += (
+                ("\n, " if not select_fixed_tokens else " ") + "{table}." + slc + ","
+            )
+
         retval: str = f"""traversal{n} AS (
         SELECT  prev_cte.{part_of},{select_fixed_tokens.format(table='prev_cte')}
                 {start_id}           start_id,

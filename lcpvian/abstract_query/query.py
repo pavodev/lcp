@@ -583,7 +583,7 @@ class QueryMaker:
                 ,"""
                 # Subsequences do not introduce any selectable entity, so we're find reusing selects_in_fixed for now
 
-        # Simple subsequences: create subseq tables that check the series of tokens between two fixed tokens
+        # CTEs: use the traversal strategy
         last_cte: Cte | None = None
         n_cte: int = 0
         for s in self.sqlsequences:
@@ -596,6 +596,11 @@ class QueryMaker:
                 if isinstance(last_cte, Cte) and n > 0:
                     state_prev_cte = last_cte.get_final_states()
                 transition_table: str = cte.transition()
+                additional_selects = [
+                    self._get_label_as(slc)
+                    for slc in self.selects
+                    if self._get_label_as(slc) != s.get_first_stream_part_of()
+                ]
                 traversal_table: str = cte.traversal(
                     from_table=last_table,
                     state_prev_cte=state_prev_cte,
@@ -603,6 +608,7 @@ class QueryMaker:
                     tok=self.token.lower(),
                     batch_suffix=batch_suffix,
                     seg=self.segment.lower(),
+                    additional_selects=additional_selects,
                 )
                 additional_ctes += f"""{transition_table}
                 ,
