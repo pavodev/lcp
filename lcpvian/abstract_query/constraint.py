@@ -358,18 +358,6 @@ class Constraint:
         Determine whether or not we need to cast to int, float, text or nothing
         """
         typ = ""
-        # if isinstance(query, (list, tuple, set)):
-        #     query = list(query)[0]
-        # if self._query_variable:
-        #     return ""
-        # if self._is_meta:
-        #     met = cast(
-        #         dict, self._layer_info.get("meta", self._attribs.get("meta", {}))
-        #     )
-        #     typ = cast(str, cast(dict, met[self.field]).get("type", ""))
-        # else:
-        #     met = cast(dict, self._attribs.get(self.field, {}))
-        #     typ = cast(str, met.get("type", ""))
         if typ.startswith("int") and isinstance(query, int):
             return "::bigint"
         elif typ.startswith("int") and not isinstance(query, int):
@@ -487,7 +475,6 @@ class Constraint:
         negated = op.lower().startswith(("not", "!"))
         op = "=" if negated else ">"
         return (op, mask_label)
-        # formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
 
     def make(self) -> None:
         """
