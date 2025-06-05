@@ -314,16 +314,16 @@ class QueryMaker:
                     obj["unit"]["quantor"] = quantor
 
             # Turn any logical expression into a main constraint
-            if any(x == "logicalExpression" for x in obj):
+            if "logicalExpression" in obj:
                 obj = {"args": [obj]}
 
             is_sequence = "sequence" in obj
             is_set = "set" in obj
-            is_constraint = "args" in obj and recurse is None
+            is_constraint = "constraint" in obj and recurse is None
             is_group = "group" in obj
 
             if is_constraint:
-                self.constraint(obj)
+                self.constraint(obj["constraint"])
                 continue
 
             if is_set:
@@ -784,7 +784,7 @@ class QueryMaker:
         Handle top-level constraints only
         """
         conn_obj = _get_constraints(
-            obj["args"],
+            cast(JSONObject, [obj]),
             "",
             "",
             self.conf,
