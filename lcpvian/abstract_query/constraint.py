@@ -3,7 +3,7 @@ import re
 from typing import Any, cast
 from uuid import UUID
 
-from .typed import JSONObject, Joins, LabelLayer, QueryType, RefInfo
+from .typed import JSONObject, Joins, LabelLayer, RefInfo
 from .utils import (
     Config,
     _get_underlang,
@@ -607,74 +607,6 @@ class Constraint:
             right_str = re.sub(r"->([^>]+)$", "->>\\1", right)
             formed_condition = f"({left_str})::numeric {self.op} ({right_str})::numeric"
 
-        # # Special case: labels
-        # left_ref_info = left_ref[1]
-        # left_type = left_ref_info.get("type")
-        # if left_type == "labels":
-        #     assert self.op.lower().endswith("contain"), SyntaxError(
-        #         f"Must use 'contain' on labels ({left_ref[0]} + {self.op})"
-        #     )
-        #     assert self.type in ("string", "regex"), TypeError(
-        #         f"Contained labels can only be tested against strings or regexes ({left_ref[0]} + {self.op} + {right_ref[0]})"
-        #     )
-        #     ref_layer = left_ref_info.get("layer", self.layer)
-        #     ref_layer_info = self.config["layer"].get(ref_layer, {})
-        #     assert "nlabels" in ref_layer_info, KeyError(
-        #         f"Missing 'nlabels' for layer '{ref_layer}' in config"
-        #     )
-        #     nbit = ref_layer_info["nlabels"]
-        #     ref_mapping = left_ref_info.get("mapping", {})
-        #     lookup_table = ref_mapping.get("name", "")
-        #     inner_op = "~" if self.type == "regex" else "="
-        #     dummy_mask = "".join(["0" for _ in range(nbit)])
-        #     inner_condition = (
-        #         f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
-        #         + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
-        #     )
-        #     # Use label_layer to store the inner conditions query-wide and give them unique labels
-        #     if self.label_layer is None:
-        #         self.label_layer = {}
-        #     if self.label not in self.label_layer:
-        #         self.label_layer[self.label] = (self.layer, {})
-        #     meta: dict = self.label_layer[self.label][1]
-        #     meta["labels inner conditions"] = meta.get("labels inner conditions", {})
-        #     comp_str: str = f"{self.op} {self.type} {right_ref[0]}"
-        #     n = meta["labels inner conditions"].get(
-        #         comp_str, len(meta["labels inner conditions"])
-        #     )
-        #     meta["labels inner conditions"][comp_str] = n
-        #     mask_label = f"{self.label}_mask_{n}"
-        #     formed_join_table = f"{inner_condition} {mask_label}"
-        #     self._add_join_on(formed_join_table, "")
-        #     negated = self.op.lower().startswith(("not", "!"))
-        #     op = "=" if negated else ">"
-        #     formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
-
-        # elif left_type == "date":
-        #     right_ref_info = right_ref[1]
-        #     assert right_ref_info.get("type") in ("date", "text", "number"), TypeError(
-        #         f"Invalid date comparison ({left_ref[0]} {self.op} {right_ref[0]})"
-        #     )
-        #     q = right_ref[0]
-        #     if self.op in (">", "<", ">=", "<=", "=", "!="):
-        #         right_ref_no_quotes = right_ref[0].strip("'").strip('"')
-        #         lower_date = self._parse_date(right_ref_no_quotes)
-        #         upper_date = self._parse_date(
-        #             right_ref_no_quotes, filler_month="12", filler_day="31"
-        #         )
-        #         op = self.op
-        #         if op == "=":
-        #             op = ">="
-        #             q = f"'{lower_date}'::date AND {left_ref[0]}::date <= '{upper_date}'::date"
-        #         elif op == "!=":
-        #             op = "<"
-        #             q = f"'{lower_date}'::date OR {left_ref[0]}::date > '{upper_date}'::date"
-        #         elif op in (">", ">="):
-        #             q = f"'{upper_date}'::date"
-        #         elif op in ("<", "<="):
-        #             q = f"'{lower_date}'::date"
-        #     formed_condition = f"{left_ref[0]}::date {op} {q}"
-
         self._joins.pop("", None)
         self._conditions.add(formed_condition)
         self.made = True
@@ -967,28 +899,6 @@ class Constraint:
             fn_str = f"extract('{sql_fn}' from ({first_arg_str})::date)"
             ref_info = RefInfo(type="number", meta={"str": ref_info_str})
         return (fn_str, ref_info)
-
-    # def date(self) -> None:
-    #     q: str = f"{self._formatted}"
-    #     op = self.op
-    #     cast = self._cast
-    #     labfield = f"{self.label.lower()}.{self.field.lower()}"
-    #     if op in (">", "<", ">=", "<=", "=", "!="):
-    #         lower_date = self._parse_date(q)
-    #         upper_date = self._parse_date(q, filler_month="12", filler_day="31")
-    #         cast = "::date"
-    #         if op == "=":
-    #             op = ">="
-    #             q = f"'{lower_date}'::date AND {labfield}{cast} <= '{upper_date}'::date"
-    #         elif op == "!=":
-    #             op = "<"
-    #             q = f"'{lower_date}'::date OR {labfield}{cast} > '{upper_date}'::date"
-    #         elif op in (">", ">="):
-    #             q = f"'{upper_date}'::date"
-    #         elif op in ("<", "<="):
-    #             q = f"'{lower_date}'::date"
-    #     formed = f"{self.label.lower()}.{self.field.lower()}{cast} {op} {q}"
-    #     self._conditions.add(formed)
 
 
 def _get_constraint(
