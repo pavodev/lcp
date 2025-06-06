@@ -4,6 +4,24 @@ OR
     Token@s
         form = "Capricorn"
 
+    Token@s
+        form = "Virgo"
+
+
+kwic => plain
+    context
+        s
+    entities
+        s
+
+
+
+Segment s
+
+OR
+    Token@s
+        form = "Capricorn"
+
     sequence@s seq
         Token
             form = "old"
@@ -141,3 +159,77 @@ main_disjuncts AS (
 )
 SELECT * FROM main_disjuncts
 LIMIT 50;
+
+
+
+
+
+-- Capricorn or ("a dog" AND (water OR (cat AND (mouse OR cheese)))) --
+
+disjunction0 AS (
+    SELECT ...
+    WHERE
+        form = mouse
+    UNION ALL
+    SELECT
+    WHERE
+        form = cheese
+),
+disjunction1 AS (
+    SELECT ...
+    WHERE
+        form = water
+    UNION ALL
+    SELECT ...
+    FROM
+        disjunction0
+    WHERE
+        form = cat
+),
+disjunction2 AS (
+    SELECT ...
+    WHERE
+        form = Capricorn
+    UNION ALL
+    SELECT
+    FROM disjunction1
+    WHERE
+        a dog
+)
+
+
+
+
+-- Capricorn OR ("a dog" AND (water OR cat) AND (mouse OR cheese)) --
+
+
+disjunction0 AS (
+    SELECT ...
+    WHERE
+        form = mouse
+    UNION ALL
+    SELECT
+    WHERE
+        form = cheese
+),
+disjunction1 AS (
+    SELECT ...
+    WHERE
+        form = water
+    UNION ALL
+    SELECT
+    WHERE
+        form = cat
+),
+disjunction2 AS (
+    SELECT ...
+    FROM disjunction1
+    CROSS JOIN disjunction0
+    WHERE
+        disjunction0.s = s
+        a dog
+    UNION ALL
+    SELECT ...
+    WHERE
+        form = Capricorn
+)

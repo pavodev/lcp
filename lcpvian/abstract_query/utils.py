@@ -359,3 +359,18 @@ def _parse_repetition(repetition: str | dict[str, str]) -> tuple[int, int]:
         f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
     )
     return (mini, maxi)
+
+
+def _flatten_coord(objs: list, operator: str = "OR") -> list:
+    ret: list = []
+    for o in objs:
+        if not isinstance(o, dict):
+            ret.append(o)
+            continue
+        log_op = o.get("logicalExpression", {}).get("operator")
+        log_args = o.get("logicalExpression", {}).get("args", [])
+        if log_op == operator:
+            ret += _flatten_coord(log_args, operator)
+            continue
+        ret.append(o)
+    return ret
