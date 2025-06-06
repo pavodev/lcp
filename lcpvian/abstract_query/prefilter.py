@@ -71,7 +71,7 @@ class SingleNode:
                     piece = piece.lstrip().lstrip("^")
                     break
             fixed.append(f"{piece}{pref}")
-        tokens = [f" {inv}{{{self.field}}}{s}" for s in fixed]
+        tokens = [f"{inv}{{{self.field}}}{s}" for s in fixed]
         if len(tokens) > 1:
             return " (" + joiner.join(tokens) + " ) "
         else:
@@ -207,14 +207,18 @@ class Prefilter:
                     continue
                 for c in pf.split("&"):
                     stripped_c = c.strip(" ()")
-                    if stripped_c.startswith(
-                        ("{" + attr_name + "}", "!{" + attr_name + "}")
+                    if (
+                        stripped_c.startswith(
+                            ("{" + attr_name + "}", "!{" + attr_name + "}")
+                        )
+                        and stripped_c not in conjuncts
                     ):
                         conjuncts.append(stripped_c)
         ps = [pf.format(**locations) for pf in prefilters]
         conjuncts = [c.format(**locations) for c in conjuncts]
         stringified = f"vec.vector @@ '{' <1> '.join(ps) }'"
-        if conjuncts:
+        if len(conjuncts) > 1:
+            # Including the single terms aside their sequence makes queries much faster
             cond_conjuncts = [f"vec.vector @@ '{c}'" for c in conjuncts]
             stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
         return stringified

@@ -1,9 +1,12 @@
+import json
 import re
 
 from typing import Any, cast
 
 from .constraint import Constraints, _get_constraints, process_set
+from .prefilter import Prefilter
 from .sequence import Cte, SQLSequence
+from .sequence_members import Sequence
 from .typed import JSONObject, Joins, LabelLayer, QueryJSON, QueryPart
 from .utils import (
     Config,
@@ -298,6 +301,8 @@ class QueryMaker:
 
         groups: dict[str, list[str]] = {}
 
+        disjunctions: list[list] = []  # disjunctions of tokens/sequences
+
         obj: dict[str, Any]
 
         for obj in to_iter:
@@ -323,7 +328,13 @@ class QueryMaker:
             is_group = "group" in obj
 
             if is_constraint:
-                self.constraint(obj["constraint"])
+                log_exp = obj["constraint"].get("logicalExpression", {})
+                log_args = log_exp.get("args", [])
+                is_disj = log_exp.get("naryOperator") == "OR"
+                if is_disj and any("unit" in x or "sequence" in x for x in log_args):
+                    disjunctions.append(log_args)
+                else:
+                    self.constraint(obj["constraint"])
                 continue
 
             if is_set:
@@ -505,7 +516,7 @@ class QueryMaker:
         elif seg_suffixes:
             seg_suffixes[next(k for k in seg_suffixes.keys())] = current_batch_suffix
 
-        table, label = self.remove_and_get_base()
+        table, label = self.remove_and_get_base(disjunctions)
         from_table = table
 
         # we remove the selects that are not needed
@@ -554,6 +565,9 @@ class QueryMaker:
         # todo: add group bt and having sections
         group_by = self._get_groupby()
         havings = self._get_havings()
+
+        for disjunction in disjunctions:
+            pass
 
         additional_ctes: str = ""
 
@@ -740,7 +754,38 @@ class QueryMaker:
         assert ll
         return next((k for k, v in ll.items() if v[0] == self.segment), "")
 
-    def remove_and_get_base(self) -> tuple[str, str]:
+    def disjunction_prefilters(
+        self, members: list = [], seg_lab: str = "", op: str = "OR"
+    ) -> str:
+        ret: str = ""
+        for m in members:
+            if "unit" in m:
+                if not any(seg_lab in x.values() for x in m["unit"].get("partOf", [])):
+                    continue
+                s: dict = {"sequence": {"members": [m]}}
+                unit_pref = Prefilter([s], self.conf, dict(), "")._condition()
+                if not unit_pref:
+                    continue
+                ret = unit_pref if not ret else ret + f" {op} ({unit_pref})"
+            elif "sequence" in m:
+                seq: Sequence = Sequence(QueryData(), self.conf, m)
+                sqlseq: SQLSequence = SQLSequence(seq)
+                if sqlseq.get_first_stream_part_of() != seg_lab:
+                    continue
+                seq_prefs = " AND ".join(sqlseq.prefilters())
+                if not seq_prefs:
+                    continue
+                ret = seq_prefs if not ret else ret + f" {op} ({seq_prefs})"
+            elif "logicalExpression" in m:
+                log_op = m["logicalExpression"].get("naryOperator")
+                log_ar = m["logicalExpression"].get("args", [])
+                coord_prefs = self.disjunction_prefilters(log_ar, seg_lab, log_op)
+                if not coord_prefs:
+                    continue
+                ret = coord_prefs if not ret else ret + f" {op} ({coord_prefs})"
+        return ret
+
+    def remove_and_get_base(self, disjunctions: list = []) -> tuple[str, str]:
         """
         If we made a join that is equal to the FROM clause, we remove it
         """
@@ -759,6 +804,8 @@ class QueryMaker:
             for p in s.prefilters()
             if s.get_first_stream_part_of() == label and p.strip()
         }
+        for disjunction in disjunctions:
+            prefilters.add(f"({self.disjunction_prefilters(disjunction, label)})")
         if self.has_fts and prefilters:
             batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
             vector_name = f"fts_vector{self._underlang}{batch_suffix}"  # Need better handling of this: add to mapping?
