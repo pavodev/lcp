@@ -660,9 +660,14 @@ class SQLSequence:
                     new_ref: str = self.internal_reference(v)
                     if override:
                         new_ref = override.get(v, v)
-                        v_lab = v.split(".")[0]
-                        if in_subsequence and "." in v and v_lab in override:
-                            pass
+                        v_lab, *v_attrs = new_ref.split(".")
+                        if (
+                            in_subsequence is not None
+                            and "." in v
+                            and v_lab in override
+                            and "." not in override[v_lab]
+                        ):
+                            new_ref = ".".join([override[v_lab], *v_attrs])
                             # token_layer = self.config.config["firstClass"]["token"]
                             # v_layer = self.label_layer.get(v_lab, (token_layer, None))[
                             #     0
@@ -944,11 +949,11 @@ class SQLSequence:
         batch_suffix: str = "_enrest",
         seg: str = "segment",
         schema: str = "sparcling1",
-    ) -> tuple[str, set[str]]:
+    ) -> tuple[str, set[str], str]:
         """Go through the sequence's simple subsequences and return an SQL string for a CTE named subseq"""
 
         if not self.simple_sequences:
-            return ("", set())
+            return ("", set(), "")
 
         part_of_stream = self.get_first_stream_part_of()
 
@@ -1090,4 +1095,5 @@ class SQLSequence:
             FROM {from_table}
             WHERE {simple_seq}""",
             add_to_fixed_selects,
+            simple_seq,
         )

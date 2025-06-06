@@ -27,18 +27,20 @@ QUANTOR_TEMPLATE = """
 """
 
 # callables allowed in dqd
-FUNCS = (
-    "length",
-    "century",
-    "decade",
-    "year",
-    "month",
-    "day",
-    "position",
-    "range",
-    "start",
-    "end",
-)
+FUNCS = {
+    "length": "number",
+    "century": "number",
+    "decade": "number",
+    "year": "number",
+    "month": "number",
+    "day": "number",
+    "position": "number",
+    "range": "number",
+    "start": "number",
+    "end": "number",
+    "lower": "string",
+    "upper": "string",
+}
 
 
 def _valid_uuid(val: Any) -> bool:
@@ -841,7 +843,7 @@ class Constraint:
             (a[1].get("meta") or {}).get("str", a[0]) for a in parsed_ars
         )
         ref_info_str = f"{fn}({ref_str_ars})"
-        ref_info = RefInfo(type="text", meta={"str": ref_info_str})
+        ref_info = RefInfo(type=FUNCS[fn], meta={"str": ref_info_str})
         if fn == "range":
             first_arg_str, first_arg_info = parsed_ars[0]
             assert first_arg_info.get("type") == "entity", TypeError(
