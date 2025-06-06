@@ -303,8 +303,8 @@ class QueryMaker:
 
         disjunctions: list[list] = []  # disjunctions of tokens/sequences
 
+        # build the conditions of the objects in the query list
         obj: dict[str, Any]
-
         for obj in to_iter:
             # Lift any argument of a quantifier to obj
             if "quantification" in obj:
@@ -451,6 +451,21 @@ class QueryMaker:
                 self.joins[join_table] = True
                 self.conditions.add(join_conds)
 
+            simple_seq, new_labels, simple_where = s.simple_sequences_table(
+                fixed_part_ts=",\n".join(
+                    [
+                        f"{last_table}.{self._get_label_as(s)} AS {self._get_label_as(s)}"
+                        for s in sorted(selects_in_fixed)
+                    ]
+                ),
+                from_table=last_table,
+                tok=tok,
+                batch_suffix=batch_suffix,
+                seg=seg_str,
+                schema=self.schema.lower(),
+            )
+            self.conditions.add(simple_where)
+
             # If this sequence has a user-provided label, select the tokens it contains
             if not s.sequence.anonymous:
                 min_ref: str = ""
@@ -570,32 +585,6 @@ class QueryMaker:
             pass
 
         additional_ctes: str = ""
-
-        # Simple subsequences: create subseq tables that check the series of tokens between two fixed tokens
-        for n, s in enumerate(self.sqlsequences):
-            simple_seq, new_labels = s.simple_sequences_table(
-                fixed_part_ts=",\n".join(
-                    [
-                        f"{last_table}.{self._get_label_as(s)} AS {self._get_label_as(s)}"
-                        for s in sorted(selects_in_fixed)
-                    ]
-                ),
-                from_table=last_table,
-                tok=tok,
-                batch_suffix=batch_suffix,
-                seg=seg_str,
-                schema=self.schema.lower(),
-            )
-            for new_label in new_labels:
-                selects_in_fixed.add(new_label)
-            if simple_seq:
-                # Update last_table
-                last_table = f"subseq{n}"
-                additional_ctes += f"""{last_table} AS (
-                    {simple_seq}
-                )
-                ,"""
-                # Subsequences do not introduce any selectable entity, so we're find reusing selects_in_fixed for now
 
         # CTEs: use the traversal strategy
         last_cte: Cte | None = None

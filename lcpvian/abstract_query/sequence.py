@@ -759,7 +759,6 @@ class SQLSequence:
                             in_subsequence.add(ref_join)
                     new_joins.append(new_j)
                 joins = new_joins
-            override[str(seg_lab)] = f"fixed_parts.{seg_lab}"
 
         refs_to_replace = "|".join(
             [
@@ -979,9 +978,6 @@ class SQLSequence:
             )
 
             override_internal_references: dict[str, str] = {}
-            # Map fixed tokens to the fixed_parts table
-            for k, v in self._internal_references.items():
-                override_internal_references[k] = f"{from_table}.{v}"
             # Temporarily map fixed token labels to subsequence-internal labels as applicable
             for i, m in enumerate(s.members):
                 label = cast(Unit, m).label or cast(Unit, m).internal_label
@@ -1052,19 +1048,19 @@ class SQLSequence:
                         x
                         for x in [
                             (
-                                f"s{n}_t{i}.{tok}_id > {from_table}.{pl} AND (s{n}_t{i}.{tok}_id - {from_table}.{pl} - 1) % {n_tokens} = {i}"
+                                f"s{n}_t{i}.{tok}_id > {pl}.{tok}_id AND (s{n}_t{i}.{tok}_id - {pl}.{tok}_id - 1) % {n_tokens} = {i}"
                                 if prev
                                 else ""
                             ),
-                            (f"s{n}_t{i}.{tok}_id < {from_table}.{nl}" if nxt else ""),
+                            (f"s{n}_t{i}.{tok}_id < {nl}.{tok}_id" if nxt else ""),
                             (
                                 f"s{n}_t{i}.{tok}_id - s{n}_t{i-1}.{tok}_id = 1"
                                 if i > 0
                                 else ""
                             ),
-                            f"s{n}_t{i}.{seg}_id = {from_table}.{part_of_stream}",
+                            f"s{n}_t{i}.{seg}_id = {part_of_stream}.{seg}_id",
                             (
-                                f"s{n}_t{i}.{tok}_id <= t{np} AND ({from_table}.t{np} - s{n}_t{i}.{tok}_id) % {mod} = 0"
+                                f"s{n}_t{i}.{tok}_id <= {np}.{tok}_id AND ({np}.{tok}_id - s{n}_t{i}.{tok}_id) % {mod} = 0"
                                 if nxt is None and i + 1 == len(s.members)
                                 else ""
                             ),
