@@ -266,9 +266,6 @@ class QueryMaker:
 
     def process_disjunction(self, members: list) -> list[list[str]]:
         # TODO: used the appropriate table reference in FROM
-        # TODO: units conditions are currently sets, turn them into strings
-        # TODO: CROSS JOIN from the units
-        # TODO: do that for segments and ANDs too!
         disjunction_ctes: list[list[str]] = []
         unions: list[str] = []
         for m in _flatten_coord(members, "OR"):
@@ -276,74 +273,90 @@ class QueryMaker:
                 continue
             log_exp = m.get("logicalExpression", {})
             log_op = log_exp.get("naryOperator")
+            if "unit" in m:
+                uly = m["unit"].get("layer", "")
+                ulb = m["unit"].get("label") or self.r.unique_label(
+                    "t", layer=self.token
+                )
+                upo = m["unit"].get("partOf", [])
+                joins, conds = self._token(m["unit"], uly, ulb, upo)
+                if not conds:
+                    continue
+                from_built = " CROSS JOIN ".join(["{prev_table}"] + [j for j in joins])
+                joins_values: list[set[str]] = [
+                    j for j in joins.values() if j and isinstance(j, set)
+                ]
+                joins_conds: set[str] = set(
+                    str(x) for j in joins_values for x in j if str(x).strip()
+                )
+                conds_built = " AND ".join(conds.union(joins_conds))
+                unions.append(f"SELECT ... FROM {from_built} WHERE {conds_built}")
+            elif "sequence" in m:
+                seq: Sequence = Sequence(QueryData(), self.conf, m)
+                sqlseq: SQLSequence = SQLSequence(seq)
+                sqlseq.categorize_members()
+                assert not sqlseq.ctes, RuntimeError(
+                    "Cannot nest a complex sequence inside a disjunction"
+                )
+                # if sqlseq.get_first_stream_part_of() != seg_lab:
+                #     continue
+                seq_where: list[str] = []
+                fixed_where, fixed_joins = sqlseq.where_fixed_members(set(), self.token)
+                if fixed_where:
+                    seq_where += fixed_where
+                batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
+                _, _, simple_where = sqlseq.simple_sequences_table(
+                    fixed_part_ts="",
+                    from_table="{prev_table}",
+                    tok=self.token,
+                    batch_suffix=batch_suffix,
+                    seg=self.segment,
+                    schema=self.schema.lower(),
+                )
+                if simple_where:
+                    seq_where.append(simple_where)
+                if not seq_where:
+                    continue
+                seq_from = " CROSS JOIN ".join(["{prev_table}"] + fixed_joins)
+                seq_where_built = " AND ".join(seq_where)
+                unions.append(f"SELECT ... FROM {seq_from} WHERE {seq_where_built}")
             if log_op != "AND":
-                if "unit" in m:
-                    uly = m["unit"].get("layer", "")
-                    ulb = m["unit"].get("label") or self.r.unique_label(
-                        "t", layer=self.token
-                    )
-                    upo = m["unit"].get("partOf", [])
-                    joins, conds = self._token(m["unit"], uly, ulb, upo)
-                    if not conds:
-                        continue
-                    unions.append(f"SELECT ... FROM fixed_parts ... WHERE {conds}")
-                elif "sequence" in m:
-                    seq: Sequence = Sequence(QueryData(), self.conf, m)
-                    sqlseq: SQLSequence = SQLSequence(seq)
-                    sqlseq.categorize_members()
-                    assert not sqlseq.ctes, RuntimeError(
-                        "Cannot nest a complex sequence inside a disjunction"
-                    )
-                    # if sqlseq.get_first_stream_part_of() != seg_lab:
-                    #     continue
-                    seq_where: list[str] = []
-                    fixed_where, fixed_joins = sqlseq.where_fixed_members(
-                        set(), self.token
-                    )
-                    if fixed_where:
-                        seq_where += fixed_where
-                    batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
-                    _, _, simple_where = sqlseq.simple_sequences_table(
-                        fixed_part_ts="",
-                        from_table="fixed_parts",
-                        tok=self.token,
-                        batch_suffix=batch_suffix,
-                        seg=self.segment,
-                        schema=self.schema.lower(),
-                    )
-                    if simple_where:
-                        seq_where.append(simple_where)
-
-                    if not seq_where:
-                        continue
-                    seq_where_built = " AND ".join(seq_where)
-                    unions.append(
-                        f"SELECT ... FROM fixed_parts ... WHERE {seq_where_built}"
-                    )
                 continue
             # AND
-            conjunction_from = []
+            from_nested: list[int] = []  # the index of the nested disjuinction CTEs
             conjunction_where: list[str] = []
+            conjunction_joins: list[str] = []
             log_args = log_exp.get("args", [])
             for conj in _flatten_coord(log_args, "AND"):
                 if not isinstance(conj, dict):
                     continue
-                if conj.get("logicalExpression", {}).get("operator", "OR"):
+                if conj.get("logicalExpression", {}).get("naryOperator") == "OR":
                     nested_disjuncts = conj.get("logicalExpression", {}).get("args", [])
-                    conjunction_from += self.process_disjunction(nested_disjuncts)
+                    nested_disjunction = self.process_disjunction(nested_disjuncts)
+                    from_nested.append(
+                        len(disjunction_ctes) + len(nested_disjunction) - 1
+                    )
+                    disjunction_ctes += nested_disjunction
                     continue
                 if "unit" in conj:
-                    uly = m["unit"].get("layer", "")
-                    ulb = m["unit"].get("label", "")
-                    upo = m["unit"].get("partOf", [])
-                    joins, conds = self._token(m, uly, ulb, upo)
+                    uly = conj["unit"].get("layer", "")
+                    ulb = conj["unit"].get("label") or self.r.unique_label(
+                        "t", layer=self.token
+                    )
+                    upo = conj["unit"].get("partOf", [])
+                    joins, conds = self._token(conj["unit"], uly, ulb, upo)
                     if not conds:
                         continue
-                    conjunction_where.append(
-                        f"SELECT ... FROM fixed_parts ... WHERE {conds}"
+                    joins_values: list[set[str]] = [
+                        j for j in joins.values() if j and isinstance(j, set)
+                    ]
+                    joins_conds: set[str] = set(
+                        str(x) for j in joins_values for x in j if str(x).strip()
                     )
-                elif "sequence" in m:
-                    seq: Sequence = Sequence(QueryData(), self.conf, m)
+                    conjunction_where += [c for c in conds.union(joins_conds)]
+                    conjunction_joins += [j for j in joins]
+                elif "sequence" in conj:
+                    seq: Sequence = Sequence(QueryData(), self.conf, conj)
                     sqlseq: SQLSequence = SQLSequence(seq)
                     sqlseq.categorize_members()
                     # if sqlseq.get_first_stream_part_of() != seg_lab:
@@ -357,7 +370,7 @@ class QueryMaker:
                     batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
                     _, _, simple_where = sqlseq.simple_sequences_table(
                         fixed_part_ts="",
-                        from_table="fixed_parts",
+                        from_table="{prev_table}",
                         tok=self.token,
                         batch_suffix=batch_suffix,
                         seg=self.segment,
@@ -368,15 +381,13 @@ class QueryMaker:
                     if not seq_where:
                         continue
                     seq_where_built = " AND ".join(seq_where)
-                    conjunction_where.append(
-                        f"SELECT ... FROM fixed_parts ... WHERE {seq_where_built}"
-                    )
-            conj_from_built = "FROM " + f"\nCROSS JOIN ".join(
-                f"disjunction{n}" for n in range(len(conjunction_from))
-            )
+                    conjunction_where.append(seq_where_built)
+                    conjunction_joins += [j for j in fixed_joins]
+            cross_joins = ["{disjunction" + str(n) + "}" for n in from_nested]
+            cross_joins += conjunction_joins
+            conj_from = " CROSS JOIN ".join(["{prev_table}"] + cross_joins)
             conj_where_built = " AND ".join(conjunction_where)
-            unions.append(f"SELECT ... {conj_from_built} WHERE {conj_where_built}")
-            disjunction_ctes += conjunction_from
+            unions.append(f"SELECT ... {conj_from} WHERE {conj_where_built}")
         disjunction_ctes.append(unions)
         return disjunction_ctes
 

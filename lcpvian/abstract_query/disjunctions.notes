@@ -233,3 +233,71 @@ disjunction2 AS (
     WHERE
         form = Capricorn
 )
+
+
+
+
+
+
+Segment s
+
+OR
+    Token@s
+        form = "Capricorn"
+    AND
+        Token@s
+            form = "Virgo"
+        Token@s
+            form = "Leo"
+
+
+kwic => plain
+    context
+        s
+    entities
+        s
+
+-- Capricorn OR (Virgo AND Leo) --
+
+disjunction0 AS (
+    SELECT ...
+    WHERE
+        form = Capricorn
+    UNION ALL
+    SELECT
+    FROM fixed_parts
+    CROSS t1
+    CROSS t2
+    WHERE
+        t1.form = Virgo
+        t2.form = Leo
+)
+
+
+
+
+
+Segment s
+
+OR
+    Token@s
+        form = "Capricorn"
+    AND
+        Token@s
+                form = "Virgo"
+        OR
+            AND
+                Token@s
+                    form = "Leo"
+                OR                        
+                    Token@s
+                        form = "Sagittarius"
+                    Token@s
+                        form = "Aries"
+
+
+kwic => plain
+    context
+        s
+    entities
+        s
