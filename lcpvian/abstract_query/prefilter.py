@@ -373,7 +373,7 @@ class Prefilter:
                 continue
             attribute, operator, pattern, typ = self.parse_comparison(arg["comparison"])
             if typ == "other":
-                return None
+                continue
             if _is_prefix(pattern, operator, typ):
                 matches.append(SingleNode(attribute, operator, pattern, typ == "regex"))
 

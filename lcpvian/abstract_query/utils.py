@@ -1,3 +1,4 @@
+import json
 import re
 
 from dataclasses import dataclass, field
@@ -163,10 +164,13 @@ def _bound_label(
     if not label:
         return False
 
-    query = query_json.get("query", [query_json])
+    query = json.loads(json.dumps(query_json.get("query", [query_json])))
     for obj in query:
+        if not isinstance(obj, dict):
+            continue
         if obj.get("label") == label:
             return in_scope
+        obj = obj.get("constraint", obj)
         if "unit" in obj:
             if obj["unit"].get("label") == label:
                 return in_scope

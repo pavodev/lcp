@@ -38,6 +38,8 @@ match_list AS (
 ),
 """
 
+SELECT_PH = "{selects}"
+
 
 class Token:
     def __init__(
@@ -290,7 +292,9 @@ class QueryMaker:
                     str(x) for j in joins_values for x in j if str(x).strip()
                 )
                 conds_built = " AND ".join(conds.union(joins_conds))
-                unions.append(f"SELECT ... FROM {from_built} WHERE {conds_built}")
+                unions.append(
+                    f"SELECT {SELECT_PH}, jsonb_build_array({ulb}.{self.token}_id) AS matches FROM {from_built} WHERE {conds_built}"
+                )
             elif "sequence" in m:
                 seq: Sequence = Sequence(QueryData(), self.conf, m)
                 sqlseq: SQLSequence = SQLSequence(seq)
@@ -319,13 +323,22 @@ class QueryMaker:
                     continue
                 seq_from = " CROSS JOIN ".join(["{prev_table}"] + fixed_joins)
                 seq_where_built = " AND ".join(seq_where)
-                unions.append(f"SELECT ... FROM {seq_from} WHERE {seq_where_built}")
+                select_matches = ", ".join(
+                    [
+                        f"{u.internal_label}.{self.token}_id"
+                        for u, *_ in sqlseq.fixed_tokens
+                    ]
+                )
+                unions.append(
+                    f"SELECT {SELECT_PH}, jsonb_build_array({select_matches}) AS matches FROM {seq_from} WHERE {seq_where_built}"
+                )
             if log_op != "AND":
                 continue
             # AND
             from_nested: list[int] = []  # the index of the nested disjuinction CTEs
             conjunction_where: list[str] = []
             conjunction_joins: list[str] = []
+            conjunction_selects: list[str] = []
             log_args = log_exp.get("args", [])
             for conj in _flatten_coord(log_args, "AND"):
                 if not isinstance(conj, dict):
@@ -355,6 +368,7 @@ class QueryMaker:
                     )
                     conjunction_where += [c for c in conds.union(joins_conds)]
                     conjunction_joins += [j for j in joins]
+                    conjunction_selects.append(f"{ulb}.{self.token}_id")
                 elif "sequence" in conj:
                     seq: Sequence = Sequence(QueryData(), self.conf, conj)
                     sqlseq: SQLSequence = SQLSequence(seq)
@@ -383,11 +397,22 @@ class QueryMaker:
                     seq_where_built = " AND ".join(seq_where)
                     conjunction_where.append(seq_where_built)
                     conjunction_joins += [j for j in fixed_joins]
-            cross_joins = ["{disjunction" + str(n) + "}" for n in from_nested]
-            cross_joins += conjunction_joins
-            conj_from = " CROSS JOIN ".join(["{prev_table}"] + cross_joins)
+                    conjunction_selects += [
+                        f"{u.internal_label}.{self.token}_id"
+                        for u, *_ in sqlseq.fixed_tokens
+                    ]
+            disj_joins = [f"disjunction{n} USING (s)" for n in from_nested]
+            conj_from = " JOIN ".join(["{prev_table}"] + disj_joins)
+            conj_from = " CROSS JOIN ".join([conj_from] + conjunction_joins)
             conj_where_built = " AND ".join(conjunction_where)
-            unions.append(f"SELECT ... {conj_from} WHERE {conj_where_built}")
+            conj_selects_built = ", ".join(conjunction_selects)
+            conj_matches = " || ".join(
+                [f"jsonb_build_array({conj_selects_built})"]
+                + [f"disjunction{n}.matches" for n in from_nested]
+            )
+            unions.append(
+                f"SELECT {SELECT_PH}, {conj_matches} AS matches FROM {conj_from} WHERE {conj_where_built}"
+            )
         disjunction_ctes.append(unions)
         return disjunction_ctes
 
@@ -709,12 +734,70 @@ class QueryMaker:
         group_by = self._get_groupby()
         havings = self._get_havings()
 
+        additional_ctes: str = ""
+
+        unbound_labels: dict[str, str] = {
+            lab: lay
+            for lab, (lay, _) in self.r.label_layer.items()
+            if not _bound_label(lab, self.query_json)
+        }
+        built_disjunctions = []
         for disjunction in disjunctions:
             # add CTEs, starting with the most deeply nested disjunction
-            disj_cte = self.process_disjunction(disjunction)
-            pass
-
-        additional_ctes: str = ""
+            disj_ctes: list[str] = [
+                " UNION ALL ".join(union_cte)
+                for union_cte in self.process_disjunction(disjunction)
+            ]
+            for n in range(len(disj_ctes)):
+                union_cte = disj_ctes[n]
+                for lab, lay in unbound_labels.items():
+                    lay_attrs: dict[str, dict] = cast(dict, self.config["layer"])[
+                        lay
+                    ].get("attributes", {})
+                    found_lab = re.search(rf"\b{lab}\b", union_cte)
+                    if not found_lab:
+                        continue
+                    sel_lab = f"___lasttable___.{lab} AS {lab}".lower()
+                    self.selects.add(sel_lab)
+                    sel_lab_in_fixed = f"{lab}.{lay}_id AS {lab}".lower()
+                    selects_in_fixed.add(sel_lab_in_fixed)
+                    union_cte = re.sub(
+                        rf"\b{lab}\.{lay}_id", lab, union_cte, flags=re.IGNORECASE
+                    )
+                    for labref in re.findall(rf"{lab}\.[_.a-zA-Z0-9]+", union_cte):
+                        # if labref.endswith("_id"):
+                        #     continue
+                        aname = labref.split(".")[-1]
+                        ref_sel_lab = (
+                            f"___lasttable___.{lab}_{aname} AS {lab}_{aname}".lower()
+                        )
+                        self.selects.add(ref_sel_lab)
+                        ref_sel_lab_in_fixed = f"{lab}.{aname} AS {lab}_{aname}".lower()
+                        selects_in_fixed.add(ref_sel_lab_in_fixed)
+                        union_cte = re.sub(
+                            rf"\b{labref}\b",
+                            f"{lab}_{aname}",
+                            union_cte,
+                            flags=re.IGNORECASE,
+                        )
+                        disj_ctes[n] = union_cte
+                    disj_ctes[n] = union_cte
+            built_disjunctions.append(disj_ctes)
+        disjunction_ctes: list[str] = []
+        selects_from_fixed = ", ".join(
+            s.replace("___lasttable___", "fixed_parts") for s in self.selects
+        )
+        n_disj = 0
+        for disj_ctes in built_disjunctions:
+            for disj_cte in disj_ctes:
+                disj_cte_str = disj_cte.format(
+                    prev_table="fixed_parts", selects=selects_from_fixed
+                )
+                disjunction_ctes.append(disj_cte_str)
+                additional_ctes += f"disjunction{n_disj} AS ({disj_cte_str}),"
+                n_disj += 1
+        if built_disjunctions:
+            last_table = f"disjunction{n_disj-1}"
 
         # CTEs: use the traversal strategy
         last_cte: Cte | None = None
