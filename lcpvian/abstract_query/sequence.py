@@ -834,7 +834,7 @@ class SQLSequence:
                         *{x for x in unit_labels_so_far},
                     }
                 }
-                m.internal_label = m.label
+                m.internal_label = m.label if m.label else m.internal_label
                 if not m.internal_label or m.internal_label in unit_labels_so_far:
                     m.internal_label = self.sequence.query_data.unique_label(
                         layer=token_layer, references=references

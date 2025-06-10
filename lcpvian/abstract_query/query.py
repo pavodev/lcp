@@ -267,6 +267,7 @@ class QueryMaker:
         # TODO
 
     def process_disjunction(self, members: list) -> list[list[str]]:
+        token_table = _get_table(self.token, self.config, self.batch, self.lang or "")
         # TODO: used the appropriate table reference in FROM
         disjunction_ctes: list[list[str]] = []
         unions: list[str] = []
@@ -321,7 +322,16 @@ class QueryMaker:
                     seq_where.append(simple_where)
                 if not seq_where:
                     continue
-                seq_from = " CROSS JOIN ".join(["{prev_table}"] + fixed_joins)
+                seq_from = " JOIN ".join(["{prev_table}"] + fixed_joins)
+                bound_tokens = [
+                    t.internal_label
+                    for t, *_ in sqlseq.fixed_tokens
+                    if t.internal_label not in self.r.label_layer
+                    or _bound_label(t.internal_label, self.config)
+                ]
+                seq_from = " CROSS JOIN ".join(
+                    f"{self.schema}.{token_table} {tlab}" for tlab in bound_tokens
+                )
                 seq_where_built = " AND ".join(seq_where)
                 select_matches = ", ".join(
                     [
@@ -337,7 +347,8 @@ class QueryMaker:
             # AND
             from_nested: list[int] = []  # the index of the nested disjuinction CTEs
             conjunction_where: list[str] = []
-            conjunction_joins: list[str] = []
+            conjunction_cross_joins: list[str] = []
+            disj_joins: list[str] = []
             conjunction_selects: list[str] = []
             log_args = log_exp.get("args", [])
             for conj in _flatten_coord(log_args, "AND"):
@@ -367,7 +378,7 @@ class QueryMaker:
                         str(x) for j in joins_values for x in j if str(x).strip()
                     )
                     conjunction_where += [c for c in conds.union(joins_conds)]
-                    conjunction_joins += [j for j in joins]
+                    conjunction_cross_joins += [j for j in joins]
                     conjunction_selects.append(f"{ulb}.{self.token}_id")
                 elif "sequence" in conj:
                     seq: Sequence = Sequence(QueryData(), self.conf, conj)
@@ -396,14 +407,23 @@ class QueryMaker:
                         continue
                     seq_where_built = " AND ".join(seq_where)
                     conjunction_where.append(seq_where_built)
-                    conjunction_joins += [j for j in fixed_joins]
+                    disj_joins += [j for j in fixed_joins]
+                    bound_tokens = [
+                        t.internal_label
+                        for t, *_ in sqlseq.fixed_tokens
+                        if t.internal_label not in self.r.label_layer
+                        or _bound_label(t.internal_label, self.config)
+                    ]
+                    conjunction_cross_joins += [
+                        f"{self.schema}.{token_table} {tlab}" for tlab in bound_tokens
+                    ]
                     conjunction_selects += [
                         f"{u.internal_label}.{self.token}_id"
                         for u, *_ in sqlseq.fixed_tokens
                     ]
-            disj_joins = [f"disjunction{n} USING (s)" for n in from_nested]
-            conj_from = " JOIN ".join(["{prev_table}"] + disj_joins)
-            conj_from = " CROSS JOIN ".join([conj_from] + conjunction_joins)
+            disj_joins += [f"disjunction{n}" + " USING ({using})" for n in from_nested]
+            conj_from = " CROSS JOIN ".join(["{prev_table}"] + conjunction_cross_joins)
+            conj_from = " JOIN ".join([conj_from] + disj_joins)
             conj_where_built = " AND ".join(conjunction_where)
             conj_selects_built = ", ".join(conjunction_selects)
             conj_matches = " || ".join(
@@ -727,7 +747,9 @@ class QueryMaker:
                     {c for c in v if c and isinstance(c, str)}
                 )
         union_conditions: set[str] = join_conditions.union(self.conditions)
-        formed_conditions = "\nAND ".join(sorted(union_conditions))
+        formed_conditions = "\nAND ".join(
+            x for x in sorted(union_conditions) if x.strip()
+        )
         formed_where = "" if not formed_conditions.strip() else "WHERE"
         formed_conditions = formed_conditions.format(_base_label=label)
         # todo: add group bt and having sections
@@ -751,9 +773,6 @@ class QueryMaker:
             for n in range(len(disj_ctes)):
                 union_cte = disj_ctes[n]
                 for lab, lay in unbound_labels.items():
-                    lay_attrs: dict[str, dict] = cast(dict, self.config["layer"])[
-                        lay
-                    ].get("attributes", {})
                     found_lab = re.search(rf"\b{lab}\b", union_cte)
                     if not found_lab:
                         continue
@@ -788,10 +807,23 @@ class QueryMaker:
             s.replace("___lasttable___", "fixed_parts") for s in self.selects
         )
         n_disj = 0
+        using: list[str] = []
+        table_suffix: str = (
+            self._table[1] if self._table else next(s for s in seg_suffixes)
+        )
+        for anchor in ("char_range", "frame_range", "xy_box"):
+            if not any(
+                sel.lower().endswith(f"as {table_suffix}_{anchor}".lower())
+                for sel in selects_in_fixed
+            ):
+                continue
+            using.append(f"{table_suffix}_{anchor}")
         for disj_ctes in built_disjunctions:
             for disj_cte in disj_ctes:
                 disj_cte_str = disj_cte.format(
-                    prev_table="fixed_parts", selects=selects_from_fixed
+                    prev_table="fixed_parts",
+                    selects=selects_from_fixed,
+                    using=", ".join(using),
                 )
                 disjunction_ctes.append(disj_cte_str)
                 additional_ctes += f"disjunction{n_disj} AS ({disj_cte_str}),"
