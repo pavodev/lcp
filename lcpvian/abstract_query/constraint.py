@@ -120,8 +120,9 @@ class Constraints:
         """
         Helper for quantors
         """
+        layer = member.layer or member.members[0].layer
         base = _get_table(
-            member.layer,
+            layer,
             self.config.config,
             self.config.batch,
             cast(str, self.config.lang),
