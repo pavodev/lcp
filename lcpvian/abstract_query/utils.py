@@ -42,6 +42,7 @@ class QueryData:
         label: str = "anonymous",
         layer="__internal",
         references: LabelLayer | None = None,
+        obj: dict = dict({}),
     ) -> str:
         if references is None:
             references = self.label_layer
@@ -51,7 +52,7 @@ class QueryData:
         while new_label in references:
             n += 1
             new_label = f"{label}{str(n)}"
-        references[new_label] = (layer, dict({}))
+        references[new_label] = (layer, obj)
         return new_label
 
 
@@ -178,13 +179,13 @@ def _bound_label(
             if obj["sequence"].get("label") == label:
                 return in_scope
             reps = _parse_repetition(obj["sequence"].get("repetition", "1"))
-            tmp_in_scope = reps != (1, 1)
+            tmp_in_scope = in_scope or (reps != (1, 1))
             for m in obj["sequence"].get("members", []):
                 if _bound_label(label, m, tmp_in_scope):
                     return True
         if "logicalExpression" in obj:
             logic = obj["logicalExpression"]
-            tmp_in_scope = (
+            tmp_in_scope = in_scope or (
                 logic.get("naryOperator") == "OR" or logic.get("unaryOperator") == "NOT"
             )
             for a in logic.get("args", []):

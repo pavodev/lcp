@@ -75,7 +75,7 @@ results : result+                                           // skip: result
 
 results_plain        : "plain" _NL _INDENT results_plain_context results_plain_entities _DEDENT // rename: results_plain_context>context results_plain_entities>entities
 results_plain_context : "context" _NL _INDENT (entity _NL*)+ _DEDENT // skip: entity
-results_plain_entities : "entities" _NL _INDENT (entity _NL*)+ _DEDENT // skip: entity
+results_plain_entities : "entities" _NL _INDENT ((entity | WILDCARD) _NL*)+ _DEDENT // skip: entity
 
 results_analysis     : "analysis" _NL _INDENT results_analysis_attributes results_analysis_functions results_analysis_filter? _DEDENT // rename: results_analysis_attributes>attributes results_analysis_functions>functions results_analysis_filter>filter
 results_analysis_attributes : "attributes" _NL _INDENT ((attribute|function) _NL*)+ _DEDENT

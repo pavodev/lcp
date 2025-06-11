@@ -268,7 +268,6 @@ class QueryMaker:
 
     def process_disjunction(self, members: list) -> list[list[str]]:
         token_table = _get_table(self.token, self.config, self.batch, self.lang or "")
-        # TODO: used the appropriate table reference in FROM
         disjunction_ctes: list[list[str]] = []
         unions: list[str] = []
         for m in _flatten_coord(members, "OR"):
@@ -322,16 +321,12 @@ class QueryMaker:
                     seq_where.append(simple_where)
                 if not seq_where:
                     continue
-                seq_from = " JOIN ".join(["{prev_table}"] + fixed_joins)
-                bound_tokens = [
-                    t.internal_label
-                    for t, *_ in sqlseq.fixed_tokens
-                    if t.internal_label not in self.r.label_layer
-                    or _bound_label(t.internal_label, self.config)
-                ]
+                token_labels = [t.internal_label for t, *_ in sqlseq.fixed_tokens]
                 seq_from = " CROSS JOIN ".join(
-                    f"{self.schema}.{token_table} {tlab}" for tlab in bound_tokens
+                    ["{prev_table}"]
+                    + [f"{self.schema}.{token_table} {tlab}" for tlab in token_labels]
                 )
+                seq_from = " JOIN ".join([seq_from] + fixed_joins)
                 seq_where_built = " AND ".join(seq_where)
                 select_matches = ", ".join(
                     [
@@ -802,15 +797,16 @@ class QueryMaker:
                         disj_ctes[n] = union_cte
                     disj_ctes[n] = union_cte
             built_disjunctions.append(disj_ctes)
+
         disjunction_ctes: list[str] = []
         selects_from_fixed = ", ".join(
             s.replace("___lasttable___", "fixed_parts") for s in self.selects
         )
         n_disj = 0
-        using: list[str] = []
         table_suffix: str = (
             self._table[1] if self._table else next(s for s in seg_suffixes)
         )
+        using: list[str] = [table_suffix]
         for anchor in ("char_range", "frame_range", "xy_box"):
             if not any(
                 sel.lower().endswith(f"as {table_suffix}_{anchor}".lower())
@@ -830,6 +826,7 @@ class QueryMaker:
                 n_disj += 1
         if built_disjunctions:
             last_table = f"disjunction{n_disj-1}"
+            self.selects.add("___lasttable___.matches AS disjunction_matches")
 
         # CTEs: use the traversal strategy
         last_cte: Cte | None = None

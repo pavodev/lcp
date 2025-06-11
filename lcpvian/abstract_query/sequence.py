@@ -836,8 +836,11 @@ class SQLSequence:
                 }
                 m.internal_label = m.label if m.label else m.internal_label
                 if not m.internal_label or m.internal_label in unit_labels_so_far:
+                    part_of = m.obj.get("partOf") or self.sequence.obj.get("partOf", [])
                     m.internal_label = self.sequence.query_data.unique_label(
-                        layer=token_layer, references=references
+                        layer=token_layer,
+                        references=references,
+                        obj={**m.obj, "partOf": part_of},
                     )
                 unit_labels_so_far.add(m.internal_label)
                 self._internal_references[m.label] = m.internal_label
@@ -1021,7 +1024,8 @@ class SQLSequence:
                         continue
                     for attr in attrs:
                         new_lbl_attr = self.sequence.query_data.unique_label(
-                            f"{lbl}_{attr}"
+                            f"{lbl}_{attr}",
+                            obj={**m.obj, "partOf": sub_member_part_of},
                         )
                         token_conds = [
                             x.replace(f"{lbl}.{attr}", new_lbl_attr)

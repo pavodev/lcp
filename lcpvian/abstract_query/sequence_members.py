@@ -199,7 +199,11 @@ class Unit(Member):
             if isinstance(u, Unit)
         ]
         if not self.label or self.label in sequence_unit_labels:
-            self.internal_label = query_data.unique_label(layer=unit_layer)
+            part_of = top_sequence.obj["sequence"].get("partOf")
+            part_of = part_of or obj.get("partOf", [])
+            self.internal_label = query_data.unique_label(
+                layer=unit_layer, obj={**obj, "partOf": part_of}
+            )
         self.depth: int = depth
         self.min_length: int = 1
         self.max_length: int = 1

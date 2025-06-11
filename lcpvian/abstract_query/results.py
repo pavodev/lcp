@@ -20,10 +20,8 @@ from .typed import (
 from .utils import (
     Config,
     QueryData,
+    _bound_label,
     _label_layer,
-    _get_table,
-    _get_mapping,
-    _get_table,
     _get_underlang,
     _is_anchored,
     _parse_comparison,
@@ -101,6 +99,10 @@ class ResultsMaker:
                     self.add_query_entities(arg)
             elif "unit" in obj:
                 unit = obj["unit"]
+                layer = obj["unit"].get("layer") or "__internal"
+                unit["label"] = unit.get("label") or self.r.unique_label(
+                    layer=layer, obj=obj
+                )
                 if cast(
                     str, unit.get("layer", "")
                 ).lower() == self.token.lower() and cast(str, unit.get("label", "")):
@@ -153,7 +155,7 @@ class ResultsMaker:
             raise ValueError("Results needed in JSON")
 
         # Check that all entity references are legit
-        legal_refs = set()
+        legal_refs = set("*")
         for obj in self.query_json.get("query", []):
             if "unit" in obj:
                 legal_refs.add(cast(dict, obj["unit"]).get("label", ""))
@@ -497,15 +499,58 @@ class ResultsMaker:
         select_extra = ""
 
         doc_join = ""
-        gesture_type = "null"
 
         self._update_context(context)
         context_layer = self.r.label_layer[context][0]
 
-        # g, t, s, d = self._get_labels(gest)
-
         lay: str
         tokens: list[dict] = []
+
+        include_disjunction: bool = False
+        if "*" in ents:
+            new_ents = [e for e in ents if e != "*"]
+            ents = new_ents
+            # Tokens in sequences
+            for lab, (lay, obj) in cast(dict, self.r.label_layer).items():
+                if lay != self.token:
+                    continue
+                part_of: list[dict[str, str]] = cast(
+                    list[dict[str, str]], obj.get("partOf", [])
+                )
+                if context not in [next(x for x in p.values()) for p in part_of]:
+                    continue
+                if _bound_label(lab, self.query_json):
+                    continue
+                is_fixed_token_in_sequence: bool = any(
+                    lab in (m.label, m.internal_label)
+                    for seq in self.r.sqlsequences
+                    for m in seq.get_members()
+                )
+                if not is_fixed_token_in_sequence:
+                    continue
+                ents.append(lab)
+            # Main tokens
+            for u in self.query_json["query"]:
+                if not isinstance(u, dict):
+                    continue
+                if "constraint" in u:
+                    include_disjunction = include_disjunction or (
+                        cast(dict, u["constraint"])
+                        .get("logicalExpression", {})
+                        .get("naryOperator")
+                        == "OR"
+                    )
+                if "unit" not in u:
+                    continue
+                part_of: list[dict[str, str]] = cast(
+                    list[dict[str, str]], cast(dict, u["unit"]).get("partOf", [])
+                )
+                if context not in [next(x for x in p.values()) for p in part_of]:
+                    continue
+                lab = cast(dict, u["unit"]).get("label")
+                if not lab:
+                    continue
+                ents.append(cast(str, lab))
 
         for e in ents:
             lay, meta = self.r.label_layer[e]
@@ -569,7 +614,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 entout += entities_list
             tokens += attributes
 
-        ents_form = ", ".join(entout)
+        ents_form: str = ", ".join(entout)
         doc_join = ""
         frame_range_base = "array[lower(match_list.{fr}), upper(match_list.{fr})]"
         extras: list[str] = []
@@ -597,9 +642,17 @@ WHERE {entity}.char_range && contained_token.char_range
                 formed = ", ".join(extras)
                 select_extra = ", " + formed
 
-        attribs = self._make_attribs(
-            context, context_layer, gesture_type, tokens, frame_ranges
-        )
+        attribs = self._make_attribs(context, context_layer, tokens, frame_ranges)
+
+        if include_disjunction:
+            ents_form = (
+                "disjunction_matches"
+                if not ents_form
+                else f"{ents_form}, disjunction_matches"
+            )
+            attribs[1]["data"].append(
+                {"name": "disjunction_matches", "type": "set", "multiple": True}
+            )
 
         out = f"""
             res{i} AS ( SELECT DISTINCT
@@ -630,37 +683,10 @@ WHERE {entity}.char_range && contained_token.char_range
             None,
         )
 
-    def _get_labels(self, gesture: bool) -> TGSD:
-        """
-        Get labels and layers for token, gesture, segment and document
-        """
-        has_gesture: None | tuple[str, str]
-        has_gesture = self._get_label_layer("gesture") if gesture else None
-        if has_gesture:
-            gesture_layer: str = has_gesture[0]
-            formed = f"{gesture_layer}.type AS {gesture_layer}_gesture"
-            self.r.selects.add(formed.lower())
-            self.r.entities.add(f"{gesture_layer}_gesture".lower())
-
-        out: list[tuple[str, str] | None] = [has_gesture]
-        has: None | tuple[str, str]
-
-        for i in ["token", "segment", "document"]:
-            has = self._get_label_layer(i)
-            assert has is None or (
-                isinstance(has, tuple)
-                and isinstance(has[0], str)
-                and isinstance(has[1], str)
-            )
-            out.append(has)
-
-        return (out[0], out[1], out[2], out[3])
-
     def _make_attribs(
         self,
         context: str,
         context_layer: str,
-        gesture_type: str,
         tokens: list[dict],
         frame_ranges: list[dict],
     ) -> list[dict]:
@@ -703,7 +729,6 @@ WHERE {entity}.char_range && contained_token.char_range
                 "type": "list[dict]",
             },
             # {"name": "document_id", "type": "number", "multiple": False},
-            # {"name": "gesture", "type": gesture_type, "multiple": False},
             # {"name": "agent", "type": "str", "multiple": False},
             {
                 "name": "frame_ranges",
