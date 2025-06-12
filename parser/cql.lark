@@ -50,7 +50,7 @@ char_string1   : CHARSTRING1
 char_string2   : CHARSTRING2
 
 CHARSTRING1 : /[^\s)(=><"\/]+/
-CHARSTRING2 : /"([^"]|\")+"/
+CHARSTRING2 : /"([^"]|(?<=\\)")+"/
 
 %import common.WS
 %ignore WS

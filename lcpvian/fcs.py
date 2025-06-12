@@ -7,7 +7,7 @@ from typing import cast
 from xml.sax.saxutils import escape
 
 from .authenticate import Authentication
-from .cqp_to_json import full_cqp_to_json
+from .cql_to_json import CqlToJson
 from .textsearch_to_json import textsearch_to_json
 from .query_classes import QueryInfo, Request
 from .query import process_query
@@ -138,7 +138,7 @@ async def search_retrieve(
     operation: str = "searchRetrieve",
     version: str = "1.2",
     query: str = "",
-    queryType: str = "",
+    queryType: str = "cql",
     maximumRecords: str | int = "",
     startRecord: str | int = 0,
     **extra_params,
@@ -186,7 +186,11 @@ async def search_retrieve(
                 continue  # only do English for now
                 # langs = [next(x for x in partitions["values"])]
             json_query: str = json.dumps(
-                full_cqp_to_json(query, conf)
+                CqlToJson(
+                    segment=conf["firstClass"]["segment"],
+                    token=conf["firstClass"]["token"],
+                    query=query,
+                ).convert()
                 if queryType == "cql"
                 else textsearch_to_json(query, conf)
             )
