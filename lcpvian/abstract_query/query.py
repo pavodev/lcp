@@ -367,18 +367,18 @@ class QueryMaker:
                     joins, conds = self._token(conj["unit"], uly, ulb, upo)
                     if not conds:
                         continue
-                    joins_values: list[set[str]] = [
+                    joins_values = [
                         j for j in joins.values() if j and isinstance(j, set)
                     ]
-                    joins_conds: set[str] = set(
+                    joins_conds = set(
                         str(x) for j in joins_values for x in j if str(x).strip()
                     )
                     conjunction_where += [c for c in conds.union(joins_conds)]
                     conjunction_cross_joins += [j for j in joins]
                     conjunction_selects.append(f"{ulb}.{self.token}_id")
                 elif "sequence" in conj:
-                    seq: Sequence = Sequence(QueryData(), self.conf, conj)
-                    sqlseq: SQLSequence = SQLSequence(seq)
+                    seq = Sequence(QueryData(), self.conf, conj)
+                    sqlseq = SQLSequence(seq)
                     sqlseq.categorize_members()
                     # if sqlseq.get_first_stream_part_of() != seg_lab:
                     #     continue

@@ -554,7 +554,7 @@ class ResultsMaker:
                     )
                 if "unit" not in u:
                     continue
-                part_of: list[dict[str, str]] = cast(
+                part_of = cast(
                     list[dict[str, str]], cast(dict, u["unit"]).get("partOf", [])
                 )
                 if context not in [next(x for x in p.values()) for p in part_of]:
@@ -586,7 +586,7 @@ class ResultsMaker:
                 continue
 
             if lay == self.token:
-                is_fixed_token_in_sequence: bool = any(
+                is_fixed_token_in_sequence = any(
                     m.label == e
                     for seq in self.r.sqlsequences
                     for m in seq.get_members()
@@ -643,7 +643,7 @@ WHERE {entity}.char_range && contained_token.char_range
             extra_meta.append(lay)
 
             for ex in extra_meta:
-                obj: dict[str, str | bool] = {
+                obj = {
                     "name": f"{ex}_frame_range",
                     "type": "list[int]",
                     "multiple": True,

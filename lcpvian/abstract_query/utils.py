@@ -60,10 +60,11 @@ class QueryData:
         new_query_json: list | dict = (
             {} if is_dict else [None for _ in range(len(query_json))]
         )
-        key_to_use = next(
+        key_to_use: None | str = next(
             (l for l in ("unit", "sequence", "set") if l in query_json), None
         )
         if is_dict and key_to_use:
+            query_json = cast(dict, query_json)
             layer = query_json[key_to_use].get("layer") or "__internal"
             query_json[key_to_use]["label"] = query_json[key_to_use].get(
                 "label"
