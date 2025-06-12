@@ -92,9 +92,11 @@ class CqlToJson:
                         "logicalExpression": {"unaryOperator": "NOT", "arg": right_obj}
                     }
                 return {
-                    "logicalExpression": {
-                        "naryOperator": operator,
-                        "args": [left_obj, right_obj],
+                    "constraint": {
+                        "logicalExpression": {
+                            "naryOperator": operator,
+                            "args": [left_obj, right_obj],
+                        }
                     }
                 }
             else:
