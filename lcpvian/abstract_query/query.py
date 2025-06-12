@@ -39,6 +39,7 @@ match_list AS (
 """
 
 SELECT_PH = "{selects}"
+CARRY_PH = "{carry_over}"
 
 
 class Token:
@@ -293,7 +294,7 @@ class QueryMaker:
                 )
                 conds_built = " AND ".join(conds.union(joins_conds))
                 unions.append(
-                    f"SELECT {SELECT_PH}, jsonb_build_array({ulb}.{self.token}_id) AS disjunction_matches FROM {from_built} WHERE {conds_built}"
+                    f"SELECT {SELECT_PH}, {CARRY_PH}jsonb_build_array({ulb}.{self.token}_id) AS disjunction_matches FROM {from_built} WHERE {conds_built}"
                 )
             elif "sequence" in m:
                 seq: Sequence = Sequence(QueryData(), self.conf, m)
@@ -335,7 +336,7 @@ class QueryMaker:
                     ]
                 )
                 unions.append(
-                    f"SELECT {SELECT_PH}, jsonb_build_array({select_matches}) AS disjunction_matches FROM {seq_from} WHERE {seq_where_built}"
+                    f"SELECT {SELECT_PH}, {CARRY_PH}jsonb_build_array({select_matches}) AS disjunction_matches FROM {seq_from} WHERE {seq_where_built}"
                 )
             if log_op != "AND":
                 continue
@@ -423,7 +424,7 @@ class QueryMaker:
             conj_selects_built = ", ".join(conjunction_selects)
             conj_matches = " || ".join(
                 [f"jsonb_build_array({conj_selects_built})"]
-                + [f"disjunction{n}.matches" for n in from_nested]
+                + [f"disjunction{n}.disjunction_matches" for n in from_nested]
             )
             unions.append(
                 f"SELECT {SELECT_PH}, {conj_matches} AS disjunction_matches FROM {conj_from} WHERE {conj_where_built}"
@@ -782,11 +783,11 @@ class QueryMaker:
         }
         built_disjunctions = []
         for disjunction in disjunctions:
-            # add CTEs, starting with the most deeply nested disjunction
             disj_ctes: list[str] = [
                 " UNION ALL ".join(union_cte)
                 for union_cte in self.process_disjunction(disjunction)
             ]
+            # Make sure we select what's necessary from fixed_parts
             for n in range(len(disj_ctes)):
                 union_cte = disj_ctes[n]
                 for lab, lay in unbound_labels.items():
@@ -800,7 +801,7 @@ class QueryMaker:
                     union_cte = re.sub(
                         rf"\b{lab}\.{lay}_id", lab, union_cte, flags=re.IGNORECASE
                     )
-                    for labref in re.findall(rf"{lab}\.[_.a-zA-Z0-9]+", union_cte):
+                    for labref in re.findall(rf"\b{lab}\.[_.a-zA-Z0-9]+", union_cte):
                         # if labref.endswith("_id"):
                         #     continue
                         aname = labref.split(".")[-1]
@@ -821,10 +822,7 @@ class QueryMaker:
             built_disjunctions.append(disj_ctes)
 
         disjunction_ctes: list[str] = []
-        selects_from_fixed = ", ".join(
-            s.replace("___lasttable___", "fixed_parts") for s in self.selects
-        )
-        n_disj = 0
+        n_disj_cte = 0
         table_suffix: str = (
             self._table[1] if self._table else next(s for s in seg_suffixes)
         )
@@ -836,18 +834,30 @@ class QueryMaker:
             ):
                 continue
             using.append(f"{table_suffix}_{anchor}")
-        for disj_ctes in built_disjunctions:
+        for n_main_disj, disj_ctes in enumerate(built_disjunctions):
             for disj_cte in disj_ctes:
+                cte_prev_table = (
+                    "fixed_parts" if n_main_disj == 0 else f"disjunction{n_disj_cte-1}"
+                )
+                cte_selects = ", ".join(
+                    s.replace("___lasttable___", cte_prev_table) for s in self.selects
+                )
+                carry_over: str = (
+                    ""
+                    if n_main_disj == 0
+                    else f"{cte_prev_table}.disjunction_matches || "
+                )
                 disj_cte_str = disj_cte.format(
-                    prev_table="fixed_parts",
-                    selects=selects_from_fixed,
+                    prev_table=cte_prev_table,
+                    selects=cte_selects,
+                    carry_over=carry_over,
                     using=", ".join(using),
                 )
                 disjunction_ctes.append(disj_cte_str)
-                additional_ctes += f"disjunction{n_disj} AS ({disj_cte_str}),"
-                n_disj += 1
+                additional_ctes += f"disjunction{n_disj_cte} AS ({disj_cte_str}),"
+                n_disj_cte += 1
         if built_disjunctions:
-            last_table = f"disjunction{n_disj-1}"
+            last_table = f"disjunction{n_disj_cte-1}"
             self.selects.add(
                 "___lasttable___.disjunction_matches AS disjunction_matches"
             )
