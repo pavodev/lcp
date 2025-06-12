@@ -146,7 +146,7 @@ class Cte:
                 entry[key] = set_entry
             delta[str(i)] = entry
 
-        # Prepare params for automathon
+        # Prepare params for automaton
         q = {str(s) for s in delta.keys()}
         sigma = {y for x in delta.values() for y in x if y}
         initial_state = str(state_map[self.start_state][0])
@@ -318,6 +318,7 @@ class Cte:
         for source_n, d in delta_items:
 
             for state_n, destinations in d.items():
+                destinations = sorted(destinations)
                 state: State = sigma_states[state_n]
                 destination_n = next(x for x in destinations)
                 override_references: dict[str, str] = {}
@@ -346,7 +347,7 @@ class Cte:
                 #     cond += f" AND {ref_table}.{self.next_fixed_token.internal_label} = token.{tok}_id + 1"
                 state_conds.add(f"({cond})")
 
-        big_disjunction: str = "\n                OR ".join(state_conds)
+        big_disjunction: str = "\n                OR ".join(sorted(state_conds))
         if not infixwheres:
             big_disjunction = f"{big_disjunction}"
         elif len(infixwheres) > 1:
@@ -394,10 +395,10 @@ class Cte:
                         references=references
                     )
                 )
-                for d in destination:
+                for d in sorted(destination):
                     dict_table[f"({source}, {d}, '{state.label}', '{name_seq}')"] = None
 
-        values: str = ",\n            ".join(dict_table.keys())
+        values: str = ",\n            ".join(sorted(dict_table.keys()))
         return f"""transition{self.n} (source_state, dest_state, label, sequence) AS (
         VALUES
             {values}
@@ -480,7 +481,7 @@ class Cte:
             "\n"
             + ", ".join(
                 [
-                    "{table}." + t.internal_label + " " + t.internal_label
+                    "{table}." + t.internal_label + " AS " + t.internal_label
                     for t, _, _, _ in self.sequence.fixed_tokens
                 ]
             )
@@ -489,6 +490,12 @@ class Cte:
             else ""
         )
         for slc in additional_selects:
+            if slc in [
+                x
+                for u, *_ in self.sequence.fixed_tokens
+                for x in (u.label, u.internal_label)
+            ]:
+                continue
             select_fixed_tokens += (
                 ("\n, " if not select_fixed_tokens else " ") + "{table}." + slc + ","
             )

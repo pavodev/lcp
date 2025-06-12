@@ -5,8 +5,8 @@ WITH RECURSIVE fixed_parts AS
    FROM
      (SELECT Segment_id
       FROM bnc1.fts_vectorrest vec
-      WHERE vec.vector @@ '( 1cat |  7ADJ <1>  1dog)'
-        AND vec.vector @@ ' 7ART <1> ( 1cat |  7ADJ <1>  1dog) <1>  7VERB') AS fts_vector_s
+      WHERE vec.vector @@ '(1cat | 7ADJ <1> 1dog)'
+        AND vec.vector @@ '7ART <1> (1cat | 7ADJ <1> 1dog) <1> 7VERB') AS fts_vector_s
    CROSS JOIN bnc1.document d
    CROSS JOIN bnc1.segmentrest s
    CROSS JOIN bnc1.tokenrest t1
@@ -20,14 +20,21 @@ WITH RECURSIVE fixed_parts AS
      AND (t4.xpos2)::text = ('VERB')::text
      AND t4.token_id - t1.token_id < 4
      AND t4.token_id - t1.token_id > 1 ),
-transition0 (source_state, dest_state, label, SEQUENCE) AS (
-    VALUES (0, 2, 't2', 'anonymous4'),
-           (0, 3, 'tadj', 'anonymous6'),
-           (3, 1, 't3', 'anonymous6')) ,
-traversal0 AS
+               transition0 (source_state, dest_state, label, SEQUENCE) AS (
+                                                                           VALUES (0,
+                                                                                   2,
+                                                                                   't2',
+                                                                                   'anonymous4'), (0,
+                                                                                                   3,
+                                                                                                   'tadj',
+                                                                                                   'anonymous'), (3,
+                                                                                                                  1,
+                                                                                                                  't3',
+                                                                                                                  'anonymous')) ,
+               traversal0 AS
   (SELECT prev_cte.s,
-          prev_cte.t1 t1,
-          prev_cte.t4 t4,
+          prev_cte.t1 AS t1,
+          prev_cte.t4 AS t4,
           token.token_id start_id,
           token.token_id id,
           transition0.dest_state state,
@@ -38,16 +45,16 @@ traversal0 AS
    JOIN transition0 ON transition0.source_state = 0
    LEFT JOIN bnc1.form token_form ON token_form.form_id = token.form_id
    WHERE (token.token_id = prev_cte.t1 + 1)
-     AND ((transition0.dest_state = 3
-           AND (token.xpos2)::text = ('ADJ')::text
-           AND transition0.label = 'tadj')
-          OR (transition0.dest_state = 2
-              AND (token_form.form)::text = ('cat')::text
-              AND token_form.form_id = token.form_id
-              AND transition0.label = 't2'))
+     AND ((transition0.dest_state = 2
+           AND (token_form.form)::text = ('cat')::text
+           AND token_form.form_id = token.form_id
+           AND transition0.label = 't2')
+          OR (transition0.dest_state = 3
+              AND (token.xpos2)::text = ('ADJ')::text
+              AND transition0.label = 'tadj'))
    UNION ALL SELECT traversal0.s,
-                    traversal0.t1 t1,
-                    traversal0.t4 t4,
+                    traversal0.t1 AS t1,
+                    traversal0.t4 AS t4,
                     traversal0.start_id,
                     token.token_id id,
                     transition0.dest_state,

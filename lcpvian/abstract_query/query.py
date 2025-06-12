@@ -1075,7 +1075,7 @@ class QueryMaker:
         if self.has_fts and prefilters:
             batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
             vector_name = f"fts_vector{self._underlang}{batch_suffix}"  # Need better handling of this: add to mapping?
-            ps: str = " AND ".join(prefilters)
+            ps: str = " AND ".join(sorted(prefilters))
             new_label = f"fts_vector_{label}"
             old_base_joins: None | bool | list | set = self.joins.get(base, [])
             new_joins: set[str | bool] = set()
