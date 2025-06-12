@@ -293,7 +293,7 @@ class QueryMaker:
                 )
                 conds_built = " AND ".join(conds.union(joins_conds))
                 unions.append(
-                    f"SELECT {SELECT_PH}, jsonb_build_array({ulb}.{self.token}_id) AS matches FROM {from_built} WHERE {conds_built}"
+                    f"SELECT {SELECT_PH}, jsonb_build_array({ulb}.{self.token}_id) AS disjunction_matches FROM {from_built} WHERE {conds_built}"
                 )
             elif "sequence" in m:
                 seq: Sequence = Sequence(QueryData(), self.conf, m)
@@ -335,7 +335,7 @@ class QueryMaker:
                     ]
                 )
                 unions.append(
-                    f"SELECT {SELECT_PH}, jsonb_build_array({select_matches}) AS matches FROM {seq_from} WHERE {seq_where_built}"
+                    f"SELECT {SELECT_PH}, jsonb_build_array({select_matches}) AS disjunction_matches FROM {seq_from} WHERE {seq_where_built}"
                 )
             if log_op != "AND":
                 continue
@@ -426,10 +426,40 @@ class QueryMaker:
                 + [f"disjunction{n}.matches" for n in from_nested]
             )
             unions.append(
-                f"SELECT {SELECT_PH}, {conj_matches} AS matches FROM {conj_from} WHERE {conj_where_built}"
+                f"SELECT {SELECT_PH}, {conj_matches} AS disjunction_matches FROM {conj_from} WHERE {conj_where_built}"
             )
         disjunction_ctes.append(unions)
         return disjunction_ctes
+
+    def lift_quantifiers(self, query_obj: dict | list) -> dict | list:
+        ret_obj: dict | list = (
+            {} if isinstance(query_obj, dict) else [None for _ in range(len(query_obj))]
+        )
+        for n, k in enumerate(query_obj):
+            v = query_obj[k] if isinstance(query_obj, dict) else k
+            i = k if isinstance(query_obj, dict) else n
+            if isinstance(v, list):
+                ret_obj[i] = self.lift_quantifiers(v)
+                continue
+            elif not isinstance(v, dict):
+                ret_obj[i] = v
+                continue
+            if "quantification" in v:
+                quan_obj = cast(dict[str, Any], v["quantification"])
+                quantor = quan_obj.get("quantifier", "")
+                if quantor.endswith(("EXISTS", "EXIST")):
+                    if quantor.startswith(("~", "!", "NOT", "¬")):
+                        quantor = "NOT EXISTS"
+                    else:
+                        quantor = "EXISTS"
+                    key_to_lift = next(
+                        (x for x in ("unit", "sequence") if x in quan_obj), None
+                    )
+                    if key_to_lift:
+                        v = {x: y for x, y in quan_obj.items() if x == key_to_lift}
+                        v[key_to_lift]["quantor"] = quantor
+            ret_obj[i] = self.lift_quantifiers(v)
+        return ret_obj
 
     def query(self, recurse: list | None = None) -> tuple[str, str, str]:
         """
@@ -473,18 +503,7 @@ class QueryMaker:
 
         # build the conditions of the objects in the query list
         obj: dict[str, Any]
-        for obj in to_iter:
-            # Lift any argument of a quantifier to obj
-            if "quantification" in obj:
-                quan_obj = cast(dict[str, Any], obj["quantification"])
-                quantor = quan_obj.get("quantifier", "")
-                if quantor.endswith(("EXISTS", "EXIST")):
-                    if quantor.startswith(("~", "!", "NOT", "¬")):
-                        quantor = "NOT EXISTS"
-                    else:
-                        quantor = "EXISTS"
-                    obj = {k: v for k, v in quan_obj.items() if k == "unit"}
-                    obj["unit"]["quantor"] = quantor
+        for obj in self.lift_quantifiers(to_iter):
 
             # Turn any logical expression into a main constraint
             if "logicalExpression" in obj:
@@ -499,7 +518,10 @@ class QueryMaker:
                 log_exp = obj["constraint"].get("logicalExpression", {})
                 log_args = log_exp.get("args", [])
                 is_disj = log_exp.get("naryOperator") == "OR"
-                if is_disj and any("unit" in x or "sequence" in x for x in log_args):
+                none_quantified = not any(
+                    "quantor" in x.get("unit", x.get("sequence", {})) for x in log_args
+                )
+                if is_disj and none_quantified:
                     disjunctions.append(log_args)
                 else:
                     self.constraint(obj["constraint"])
@@ -826,7 +848,9 @@ class QueryMaker:
                 n_disj += 1
         if built_disjunctions:
             last_table = f"disjunction{n_disj-1}"
-            self.selects.add("___lasttable___.matches AS disjunction_matches")
+            self.selects.add(
+                "___lasttable___.disjunction_matches AS disjunction_matches"
+            )
 
         # CTEs: use the traversal strategy
         last_cte: Cte | None = None
@@ -865,7 +889,8 @@ class QueryMaker:
         # If any sequence has a label and needs its range to be returned
         if sequence_ranges:
 
-            selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
+            # selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
+            selects_intermediate = {self._get_label_as(s) for s in self.selects}
             gather_selects: str = ",\n".join(
                 # sorted({s.replace("___lasttable___", last_table) for s in self.selects})
                 sorted(

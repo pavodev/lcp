@@ -38,7 +38,7 @@ def json_to_sql(
     """
     language: str | None = lang.lower() if lang else None
     conf: Config = Config(schema, batch, config, language)
-    result_data: QueryData = ResultsMaker(query_json, conf).results()
+    query_json, result_data = ResultsMaker(query_json, conf).results()
     query_part: str
     seg_label: str
     query_part, seg_label, has_char_range = QueryMaker(

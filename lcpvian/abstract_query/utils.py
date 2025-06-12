@@ -55,6 +55,30 @@ class QueryData:
         references[new_label] = (layer, obj)
         return new_label
 
+    def add_labels(self, query_json: list | dict, references: dict) -> list | dict:
+        is_dict = isinstance(query_json, dict)
+        new_query_json: list | dict = (
+            {} if is_dict else [None for _ in range(len(query_json))]
+        )
+        key_to_use = next(
+            (l for l in ("unit", "sequence", "set") if l in query_json), None
+        )
+        if is_dict and key_to_use:
+            layer = query_json[key_to_use].get("layer") or "__internal"
+            query_json[key_to_use]["label"] = query_json[key_to_use].get(
+                "label"
+            ) or self.unique_label(
+                layer=layer, references=references, obj=query_json[key_to_use]
+            )
+
+        for n, k in enumerate(query_json):
+            v = query_json[k] if is_dict else k
+            i = k if is_dict else n
+            if isinstance(v, (list, dict)):
+                v = self.add_labels(v, references)
+            new_query_json[i] = v
+        return new_query_json
+
 
 @dataclass
 class Config:

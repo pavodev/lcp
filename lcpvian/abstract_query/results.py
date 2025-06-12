@@ -44,7 +44,6 @@ class ResultsMaker:
     """
 
     def __init__(self, query_json: QueryJSON, conf: Config) -> None:
-        self.query_json: QueryJSON = query_json
         self.conf: Config = conf
         self.config: ConfigJSON = conf.config
         self.schema: str = conf.schema
@@ -55,7 +54,11 @@ class ResultsMaker:
         self.document = cast(str, self.config["document"])
         self.conf_layer = cast(JSONObject, self.config["layer"])
         self.r = QueryData()
-        self.r.label_layer = _label_layer(query_json.get("query", query_json))
+        tmp_label_layer = _label_layer(query_json.get("query", query_json))
+        self.query_json: QueryJSON = cast(
+            QueryJSON, self.r.add_labels(query_json, tmp_label_layer)
+        )
+        self.r.label_layer = _label_layer(self.query_json.get("query", self.query_json))
         self._n = 1
         self._underlang = _get_underlang(self.lang, self.config)
         self._label_mapping: dict[str, str] = (
@@ -136,7 +139,7 @@ class ResultsMaker:
                     return v
         return None
 
-    def results(self) -> QueryData:
+    def results(self) -> tuple[QueryJSON, QueryData]:
         """
         Build the results section of the postgres query
         """
@@ -241,7 +244,7 @@ class ResultsMaker:
         strings.append(COUNTER)
         self.r.meta_json = {"result_sets": attribs}
         self.r.needed_results = "\n , ".join(strings)
-        return self.r
+        return self.query_json, self.r
 
     def _add_collocation_selects(self, result: dict) -> None:
         """
@@ -534,11 +537,20 @@ class ResultsMaker:
                 if not isinstance(u, dict):
                     continue
                 if "constraint" in u:
-                    include_disjunction = include_disjunction or (
-                        cast(dict, u["constraint"])
-                        .get("logicalExpression", {})
-                        .get("naryOperator")
+                    constraint = cast(dict, u["constraint"])
+                    is_or = (
+                        constraint.get("logicalExpression", {}).get("naryOperator")
                         == "OR"
+                    )
+                    include_disjunction = include_disjunction or (
+                        is_or
+                        and any(
+                            "unit" in x or "sequence" in x and "quantor" not in x
+                            for x in cast(
+                                list,
+                                constraint["logicalExpression"]["args"],
+                            )
+                        )
                     )
                 if "unit" not in u:
                     continue

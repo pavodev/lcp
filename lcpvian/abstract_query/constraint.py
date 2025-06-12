@@ -954,7 +954,7 @@ def _get_constraint(
             unit_layer,
             unit_label,
             conf,
-            quantor,
+            quantor or unit.get("quantor", None),
             "AND",
             n,
             order,
@@ -1063,33 +1063,29 @@ def _get_constraints(
     # if not constraints and order is None:
     #     return None
 
+    # sorry about this:
+    first_unit: dict[str, Any] = next(
+        (
+            cast(dict[str, Any], i.get("unit", i.get("sequence", i.get("set"))))
+            for i in sorted(cast(list[dict], constraints), key=arg_sort_key)
+            if any(x in i for x in ("unit", "sequence", "set"))
+        ),
+        {},
+    )
+    first_layer = first_unit.get("layer", "")
+
     if top_level:
         allow_any = True
-        # sorry about this:
-        first_unit: dict[str, Any] = next(
-            (
-                cast(dict[str, Any], cast(JSONObject, i)["unit"])
-                for i in cast(
-                    list[JSONObject],
-                    sorted(
-                        cast(list[dict], constraints), key=arg_sort_key
-                    ),  # why do we assume the existence of an args key here?
-                )
-                if "unit" in cast(JSONObject, i)
-            ),
-            {},
-        )
-        first_layer = first_unit.get("layer", "")
 
     results = []
     # op = cast(str, constraints.get("operator", "AND"))
-
-    lab = label or f"constraint_{n}"
 
     references: dict[str, list[str]] = {}
 
     part_ofs: list[str] = []
     for part in part_of or []:
+        if not label and first_unit:
+            label = first_unit.get("label", "")
         part_type, part_label = cast(
             tuple[str, str], next((k, v) for k, v in part.items())
         )
@@ -1117,7 +1113,7 @@ def _get_constraints(
 
     args = cast(list[JSONObject], constraints)
     for arg in sorted(args, key=arg_sort_key):
-        arg_label = cast(str, lab if not top_level else arg.get("label", ""))
+        arg_label = cast(str, arg.get("label") or label)
         tup = _get_constraint(
             arg,
             layer,
@@ -1136,11 +1132,11 @@ def _get_constraints(
         )
         n += 1
         results.append(tup)
-    lay: str = layer if not top_level else first_layer
+    lay: str = first_layer if top_level else layer
     return Constraints(
         conf.schema,
         lay,
-        lab,
+        label,
         conf,
         results,
         cast(str, op),
