@@ -2,13 +2,13 @@
   <div class="home">
     <div class="container">
       <div class="row mt-4">
-        <div class="col-8">
+        <div class="col-12 col-md-8">
           <Title :title="$t('platform-general')" />
           <p>
             {{ $t('platform-general-description') }}
           </p>
         </div>
-        <div class="col mt-1 text-end" v-if="userData && userData.user && userData.user.displayName">
+        <div class="col mt-1 text-center text-md-end" v-if="userData && userData.user && userData.user.displayName">
           <button
             type="button"
             class="btn btn-secondary btn-sm"
