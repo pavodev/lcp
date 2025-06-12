@@ -292,7 +292,7 @@ class QueryMaker:
                 joins_conds: set[str] = set(
                     str(x) for j in joins_values for x in j if str(x).strip()
                 )
-                conds_built = " AND ".join(conds.union(joins_conds))
+                conds_built = " AND ".join(sorted(conds.union(joins_conds)))
                 unions.append(
                     f"SELECT {SELECT_PH}, {CARRY_PH}jsonb_build_array({ulb}.{self.token}_id) AS disjunction_matches FROM {from_built} WHERE {conds_built}"
                 )
@@ -373,7 +373,7 @@ class QueryMaker:
                     joins_conds = set(
                         str(x) for j in joins_values for x in j if str(x).strip()
                     )
-                    conjunction_where += [c for c in conds.union(joins_conds)]
+                    conjunction_where += sorted(c for c in conds.union(joins_conds))
                     conjunction_cross_joins += [j for j in joins]
                     conjunction_selects.append(f"{ulb}.{self.token}_id")
                 elif "sequence" in conj:
@@ -840,7 +840,8 @@ class QueryMaker:
                     "fixed_parts" if n_main_disj == 0 else f"disjunction{n_disj_cte-1}"
                 )
                 cte_selects = ", ".join(
-                    s.replace("___lasttable___", cte_prev_table) for s in self.selects
+                    s.replace("___lasttable___", cte_prev_table)
+                    for s in sorted(self.selects)
                 )
                 carry_over: str = (
                     ""

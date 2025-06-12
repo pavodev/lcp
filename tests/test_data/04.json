@@ -1,0 +1,126 @@
+{
+    "query": [
+        {
+            "unit": {
+                "layer": "Segment",
+                "label": "s"
+            }
+        },
+        {
+            "unit": {
+                "layer": "Token",
+                "partOf": [
+                    {
+                        "partOfStream": "s"
+                    }
+                ],
+                "label": "tv",
+                "constraints": [
+                    {
+                        "comparison": {
+                            "left": {
+                                "reference": "xpos2"
+                            },
+                            "comparator": "=",
+                            "right": {
+                                "string": "VERB"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            "constraint": {
+                "logicalExpression": {
+                    "naryOperator": "OR",
+                    "args": [
+                        {
+                            "unit": {
+                                "layer": "Token",
+                                "partOf": [
+                                    {
+                                        "partOfStream": "s"
+                                    }
+                                ],
+                                "constraints": [
+                                    {
+                                        "comparison": {
+                                            "left": {
+                                                "reference": "form"
+                                            },
+                                            "comparator": "=",
+                                            "right": {
+                                                "string": "dog"
+                                            }
+                                        }
+                                    }
+                                ]
+                            }
+                        },
+                        {
+                            "sequence": {
+                                "partOf": [
+                                    {
+                                        "partOfStream": "s"
+                                    }
+                                ],
+                                "members": [
+                                    {
+                                        "unit": {
+                                            "layer": "Token",
+                                            "constraints": [
+                                                {
+                                                    "comparison": {
+                                                        "left": {
+                                                            "reference": "form"
+                                                        },
+                                                        "comparator": "=",
+                                                        "right": {
+                                                            "string": "a"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    },
+                                    {
+                                        "unit": {
+                                            "layer": "Token",
+                                            "constraints": [
+                                                {
+                                                    "comparison": {
+                                                        "left": {
+                                                            "reference": "form"
+                                                        },
+                                                        "comparator": "=",
+                                                        "right": {
+                                                            "string": "cat"
+                                                        }
+                                                    }
+                                                }
+                                            ]
+                                        }
+                                    }
+                                ]
+                            }
+                        }
+                    ]
+                }
+            }
+        }
+    ],
+    "results": [
+        {
+            "label": "kwic",
+            "resultsPlain": {
+                "context": [
+                    "s"
+                ],
+                "entities": [
+                    "*"
+                ]
+            }
+        }
+    ]
+}
