@@ -121,11 +121,14 @@ class CqlToJson:
                 return {
                     "unit": {
                         "layer": "Token",
+                        "partOf": [{"partOfStream": "s"}],
                         "constraints": [
                             {
-                                "left": {"reference": attribute_name},
-                                "operator": operator,
-                                "right": {"string": value_right},
+                                "comparison": {
+                                    "left": {"reference": attribute_name},
+                                    "comparator": operator,
+                                    "right": {"string": value_right},
+                                }
                             }
                         ],
                     }

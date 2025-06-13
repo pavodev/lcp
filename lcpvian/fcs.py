@@ -88,7 +88,7 @@ def _make_search_response(
             prep_seg = ""
             in_hit = False
             for n, token in enumerate(tokens):
-                token_str = escape(token[form_id])
+                token_str = escape(token[form_id]) if token[form_id] else ""
                 is_hit = offset + n in hits or offset + n in [
                     y for x in hits if isinstance(x, list) for y in x
                 ]
