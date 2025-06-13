@@ -558,6 +558,7 @@ export default {
       let time = this.$refs.videoPlayer1.duration * percent;
       if (this.$refs.videoPlayer1) {
         this.$refs.videoPlayer1.currentTime = time;
+        this.playerCurrentTime = time;
       }
       if (this.$refs.videoPlayer2) {
         this.$refs.videoPlayer2.currentTime = time;
@@ -593,10 +594,10 @@ export default {
       this.volume = _volume
     },
     _annotationEnter({ x, y, mouseX, mouseY, entry }) {
-      this.timelinePopinY = Number(mouseY);
-      this.timelinePopinX = Number(x);
-      this.timelinePopinY = Number(y);
-      this.timelinePopinX = Number(mouseX);
+      // Set coordinates once, using the mouse coordinates
+      this.timelinePopinX = mouseX;
+      this.timelinePopinY = mouseY;
+      
       this.timelineEntry = [
         ...Object.entries(entry).filter(kv => !(kv[0] in { frame_range: 1, char_range: 1, prepared: 1, meta: 1 })),
         ...Object.entries(entry.meta || {})
@@ -608,37 +609,21 @@ export default {
       this.timelineEntry = null;
     },
     _getTimelinePopinXY() {
-      // Get the popup dimensions first
+      if(!document.querySelector("#timeline-svg")) return;
+      
+      let { x, y } = document.querySelector("#timeline-svg").getBoundingClientRect();
+      x += this.timelinePopinX + window.scrollX;
+      y += this.timelinePopinY + window.scrollY;
+      const bottom = window.scrollY + window.innerHeight, right = window.scrollX + window.innerWidth;
       const { width, height } = (
         this.$refs.timelinePopin
-        || { getBoundingClientRect: () => ({ width: 0, height: 0 }) }
+        || { getBoundingClientRect: () => Object({ width: 0, height: 0 }) }
       ).getBoundingClientRect();
-
-      // Calculate viewport boundaries
-      const viewportRight = window.scrollX + window.innerWidth;
-      const viewportBottom = window.scrollY + window.innerHeight;
-
-      // Calculate initial position
-      let x = this.timelinePopinX;
-      let y = this.timelinePopinY;
-
-      // Adjust position to keep within viewport
-      if (x + width > viewportRight) {
-        x = viewportRight - width;
-      }
-      if (y + height > viewportBottom) {
-        y = viewportBottom - height;
-      }
-
-      // Ensure minimum values
-      x = Math.max(0, x);
-      y = Math.max(0, y);
-
-      return {
-        'left': x + 'px',
-        'top': y + 'px',
-        'position': 'fixed'
-      };
+      if (x + width > right)
+        x = right - width;
+      if (y + height > bottom)
+        y = bottom - height;
+      return { 'left': x + 'px', 'top': y - 250 + 'px' };
     },
     onSocketMessage(data) {
       // console.log("SOC2", data)

@@ -315,7 +315,14 @@ export default {
       // console.log("playerState", playerState);
     },
     playerCurrentTime() {
-      this.updateCurrentPosition(this.playerCurrentTime)
+      if (this.isModalOpen && this.isLandscape) {
+        // For mobile modal, we need to ensure the SVG is ready
+        this.$nextTick(() => {
+          this.updateCurrentPosition(this.playerCurrentTime);
+        });
+      } else {
+        this.updateCurrentPosition(this.playerCurrentTime);
+      }
     },
     zoomValue() {
       const transform = d3.zoomTransform(svg.node());
@@ -360,6 +367,7 @@ export default {
       
       if (!isNaN(xPosition)) {
         this.updateVerticalLine(xPosition);
+        // Only center if we're not playing, to avoid jumping during playback
         if (!this.playerIsPlaying) {
           this.center();
         }
@@ -486,6 +494,11 @@ export default {
         // Only initialize if we're in landscape mode
         if (this.isLandscape) {
           this.initializeTimeline('timeline-svg-mobile');
+          // Use setTimeout to ensure SVG is fully initialized and transformed
+          setTimeout(() => {
+            this.updateCurrentPosition(this.playerCurrentTime);
+            this.center();
+          }, 100);
         }
       });
     },
@@ -677,7 +690,7 @@ export default {
         .on("zoom", zoomed.bind(this));
 
       // Apply zoom behavior to SVG
-      svg.call(zoom);
+      svg.call(zoom).on("wheel.zoom", null);
 
       // Update the zoomed function to handle axis updates better
       function zoomed(event) {
@@ -830,7 +843,13 @@ export default {
             .text(Utils.secondsToTime(originalValue, true));
         });
 
-      this.updateCurrentPosition(this.defaultCurrentTime);
+      // If we're initializing for mobile, update position and center
+      if (svgId === 'timeline-svg-mobile') {
+        this.updateCurrentPosition(this.playerCurrentTime);
+        this.center();
+      } else {
+        this.updateCurrentPosition(this.defaultCurrentTime);
+      }
     }
   },
   mounted() {
