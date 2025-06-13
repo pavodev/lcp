@@ -321,7 +321,14 @@ class Constraint:
         """
         Associate one or more WHERE statements with a JOIN statement
         """
-        table = table.lower()
+        table_strings = re.findall("'[^']+'", table)
+        table_non_strings = re.split("'[^']+'", table)
+        table_lower = ""
+        for n, non_string in enumerate(table_non_strings):
+            table_lower += non_string.lower()
+            if n < len(table_strings):
+                table_lower += table_strings[n]
+        table = table_lower
         if table in self._joins:
             if self._joins[table] is None:
                 self._joins[table] = set()
