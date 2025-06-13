@@ -608,19 +608,37 @@ export default {
       this.timelineEntry = null;
     },
     _getTimelinePopinXY() {
-      let { x, y } = document.querySelector("#timeline-svg").getBoundingClientRect();
-      x += this.timelinePopinX + window.scrollX;
-      y += this.timelinePopinY + window.scrollY;
-      const bottom = window.scrollY + window.innerHeight, right = window.scrollX + window.innerWidth;
+      // Get the popup dimensions first
       const { width, height } = (
         this.$refs.timelinePopin
-        || { getBoundingClientRect: () => Object({ width: 0, height: 0 }) }
+        || { getBoundingClientRect: () => ({ width: 0, height: 0 }) }
       ).getBoundingClientRect();
-      if (x + width > right)
-        x = right - width;
-      if (y + height > bottom)
-        y = bottom - height;
-      return { 'left': x + 'px', 'top': y - 250 + 'px' };
+
+      // Calculate viewport boundaries
+      const viewportRight = window.scrollX + window.innerWidth;
+      const viewportBottom = window.scrollY + window.innerHeight;
+
+      // Calculate initial position
+      let x = this.timelinePopinX;
+      let y = this.timelinePopinY;
+
+      // Adjust position to keep within viewport
+      if (x + width > viewportRight) {
+        x = viewportRight - width;
+      }
+      if (y + height > viewportBottom) {
+        y = viewportBottom - height;
+      }
+
+      // Ensure minimum values
+      x = Math.max(0, x);
+      y = Math.max(0, y);
+
+      return {
+        'left': x + 'px',
+        'top': y + 'px',
+        'position': 'fixed'
+      };
     },
     onSocketMessage(data) {
       // console.log("SOC2", data)

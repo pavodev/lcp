@@ -25,9 +25,9 @@
     </div>
 
     <!-- Mobile Timeline Button -->
-    <div v-else>
+    <div class="text-center" v-else>
       <button class="btn btn-primary btn-sm me-1" @click="showTimelineModal">
-        <FontAwesomeIcon :icon="['fas', 'timeline']" class="me-1" />
+        <FontAwesomeIcon :icon="['fas', 'chart-gantt']" class="me-1" />
         {{ $t('common-show-timeline') }}
       </button>
     </div>
@@ -44,8 +44,8 @@
         
         <!-- Mobile Rotation Instructions -->
         <div v-if="!isLandscape" class="rotation-instructions">
-          <FontAwesomeIcon :icon="['fas', 'mobile-screen']" class="rotation-icon" />
-          <p>{{ $t('common-rotate-device') }}</p>
+          <FontAwesomeIcon :icon="['fas', 'mobile-screen-button']" class="rotation-icon" />
+          <p class="p-0 m-0">{{ $t('common-rotate-device') }}</p>
         </div>
 
         <div v-if="isLandscape" class="timeline-container">
@@ -80,16 +80,16 @@
 <style scoped>
 .timeline-modal {
   position: fixed;
-  top: 0;
+  top: 56px; /* Height of the navigation bar */
   left: 0;
   width: 100%;
-  height: 100%;
+  height: calc(100% - 56px); /* Subtract navigation bar height */
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 1000;
-  touch-action: none; /* Prevent default touch actions */
+  touch-action: none;
 }
 
 .modal-content {
@@ -103,7 +103,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  touch-action: none; /* Prevent default touch actions */
+  touch-action: none;
 }
 
 .modal-header {
@@ -111,6 +111,11 @@
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
+  position: sticky;
+  top: 0;
+  background-color: white;
+  z-index: 1;
+  padding: 10px 0;
 }
 
 .close-button {
@@ -225,8 +230,8 @@
 
 @keyframes rotate {
   0% { transform: rotate(0deg); }
-  25% { transform: rotate(90deg); }
-  75% { transform: rotate(90deg); }
+  25% { transform: rotate(-90deg); }
+  75% { transform: rotate(-90deg); }
   100% { transform: rotate(0deg); }
 }
 
