@@ -204,14 +204,14 @@
       </div>
       <div class="container-fluid mt-4">
         <div class="row mt-2 mb-4">
-          <div class="col col-md-2">
+          <div class="col col-md-3">
             <label for="timePicker">{{ $t('common-go-to-time') }}:</label>
             <div v-if="currentMediaDuration > 0">
-              <VueDatePicker v-model="selectedTime" time-picker enable-seconds format="HH:mm:ss" :min-time="minTime"
+              <VueDatePicker id="timePicker" v-model="selectedTime" time-picker enable-seconds format="HH:mm:ss" :min-time="minTime"
                 :start-time="startTime" @update:model-value="handleDatePickerChange"></VueDatePicker>
             </div>
             <div v-else>
-              <input type="text" disabled :placeholder="`${$t('common-loading-video-duration')}...`" />
+              <input id="timePicker" type="text" disabled :placeholder="`${$t('common-loading-video-duration')}...`" />
             </div>
           </div>
         </div>

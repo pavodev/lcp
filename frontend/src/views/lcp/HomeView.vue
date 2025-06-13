@@ -119,7 +119,7 @@
                 v-for="corpus in filterCorpora(project.corpora)"
                 :key="corpus.id"
                 @click.stop="openQueryWithCorpus(corpus, 'catchphrase')"
-                class="col-4 mb-3"
+                class="col col-md-4 mb-3"
               >
                 <div
                   class="corpus-block"
