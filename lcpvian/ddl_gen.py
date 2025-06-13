@@ -725,7 +725,7 @@ class CTProcessor:
                             f"Cannot accommodate more than 9223372036854775807 distinct labels"
                         )
                     label_lookup_table = Table(
-                        label_lookup_table_name,
+                        attr.lower(),
                         [
                             Column("bit", inttype, primary_key=True),
                             Column("label", "text", unique=True),
