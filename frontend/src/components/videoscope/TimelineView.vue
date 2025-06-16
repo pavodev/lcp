@@ -180,6 +180,7 @@
 
   .modal-content {
     padding: 10px;
+    flex-direction: column;
   }
 
   .timeline-wrapper {
@@ -200,7 +201,7 @@
   }
 
   .modal-content {
-    flex-direction: row;
+    flex-direction: column;
     padding: 10px;
   }
 
@@ -210,7 +211,7 @@
   }
 
   .button-container {
-    flex-direction: column;
+    flex-direction: row;
     margin-right: 10px;
     margin-left: 0;
     padding: 5px;
