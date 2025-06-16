@@ -42,6 +42,11 @@
             </li>
           </ul>
           <ul class="navbar-nav ms-auto">
+            <li>
+              <multiselect v-model="language" @select="changeLanguage" :options="languageOptions" track-by="name" label="name" :searchable="false" :close-on-select="true" :show-labels="false" :allow-empty="false"
+                 placeholder="English" aria-label="Select a language">
+                </multiselect>
+            </li>
             <li class="nav-item">
               <span class="nav-link version-number">
                 #{{ appVersion }}
@@ -85,6 +90,7 @@ import { mapState } from "pinia";
 import { useUserStore } from "@/stores/userStore";
 import { useCorpusStore } from "@/stores/corpusStore";
 import { useWsStore } from "@/stores/wsStore";
+import { changeLocale, getUserLocale, availableLanguages } from "@/fluent";
 
 import LoadingView from "@/components/LoadingView.vue";
 import FooterView from "@/components/FooterView.vue";
@@ -97,6 +103,8 @@ export default {
     return {
       appVersion: process.env.GIT_HASH,
       appLinks: config.appLinks,
+      language: getUserLocale(),
+      languageOptions: availableLanguages,
     }
   },
   mounted() {
@@ -111,6 +119,18 @@ export default {
     addActionClass(e) {
       e.currentTarget.querySelector(".nav-link").classList.add("active");
     },
+    changeLanguage(selectedOption){
+      changeLocale(selectedOption);
+
+      // This is necessary in order to correctly load the language bundle
+      if (this.$route.path === '/') {
+        // Reload the page if already on the homepage
+        this.$router.go();
+      } else {
+        // Otherwise, navigate to the homepage
+        this.$router.push('/');
+      }
+    }
   },
   components: {
     LoadingView,
