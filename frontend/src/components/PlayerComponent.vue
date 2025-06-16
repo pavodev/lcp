@@ -593,7 +593,7 @@ export default {
       }
       this.volume = _volume
     },
-    _annotationEnter({ x, y, mouseX, mouseY, entry }) {
+    _annotationEnter({ mouseX, mouseY, entry }) {
       // Set coordinates once, using the mouse coordinates
       this.timelinePopinX = mouseX;
       this.timelinePopinY = mouseY;

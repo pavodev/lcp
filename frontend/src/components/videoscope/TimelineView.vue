@@ -284,7 +284,7 @@ let linearScale = null;
 let playerState = false;
 let hoveringAnnotation = null;
 const padding = 180;
-const width = document.body.clientWidth - 20;
+// const width = document.body.clientWidth - 20;
 const paddingBeforeTimeline = 40;
 const MAX_ZOOM_LEVEL = 100
 const DEFAULT_ZOOM_LEVEL = 20;
@@ -515,7 +515,6 @@ export default {
     },
     handleResize() {
       // Only update mobile status if the device type has changed
-      const wasMobile = this.isMobile;
       this.checkMobile();
       
       // If we're in the modal and the device is still mobile, keep it open
@@ -862,7 +861,7 @@ export default {
       this.initializeTimeline();
     }
   },
-  beforeDestroy() {
+  beforeUnmount() {
     window.removeEventListener('resize', this.handleResize);
     window.removeEventListener('orientationchange', this.handleResize);
   }

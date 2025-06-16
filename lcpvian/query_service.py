@@ -43,11 +43,8 @@ from .callbacks import (
     _general_failure,
     _upload_failure,
     _queries,
-<<<<<<< HEAD
     _deleted,
-    _query,
-=======
->>>>>>> develop
+    # _query,
     _schema,
     _upload,
 )
