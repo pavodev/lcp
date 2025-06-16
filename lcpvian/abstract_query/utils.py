@@ -1,3 +1,4 @@
+import json
 import re
 
 from dataclasses import dataclass, field
@@ -41,6 +42,7 @@ class QueryData:
         label: str = "anonymous",
         layer="__internal",
         references: LabelLayer | None = None,
+        obj: dict = dict({}),
     ) -> str:
         if references is None:
             references = self.label_layer
@@ -50,8 +52,33 @@ class QueryData:
         while new_label in references:
             n += 1
             new_label = f"{label}{str(n)}"
-        references[new_label] = (layer, dict({}))
+        references[new_label] = (layer, obj)
         return new_label
+
+    def add_labels(self, query_json: list | dict, references: dict) -> list | dict:
+        is_dict = isinstance(query_json, dict)
+        new_query_json: list | dict = (
+            {} if is_dict else [None for _ in range(len(query_json))]
+        )
+        key_to_use: None | str = next(
+            (l for l in ("unit", "sequence", "set") if l in query_json), None
+        )
+        if is_dict and key_to_use:
+            query_json = cast(dict, query_json)
+            layer = query_json[key_to_use].get("layer") or "__internal"
+            query_json[key_to_use]["label"] = query_json[key_to_use].get(
+                "label"
+            ) or self.unique_label(
+                layer=layer, references=references, obj=query_json[key_to_use]
+            )
+
+        for n, k in enumerate(query_json):
+            v = query_json[k] if is_dict else k
+            i = k if is_dict else n
+            if isinstance(v, (list, dict)):
+                v = self.add_labels(v, references)
+            new_query_json[i] = v
+        return new_query_json
 
 
 @dataclass
@@ -163,10 +190,13 @@ def _bound_label(
     if not label:
         return False
 
-    query = query_json.get("query", [query_json])
+    query = json.loads(json.dumps(query_json.get("query", [query_json])))
     for obj in query:
+        if not isinstance(obj, dict):
+            continue
         if obj.get("label") == label:
             return in_scope
+        obj = obj.get("constraint", obj)
         if "unit" in obj:
             if obj["unit"].get("label") == label:
                 return in_scope
@@ -174,13 +204,13 @@ def _bound_label(
             if obj["sequence"].get("label") == label:
                 return in_scope
             reps = _parse_repetition(obj["sequence"].get("repetition", "1"))
-            tmp_in_scope = reps != (1, 1)
+            tmp_in_scope = in_scope or (reps != (1, 1))
             for m in obj["sequence"].get("members", []):
                 if _bound_label(label, m, tmp_in_scope):
                     return True
         if "logicalExpression" in obj:
-            logic = obj["logicalExpresion"]
-            tmp_in_scope = (
+            logic = obj["logicalExpression"]
+            tmp_in_scope = in_scope or (
                 logic.get("naryOperator") == "OR" or logic.get("unaryOperator") == "NOT"
             )
             for a in logic.get("args", []):
@@ -359,3 +389,18 @@ def _parse_repetition(repetition: str | dict[str, str]) -> tuple[int, int]:
         f"The maximum number of repetitions of a sequence must be greater than its minimum ({maxi} < {mini})"
     )
     return (mini, maxi)
+
+
+def _flatten_coord(objs: list, operator: str = "OR") -> list:
+    ret: list = []
+    for o in objs:
+        if not isinstance(o, dict):
+            ret.append(o)
+            continue
+        log_op = o.get("logicalExpression", {}).get("operator")
+        log_args = o.get("logicalExpression", {}).get("args", [])
+        if log_op == operator:
+            ret += _flatten_coord(log_args, operator)
+            continue
+        ret.append(o)
+    return ret

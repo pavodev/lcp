@@ -19,13 +19,13 @@ export const useCorpusStore = defineStore("corpusData", {
   getters: {
     getLicenseByTag: (state) => {
       return (tag) => {
-        return state.licenses.find(license => license.tag === tag)
+        return state.licenses.find(license => license.tag === tag) || {url: ""}
       }
     },
   },
   actions: {
     async fetchQuery(data) {
-      let response = await httpApi.post(`/query_future`, data)
+      let response = await httpApi.post(`/query`, data)
       this.queryData = await response.data;
       return this.queryData
     },

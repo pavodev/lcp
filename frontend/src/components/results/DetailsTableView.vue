@@ -118,12 +118,12 @@ export default {
     headToken(tokenData, tIndex) {
       let token = ""
       let headIndex = this.columnHeaders.indexOf("head")
-      let lemmaIndex = this.columnHeaders.indexOf("lemma")
+      let formIndex = this.columnHeaders.indexOf("form")
       let startId = this.sentences[0]
-      if (headIndex && lemmaIndex) {
+      if (headIndex && formIndex >= 0) {
         let tokenId = tokenData[headIndex];
         if (tokenId) {
-          token = this.sentences[1][tokenId - startId][lemmaIndex]
+          token = this.sentences[1][tokenId - startId][formIndex]
           let difference = tokenId - startId - tIndex;
           let arrow = "↓", tag="sub";
           if (difference<0) {

@@ -1,4 +1,9 @@
 """
+query_service.py: all database queries not related to a DQD query
+
+
+PRE-OVERHAUL
+
 query_service.py: control submission of RQ jobs
 
 We use RQ/Redis for long-running DB queries. The QueryService class has a method
@@ -22,8 +27,7 @@ import json
 import os
 import uuid
 
-from collections.abc import Coroutine
-from typing import Any, final, Unpack, cast
+from typing import Any, final, cast
 
 from aiohttp import web
 from redis import Redis as RedisConnection
@@ -36,18 +40,14 @@ from .callbacks import (
     _config,
     _document,
     _document_ids,
-    _export_notifs,
     _general_failure,
     _upload_failure,
-    _meta,
     _queries,
-    _deleted,
-    _query,
     _schema,
-    _sentences,
     _upload,
+    _deleted,
 )
-from .convert import _apply_filters
+from .export import _export_notifs
 from .jobfuncs import _db_query, _upload_data, _create_schema
 from .typed import (
     BaseArgs,
@@ -55,25 +55,12 @@ from .typed import (
     CorpusConfig,
     DocIDArgs,
     JSONObject,
-    QueryArgs,
-    RawSent,
-    Results,
-    ResultsValue,
-    SentJob,
 )
 from .utils import (
     _default_tracks,
-    _get_status,
-    _delete_request_info,
-    _get_request_info,
-    _get_query_info,
-    _update_query_info,
     _format_config_query,
     _set_config,
-    _sign_payload,
     hasher,
-    PUBSUB_CHANNEL,
-    CustomEncoder,
     range_to_array,
 )
 from .abstract_query.utils import _get_table, _get_mapping
@@ -97,152 +84,6 @@ class QueryService:
         self.upload_timeout = int(os.getenv("UPLOAD_TIMEOUT", 43200))
         self.query_ttl = int(os.getenv("QUERY_TTL", 5000))
         self.use_cache = app["_use_cache"]
-
-    async def send_all_data(self, job: Job, **kwargs: Unpack[QueryArgs]) -> bool:
-        """
-        Get the stored messages related to a query and send them to frontend
-        """
-        query_info = _get_query_info(self.app["redis"], job=job)
-
-        msg = query_info["latest_stats_message"]
-        print(f"Retrieving stats message: {msg}")
-        jso = self.app["redis"].get(msg)
-
-        if jso is None:
-            return False
-
-        payload: JSONObject = json.loads(jso)
-
-        success = True
-        for request_info in _get_request_info(self.app["redis"], query_info["hash"]):
-            status = _get_status(
-                query_info,
-                request_info,
-                search_all=cast(bool, request_info.get("search_all", False)),
-            )
-            if float(cast(float, payload.get("percentage_done", 0.0))) >= 100.0:
-                status = "finished"
-            payload["status"] = status
-
-            # we may have to apply the latest post-processes...
-            pps = cast(dict[int, Any], query_info.get("post_processes", {}))
-            # json serialises the Results keys to strings, so we have to convert
-            # them back into int for the Results object to be correctly typed:
-            full_res = cast(dict[str, ResultsValue], query_info["all_non_kwic_results"])
-            res = cast(Results, {int(k): v for k, v in full_res.items()})
-            if pps:
-                filtered = _apply_filters(res, pps)
-                payload["result"] = cast(JSONObject, filtered)
-            payload["no_restart"] = True
-            self.app["redis"].expire(msg, self.query_ttl)
-            _sign_payload(payload, request_info)
-            strung: str = json.dumps(payload, cls=CustomEncoder)
-
-            failed = False
-            tasks: list[Coroutine[None, None, None]] = [
-                self.app["aredis"].publish(PUBSUB_CHANNEL, strung)
-            ]
-
-            sent_and_meta_msgs = {
-                **query_info.get("sent_job_ws_messages", {}),
-                **query_info.get("meta_job_ws_messages", {}),
-            }
-
-            for msg in sent_and_meta_msgs:
-                print(f"Retrieving sentences or metadata message: {msg}")
-                jso = self.app["redis"].get(msg)
-                if jso is None:
-                    failed = True
-                    continue
-                payload = json.loads(jso)
-                _sign_payload(payload, request_info)
-                payload["no_update_progress"] = True
-                payload["no_restart"] = True
-                payload["status"] = status
-                self.app["redis"].expire(msg, self.query_ttl)
-                task = self.app["aredis"].publish(
-                    PUBSUB_CHANNEL, json.dumps(payload, cls=CustomEncoder)
-                )
-                tasks.append(task)
-
-            if failed:
-                success = False
-            else:
-                for task in tasks:
-                    await task
-                # if status in ("finished", "satisfied"):
-                #     _delete_request_info(self.app["connection"], request_info)
-
-        if success:
-            _update_query_info(self.app["redis"], job=job, info={"running": False})
-        return success
-
-    async def query(
-        self,
-        query: str,
-        queue: str = "query",
-        **kwargs: Unpack[QueryArgs],
-    ) -> tuple[Job | None, bool | None]:
-        """
-        Here we send the query to RQ and therefore to redis
-        """
-        hashed = str(hasher(query))
-        job: Job | None
-
-        if self.use_cache:
-            job, submitted = await self._attempt_query_from_cache(hashed, **kwargs)
-            if job is not None:
-                return job, submitted
-
-        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
-
-        job = self.app[queue].enqueue(
-            _db_query,
-            on_success=Callback(_query, timeout),
-            on_failure=Callback(_general_failure, timeout),
-            result_ttl=self.query_ttl,
-            job_timeout=timeout,
-            job_id=hashed,
-            args=(query,),
-            kwargs=kwargs,
-        )
-        return cast(Job, job), True
-
-    async def _attempt_query_from_cache(
-        self, hashed: str, **kwargs: Unpack[QueryArgs]
-    ) -> tuple[Job | None, bool | None]:
-        """
-        Try to get a query from cache. Return the job and an indicator of
-        whether or not a job was submitted
-        """
-        job: Job | None
-        try:
-            job = Job.fetch(hashed, connection=self.app["redis"])
-            first_job_id: str = cast(str, kwargs.get("first_job", ""))
-            # Use an if here because .get() can return an empty string
-            if not first_job_id:
-                first_job_id = str(job.id)
-            first_job = Job.fetch(first_job_id, connection=self.app["redis"])
-            is_first = first_job.id == job.id
-            self.app["redis"].expire(job.id, self.query_ttl)
-            print(f"FOUND JOB IN CACHE: {str(job.id)} FOR {hashed}")
-            if job.get_status() == "finished":
-                job_for_send_all_data = job if is_first else first_job
-                success = await self.send_all_data(job_for_send_all_data, **kwargs)
-                if success:
-                    return job, None
-                query_info = _get_query_info(self.app["redis"], job=job)
-                query_kwargs = {
-                    "post_processes": query_info["post_processes"],
-                    "current_kwic_lines": query_info["current_kwic_lines"],
-                    "from_memory": True,
-                }
-                _sign_payload(query_kwargs, query_info)
-                _query(job, self.app["redis"], job.result, **query_kwargs)
-                return job, False
-        except NoSuchJobError:
-            pass
-        return None, None
 
     def document_ids(
         self,
@@ -415,124 +256,6 @@ class QueryService:
         )
         return job
 
-    def sentences(
-        self,
-        query: str,
-        meta: str = "",
-        queue: str = "query",
-        **kwargs: Unpack[SentJob],
-    ) -> list[str]:
-        depends_on = kwargs.get("depends_on", "")
-        hash_dep = tuple(depends_on) if isinstance(depends_on, list) else depends_on
-        offset = kwargs.get("offset", 0)
-        needed = kwargs.get("needed", 0)
-        full = kwargs.get("full", False)
-        hashed = str(hasher((query, hash_dep, offset, needed, full)))
-        kwargs["sentences_query"] = query
-        hashed_meta = str(hasher((meta, hash_dep, offset, needed, full)))
-        job_sent: Job
-
-        if self.use_cache:
-            ids: list[str] = self._attempt_sent_from_cache(hashed, **kwargs)
-            if meta:
-                ids += self._attempt_meta_from_cache(hashed_meta, **kwargs)
-            if ids:
-                return ids
-
-        timeout = self.timeout if not kwargs.get("full") else self.whole_corpus_timeout
-
-        job_sent = self.app[queue].enqueue(
-            _db_query,
-            on_success=Callback(_sentences, timeout),
-            on_failure=Callback(_general_failure, timeout),
-            result_ttl=self.query_ttl,
-            depends_on=depends_on,
-            job_timeout=timeout,
-            job_id=hashed,
-            args=(query,),
-            kwargs=kwargs,
-        )
-
-        return_jobs = [job_sent.id]
-
-        if meta:
-            kwargs["meta_query"] = meta
-            job_meta: Job = self.app[queue].enqueue(
-                _db_query,
-                on_success=Callback(_meta, timeout),
-                on_failure=Callback(_general_failure, timeout),
-                result_ttl=self.query_ttl,
-                depends_on=depends_on,
-                job_timeout=timeout,
-                job_id=hashed_meta,
-                args=(meta,),
-                kwargs=kwargs,
-            )
-            return_jobs.append(job_meta.id)
-
-        return return_jobs
-
-    def _attempt_meta_from_cache(
-        self, hashed: str, **kwargs: Unpack[SentJob]
-    ) -> list[str]:
-        """
-        Try to return meta from redis cache, instead of doing a new query
-        """
-        jobs: list[str] = []
-        kwa: SentJob
-        job: Job
-        try:
-            job = Job.fetch(hashed, connection=self.app["redis"])
-            self.app["redis"].expire(job.id, self.query_ttl)
-            if job.get_status() == "finished":
-                print("Meta found in redis memory. Retrieving...")
-                kwa = {
-                    "full": kwargs.get("full", False),
-                    "from_memory": True,
-                }
-                _sign_payload(kwa, kwargs)
-                _meta(job, self.app["redis"], job.result, **kwa)
-                return [job.id]
-        except NoSuchJobError:
-            pass
-        return jobs
-
-    def _attempt_sent_from_cache(
-        self, hashed: str, **kwargs: Unpack[SentJob]
-    ) -> list[str]:
-        """
-        Try to return sentences from redis cache, instead of doing a new query
-        """
-        jobs: list[str] = []
-        kwa: dict[str, int | bool | str | None] = {}
-        job: Job
-        try:
-            job = Job.fetch(hashed, connection=self.app["redis"])
-            self.app["redis"].expire(job.id, self.query_ttl)
-            if job.get_status() == "finished":
-                print("Sentences found in redis memory. Retrieving...")
-                trr = kwargs.get("total_results_requested", 0)
-                kwa = {
-                    "full": kwargs.get("full", False),
-                    "from_memory": True,
-                }
-                _sign_payload(kwa, cast(JSONObject, kwargs))
-                first_job_id = cast(dict, job.kwargs)["first_job"]
-                first_job = Job.fetch(first_job_id, connection=self.app["redis"])
-                all_sent_ids = first_job.meta.get("_sent_jobs", [])
-                results: list[RawSent] = []
-                for sj in all_sent_ids:
-                    sent_job = Job.fetch(sj, connection=self.app["redis"])
-                    if sent_job.result:
-                        results += sent_job.result
-                    if len(results) >= trr:
-                        break
-                _sentences(job, self.app["redis"], results, **kwa)
-                return [job.id]
-        except NoSuchJobError:
-            pass
-        return jobs
-
     async def get_config(self, force_refresh: bool = False) -> Job:
         """
         Get initial app configuration JSON
@@ -597,7 +320,12 @@ class QueryService:
         return job
 
     def fetch_queries(
-        self, user: str, room: str, query_type: str, queue: str = "internal", limit: int = 10
+        self,
+        user: str,
+        room: str,
+        query_type: str,
+        queue: str = "internal",
+        limit: int = 10,
     ) -> Job:
         """
         Get previous saved queries for this user/room
@@ -643,7 +371,6 @@ class QueryService:
             kwargs=opts,
         )
         return job
-    
 
     def store_query(
         self,
@@ -658,7 +385,7 @@ class QueryService:
         """
         query = (
             'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name, query_type) '
-            'VALUES (:idx, :query, :user, :room, :query_name, :query_type);'
+            "VALUES (:idx, :query, :user, :room, :query_name, :query_type);"
         )
         kwargs = {
             "user": user,
@@ -667,13 +394,13 @@ class QueryService:
             "is_main": True,  # query on main.* or something similar
             "query_id": idx,
         }
-        params: dict[str, str | int | None | JSONObject] = {
+        params: dict[str, Any] = {
             "idx": idx,
             "query": json.dumps(query_data, default=str),
             "user": user,
             "room": room,
             "query_name": query_data["query_name"],
-            "query_type": query_data["query_type"]
+            "query_type": query_data["query_type"],
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -686,7 +413,9 @@ class QueryService:
         )
         return job
 
-    def delete_query(self, user_id: str, room_id: str, query_id: str, queue: str = "internal") -> Job:
+    def delete_query(
+        self, user_id: str, room_id: str, query_id: str, queue: str = "internal"
+    ) -> Job:
         """
         Delete a query using a background job.
         """
@@ -695,23 +424,21 @@ class QueryService:
             query_uuid = uuid.UUID(query_id)
         except ValueError:
             raise ValueError("Invalid query id provided")
-        
+
         # Build parameters with the UUID object.
-        params: dict[str, any] = {"user": user_id, "room": room_id, "idx": query_uuid}
+        params: dict[str, Any] = {"user": user_id, "room": room_id, "idx": query_uuid}
 
         # DELETE query without a RETURNING clause.
-        query = (
-            """DELETE FROM lcp_user.queries
+        query = """DELETE FROM lcp_user.queries
             WHERE "user" = :user
             AND idx = :idx"""
-        )
 
         opts = {
             "user": user_id,
             "room": room_id,
             "idx": query_id,  # keep as string for logging and later use in the callback
             "delete": True,
-            "config": True
+            "config": True,
         }
 
         job: Job = self.app[queue].enqueue(
@@ -724,7 +451,6 @@ class QueryService:
             kwargs=opts,
         )
         return job
-
 
     def update_metadata(
         self,

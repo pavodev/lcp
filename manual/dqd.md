@@ -4,61 +4,72 @@
 
 ## Introduction
 
-LCP's query language _DQD_ (**D**escriptive **Q**uery **D**efinition) follows the idea of [Entity-Relationship models](https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model). A DQD query defines sets of entities by listing logical constraints on their properties and on their relations to one another. The query engine then searches for those constellations of entities inside the selected corpus or corpora. Along the lines of first order logic, DQD includes quantors, which can be employed to enforce the existence or non-existence of constellations.
+LCP's query language _DQD_ (**D**escriptive **Q**uery **D**efinition) lets you look for matches based on a set of constraints and output the results in various formats.
 
-In addition to the declaration of sets of entities and their constraints, every query needs to specify at least one result set, which is either a (plain) list of entities comprising the query matches, a statistical or a collocational analysis.
+![Simple query and output](images/query_output.png)
+
+The picture above illustrates a simple query looking for co-occurrences of "cat" and "dog" within the same sentence (the _Constraints_ part of the query) and asking to output them as a plain list of matches (the _Results_ part of the query).
+
+
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+As visible in the picutre, you can have <strong>multiple matches for one sentence</strong>. DQD follows the idea of 
+<!-- <a href="https://en.wikipedia.org/wiki/Entity%E2%80%93relationship_model" target="_blank"> -->
+<em>Entity-Relationship models</em>: it defines sets of entities by listing logical constraints on their properties and on their relations to one another. <strong>Any combination of entities matching the constraints constitutes a hit</strong>, which explains the results above.
+
+DQD also includes quantifiers, which can be used to write constraints that do not add new entities to the constellation.
+</div>
 
 
 ## Getting started
 
-In a text corpus with standard annotations (viz the [CoNLL-U format](https://universaldependencies.org/format.html)), a simple query for the occurrence of the word "dogs" would look like this:
-```
-Segment s
+The picture below relates a simple query on [the BNC corpus](https://catchphrase.linguistik.uzh.ch/query/2/BNC) (on the left, "look for all occurrences of _dogs_") to its structure (on the right).
 
-Token@s t
-    form = "dogs"
+![Simple query and corpus template](images/query_template.png)
 
-result => plain
-    context
-        s
-    entities
-        t
-```
+### Corpus-specific queries
 
-We proceed to explain this simple query below.
+The first remark about DQD is that **it adapts to the specificities of each corpus**. The terms `Segment`, `Token` and `form` in the query all occur in the diagram; another corpus could use `Word` instead of `Token`, in which case the DQD query would use that term instead.
 
-### Instantiation and Scopes
+The same is true of **all entities and attributes in the corpus**: in the BNC corpus, the part-of-speech of each token was labeled according to two different conventions, hence each token comes with two attributes named `xpos1` and `xpos2`. Queries can define constraints on either attribute (as in, e.g., `xpos2 = "VERB"`)
 
-Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entity later on. The simple line `Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`.
+For this reason, it is important to know the structure of a corpus when writing a DQD query, which is why LCP displays a diagram along with the query editor.
 
-> LCP allows corpus creators to use arbitrary annotation layer names, but `Token` and `Segment` are common default names. You can see the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
 
-An entity is by default existantially quantified, and its scope ranges from its instanciation to the end of the query. This means that the query will only output results where a matching entity was found, and that occurrences of its label will refer back it anywhere in the query below its instantiation line. 
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+To learn more about <strong>>corpus diagram</strong>, you can read the page <a href="corpora_in_lcp.html">Corpora in LCP</a>.</div>
 
-> Some exceptions exist, for example when entities are instantiated within the scope of a negative existential quantifier, or within the scope of a repeatable [sequence](sequence.md). We will touch on those later.
 
-The code above declares a second entity, labeled `t`, on the annotation layer named `Token`. The character-containment operator [`@`](at.md) requires that the current entity (the token labeled `t`) be part of the entity whose label appears to the right of the operator (the segment labeled `s`). The use of this operator will become apparent later.
+### Entities
 
-Scope is controled via **indentation**: in the code above, the constraint `form = "dogs"` is in the scope of the token instantiation, but the line that comes next (`result => plain`) is not in that scope, because the line was de-dented.
+Entities are instantiated by providing the name of their [annotation layer](model.md#layers), followed by a (unique) label, which can be used to reference the entity later on. The simple line **`Segment s` instantiates an entity labeled `s` on the annotation layer `Segment`**.
 
-## Constraints
+The query above declares a second entity, labeled `t`, on the annotation layer named `Token`. The operator **[`@`](at.md) requires that it overlap character-wise** with another entity, in this case the segment labeled `s`. As visible in the diagram, each token is fully contained _in_ a segment, so overlapping here means being _part of_ a segment.
 
-Simple constraints usually use the format `left operator right`; when the constraint appears in the scope of an entity, left and right can be the name of an attribute of that entity (attribute names need to be preceded by `prefix.` everywhere else, where prefix is the label of the target entity).
 
-The constraint in the example above respects this schema, where `left` is `form`, `operator` is `=` and `right` is `"dogs"`. LCP allows corpus creators to define arbitrary attributes for each layer, but `form` is mandatory on the token-level attribute. Because the constraint is in the scope of the token, `form` refers to the token attribute named "form": this constraint states that we are looking for token entities whose form must be "dogs". 
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span>
+The presence of the <code>@</code> operator is important: without it, you would be looking for <strong>any possible combination</strong> of a segment and a token "dogs" in the corpus. So even if "dogs" appeared only once in a single segment across the entire corpus, if it contained a total of 1000 segments, you would end up with 1000 matches, because the query would define no relation constraint between the segment and the token. If "dogs" appeared twice, you would have 2000 matches, and so on, which quickly explodes and can lead to significant querying times.
+</div>
 
-Annotation layers can come with any number of attributes, but it is standard for tokens to also define an attribute named `lemma`. Had we used the constraint `lemma = "dog"` instead, we would have matched token occurrences whose form could be either "dog" or "dogs".
 
-> Attributes can have different types; in this illustration, both `form` and `lemma` are assumed to be strings. Accordingly, we surround the test value in double quotes. DQD does **not** accept string surrounded by single quotes. You can see the attributes of the annotation layers in a corpus by looking at [its diagram](corpora_in_lcp.md#diagram) and reference them in your DQD query.
+### Constraints
 
-### Regular expressions
+Simple constraints usually use the format `left operator right`. When the constraint appears in the scope of an entity (as signaled by indentation), `left` and `right` can be the name of an attribute of that entity.
 
-In addition to plain strings, DQD supports references to regular expressions by enclosing a string in forward slashes (`/`). For example, the constraint `form = /^[Dd]ogs?$/` expresses that the form should be exactly one of "dog", "Dog", "dogs" or "Dogs".
+The constraint in the example above respects this schema: `left` is `form`, `operator` is `=`, and `right` is `"dogs"`. LCP allows corpus curators to define arbitrary attributes for each layer, but `form` is mandatory at the token level. This constraint states that we are looking for tokens whose surface form must be "dogs". 
+
+Annotation layers can come with any number of attributes. For example, the `Document` layer in this corpus has three attributes named `date`, `title`, `keyWords` and `classCode`. It is standard for tokens to also define an attribute named `lemma`. Had we written the constraint `lemma = "dog"` instead, we would have matched token occurrences whose surface form could be either "dog" or "dogs".
+
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+Attributes can have different types; in this illustration, both <code>form</code> and <code>lemma</code> are assumed to be strings. Accordingly, we surround the test value with double quotes; DQD does <em>not</em> accept strings surrounded by single quotes. You can also use forward slashes <code>/</code> to define unanchored <strong>regular expressions</strong> (use <code>^</code> and <code>$</code> for anchoring purposes).</div>
 
 
 ## Sequences
 
-To look for consecutive entities, such as a series of tokens, one can use the keyword [`sequence`](sequence.md).
+To look for a sequence of tokens rather than isolated tokens, one can use the keyword [`sequence`](sequence.md).
 
 ## Sets
 

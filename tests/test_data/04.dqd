@@ -1,0 +1,19 @@
+Segment s
+
+Token@s tv
+    xpos2 = "VERB"
+
+OR
+    Token@s
+        form = "dog"
+    sequence@s
+        Token
+            form = "a"
+        Token
+            form = "cat"
+
+kwic => plain
+    context
+        s
+    entities
+        *

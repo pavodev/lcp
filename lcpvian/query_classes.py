@@ -208,9 +208,9 @@ class Request:
         all_segs_sent = True
         for batch_hash, (_, _, req_segs) in self.lines_batch.items():
             batch_name = qi.get_batch_from_hash(batch_hash)
-            batch_seg_hahes = qi.segment_hashes_for_batch.get(batch_name, [])
+            batch_seg_hashes = qi.segments_for_batch.get(batch_name, {})
             batch_segs_sent = (
-                sum(n for (sh, n) in self.sent_hashes.items() if sh in batch_seg_hahes)
+                sum(n for (sh, n) in self.sent_hashes.items() if sh in batch_seg_hashes)
                 >= req_segs
             )
             all_segs_sent = all_segs_sent and batch_segs_sent
@@ -287,7 +287,7 @@ class Request:
         and send them to the client
         """
         print(f"[{self.id}] send segments {batch_name}")
-        seg_hashes: list[str] = [x for x in qi.segment_hashes_for_batch[batch_name]]
+        seg_hashes: list[str] = [x for x in qi.segments_for_batch[batch_name]]
         if all(x in self.sent_hashes for x in seg_hashes):
             return
         results: dict[str, Any] = {}
@@ -588,11 +588,11 @@ class QueryInfo:
         self._connection.expire(key, QUERY_TTL)
         return cast(list, json.loads(res_json))
 
-    async def query(self, qhash: str, script: str) -> Any:
+    async def query(self, qhash: str, script: str, params: dict = {}) -> Any:
         """
         Helper to make sure the results are stored in redis
         """
-        res = await _db_query(script)
+        res = await _db_query(script, params=params)
         self.set_cache(qhash, res)
         return res
 
@@ -687,22 +687,22 @@ class QueryInfo:
         self.update({"query_batches": value})
 
     @property
-    def segment_hashes_for_batch(self) -> dict[str, list[str]]:
+    def segments_for_batch(self) -> dict[str, dict[str, dict[str, int]]]:
         """
-        All the segment jobs associated to the query job
+        batch_hash->{segment_hash->segment_ids, segment_hash->segment_ids}
         """
-        segment_hashes_for_batch = self.qi.get("segment_hashes_for_batch", {})
+        segments_for_batch = self.qi.get("segments_for_batch", {})
         return cast(
             dict,
             ObservableDict(
-                observer=self.get_observer("segment_hashes_for_batch"),
-                **segment_hashes_for_batch,
+                observer=self.get_observer("segments_for_batch"),
+                **segments_for_batch,
             ),
         )
 
-    @segment_hashes_for_batch.setter
-    def segment_hashes_for_batch(self, value: dict[str, list[str]]):
-        self.update({"segment_hashes_for_batch": value})
+    @segments_for_batch.setter
+    def segments_for_batch(self, value: dict[str, dict[str, dict[str, int]]]):
+        self.update({"segments_for_batch": value})
 
     def has_request(self, request: Request):
         return any(r.id == request.id for r in self.requests)
