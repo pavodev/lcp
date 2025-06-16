@@ -491,23 +491,16 @@ export default {
     showTimelineModal() {
       this.isModalOpen = true;
       this.checkMobile();
-      
       // Wait for the modal to be mounted and visible
       this.$nextTick(() => {
         // Only initialize if we're in landscape mode
         if (this.isLandscape) {
-          // Wait for the modal to be fully rendered and have dimensions
-          const waitForModal = () => {
-            const modalElement = document.querySelector('.timeline-modal');
-            if (modalElement && modalElement.offsetWidth > 0) {
-              this.initializeTimeline('timeline-svg-mobile');
-              this.updateCurrentPosition(this.playerCurrentTime);
-              this.center();
-            } else {
-              requestAnimationFrame(waitForModal);
-            }
-          };
-          waitForModal();
+          this.initializeTimeline('timeline-svg-mobile');
+          // Use setTimeout to ensure SVG is fully initialized and transformed
+          setTimeout(() => {
+            this.updateCurrentPosition(this.playerCurrentTime);
+            this.center();
+          }, 100);
         }
       });
     },
