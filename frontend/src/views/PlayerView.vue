@@ -243,7 +243,8 @@
           </div>
         </div>
       </div>
-      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()" @mouseleave="_annotationLeave">
+      <div id="timelinePopin" ref="timelinePopin" v-if="timelineEntry" :style="_getTimelinePopinXY()"
+        @mouseleave="_annotationLeave">
         <div v-for="(entry, index) in timelineEntry" :key=index>
           <div class="header" v-html=entry[0]></div>
           <div v-html=entry[1]></div>
@@ -719,7 +720,7 @@ export default {
         .join(":");
     },
     handleDatePickerChange(newTime) {
-      if(newTime === null) {
+      if (newTime === null) {
         return;
       }
 
@@ -1516,5 +1517,17 @@ div.active video {
 #timelinePopin .header {
   font-weight: bold;
   background-color: lightgray;
+}
+
+@media screen and (max-width: 768px) {
+  .video-box>div.active {
+    max-width: calc(100vw - 78px) !important;
+    order: -1;
+  }
+
+  div.active video {
+    max-width: 100vw !important;
+    height: auto;
+  }
 }
 </style>

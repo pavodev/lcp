@@ -1097,12 +1097,14 @@ div.active>video {
   }
 
   .video-box > div.active {
+    max-width: calc(100vw - 78px);
     min-height: auto;
   }
 
   div.active > video {
     height: auto;
     max-height: 300px;
+    max-width: 100vw;
     width: 100%;
     object-fit: contain;
   }

@@ -83,6 +83,7 @@
   top: 56px; /* Height of the navigation bar */
   left: 0;
   width: 100%;
+  max-width: 100vw;
   height: calc(100% - 56px); /* Subtract navigation bar height */
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
