@@ -26,7 +26,9 @@ async def document(request: web.Request) -> web.Response:
     corpus = corpora[0]
     corpus_conf = request.app["config"][str(corpus)]
     schema = corpus_conf["schema_path"]
-    job = request.app["query_service"].document(schema, corpus, doc_id, user, room, corpus_conf)
+    job = request.app["query_service"].document(
+        schema, corpus, doc_id, user, room, corpus_conf
+    )
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
 

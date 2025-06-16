@@ -3,7 +3,6 @@ utils.py: all miscellaneous helpers and tools used by backend
 """
 
 import asyncio
-import csv
 import json
 import logging
 import math
@@ -23,7 +22,6 @@ from hashlib import md5
 from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
-from rq import Callback
 from rq.exceptions import NoSuchJobError
 from rq.registry import FinishedJobRegistry
 
@@ -598,6 +596,16 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     app["redis"].expire("app_config", MESSAGE_TTL)
 
     return None
+
+
+@ensure_authorised
+async def refresh_config(request: web.Request) -> web.Response:
+    """
+    Force a refresh of the config via the /config endpoint
+    """
+    qs = request.app["query_service"]
+    job: Job = await qs.get_config(force_refresh=True)
+    return web.json_response({"job": str(job.id)})
 
 
 subtype: TypeAlias = list[dict[str, str]]
@@ -1282,7 +1290,7 @@ def _get_query_batches(
 
 
 def get_segment_meta_script(
-    config: dict, languages: list[str], batch_name: str, segment_ids: list[str]
+    config: dict, languages: list[str], batch_name: str
 ) -> tuple[str, list[str]]:
     schema = config["schema_path"]
     layers: dict = config["layer"]
@@ -1301,13 +1309,12 @@ def get_segment_meta_script(
         if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
         else ""
     )
-    sids = ", ".join([f"'{sid}'" for sid in segment_ids])
     seg_mapping = _get_mapping(seg, config, batch_name, lang)
     prep_table: str = seg_mapping.get("prepared", {}).get(
         "relation", f"prepared_{seg_table}"
     )
     # seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
-    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
+    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id = ANY(:sids)"
 
     # META
     has_media = config.get("meta", config).get("mediaSlots", {})

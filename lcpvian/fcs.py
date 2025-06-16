@@ -7,10 +7,10 @@ from typing import cast
 from xml.sax.saxutils import escape
 
 from .authenticate import Authentication
-from .cqp_to_json import full_cqp_to_json
+from .cql_to_json import CqlToJson
 from .textsearch_to_json import textsearch_to_json
 from .query_classes import QueryInfo, Request
-from .query_future import process_query
+from .query import process_query
 from .utils import LCPApplication
 
 FCS_HOST = "catchphrase.linguistik.uzh.ch"
@@ -70,7 +70,7 @@ def _make_search_response(
 ) -> str:
     resp = """<?xml version='1.0' encoding='utf-8'?>
 <sru:searchRetrieveResponse xmlns:sru="http://www.loc.gov/zing/srw/">
-  <sru:version>1.2</sru:version>"""
+  <sru:version>2.0</sru:version>"""
     records: list[str] = []
     for rid, corpus in request_ids.items():
         payload = buffers[rid]
@@ -88,7 +88,7 @@ def _make_search_response(
             prep_seg = ""
             in_hit = False
             for n, token in enumerate(tokens):
-                token_str = escape(token[form_id])
+                token_str = escape(token[form_id]) if token[form_id] else ""
                 is_hit = offset + n in hits or offset + n in [
                     y for x in hits if isinstance(x, list) for y in x
                 ]
@@ -108,7 +108,7 @@ def _make_search_response(
                 prep_seg += "</hits:Hit>"
             records.append(
                 f"""
-    <sruc:record>
+    <sru:record>
       <sru:recordSchema>http://clarin.eu/fcs/resource</sru:recordSchema>
       <sru:recordPacking>xml</sru:recordPacking>
       <sru:recordData>
@@ -128,7 +128,7 @@ def _make_search_response(
     resp += f"""
   <sru:numberOfRecords>{len(records)}</sru:numberOfRecords>
   <sru:records>{''.join(records)}
-  <sru:/records>
+  </sru:records>
 </sru:searchRetrieveResponse>"""
     return resp
 
@@ -136,9 +136,9 @@ def _make_search_response(
 async def search_retrieve(
     app: LCPApplication,
     operation: str = "searchRetrieve",
-    version: str = "1.2",
+    version: str = "2.0",
     query: str = "",
-    queryType: str = "",
+    queryType: str = "cql",
     maximumRecords: str | int = "",
     startRecord: str | int = 0,
     **extra_params,
@@ -186,7 +186,11 @@ async def search_retrieve(
                 continue  # only do English for now
                 # langs = [next(x for x in partitions["values"])]
             json_query: str = json.dumps(
-                full_cqp_to_json(query, conf)
+                CqlToJson(
+                    segment=conf["firstClass"]["segment"],
+                    token=conf["firstClass"]["token"],
+                    query=query,
+                ).convert()
                 if queryType == "cql"
                 else textsearch_to_json(query, conf)
             )
@@ -211,13 +215,13 @@ async def search_retrieve(
 async def explain(app: LCPApplication, **extra_params) -> str:
     first_half: str = f"""<?xml version='1.0' encoding='utf-8'?>
 <sru:explainResponse xmlns:sru="http://www.loc.gov/zing/srw/">
-  <sru:version>1.2</sru:version>
+  <sru:version>2.0</sru:version>
   <sru:record>
     <sru:recordSchema>http://explain.z3950.org/dtd/2.0/</sru:recordSchema>
     <sru:recordPacking>xml</sru:recordPacking>
     <sru:recordData>
       <zr:explain xmlns:zr="http://explain.z3950.org/dtd/2.0/">
-        <zr:serverInfo protocol="SRU" version="1.2" transport="http">
+        <zr:serverInfo protocol="SRU" version="2.0" transport="http">
           <zr:host>{FCS_HOST}</zr:host>
           <zr:port>{FCS_PORT}</zr:port>
           <zr:database>{FCS_DB}</zr:database>
@@ -254,7 +258,7 @@ async def explain(app: LCPApplication, **extra_params) -> str:
         ]
         resources_str = "\n        ".join(resources_list)
         second_half = f"""  <sru:echoedExplainRequest>
-    <sru:version>1.2</sru:version>
+    <sru:version>2.0</sru:version>
     <sru:baseUrl>http://repos.example.org/fcs-endpoint</sru:baseUrl>
   </sru:echoedExplainRequest>
   <sru:extraResponseData>
@@ -279,18 +283,18 @@ async def get_fcs(request: web.Request) -> web.Response:
     app = cast(LCPApplication, request.app)
     q = request.rel_url.query
     operation = q["operation"]
-    if not q.get("query", "").strip():
-        # http://clarin.eu/fcs/diagnostic/10
-        resp = """<diagnostics>
-    <diagnostic xmlns="info:srw/xmlns/1/sru-1-2-diagnostic">
-        <uri>http://clarin.eu/fcs/diagnostic/10</uri>
-        <details>10</details>
-        <message>No query found in the request.</message>
-    </diagnostic>
-</diagnostics>"""
-        return web.Response(body=resp, content_type="application/xml")
-    if operation == "searchRetrieve":
-        resp = await search_retrieve(app, **q)
-    elif operation == "explain":
+    if operation == "explain":
         resp = await explain(app, **q)
+    elif operation == "searchRetrieve":
+        if not q.get("query", "").strip():
+            # http://clarin.eu/fcs/diagnostic/10
+            resp = """<diagnostics>
+        <diagnostic xmlns="info:srw/xmlns/1/sru-1-2-diagnostic">
+            <uri>http://clarin.eu/fcs/diagnostic/10</uri>
+            <details>10</details>
+            <message>No query found in the request.</message>
+        </diagnostic>
+    </diagnostics>"""
+        else:
+            resp = await search_retrieve(app, **q)
     return web.Response(body=resp, content_type="application/xml")

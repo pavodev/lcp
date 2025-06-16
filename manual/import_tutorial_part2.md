@@ -1,132 +1,148 @@
 # Part 2: Processing the data
 
-## No time alignment
+## Setup
 
-For the sake of illustration, we will start by generating non-time-aligned files. We will write a script that increments a counter for each character in the transcript, such that:
+Make sure you have `lcpcli` installed in your local python environment:
 
- - if the character is **not** among `,`, ` `, `.`, `?` or `!`, it goes into a string buffer and the counter is incremented by 1
- - if the character **is** `,` or ` ` (<span style="color:lightblue">**blue**</span> and <span style="color:orange">**orange**</span> lines below): we have a full token in the buffer, we add a line to `token.csv` along with its span on the character axis and a form ID; we also add a line to `token_form.csv` that reports the form ID + form string association
- - if the character is `.`, `?` or `!` (<span style="color:red">**red**</span> lines below): we have reached the end of a sentence, we add a new line to `segment.csv` along with its span on the character axis
- - if the character is a linebreak at the start of a new line we ignore the next two line (block number and time stamps)
-
-
-<p>
-  <img src="images/tuto_scan.png" alt="Character by character steps" width="1252"/>
-</p>
-
-A python script that implements this logic (across two SRT files) can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/text_no_lemma/convert.py).
-
-### Configuration file
-
-Before we can upload our files, we need to create a configuration file to let LCP know how to handle the tables. The configuration file is a JSON file which reports some metadata information about the corpus (its name, its authors, etc.) the annotation layers present in the corpus and their attributes. The information is used not only to create entries in the database, but also to inform the engine about what data in the corpus can be queried, and how.
-
-In our case, things are pretty simple, let us see what the configuration file needs to look like:
-
-```json
-{
-    "meta": {
-        "name": "Test Corpus",
-        "author": "LCP tutorial",
-        "date": "2025-03-26",
-        "version": 1,
-        "corpusDescription": "Test corpus from the tutorial"
-    },
-    "firstClass": {
-        "document": "Document",
-        "segment": "Segment",
-        "token": "Token"
-    },
-    "layer": {
-        "Document": {
-            "layerType": "span",
-            "contains": "Segment",
-            "attributes": {}
-        },
-        "Segment": {
-            "layerType": "span",
-            "contains": "Token",
-            "attributes": {}
-        },
-        "Token": {
-            "layerType": "unit",
-            "anchoring": {
-                "stream": true,
-                "time": false,
-                "location": false
-            },
-            "attributes": {
-                "form": {
-                    "type": "text",
-                    "nullable": false
-                }
-            }
-        }
-    }
-}
+```bash
+pip install lcpcli==0.2.2
 ```
 
-The first key, `firstClass`, simply defines the names your corpus uses for the three basic annotation layers, as shown to the end-user, and in this case we use straightforward names.
+The `lcpcli` library provides us with a tool to help us build LCP corpora in python.
 
-Under `layer` should be reported one key for each annotation layer in the corpus. In this case, we work with a very basic corpus, so we only define the three basic annotation layers. Note that for the basic layers, the names need to match exactly the values defined in `firstClass` (i.e. the names start with an uppercase character, not a lowercase one). The names of the CSV files also need to match those names, although the filenames should use lowercase characters exclusively; this is also true of the column names (`document_id`, `segment_id`, `token_id`). For example, had we reported `"segment": "Sentence"` in `firstClass`, we would have used `"Sentence"` as key instead of `"Segment"` in `layer`, `sentence.csv` instead of `segment.csv` as a filename and the column's name would have been `sentence_id`.
+## Corpus builder
 
-The `Document` and `Segment` layers are straightforward: they are spans of segments and token units, respectively, and have no attributes exposed to the user (their IDs and character ranges exist for database-related purposes only and, as such, are not considered attributes here).
+At the simplest level, creating an LCP corpus requires very few steps:
 
-The `Token` layer is of type `"unit"` because it is parent to no further annotation layer. The token layer of any corpus must always define `anchoring`: it tells LCP whether the table has a `char_range` column (i.e. `stream` is set to `true`) and whether it has other types of ranges, for timestamps (`time` -- more about this later in this tutorial) or for XY coordinates (`location` -- not covered in this tutorial). Finally, `attributes` lists the attributes of the tokens, in this case only `form`. Note that the names reported in `attributes` need to match exactly the column names in the CSV files: token_form.csv, in addition to being named after the exact lowercase versions of the layer's name and the attribute's name, has a column named *exactly* `form` and another one named `form_id`, while token.csv also has a column named `form_id`. Attribute names should always use under_score casing and can never include uppercase characters. Like we said earlier, the `form` attribute is of type `text` because the possible values are numerous, and when LCP sees an attribute of type `text` on an annotation layer in the configuration file, it requires a lookup file named `{layer}_{attribute}.csv` in addition to `{layer}.csv`. Finally, the `form` attribute is set to `nullable`=`false` because we do not accept tokens with an empty form.
+```python
+from lcpcli.builder import Corpus
 
-### One last step
+corpus = Corpus("my corpus")
+corpus.Document(
+    corpus.Segment(
+        corpus.Token("Hello"),
+        corpus.Token("world")
+    )
+)
+corpus.make()
+```
 
-In its current state, LCP also requires the token layer of all corpora to define a `lemma` attribute of type `text` besides `form`, otherwise import will crash. 
+The lines above will create a text-only corpus consisting of only one document, with only one segment, with two tokens whose forms are `Hello` and `world`.
 
-{% hint style="info" %}
-Take a moment to think of how you would modify the python script to add that attribute (re-using the same values as for `form`) and how you would update the configuration file to report that attribute.
-{% endhint %}
+The last line, `c.make()`, builds and outputs files for upload in the current directory.
 
-An updated python script and an updated configuration file can be found [here](https://github.com/liri-uzh/lcp_tutorial/tree/main/text_with_lemma).
+Our implementation will be a little more sophisticated than this hello-world example, in that we will have multiple segments and two documents, but the basic idea will remain the same.
 
-### Import
 
-Run the python script, save the JSON configuration in a file named meta.json alongside your CSV files in your output folder. Install the `lcpcli` tool:
+## Segmentation and Tokenization
 
-`pip install lcpcli`
+The `Corpus` class allows us to define arbitrary names instead of `Token`, `Segment` and `Document`. In this tutorial, we will use the more common (albeit less technical) terms `Word`, `Sentence` and `Clip` instead:
 
-Now visit [catchphrase](https://catchphrase.linguistik.uzh.ch) and create a new corpus collection, then open its setting by clicking the gear icon, click the "API" tab and create a new API key; write down the key and the secret.
+```python
+corpus = Corpus(
+    "Tutorial corpus",
+    document="Clip",
+    segment="Sentence",
+    token="Word"
+)
+```
 
-Open a terminal and run the following command, replacing `$API_KEY` with the key you just got, `$API_SECRET` with the secret you just got and `$PROJECT` with the name of the collection you just created:
+To start with, we will only process one SRT file, `database_explorer.srt`, so we will only create a single clip in the corpus, using `clip = corpus.Clip()`
+
+A first rough approach would be to treat every non-empty line of the SRT file as a segment and split it by space to get words:
+
+```python
+clip = corpus.Clip()
+
+with open("database_explorer.srt", "r") as input:
+    while line := input.readline():
+        line = line.strip()
+        if not line:
+            continue
+        clip.Sentence(*[
+            corpus.Word(w.strip())
+            for w in line.split(" ")
+            if w.strip()
+        ])
+
+clip.make()
+```
+
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+Note that <code>.Sentence</code> can be called either on <code>clip</code>, as in this snippet, or on <code>corpus</code>, which is the method used in the hello-world example (resp. <code>.Segment</code>). In the hello-world, the segment is created directly as an argument of <code>corpus.Document</code> and, as such, belongs to it; here, the script does not pass sentences as direct arguments of the clip; instead, the sentences are created on the fly, which why it is necessary to call <code>.Sentence</code> on <code>clip</code>.
+</div>
+
+Although functional, the snippet above outputs unusable data: becaue each line is mapped to one sentence, some will consist just of a block number, some of timestamps, and many actually correspond to chunks of sentences distributed over multiple transcriptoin blocks.
+
+[This commented python script](https://github.com/liri-uzh/lcp_tutorial/blob/main/first_pass/convert.py) extends the logic illustrated in the snippet to ignore the transcription block numbers and timestamps, and uses sentence delimiters for segmentation instead of mapping one line to one sentence:
+
+ - If the line reports a block number or the block's timestamps, it is ignored
+ - If the line is a linebreak, the next two lines are flagged as a block number and its timestamps
+ - If the line has some text, it is split by sentence delimiters (`.`, `!`, `?`) and each resulting chunk is in turn split by token delimiters (` `, `,`, `'`); the resulting word is added to the current sentence
+
+Whenever the script hits a sentence delimiter, it creates a new sentence with `sentence = clip.Sentence()`, and whenever it processes a word, it adds it to the current sentence with `sentence.Word(w)`.
+
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+The same is true of <code>.Sentence</code> and <code>.Word</code>: each can be called on <code>corpus</code> or on their parent (respectively, <code>clip</code> and <code>segment</code>) depending on whether you decide to pass them as direct arguments of their parent.
+</div>
+
+## Import
+
+Visit [catchphrase](https://catchphrase.linguistik.uzh.ch) and create a new corpus collection, then open its setting by clicking the gear icon, click the "API" tab and create a new API key; write down the key and the secret.
+
+Open a terminal and run the following command, replacing `path/to/output` with a path pointing to the folder containing the files generated by the script, `$API_KEY` with the key you just got, `$API_SECRET` with the secret you just got and `$PROJECT` with the name of the collection you just created:
 
 `lcpcli -c path/to/output/ -k $API_KEY -s $API_SECRET -p "$PROJECT" --live`
 
 You should get a confirmation message, and your corpus should now be visible in your collection after you refresh the page!
 
 
-### Adding annotations
+## Multiple documents
 
-For the sake of illustration, we will now add two pieces of annotation: we will report the original text of each segment (which will include the token-delimiter characters) and we will report whether each token was preceded by a single quote (we will name the attribute `shortened`)
+To parse multilpe SRT files, the edits to the script are minimal: one just needs to iterate over the SRT files to create a dedicated instance of `Clip` for each, and one can also report the name of the file for reference purposes, as in: `clip = corpus.Clip(name="database_explorer")`.
 
-{% hint style="info" %}
-Because each segment has a different original text, which is a relatively long string, we will store them in a lookup CSV file, just like we did for `form`. The `shortened` attribute, however, can take only two values (`yes` vs `no`) so those will be reported direclty in `token.csv`. The configuration file informs LCP of those parameters.
-{% endhint %}
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+One can pass arbitrary keyword arguments to define attributes, as illustrated here with <code>name="database_explorer"</code>. Another option is to set the attribute on the instance, as in <code>clip.name = "database_explorer"</code>. This applies to all entities, not just to documents.
+</div>
 
-An updated python script and an updated configuration file can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/text_original_shortened).
+An updated version of the script that processes all the SRT documents in the working directory can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/all_documents/convert.py).
+
+## Adding annotations
+
+For the sake of illustration, we will now add two pieces of annotation:
+ - one at the sentence level, reporting the original text of each sentence, i.e. including the token-delimiter characters
+ - one at the word level, reporting whether each word was preceded by a single quote
+
+An updated python script that does that can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/original_shortened/convert.py).
+
+The original text of the sentence is set as `sentence.original = original` (where `original` is a string containing the original text) and whether a word is preceded by `'` is set when creating the word instance, as in `sentence.Word(word, shortened=shortened)` (where `shortened` is appropriately set to `"yes"` or `"no"`).
 
 
-### Time alignment and video
+## Time alignment and video
 
-The corpus we prepared above is a text-only corpus: the token layer (and, by inheritence, the segment and document layers) are only aligned on the character axis and, correspondingly, their tables have a column named `char_range`. In this section, we will use the timestamps from the transcript files to add an anchor on a time axis, and we will associate each document with its video file.
+Associating a document with a video only takes one command: `clip.set_media("clip", "database_explorer.mp4")`.
 
-Because the timestamps only give us (approximate) information about the segments, we will _not_ align the tokens on the time axis. The file `token.csv` will therefore remain unchanged; the files `segment.csv` and `document.csv`, however, will gain one additional column, named `frame_range`.
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+The first argument of <code>set_media</code> is a string defining the name of the <em>media slot</em> for the media file. Unlike this corpus, some video corpora can have more than one video per document; for example, scenes could be filmed from two different angles in parallel, resulting in two video files per document, so that one media slot could be named <code>"left"</code> and the other <code>"right"</code>.
+</div>
 
-For each segment, we build its `frame_range` value as follows: we take the start-point of the block where the segment starts and the end-point of the block where the segment ends, and we multiply each by 25 (LCP uses a convention of 25 frames per second). For the documents, `frame_range` will simply correspond to the lowest start-point of the contained segments + the highest end-point of the contained segments.
+The challenging part is time alignment. Command-wise, it again only takes one line to align a segment: `sentence.set_time(0, 25)`. This would align the sentence from 0s to 1s (remember that LCP uses a convention of 25 frames per second).
 
-Finally, `document.csv` needs an additional column `name`, which will report the name to be used in _videoScope_ for browsing purposes, and one column named `media`, which will report which video file to use for playback in _videoScope_; the `media` column reports stringified JSON key-value objects with a key (here, `video`) mapping to the filename of the media file correspondig to the document.
+We will use the timestamps of the transcription blocks to time-align the sentences, while leaving the words unaligned. Because **some sentences can span multiple blocks**, and **each block can contain more than one sentence**, we have to be smart about it: only when we hit a sentence delimiter do we use the start timecode of the block as the start of the _next_ sentence, otherwise we need to use the start timecode of the _first_ block in which the sentence starts.
 
-An updated python script and an updated configuration file can be found [here](https://github.com/liri-uzh/lcp_tutorial/tree/main/video).
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(237,245,253); color: black; border-radius: 0.2em;">
+<span style="color: darkblue; font-weight: bold;">( ! ) </span>
+Because we process multiple videos, we also need to offset the time-alignment of each successive clip by the duration of the preceding ones. Failing to do so would cause sentences <em>from different video clips</em> to overlap in LCP, which would undermine the value of time-based queries.
+</div>
 
-{% hint style="warning" %}
-The configuration file only requires minimal edits. First, because this is now a multimedia corpus, we need to report a `mediaSlots` key-value object in `meta`. Each key in `mediaSlots` needs to have a correspondingly named key (in this case, `video`) in the object from the `media` column of the document's table, which will report the filename to display in LCP for that document. LCP allows assocations of more than just one media file per document, but we will keeps things simple here.
+An updated python script that implements time alignment can be found [here](https://github.com/liri-uzh/lcp_tutorial/blob/main/video/convert.py). 
 
-Finally, we now report explicit `anchoring` settings for the segment and document layers (with `time` set to `true`), because they no longer correspond to the `anchoring` settings for the token layer.
-{% endhint %}
-
-Make sure you place the mp4 files in a `media` subfolder in the output folder. The upload command remains the same as before, but the process will include one extra last step to upload the media files, which can take some time depending on your connection.
-
-When you visit your corpus on _videoScope_, you will notice a video player and a timeline. By default, the timeline displays the segment attributes. Because this corpus has a single segment attribute, the timeline reports the `original` text, aligned according to the `frame_range` value of the corresponding segment.
+<div style="padding: 0.5em; margin: 1em 0em; background-color: rgb(255,243,233); color: black; border-radius: 0.2em;">
+<span style="color: darkorange; font-weight: bold;">( ! ) </span>
+Make sure to <a href="https://drive.switch.ch/index.php/s/v3uxBpNkeYuyPE2" target="_blank">download</a> and place the files <code>database_explorer.mp4</code> and <code>presenter_pro.mp4</code> in your folder so they can be included in the output folder and uploaded to <em>videoScope</em>.<br />
+(The MP4 files next to <code>convert.py</code> in the repository are empty, placeholder files and will not play back in <em>videoScope</em>.)
+</div>

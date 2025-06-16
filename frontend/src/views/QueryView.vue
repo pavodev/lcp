@@ -1259,7 +1259,7 @@ export default {
               if (layer == segment && attr == "id")
                 segment_id = value;
               meta_object[layer] = meta_object[layer] || {};
-              if (attr.endsWith("_range")) {
+              if (attr.endsWith("_range") && value) {
                 const ranges = value.match(/\[(\d+),(\d+)\)/);
                 if (ranges)
                   value = [parseInt(ranges[1]),parseInt(ranges[2])];
