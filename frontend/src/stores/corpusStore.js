@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { getUserLocale } from "@/fluent";
 import httpApi from "@/httpApi";
 
 export const useCorpusStore = defineStore("corpusData", {
@@ -53,10 +54,17 @@ export const useCorpusStore = defineStore("corpusData", {
     fetchCorpora() {
       httpApi.post(`/corpora`).then((response) => {
         this.corporaJson = response.data;
-        delete this.corporaJson.config["-1"]
+        delete this.corporaJson.config["-1"];
+        const lg = getUserLocale().value;
         this.corpora = Object.keys(this.corporaJson.config).map(corpusId => {
           let corpus = this.corporaJson.config[corpusId]
           corpus.meta['id'] = corpusId
+          for (let [k,v] of Object.entries(corpus.meta)) {
+            if (typeof(v) == "string" || !(v instanceof Object))
+              continue;
+            if (lg in v && typeof(v[lg]) == "string")
+              corpus.meta[k] = v[lg];
+          }
           return corpus
         })
       });
