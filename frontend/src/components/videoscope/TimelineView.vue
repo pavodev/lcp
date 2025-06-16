@@ -491,16 +491,23 @@ export default {
     showTimelineModal() {
       this.isModalOpen = true;
       this.checkMobile();
+      
       // Wait for the modal to be mounted and visible
       this.$nextTick(() => {
         // Only initialize if we're in landscape mode
         if (this.isLandscape) {
-          this.initializeTimeline('timeline-svg-mobile');
-          // Use setTimeout to ensure SVG is fully initialized and transformed
-          setTimeout(() => {
-            this.updateCurrentPosition(this.playerCurrentTime);
-            this.center();
-          }, 100);
+          // Wait for the modal to be fully rendered and have dimensions
+          const waitForModal = () => {
+            const modalElement = document.querySelector('.timeline-modal');
+            if (modalElement && modalElement.offsetWidth > 0) {
+              this.initializeTimeline('timeline-svg-mobile');
+              this.updateCurrentPosition(this.playerCurrentTime);
+              this.center();
+            } else {
+              requestAnimationFrame(waitForModal);
+            }
+          };
+          waitForModal();
         }
       });
     },
@@ -635,12 +642,12 @@ export default {
         .attr("rx", "2")
         .attr("x", (d) => {
           const x = linearScale(d.x1);
-          return isNaN(x) ? 0 : x;
+          return isNaN(x) ? 0 : Math.max(0, x);
         })
         .attr("y", (d) => heightStart[d.l])
         .attr("width", (d) => {
           const width = linearScale(d.x2) - linearScale(d.x1);
-          return isNaN(width) ? 0 : width;
+          return isNaN(width) ? 0 : Math.max(0, width);
         })
         .attr("height", 20)
         .attr("fill", (d) => (barColors[d.l % barColors.length]));
@@ -650,7 +657,7 @@ export default {
         .append("text")
         .attr("x", (d) => {
           const x = linearScale(d.x1) + 3;
-          return isNaN(x) ? 3 : x;
+          return isNaN(x) ? 3 : Math.max(3, x);
         })
         .attr("y", (d) => heightStart[d.l] + 14)
         .text((d) => d.n)
