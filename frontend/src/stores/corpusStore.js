@@ -65,6 +65,24 @@ export const useCorpusStore = defineStore("corpusData", {
             if (lg in v && typeof(v[lg]) == "string")
               corpus.meta[k] = v[lg];
           }
+          for (let [layer, props] of Object.entries(corpus.layer)) {
+            for (let [k,v] of Object.entries(props.attributes || {})) {
+              if (k == "meta" && v instanceof Object) {
+                for (let [mk,mv] of Object.entries(v)) {
+                  if (!mv.description || typeof(mv.description) == "string" || !(mv.description instanceof Object))
+                    continue;
+                  if (lg in mv.description && typeof(mv.description[lg]) == "string")
+                    corpus.layer[layer].attributes.meta[mk].description = mv.description[lg];
+                }
+              }
+              else {
+                if (!v.description || typeof(v.description) == "string" || !(v.description instanceof Object))
+                  continue;
+                if (lg in v.description && typeof(v.description[lg]) == "string")
+                  corpus.layer[layer].attributes[k].description = v.description[lg];
+              }
+            }
+          }
           return corpus
         })
       });
