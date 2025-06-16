@@ -2,7 +2,7 @@
   <div class="player">
     <div class="container-fuild">
       <div class="row" v-if="selectedCorpora">
-        <div class="col-12 col-md-6">
+        <div class="col-12 col-md-3">
           <div class="mb-3 mt-3">
             <!-- <label class="form-label">Document</label> -->
             <multiselect
