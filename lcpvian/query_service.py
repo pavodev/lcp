@@ -482,7 +482,9 @@ class QueryService:
                 query_data[k] = {"en": existing_meta[k]}
             if not isinstance(query_data[k], dict):
                 query_data[k] = (
-                    {**existing_meta[k]} if isinstance(existing_meta[k], dict) else {}
+                    {**existing_meta[k]}
+                    if isinstance(existing_meta.get(k), dict)
+                    else {}
                 )
             query_data[k][lg] = v  # type: ignore
             if "en" not in query_data[k]:  # type: ignore
