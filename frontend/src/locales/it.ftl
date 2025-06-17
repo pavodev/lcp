@@ -154,6 +154,10 @@ modal-meta-description = Descrizione
 modal-meta-license = Licenza
 modal-meta-user-defined = Definito dall'utente
 modal-meta-user-license = Licenza definita dall'utente
+modal-meta-sample = Esempio di query DQD
+modal-meta-warning-before = Stai modificando le proprietà in
+modal-meta-warning-after = . Cambia la lingua dell'interfaccia per modificare le proprietà in un'altra lingua.
+
 
 # Nuovo/Modifica progetto
 

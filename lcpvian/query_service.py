@@ -456,11 +456,14 @@ class QueryService:
         self,
         corpus_id: int,
         query_data: JSONObject,
+        lg: str = "en",
         queue: str = "internal",
     ) -> Job:
         """
         Update metadata for a corpus
         """
+        MONOLINGUAL = {"name", "version", "license"}
+
         kwargs = {
             "store": True,
             "is_main": True,  # query on main.*
@@ -468,10 +471,27 @@ class QueryService:
             "refresh_config": True,
         }
         query = f"""CALL main.update_corpus_meta(:corpus_id, :metadata_json ::jsonb);"""
+        existing_meta: dict = self.app["config"][str(corpus_id)]["meta"]
+        for k, v in query_data.items():
+            if k in MONOLINGUAL:
+                continue
+            is_str = isinstance(existing_meta.get(k), str)
+            if is_str:
+                if lg == "en" or existing_meta[k] == v:
+                    continue
+                query_data[k] = {"en": existing_meta[k]}
+            if not isinstance(query_data[k], dict):
+                query_data[k] = (
+                    {**existing_meta[k]} if isinstance(existing_meta[k], dict) else {}
+                )
+            query_data[k][lg] = v  # type: ignore
+            if "en" not in query_data[k]:  # type: ignore
+                query_data[k]["en"] = v  # type: ignore
         params: dict[str, str | int | None | JSONObject] = {
             "corpus_id": corpus_id,
             "metadata_json": json.dumps(query_data),
         }
+        self.app["config"][str(corpus_id)]["meta"] = query_data
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,

@@ -73,7 +73,7 @@ async def corpora_meta_update(request: web.Request) -> web.Response:
         userLicense=request_data.get("userLicense", ""),
         dataType=request_data.get("dataType", ""),
     )
-    args = (corpora_id, to_store)
+    args = (corpora_id, to_store, request_data.get("_lg") or "en")
     job: Job = request.app["query_service"].update_metadata(*args)
     info: dict[str, str] = {"status": "1", "job": str(job.id)}
     return web.json_response(info)

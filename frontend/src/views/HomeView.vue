@@ -305,8 +305,8 @@
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="corpusEditModalLabel">
-              {{ $t('platform-general-corpus-settings') }}
+            <h5 class="modal-title" id="corpusEditModalLabel" v-if="corpusModal">
+              {{ $t('platform-general-corpus-settings') }} - <em>{{ corpusModal.meta.name }}</em>
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
