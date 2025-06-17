@@ -66,6 +66,8 @@ export const useCorpusStore = defineStore("corpusData", {
               continue;
             if (lg in v && typeof(v[lg]) == "string")
               corpus.meta[k] = v[lg];
+            else if ("en" in v && typeof(v.en) == "string")
+              corpus.meta[k] = v.en;
           }
           for (let [layer, props] of Object.entries(corpus.layer)) {
             for (let [k,v] of Object.entries(props.attributes || {})) {
