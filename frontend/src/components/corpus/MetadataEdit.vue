@@ -9,8 +9,8 @@
       </div>
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-source" class="form-label">{{ $t('modal-meta-source') }}</label>
-          <input type="text" class="form-control" v-model="corpusData.meta.source" id="corpus-source" />
+          <label for="corpus-url" class="form-label">{{ $t('modal-meta-url') }}</label>
+          <input type="text" class="form-control" v-model="corpusData.meta.url" id="corpus-url" />
         </div>
       </div>
     </div>

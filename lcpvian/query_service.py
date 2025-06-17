@@ -359,7 +359,7 @@ class QueryService:
             "room": room,
             "config": True,
             "query_type": query_type,
-            "is_Main": True,  # query on main.* or something similar
+            "is_main": True,  # query on main.* or something similar
         }
         job: Job = self.app[queue].enqueue(
             _db_query,

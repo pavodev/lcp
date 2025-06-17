@@ -146,7 +146,7 @@ modal-details-user-license = User defined
 # Metadata edit modal
 
 modal-meta-name = Name
-modal-meta-source = Source
+modal-meta-url = URL
 modal-meta-authors = Authors
 modal-meta-provider = Provider/Institution
 modal-meta-revision = Revision
