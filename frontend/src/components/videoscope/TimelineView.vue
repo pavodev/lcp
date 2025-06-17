@@ -556,6 +556,24 @@ export default {
         ? svgElement.parentElement.clientWidth 
         : document.body.clientWidth - 20;
       
+      // Debug logging for iOS
+      console.log('Timeline initialization:', {
+        svgId,
+        containerWidth,
+        parentWidth: svgElement.parentElement?.clientWidth,
+        bodyWidth: document.body.clientWidth,
+        mediaDuration: this.mediaDuration
+      });
+      
+      // Ensure we have valid dimensions
+      if (containerWidth <= 0 || !this.mediaDuration || this.mediaDuration <= 0) {
+        console.warn('Invalid dimensions for timeline initialization:', {
+          containerWidth,
+          mediaDuration: this.mediaDuration
+        });
+        return;
+      }
+      
       this.svgWidth = containerWidth;
 
       // Create the scaleLinear with the correct width
@@ -620,12 +638,12 @@ export default {
         .append("rect")
         .attr("x", (d) => {
           const x = linearScale(d.x1);
-          return isNaN(x) ? 0 : x;
+          return isNaN(x) ? 0 : Math.max(0, x);
         })
         .attr("y", (d) => heightStart[d.l])
         .attr("width", (d) => {
           const width = linearScale(d.x2) - linearScale(d.x1);
-          return isNaN(width) ? 0 : width;
+          return isNaN(width) ? 0 : Math.max(0, width);
         })
         .attr("height", 20);
 
@@ -712,18 +730,18 @@ export default {
           .selectAll("rect")
           .attr("x", (d) => {
             const x = newXScale(d.x1);
-            return isNaN(x) ? 0 : x;
+            return isNaN(x) ? 0 : Math.max(0, x);
           })
           .attr("width", (d) => {
             const width = newXScale(d.x2) - newXScale(d.x1);
-            return isNaN(width) ? 0 : width;
+            return isNaN(width) ? 0 : Math.max(0, width);
           });
 
         // Update the text with NaN checks
         barsGroup.selectAll("text")
           .attr("x", (d) => {
             const x = newXScale(d.x1) + 5;
-            return isNaN(x) ? 5 : x;
+            return isNaN(x) ? 5 : Math.max(5, x);
           });
 
         // Update the vertical line
