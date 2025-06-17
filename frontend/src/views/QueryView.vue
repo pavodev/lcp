@@ -801,8 +801,8 @@ export default {
               corpus: corpus[0],
             };
             this.checkAuthUser()
-            this.defaultQueryDQD = corpus[0].sample_query || "";
-            this.queryDQD = this.defaultQueryDQD;
+            this.defaultQueryDQD = this.getSampleQuery();
+            this.queryDQD = this.getSampleQuery();
             this.preselectedCorporaId = null;
             this.showGraph = 'main'
             setTimeout(() => this.graphIndex++, 1)
@@ -845,8 +845,8 @@ export default {
       // this.validate();
       if (this.selectedCorpora) {
         // this.loadDocuments();
-        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
-        this.queryDQD = this.selectedCorpora.corpus.sample_query || "";
+        this.defaultQueryDQD = this.getSampleQuery();
+        this.queryDQD = this.getSampleQuery();
         history.pushState(
           {},
           null,
@@ -943,6 +943,11 @@ export default {
     // },
   },
   methods: {
+    getSampleQuery() {
+      const corpus = this.selectedCorpora;
+      if (!corpus) return "";
+      return corpus.corpus.meta.sample_query || corpus.corpus.sample_query || ""
+    },
     setExportFilename(format) {
       if (!this.nameExport)
         this.nameExport = `${this.selectedCorpora.corpus.shortname} ${new Date().toLocaleString()}.${format}`;
