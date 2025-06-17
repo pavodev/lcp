@@ -613,6 +613,7 @@ export default {
       // Clear any existing clip paths
       svg.selectAll("clipPath").remove();
 
+      console.log('FIRST RECT', padding, containerWidth, paddingBeforeTimeline);
       svg
         .append("clipPath")
         .attr("id", "myClip")
@@ -638,11 +639,13 @@ export default {
         .append("rect")
         .attr("x", (d) => {
           const x = linearScale(d.x1);
+          console.log('group CLIP PATH X: ', x)
           return isNaN(x) ? 0 : Math.max(0, x);
         })
         .attr("y", (d) => heightStart[d.l])
         .attr("width", (d) => {
           const width = linearScale(d.x2) - linearScale(d.x1);
+          console.log('group CLIP PATH WIDTH: ', width)
           return isNaN(width) ? 0 : Math.max(0, width);
         })
         .attr("height", 20);
@@ -653,11 +656,13 @@ export default {
         .attr("rx", "2")
         .attr("x", (d) => {
           const x = linearScale(d.x1);
+          console.log("BARS X", x)
           return isNaN(x) ? 0 : Math.max(0, x);
         })
         .attr("y", (d) => heightStart[d.l])
         .attr("width", (d) => {
           const width = linearScale(d.x2) - linearScale(d.x1);
+          console.log("BARS WIDTH", width)
           return isNaN(width) ? 0 : Math.max(0, width);
         })
         .attr("height", 20)
@@ -730,10 +735,12 @@ export default {
           .selectAll("rect")
           .attr("x", (d) => {
             const x = newXScale(d.x1);
+            console.log('RECT X: ', x);
             return isNaN(x) ? 0 : Math.max(0, x);
           })
           .attr("width", (d) => {
             const width = newXScale(d.x2) - newXScale(d.x1);
+            console.log('RECT WIDTH: ', width);
             return isNaN(width) ? 0 : Math.max(0, width);
           });
 
