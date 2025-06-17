@@ -511,10 +511,10 @@ export default {
         if (this.isLandscape) {
           this.initializeTimeline('timeline-svg-mobile');
           // Use setTimeout to ensure SVG is fully initialized and transformed
-          setTimeout(() => {
-            this.updateCurrentPosition(this.playerCurrentTime);
-            this.center();
-          }, 100);
+          // setTimeout(() => {
+          //   this.updateCurrentPosition(this.playerCurrentTime);
+          //   this.center();
+          // }, 100);
         }
       });
     },
