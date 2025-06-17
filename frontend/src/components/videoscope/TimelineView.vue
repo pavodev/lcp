@@ -41,7 +41,7 @@
             <FontAwesomeIcon :icon="['fas', 'times']" />
           </button>
         </div>
-        
+
         <!-- Mobile Rotation Instructions -->
         <div v-if="!isLandscape" class="rotation-instructions">
           <FontAwesomeIcon :icon="['fas', 'mobile-screen-button']" class="rotation-icon" />
@@ -80,11 +80,13 @@
 <style scoped>
 .timeline-modal {
   position: fixed;
-  top: 56px; /* Height of the navigation bar */
+  top: 56px;
+  /* Height of the navigation bar */
   left: 0;
   width: 100%;
   max-width: 100vw;
-  height: calc(100% - 56px); /* Subtract navigation bar height */
+  height: calc(100% - 56px);
+  /* Subtract navigation bar height */
   background-color: rgba(0, 0, 0, 0.5);
   display: flex;
   justify-content: center;
@@ -156,7 +158,8 @@
   position: relative;
   width: 100%;
   height: 100%;
-  touch-action: none; /* Prevent default touch actions */
+  touch-action: none;
+  /* Prevent default touch actions */
 }
 
 .button-container {
@@ -231,10 +234,21 @@
 }
 
 @keyframes rotate {
-  0% { transform: rotate(0deg); }
-  25% { transform: rotate(-90deg); }
-  75% { transform: rotate(-90deg); }
-  100% { transform: rotate(0deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+
+  25% {
+    transform: rotate(-90deg);
+  }
+
+  75% {
+    transform: rotate(-90deg);
+  }
+
+  100% {
+    transform: rotate(0deg);
+  }
 }
 
 /* #timeline-svg {
@@ -362,11 +376,11 @@ export default {
     updateCurrentPosition(time) {
       this.currentTime = time;
       if (!svg) return;
-      
+
       const transform = d3.zoomTransform(svg.node());
       const newXScale = transform.rescaleX(linearScale);
       const xPosition = newXScale(this.currentTime);
-      
+
       if (!isNaN(xPosition)) {
         this.updateVerticalLine(xPosition);
         // Only center if we're not playing, to avoid jumping during playback
@@ -377,14 +391,14 @@ export default {
     },
     updateVerticalLine(xPosition) {
       if (!svg) return;
-      
+
       const verticalLine = svg.selectAll(".vertical-line");
       const transform = d3.zoomTransform(svg.node());
       const newXScale = transform.rescaleX(linearScale);
       let [domainStart, domainEnd] = newXScale.domain();
-      
+
       if (isNaN(domainStart) || isNaN(domainEnd)) return;
-      
+
       domainStart = Math.max(0, domainStart.toFixed(3));
       const inDomain = (this.currentTime >= domainStart && this.currentTime <= domainEnd);
 
@@ -401,52 +415,52 @@ export default {
     },
     center() {
       // Get the current transform and the current SVG dimensions.
-  const currentTransform = d3.zoomTransform(svg.node());
-  const svgBounds = svg.node().getBoundingClientRect();
-  const svgWidth = svgBounds.width; // use the current rendered width
+      const currentTransform = d3.zoomTransform(svg.node());
+      const svgBounds = svg.node().getBoundingClientRect();
+      const svgWidth = svgBounds.width; // use the current rendered width
 
-  // Create a scale based on the current transform.
-  const newXScale = currentTransform.rescaleX(linearScale);
+      // Create a scale based on the current transform.
+      const newXScale = currentTransform.rescaleX(linearScale);
 
-  // Compute the pixel position (under the current transform) for the current time.
-  const currentX = newXScale(this.currentTime);
+      // Compute the pixel position (under the current transform) for the current time.
+      const currentX = newXScale(this.currentTime);
 
-  // Compute the visible area in pixels.
-  // (Assuming your clip area starts at "padding" and extends to (svgWidth - paddingBeforeTimeline))
-  const visibleWidth = svgWidth - padding - paddingBeforeTimeline;
-  const centerPixel = padding + visibleWidth / 2;
+      // Compute the visible area in pixels.
+      // (Assuming your clip area starts at "padding" and extends to (svgWidth - paddingBeforeTimeline))
+      const visibleWidth = svgWidth - padding - paddingBeforeTimeline;
+      const centerPixel = padding + visibleWidth / 2;
 
-  // Compute how much (in pixels) we want to shift the timeline so that currentX becomes centered.
-  let dx = centerPixel - currentX;
-  let desiredX = currentTransform.x + dx;
+      // Compute how much (in pixels) we want to shift the timeline so that currentX becomes centered.
+      let dx = centerPixel - currentX;
+      let desiredX = currentTransform.x + dx;
 
-  // --- Left Boundary Clamp ---
-  // Under your base linearScale, data value 0 maps to "padding".
-  // With a transform, the left edge appears at: currentTransform.x + currentTransform.k * padding.
-  // We want to keep that ≤ padding.
-  // Rearranging gives:
-  //    currentTransform.x ≤ padding - currentTransform.k * padding = padding * (1 - currentTransform.k)
-  const minAllowedX = padding * (1 - currentTransform.k);
-  desiredX = Math.min(desiredX, minAllowedX);
+      // --- Left Boundary Clamp ---
+      // Under your base linearScale, data value 0 maps to "padding".
+      // With a transform, the left edge appears at: currentTransform.x + currentTransform.k * padding.
+      // We want to keep that ≤ padding.
+      // Rearranging gives:
+      //    currentTransform.x ≤ padding - currentTransform.k * padding = padding * (1 - currentTransform.k)
+      const minAllowedX = padding * (1 - currentTransform.k);
+      desiredX = Math.min(desiredX, minAllowedX);
 
-  // --- Right Boundary Clamp ---
-  // The right edge of your content (data value = this.mediaDuration) maps to:
-  //   linearScale(this.mediaDuration)
-  // With the transform it's at: currentTransform.x + currentTransform.k * linearScale(this.mediaDuration)
-  // We want that to be exactly at the right visible boundary:
-  //   svgWidth - paddingBeforeTimeline
-  // Solving for the x translation gives:
-  //   desiredX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration)
-  const maxAllowedX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration);
-  desiredX = Math.max(desiredX, maxAllowedX);
+      // --- Right Boundary Clamp ---
+      // The right edge of your content (data value = this.mediaDuration) maps to:
+      //   linearScale(this.mediaDuration)
+      // With the transform it's at: currentTransform.x + currentTransform.k * linearScale(this.mediaDuration)
+      // We want that to be exactly at the right visible boundary:
+      //   svgWidth - paddingBeforeTimeline
+      // Solving for the x translation gives:
+      //   desiredX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration)
+      const maxAllowedX = (svgWidth - paddingBeforeTimeline) - currentTransform.k * linearScale(this.mediaDuration);
+      desiredX = Math.max(desiredX, maxAllowedX);
 
-  // Build the new transform with the clamped translation.
-  const newTransform = d3.zoomIdentity
-    .translate(desiredX, currentTransform.y)
-    .scale(currentTransform.k);
+      // Build the new transform with the clamped translation.
+      const newTransform = d3.zoomIdentity
+        .translate(desiredX, currentTransform.y)
+        .scale(currentTransform.k);
 
-  // Apply the new transform with a smooth transition.
-  svg.transition().call(zoom.transform, newTransform);
+      // Apply the new transform with a smooth transition.
+      svg.transition().call(zoom.transform, newTransform);
     },
     moveLeft() {
       console.log('MOVING LEFT');
@@ -511,14 +525,14 @@ export default {
       // Check if the device is mobile based on user agent
       const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
       this.isMobile = isMobileDevice;
-      
+
       // Check orientation
       this.isLandscape = window.innerWidth > window.innerHeight;
     },
     handleResize() {
       // Only update mobile status if the device type has changed
       this.checkMobile();
-      
+
       // If we're in the modal and the device is still mobile, keep it open
       if (this.isModalOpen && this.isMobile) {
         // Reinitialize the timeline if needed
@@ -550,12 +564,16 @@ export default {
 
       // Set up the SVG container
       svg = d3.select(`#${svgId}`);
-      
+
       // Get the actual width of the container
-      const containerWidth = svgId === 'timeline-svg-mobile' 
-        ? svgElement.parentElement.clientWidth 
+      const containerWidth = svgId === 'timeline-svg-mobile'
+        ? svgElement.parentElement.clientWidth
         : document.body.clientWidth - 20;
-      
+
+      // Avoid the timeline to be rendered if the container was still no drawn in the browser
+      // Neccessary in particular for iOS devices using safari.
+      if (containerWidth === 0) return;
+
       // Debug logging for iOS
       console.log('Timeline initialization:', {
         svgId,
@@ -564,7 +582,7 @@ export default {
         bodyWidth: document.body.clientWidth,
         mediaDuration: this.mediaDuration
       });
-      
+
       // Ensure we have valid dimensions
       if (containerWidth <= 0 || !this.mediaDuration || this.mediaDuration <= 0) {
         console.warn('Invalid dimensions for timeline initialization:', {
@@ -573,7 +591,7 @@ export default {
         });
         return;
       }
-      
+
       this.svgWidth = containerWidth;
 
       // Create the scaleLinear with the correct width
@@ -602,7 +620,7 @@ export default {
         .text((d) => d.name);
 
       let height = totalHeight + 20;
-      
+
       // Set SVG dimensions
       svg
         .attr("width", "100%")
@@ -618,10 +636,10 @@ export default {
         .append("clipPath")
         .attr("id", "myClip")
         .append("rect")
-          .attr("x", padding)
-          .attr("y", "40")
-          .attr("width", containerWidth - padding - paddingBeforeTimeline)
-          .attr("height", totalHeight + 40);
+        .attr("x", padding)
+        .attr("y", "40")
+        .attr("width", containerWidth - padding - paddingBeforeTimeline)
+        .attr("height", totalHeight + 40);
 
       // Create a single group for all bars
       const barsGroup = svg.append("g").attr("clip-path", "url(#myClip)");
@@ -631,7 +649,7 @@ export default {
         .data(data.flatMap(d => d.values))
         .enter()
         .append("g")
-          .attr("clip-path", (d, i) => `url(#barClip${i})`);
+        .attr("clip-path", (d, i) => `url(#barClip${i})`);
 
       // Define a clip path for each group
       barAndTextGroups.append("clipPath")
@@ -720,7 +738,7 @@ export default {
       function zoomed(event) {
         const { transform } = event;
         const newXScale = transform.rescaleX(linearScale);
-        
+
         // Update x-axis with better tick formatting
         xAxis.scale(newXScale)
           .ticks(Math.min(10, Math.floor(containerWidth / 100)))
@@ -882,7 +900,7 @@ export default {
     this.checkMobile();
     window.addEventListener('resize', this.handleResize);
     window.addEventListener('orientationchange', this.handleResize);
-    
+
     // Initialize timeline for desktop view
     if (!this.isMobile) {
       this.initializeTimeline();
