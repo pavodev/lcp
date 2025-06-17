@@ -570,6 +570,9 @@ export default {
         ? svgElement.parentElement.clientWidth
         : document.body.clientWidth - 20;
 
+        console.log("Timeline parent: ", svgElement.parentElement);
+        console.log("document.body.clientwidth: ", document.body.clientWidth);
+
       // Avoid the timeline to be rendered if the container was still no drawn in the browser
       // Neccessary in particular for iOS devices using safari.
       if (containerWidth === 0) return;
