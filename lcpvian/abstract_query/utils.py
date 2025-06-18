@@ -417,4 +417,4 @@ def escape_single_quotes(obj: list | dict) -> list | dict:
             v = v.replace("'", "''")
         i = k if is_dict else n
         ret[i] = v  # type: ignore
-    return ret
+    return cast(list | dict, ret)

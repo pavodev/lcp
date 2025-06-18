@@ -9,7 +9,6 @@ from .typed import (
     QueryJSON,
     Joins,
     JSONObject,
-    TGSD,
     ConfigJSON,
     ResultMetadata,
     JSON,
@@ -20,6 +19,7 @@ from .typed import (
 from .utils import (
     Config,
     QueryData,
+    _get_table,
     _bound_label,
     _label_layer,
     _get_underlang,
@@ -789,10 +789,42 @@ WHERE {entity}.char_range && contained_token.char_range
         """
         Produce a frequency table and its JSON metadata
         """
+        count_entities: list[str] = [x["entity"] for x in attributes if "entity" in x]
+        assert len(count_entities) < 2, RuntimeError(
+            f"Cannot reference more than one entity in the attributes of an analysis {', '.join(count_entities)})"
+        )
         counts: list[str] = []
         for func in functions:
             if func.lower().startswith("freq"):
-                counts.append(f"count(*) AS {func.lower()}")
+                if not count_entities:
+                    counts.append(f"count(*) AS {func.lower()}")
+                    continue
+                count_entity = count_entities[0]
+                counts.append(f"count(DISTINCT {count_entity}) AS {func.lower()}")
+                entity_layer, _ = self.r.label_layer[count_entity]
+                conf_map = cast(dict, self.config["mapping"])
+                token_mapping = conf_map["layer"].get(self.token, {})
+                if "partitions" in token_mapping and self.lang:
+                    token_mapping = token_mapping["partitions"].get(self.lang, {})
+                mapping: dict = conf_map["layer"].get(entity_layer, {})
+                if "partitions" in mapping and self.lang:
+                    mapping = mapping["partitions"].get(self.lang, {})
+                table = _get_table(entity_layer, self.config, self.batch, self.lang)
+                counts.append(
+                    f"(SELECT count(*) FROM {self.schema}.{table}) AS total_{entity_layer.lower()}"
+                )
+                # table = mapping.get("relation", entity_layer.lower())
+                # if (
+                #     "batches" in mapping
+                #     or entity_layer == self.segment
+                #     and "batches" in token_mapping
+                # ):
+                #     if table.endswith("<batch>"):
+                #         table = table[0:-7]
+                #     table = table + "0"
+                # counts.append(
+                #     f"(SELECT count(*) FROM {self.schema}.{table}) AS total_{entity_layer.lower()}"
+                # )
             else:
                 raise NotImplementedError("TODO?")
         if counts:
@@ -802,6 +834,8 @@ WHERE {entity}.char_range && contained_token.char_range
         funcstr = " , ".join(functions)
         parsed_attributes: list[tuple[str, RefInfo]] = []
         for att in attributes:
+            if "entity" in att:
+                continue
             constraint: Constraint = Constraint(
                 att,
                 "=",  # placeholder,
@@ -833,6 +867,12 @@ WHERE {entity}.char_range && contained_token.char_range
             self.r.selects.add(f"{ref} AS {alias}")
             self.r.entities.add(alias)
             parsed_attributes.append((alias, ref_info))
+        assert parsed_attributes, RuntimeError(
+            f"Need at least one *attribute* referenced in the analysis"
+        )
+        if count_entities:
+            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            funcstr += f", total_{count_entity_layer.lower()}"
         nodes = " , ".join(p for p, _ in parsed_attributes)
         wheres, filter_meta = self._process_filters(filt)
         out = f"""
@@ -859,7 +899,12 @@ WHERE {entity}.char_range && contained_token.char_range
             typed = f"{lay}.{lab}"
             attribs.append({"name": attr, "type": typed})
         for func in functions:
-            attribs.append({"name": func, "type": "aggregrate"})
+            attribs.append({"name": func, "type": "aggregate"})
+        if count_entities:
+            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            attribs.append(
+                {"name": f"total_{count_entity_layer.lower()}", "type": "aggregate"}
+            )
         meta: ResultMetadata = {
             "attributes": attribs,
             "name": label,

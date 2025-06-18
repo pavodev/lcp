@@ -418,7 +418,7 @@
                           <ResultsTableView v-else-if="resultSet.type != 'plain'"
                             :data="WSDataResults.result[index + 1]" :languages="selectedLanguages"
                             :attributes="resultSet.attributes" :meta="WSDataMeta" :resultsPerPage="resultsPerPage"
-                            :type="resultSet.type" />
+                            :type="resultSet.type" :corpora="selectedCorpora" />
                         </div>
                       </div>
                     </div>
@@ -1236,7 +1236,6 @@ export default {
           if (!this.WSDataResults.result)
             return this.WSDataResults.result = data.result;
           const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
-          console.log("kwic_keys", kwic_keys);
           for (let rkey in data.result) {
             if (!kwic_keys.includes(parseInt(rkey))) {
               this.WSDataResults.result[rkey] = data.result[rkey];
