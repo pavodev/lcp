@@ -24,11 +24,11 @@ Arguments:
  - `institution` (`str`, optional, default `""`) is the name of the institution associated with the corpus
  - `description` (`str`, optional, default `""`) is a description of the corpus, as it will be presented to end users
  - `date` (`str`, optional, default `"placeholder"`) is the date when the corpus was curated
- - `version` (`int | float`, optional, default `1`) is the revision number of the corpus
+ - `revision` (`int | float`, optional, default `1`) is the revision number of the corpus
  - `url` (`str`, optional, default `"placeholder"`) is the source URL of the corpus
  - `license` (`str | None`, optional, default `None`) is the code of the license of the corpus
 
-The values of `authors`, `institution`, `description`, `date`, `version`, `url` and `license` can be modified in LCP after import.
+The values of `authors`, `institution`, `description`, `date`, `revision`, `url` and `license` can be modified in LCP after import.
 
 **Example**
 
