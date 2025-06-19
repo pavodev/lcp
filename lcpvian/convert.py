@@ -61,7 +61,7 @@ OPS = {
 
 
 def _prepare_existing(
-    res: Results, kwics: set[int], colls: set[int]
+    res: Results, kwics: set[int], colls: set[int], result_set: list
 ) -> dict[int, dict[str, tuple[int, float]]]:
     out: dict[int, Any] = {}
     for k, v in res.items():
@@ -80,11 +80,17 @@ def _prepare_existing(
                     pretotal, pree = out[k][text]
                     out[k][text] = (total + pretotal, (e + pree / 2))
         else:
+            attrs = result_set[k - 1].get("attributes", [])
             for r in v:
-                body = r[:-1]
-                if tuple(body) not in out[k]:
-                    out[k][tuple(body)] = 0
-                out[k][tuple(body)] += r[-1]
+                body, totals_this_batch = _body_totals(r, attrs)
+                # body = r[:-1]
+                tk = tuple(body)
+                if tk not in out[k]:
+                    out[k][tk] = [0 for _ in totals_this_batch]
+                out[k][tk] = [
+                    out[k][tk][n] + totals_this_batch[n]  # type: ignore
+                    for n, _ in enumerate(totals_this_batch)
+                ]
     return out
 
 
@@ -103,10 +109,20 @@ def _unfold(exist: dict, kwics: set[int], colls: set[int]) -> Results:
                 ok = cast(list, out[k])
                 ok.append([text, a, b])
         else:
-            for body, score in v.items():
+            for body, scores in v.items():
                 ok = cast(list, out[k])
-                ok.append(list(body) + [score])
+                ok.append(list(body) + scores)
     return out
+
+
+def _body_totals(rest: list, attrs: list[dict]) -> tuple[list, list[int]]:
+    body = cast(
+        list,
+        [str(x) for n, x in enumerate(rest) if attrs[n]["type"] != "aggregate"],
+    )
+    # body = cast(list, [str(x) for x in rest[:-1]])
+    totals_this_batch = rest[-1 * (len(rest) - len(body)) :]
+    return body, totals_this_batch
 
 
 def _aggregate_results(
@@ -128,12 +144,12 @@ def _aggregate_results(
     colls = set(
         [i for i, r in enumerate(rs, start=1) if r.get("type") == "collocation"]
     )
-    counts: defaultdict[int, int] = defaultdict(int)
+    counts: defaultdict[int, int | list[int]] = defaultdict(int)
 
     minus_one: ResultsValue = existing.get(-1, cast(ResultsValue, {}))
     zero: ResultsValue = existing.get(0, cast(ResultsValue, {}))
 
-    precalcs: dict = _prepare_existing(existing, kwics, colls)
+    precalcs: dict = _prepare_existing(existing, kwics, colls, rs)
 
     for line in result:
         key = int(line[0])
@@ -142,7 +158,7 @@ def _aggregate_results(
             n_results = rest[0]
             continue
         if key in kwics:
-            counts[key] += 1
+            counts[key] += 1  # type: ignore
             continue
         if key not in existing:
             existing[key] = []
@@ -157,11 +173,16 @@ def _aggregate_results(
             precalcs[key][text] = (combined, combined_e)
             continue
         # frequency table:
-        body = cast(list, [str(x) for x in rest[:-1]])
-        total_this_batch = rest[-1]
+        attrs: list[dict] = cast(dict, rs[key - 1]).get("attributes", [])
+        # body = cast(list, [str(x) for x in rest[:-1]])
+        body, totals_this_batch = _body_totals(rest, attrs)
         # need_update = body in precalcs[key]
-        preexist = precalcs[key].get(tuple(body), 0)
-        combined = preexist + total_this_batch
+        preexist = precalcs[key].get(
+            tuple(body), [0 for n, _ in enumerate(totals_this_batch)]
+        )
+        combined = [
+            preexist[n] + totals_this_batch[n] for n, _ in enumerate(totals_this_batch)
+        ]
         precalcs[key][tuple(body)] = combined
         counts[key] = combined
 
@@ -186,10 +207,11 @@ def _combine_e(
     Get the combined E value for collocation
     """
     assert current is not None and done is not None
-    if not done:
+    done_minus_current = [x for x in done if x != current]
+    if not done_minus_current:
         return this_time_e
     current_size: int = current[-1]
-    done_size = sum(d[-1] for d in done if d != current)
+    done_size = sum(d[-1] for d in done_minus_current if d != current)
     prop = this_time_e * current_size
     done_prop = e_so_far * done_size
     return (prop + done_prop) / (current_size + done_size)
@@ -272,7 +294,7 @@ def _format_kwics(
 
 def _get_all_sents(
     job: Job,
-    base: Job,
+    query_info: dict,
     meta_json: QueryMeta,
     max_kwic: int,
     current_lines: int,
@@ -286,7 +308,7 @@ def _get_all_sents(
     out: Results = {0: meta_json, -1: sen}
     is_first = True
     got: Results
-    for jid in base.meta["_sent_jobs"]:
+    for jid in query_info["_sent_jobs"]:
         j = job if job.id == jid else Job.fetch(jid, connection=connection)
         jk = cast(dict, j.kwargs)
         dep = _get_associated_query_job(jk["depends_on"], connection)
@@ -345,7 +367,7 @@ def _limit_kwic_to_max(to_send: Results, current_lines: int, max_kwic: int) -> R
 
 
 def _make_filters(
-    post: dict[int, list[dict[str, Any]]]
+    post: dict[int, list[dict[str, Any]]],
 ) -> dict[int, list[tuple[str, str, str | int | float]]]:
     """
     Because we iterate over them a lot, turn the filters object into something

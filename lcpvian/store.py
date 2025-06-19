@@ -13,23 +13,19 @@ from .utils import ensure_authorised
 async def fetch_queries(request: web.Request) -> web.Response:
     """
     User wants to retrieve their stored queries from the DB
-
-    Currently these buttons are not shown in the frontend, so these are unused
     """
     request_data: dict[str, str] = await request.json()
     user = request_data["user"]
     room = request_data.get("room")
-    job: Job = request.app["query_service"].fetch_queries(user, room)
+    query_type = request_data.get("query_type")
+    job: Job = request.app["query_service"].fetch_queries(user, room, query_type)
     info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)
-
 
 @ensure_authorised
 async def store_query(request: web.Request) -> web.Response:
     """
     User wants to store one or more queries in the DB
-
-    Currently these buttons are not shown in the frontend, so these are unused
     """
     request_data: JSONObject = await request.json()
     user = cast(str, request_data["user"])
@@ -42,9 +38,24 @@ async def store_query(request: web.Request) -> web.Response:
         languages=request_data["languages"],
         total_results_requested=request_data["total_results_requested"],
         query_name=request_data["query_name"],
+        query_type=request_data["query_type"],
     )
     idx = uuid4()
     args = (to_store, idx, user, room)
     job: Job = request.app["query_service"].store_query(*args)
     info: dict[str, str] = {"status": "started", "job": job.id, "query_id": str(idx)}
+    return web.json_response(info)
+
+@ensure_authorised
+async def delete_query(request: web.Request) -> web.Response:
+    """
+    User wants to delete their stored query from the DB.
+    Expects URL parameters: /user/{user_id}/room/{room_id}/query/{query_id}
+    """
+    user_id: str = request.match_info["user_id"]
+    room_id: str = request.match_info["room_id"]
+    query_id: str = request.match_info["query_id"]
+
+    job: Job = request.app["query_service"].delete_query(user_id, room_id, query_id)
+    info: dict[str, str] = {"status": "started", "job": job.id}
     return web.json_response(info)

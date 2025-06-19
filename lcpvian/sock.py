@@ -39,14 +39,18 @@ from redis.exceptions import ConnectionError
 
 
 from .configure import _get_batches, CorpusConfig
-from .export import export
-from .query import query
 from .query_service import QueryService
+from .query_classes import QueryInfo, Request
 from .utils import push_msg
 from .validate import validate
 
-from .typed import JSON, JSONObject, RedisMessage, Results, Websockets
-from .utils import PUBSUB_CHANNEL, _filter_corpora, _set_config, _sign_payload
+from .typed import JSON, JSONObject, RedisMessage, Websockets
+from .utils import (
+    PUBSUB_CHANNEL,
+    _filter_corpora,
+    _set_config,
+    _sign_payload,
+)
 
 
 MESSAGE_TTL = os.getenv("REDIS_WS_MESSSAGE_TTL", 5000)
@@ -75,6 +79,12 @@ async def _process_message(
         if not raw:
             return None
         payload: JSONObject = json.loads(raw)
+        if "callback_query" in payload:
+            qi_hash: str = str(payload["hash"])
+            qi = QueryInfo(qi_hash, app["redis"])
+            async with asyncio.TaskGroup() as group:
+                for req in qi.requests:
+                    group.create_task(req.respond(app, payload))
         if "user" in data or "room" in data:
             # If the incoming data contains fresher information than from redis memory,
             # (as determined by the presence of a user/room in data)
@@ -202,12 +212,10 @@ async def _handle_message(
     user = cast(str, payload.get("user", ""))
     room = cast(str, payload.get("room", ""))
     action = payload.get("action", "")
-    status = payload.get("status", "")
-    do_full = payload.get("full") and status != "finished"
-    to_export = payload.get("to_export")
     simples = (
         "fetch_queries",
         "store_query",
+        "delete_query",
         "background_job_progress",
         "document",
         "document_ids",
@@ -240,14 +248,6 @@ async def _handle_message(
         await app["query_service"].get_export_notifs(hash=payload.get("hash", ""))
         return
 
-    if action == "sentences":
-        base = "rq:job:"
-        first_id = cast(str, payload["first_job"])
-        query_id: str = str(payload["query"])
-        app["redis"].expire(base + query_id, QUERY_TTL)
-        if query_id != first_id:
-            app["redis"].expire(base + first_id, QUERY_TTL)
-
     # for document ids request, we also add this information to config
     # so that on subsequent requests we can just fetch it from there
     if action == "document_ids":
@@ -256,54 +256,16 @@ async def _handle_message(
             payload["document_ids"],
         ]
 
-    can_send = payload.get("can_send", True) and not to_export
-
-    sent_allowed = action in ("sentences", "meta") and can_send
     to_submit: None | Coroutine[None, None, web.Response] = None
 
-    if (
-        (status == "partial" or do_full)
-        and action in ("sentences", "meta")
-        and payload.get("submit_query")
-        and not payload.get("no_restart")
-    ):
-        # we don't await till until after we send the ws message for performance
-        to_submit = query(None, manual=payload.get("submit_query"), app=app)
-
-    if action in ("sentences", "meta"):
-        drops = ("can_send", "submit_query")
-        for drop in drops:
-            payload.pop(drop, None)
-
-    if to_export and action == "query_result" and status in ("satisfied", "finished"):
-        export_obj: Any = to_export
-        if isinstance(export_obj, str):
-            export_obj = json.loads(cast(str, to_export))
-        export_obj["user"] = user
-        export_obj["room"] = room
-        corpus_id: str = str(cast(list, payload["current_batch"])[0])
-        export_obj["config"] = app["config"][corpus_id]
-        await export(app, cast(JSONObject, export_obj), cast(str, payload["first_job"]))
-
-    if action in simples or sent_allowed:
-        send_sents = not payload.get("full") and (
-            action == "sentences"
-            and len(cast(Results, payload["result"])) > 2
-            or action == "meta"
+    if action in simples:
+        await push_msg(
+            app["websockets"],
+            room,
+            payload,
+            skip=None,
+            just=(room, user),
         )
-        if not to_export and action in simples or send_sents:
-            await push_msg(
-                app["websockets"],
-                room,
-                payload,
-                skip=None,
-                just=(room, user),
-            )
-        else:
-            print(f"Not sending {action} message!")
-        if to_submit is not None:
-            await to_submit
-            to_submit = None
         return None
 
     if action in errors:
@@ -357,10 +319,6 @@ async def _handle_message(
             payload["config"] = cast(JSONObject, filt)
             await push_msg(app["websockets"], "", payload)
 
-    if action == "query_result":
-        payload["can_send"] = can_send
-        await _handle_query(app, payload, user, room)
-
     if to_submit is not None:
         await to_submit
 
@@ -388,102 +346,6 @@ def _print_status_message(payload: JSONObject, status: str) -> None:
     return None
 
 
-async def _handle_query(
-    app: web.Application,
-    payload: JSONObject,
-    user: str,
-    room: str,
-) -> None:
-    """
-    Our subscribe listener has picked up a message, and it's about
-    a query iteration. Create a websocket message to send to correct frontends
-    """
-    status = cast(str, payload.get("status", "unknown"))
-    job = cast(str, payload["job"])
-    the_job = Job.fetch(job, connection=app["redis"])
-    job_status = the_job.get_status(refresh=True)
-    if job_status in ("stopped", "canceled") or job in app["canceled"]:
-        if job not in app["canceled"]:
-            app["canceled"].append(job)
-        print(f"Query was stopped: {job} -- preventing update")
-        return
-
-    _print_status_message(payload, status)
-
-    to_submit: None | Coroutine[None, None, web.Response] = None
-    can_send = payload["can_send"]
-    # todo: this should no longer happen, as we send a progress update message instead?
-    do_full = payload.get("full") and payload.get("status") != "finished"
-    if do_full:
-        can_send = False
-
-    if (
-        (status == "partial" or do_full)
-        and job_status not in ("stopped", "canceled")
-        and job not in app["canceled"]
-        and not payload.get("simultaneous")
-        and not payload.get("from_memory")
-        and not payload.get("no_restart")
-    ):
-        payload["config"] = app["config"]
-        to_submit = query(None, manual=payload, app=app)
-
-    if do_full and "progress" in payload:
-        prog = cast(dict[str, JSON], payload["progress"])
-        await push_msg(
-            app["websockets"],
-            room,
-            prog,
-            skip=None,
-            just=(room, user),
-        )
-
-    if not can_send:
-        print("Not sending WS message!")
-    else:
-        keys = [
-            "result",
-            "job",
-            "action",
-            "user",
-            "room",
-            "n_users",
-            "status",
-            "word_count",
-            "full",
-            "first_job",
-            "table",
-            "total_duration",
-            "jso",
-            "from_memory",
-            "batch_matches",
-            "offset",
-            "current_kwic_lines",
-            "total_results_so_far",
-            "percentage_done",
-            "percentage_words_done",
-            "total_duration",
-            "duration",
-            "total_results_requested",
-            "projected_results",
-            "batches_done",
-            "simultaneous",
-            "consoleSQL",
-            "to_export",
-        ]
-        payload = {k: v for k, v in payload.items() if k in keys}
-        await push_msg(
-            app["websockets"],
-            room,
-            payload,
-            skip=None,
-            just=(room, user),
-        )
-
-    if to_submit is not None:
-        await to_submit
-
-
 async def sock(request: web.Request) -> web.WebSocketResponse:
     """
     Socket has to handle incoming messages, but also send a message when
@@ -499,15 +361,11 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
     if request.app["mypy"]:
         while True:
             msg = await ws.receive()
-            await _handle_sock(
-                ws, msg, sockets, request.app["query_service"], request.app["config"]
-            )
+            await _handle_sock(ws, msg, sockets, request.app)
     else:
         # mypyc bug?
         async for msg in ws:
-            await _handle_sock(
-                ws, msg, sockets, request.app["query_service"], request.app["config"]
-            )
+            await _handle_sock(ws, msg, sockets, request.app)
 
     # connection closed
     # await ws.close(code=WSCloseCode.GOING_AWAY, message=b"Server shutdown")
@@ -516,11 +374,7 @@ async def sock(request: web.Request) -> web.WebSocketResponse:
 
 
 async def _handle_sock(
-    ws: web.WebSocketResponse,
-    msg: WSMessage,
-    sockets: Websockets,
-    qs: QueryService,
-    conf: dict[str, Any],
+    ws: web.WebSocketResponse, msg: WSMessage, sockets: Websockets, app: web.Application
 ) -> None:
     """
     Handle an incoming message based on its `action`
@@ -529,6 +383,8 @@ async def _handle_sock(
     * query has enough results, so stop it (in simultaneous mode only)
     * user joins/leaves room
     """
+    qs: QueryService = app["query_service"]
+    conf: dict[str, Any] = app["config"]
     if msg.type in (WSMsgType.CLOSE, WSMsgType.CLOSING, WSMsgType.CLOSED):
         try:
             await ws.close(code=WSCloseCode.GOING_AWAY, message=b"User left")
@@ -580,16 +436,29 @@ async def _handle_sock(
 
     # query is stopped, automatically or manually
     elif action == "stop":
-        jobs = qs.cancel_running_jobs(user_id, session_id)
-        jobs = list(set(jobs))
-        if jobs:
-            response = {
-                "status": "stopped",
-                "n": len(jobs),
-                "action": "stopped",
-                # "jobs": jobs,
-            }
-            await push_msg(sockets, session_id, response, just=ident)
+        request_id = payload.get("request", "")
+        if not request_id:
+            return
+        req: None | Request
+        try:
+            req = Request(app["redis"], {"id": request_id})
+        except:
+            req = None
+        if not req:
+            return
+        qi: QueryInfo = QueryInfo(req.hash, app["redis"])
+        qi.stop_request(req)
+        # jobs = qs.cancel_running_jobs(user_id, session_id)
+        # jobs = list(set(jobs))
+        # if jobs:
+        response = {
+            "request": request_id,
+            "status": "stopped",
+            # "n": len(jobs),
+            "action": "stopped",
+            # "jobs": jobs,
+        }
+        await push_msg(sockets, session_id, response, just=ident)
 
     # user edited a query, triggering auto-validation of the DQD/JSON
     elif action == "validate":

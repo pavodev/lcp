@@ -26,13 +26,13 @@
           @mouseleave="hoverResultLine(null)"
         >
           <td scope="row" class="results">
-            <span title="Copy to clipboard" @click="copyToClip(item)" class="action-button">
+            <span :title="$t('common-copy-clipboard')" @click="copyToClip(item)" class="action-button">
               <FontAwesomeIcon :icon="['fas', 'copy']" />
             </span>
-            <span title="Play audio" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
+            <span :title="$t('common-play-audio')" @click="playAudio(resultIndex)" class="action-button" v-if="showAudio(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
-            <span title="Play video" @click="playVideo(resultIndex)" class="action-button" v-if="showVideo(resultIndex)">
+            <span :title="$t('common-play-video')" @click="playVideo(resultIndex)" class="action-button" v-if="showVideo(resultIndex)">
               <FontAwesomeIcon :icon="['fas', 'play']" />
             </span>
             <span
@@ -103,7 +103,7 @@
               :data-bs-target="`#detailsModal${randInt}`"
               @click="showModal(resultIndex)"
             >
-              Details
+              {{ $t('common-details') }}
             </button>
           </td>
           <td :class="['audioplayer','audioplayer-'+resultIndex, playIndex == resultIndex ? 'visible' : '']"></td>
@@ -200,12 +200,12 @@
       <div class="modal-dialog modal-full">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="detailsModalLabel">Details</h5>
+            <h5 class="modal-title" id="detailsModalLabel">{{ $t('common-details') }}</h5>
             <button
               type="button"
               class="btn-close"
               data-bs-dismiss="modal"
-              aria-label="Close"
+              :aria-label="$t('common-close')"
             ></button>
           </div>
           <div class="modal-body text-start">
@@ -226,7 +226,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -242,12 +242,12 @@
       <div class="modal-dialog modal-full">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="imageModalLabel">Image Viewer</h5>
+            <h5 class="modal-title" id="imageModalLabel">{{ $t('results-image-viewer') }}</h5>
             <button
               type="button"
               class="btn-close"
               data-bs-dismiss="modal"
-              aria-label="Close"
+              :aria-label="$t('common-close')"
             ></button>
           </div>
           <div class="modal-body text-start">
@@ -266,7 +266,7 @@
               class="btn btn-secondary"
               data-bs-dismiss="modal"
             >
-              Close
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
@@ -274,7 +274,7 @@
     </div>
     <audio controls ref="audioplayer" class="d-none">
         <source src="" type="audio/mpeg">
-        Your browser does not support the audio element.
+        {{ $t('results-audio-no-support') }}
     </audio>
   </div>
 </template>
@@ -427,7 +427,7 @@ import config from "@/config";
 
 class TokenToDisplay {
   constructor(tokenArray, index, groups, columnHeaders, annotations) {
-    if (!(tokenArray instanceof Array) || tokenArray.length < 2)
+    if (!(tokenArray instanceof Array) || tokenArray.length < 1)
       throw Error(`Invalid format for token ${JSON.stringify(tokenArray)}`);
     if (isNaN(Number(index)) || index<=0)
       throw Error(`Invalid index (${index}) for token ${JSON.stringify(tokenArray)}`);
@@ -559,7 +559,16 @@ export default {
       this.closePopover();
       resultIndex = resultIndex + (this.currentPage - 1) * this.resultsPerPage;
       const sentenceId = this.data[resultIndex][0];
-      this.currentMeta = this.meta[sentenceId];
+      this.currentMeta = {...this.meta[sentenceId]};
+      for (let layer in this.currentMeta) {
+        const submeta = this.currentMeta[layer].meta;
+        if (!submeta || (this.corpora.corpus.mapping[layer]||{}).hasMeta === false) continue
+        delete this.currentMeta[layer].meta;
+        for (let k in submeta) {
+          if (k in this.currentMeta[layer]) continue;
+          this.currentMeta[layer][k] = submeta[k];
+        }
+      }
       this.popoverY = event.clientY + 10;
       this.popoverX = event.clientX + 10;
     },
@@ -673,11 +682,16 @@ export default {
       if (!meta) return "";
       const doc_meta = meta[this.corpora.corpus.firstClass.document];
       if (!doc_meta) return "";
-      const media = doc_meta.media;
+      let media = doc_meta.media;
       if (!media) return "";
+      try {
+        media = JSON.parse(media)
+      } catch {
+        null;
+      }
       const media_name = Object.keys(this.corpora.corpus.meta.mediaSlots||{'':0})[0];
       if (!media_name) return "";
-      return JSON.parse(media)[media_name];
+      return media[media_name];
     },
     showAudio(resultIndex) {
       let retval = false;
@@ -800,18 +814,19 @@ export default {
     },
     meta_render(meta_value) {
       let ret = "";
+      let meta_obj = null;
       try {
-        let metaJSON = JSON.parse(meta_value.replace(/'/gi, '"'))
-        if (Array.isArray(metaJSON)) {
-          ret = metaJSON.join(", ")
-        }
-        else {
-          ret = Utils.dictToStr(metaJSON, {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
-        }
+        meta_obj = JSON.parse(meta_value.replace(/'/gi, '"'))
       }
       catch {
-        ret = meta_value;
+        meta_obj = meta_value;
       }
+      if (Array.isArray(meta_obj))
+        ret = meta_obj.join(", ")
+      else if (typeof(meta_obj) == "string")
+        ret = meta_obj
+      else
+        ret = Utils.dictToStr(meta_obj, {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
       return ret;
     }
   },

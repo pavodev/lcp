@@ -17,9 +17,11 @@ COPY MANIFEST.in ./
 COPY .env.docker ./.env
 COPY lcpvian ./lcpvian
 COPY parser ./parser
+COPY lcpcli ./lcpcli
 
 # Install any needed packages specified in requirements.txt
 RUN pip install --no-cache-dir .
+RUN pip install --no-cache-dir ./lcpcli/
 
 # Make port 5000 available to the world outside this container
 EXPOSE 9090

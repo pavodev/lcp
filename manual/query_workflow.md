@@ -1,3 +1,22 @@
+# Overhaul
+
+## _query
+
+BE saves request-specific parameters (offset, total_requested, resume, to_export) in redis
+and query-wide values (corpus id, languages, latest results, etc.) in first job's meta
+
+_query callback sends ONE message over PUBSUB
+
+_query sock pushes 1+ WS msgs to FE and submits sentences/meta + next queries as necessary
+
+
+## _sentences / _meta
+
+_sentences / _meta callback sends 1+ messages over PUBSUB, containing the respective results of _format_kwics
+
+_sentences / _meta sock pushes 1 WS message each time it is called
+
+
 # LCP's query workflow
 
 <p align="center"> <!-- Doesnt work, I wanted to center it, but it's not that important -->

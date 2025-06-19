@@ -10,14 +10,14 @@
               :options="documentOptions"
               :multiple="false"
               label="name"
-              placeholder="Select document"
+              :placeholder="$t('common-select-document')"
               track-by="value"
             ></multiselect>
           </div>
         </div>
         <div class="col-2">
           <div class="mb-3 mt-3">
-            <button type="button" class="btn btn-primary" @click="$emit('switchToQueryTab')">Query corpus</button>
+            <button type="button" class="btn btn-primary" @click="$emit('switchToQueryTab')">{{ $t('common-query-corpus') }}</button>
           </div>
         </div>
       </div>
@@ -203,6 +203,18 @@
         </div>
       </div>
       <div class="container-fluid mt-4">
+        <div class="row mt-2 mb-4">
+          <div class="col col-md-2">
+            <label for="timePicker">{{ $t('common-go-to-time') }}:</label>
+            <div v-if="currentMediaDuration > 0">
+              <VueDatePicker v-model="selectedTime" time-picker enable-seconds format="HH:mm:ss" :min-time="minTime"
+                :start-time="startTime" @update:model-value="handleDatePickerChange"></VueDatePicker>
+            </div>
+            <div v-else>
+              <input type="text" disabled :placeholder="`${$t('common-loading-video-duration')}...`" />
+            </div>
+          </div>
+        </div>
         <div class="row">
           <div class="col" @click="timelineClick">
             <div class="progress" style="height: 10px; width: 100%" ref="timeline">
@@ -214,8 +226,8 @@
         <div class="row mb-3 mt-2">
           <div class="col">
             <!-- Percentage: <span v-html="progress.toFixed(2)" />% -->
-            Frame:
-            <span v-html="parseInt(currentFrame, 10)" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; Time: <span
+            {{ $t('common-frame') }}:
+            <span v-html="parseInt(currentFrame, 10)" />&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; {{ $t('common-time') }}: <span
               v-html="currentTime" />
           </div>
         </div>
@@ -240,7 +252,7 @@
         :key="documentIndexKey"
       />
       <div v-else-if="loadingDocument == true">
-        Loading data ...
+        {{ $t('common-loading-data') }}...
       </div>
     </div>
   </div>
@@ -257,6 +269,9 @@ import { useWsStore } from "@/stores/wsStore";
 import config from "@/config";
 import Utils from "@/utils.js";
 import TimelineView from "@/components/videoscope/TimelineView.vue";
+
+import VueDatePicker from '@vuepic/vue-datepicker';
+import '@vuepic/vue-datepicker/dist/main.css';
 
 const urlRegex = /(https?:\/\/(www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_+.~#?&//=]*))/g;
 
@@ -297,6 +312,10 @@ export default {
 
       timelineEntry: null,
 
+      selectedTime: { hours: 0, minutes: 0, seconds: 0 }, // initialize to 00:00:00
+      minTime: { hours: 0, minutes: 0, seconds: 0 },
+      startTime: { hours: 0, minutes: 0, seconds: 0 },
+
       setResultTimes: null,
       query: "",
       queryDQD: '',
@@ -310,6 +329,7 @@ export default {
     // EditorView,
     // PaginationComponent,
     TimelineView,
+    VueDatePicker
   },
   computed: {
     ...mapState(useCorpusStore, ["queryData", "corpora"]),
@@ -458,6 +478,26 @@ export default {
         this.$refs.videoPlayer4.playbackRate = speed;
       }
       this.playerSpeed = speed;
+    },
+    handleDatePickerChange(newTime) {
+      if(newTime === null) {
+        return;
+      }
+
+      // Convert the selected time (HH:mm:ss) to seconds.
+      let seconds =
+        newTime.hours * 3600 +
+        newTime.minutes * 60 +
+        newTime.seconds;
+
+      console.log(newTime, seconds);
+
+      // Clamp to video duration if available
+      if (this.$refs.videoPlayer1 && this.$refs.videoPlayer1.duration) {
+        seconds = Math.min(seconds, this.$refs.videoPlayer1.duration - 0.1);
+      }
+      // Use your existing helper method to update the player's time
+      this._playerSetTime(seconds);
     },
     timeupdate() {
       try {

@@ -3,7 +3,6 @@ utils.py: all miscellaneous helpers and tools used by backend
 """
 
 import asyncio
-import csv
 import json
 import logging
 import math
@@ -12,6 +11,7 @@ import os
 import re
 import shutil
 import traceback
+import uuid
 
 from dotenv import load_dotenv
 from asyncpg import Connection, Range, Box
@@ -22,6 +22,7 @@ from hashlib import md5
 from io import BytesIO
 from typing import Any, cast, TypeAlias
 from uuid import uuid4, UUID
+from rq.exceptions import NoSuchJobError
 from rq.registry import FinishedJobRegistry
 
 from aiohttp import web
@@ -29,7 +30,7 @@ from aiohttp import web
 # here we remove __slots__ from these superclasses because mypy can't handle them...
 from redis import Redis as RedisConnection
 
-from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser
+from redis._parsers import _AsyncHiredisParser, _AsyncRESP3Parser  # type: ignore
 
 from redis.utils import HIREDIS_AVAILABLE
 
@@ -47,6 +48,8 @@ from rq.connections import get_current_connection
 from rq.job import Job
 
 from .authenticate import Authentication
+
+# from .callbacks import _general_failure
 from .configure import CorpusConfig, CorpusTemplate
 from .typed import (
     Batch,
@@ -54,13 +57,19 @@ from .typed import (
     JSON,
     JSONObject,
     MainCorpus,
+    ObservableDict,
+    ObservableList,
+    _serialize_observable,
     SentJob,
     QueryArgs,
+    RequestInfo,
     Websockets,
 )
 
 CSV_DELIMITERS = [",", "\t"]
 CSV_QUOTES = ['"', "\b"]
+
+QUERY_TTL = int(os.getenv("QUERY_TTL", 5000))
 
 RESULTS_DIR = os.getenv("RESULTS", "results")
 
@@ -124,21 +133,38 @@ CONFIG_JOIN = """CROSS JOIN
 """
 
 META_QUERY = """SELECT
-    -2::int2 AS rstype,
     {selects_formed}
 FROM
-    {froms_formed}
+    preps
     {joins_formed}
-WHERE
-    {wheres_formed}
 GROUP BY
-    {group_by_formed}
-;"""
+    {group_by_formed}"""
 slb = r"[\s\n]+"
 META_QUERY_REGEXP = rf"""SELECT
     -2::int2 AS rstype,{slb}((.+ AS .+)+?)
 FROM(.|{slb})+
 """
+
+
+def _futurecb(
+    job: Job,
+    connection: RedisConnection,
+    result: dict | None = None,
+) -> None:
+    """
+    Fetch msg_id from the job's meta and sends it publish_msg
+    Will be picked up in socks.py, which will resolve the future
+    """
+    msg_id = cast(dict, job.get_meta(refresh=True)).get("msg_id", "")
+    jso = json.dumps(result, cls=CustomEncoder)
+    return _publish_msg(connection, jso, msg_id)
+
+
+# Custom class to add a `job` attribute
+class CustomFuture(asyncio.Future):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.job: Job  # type: ignore
 
 
 class LCPApplication(web.Application):
@@ -172,6 +198,7 @@ class Interrupted(Exception):
 class CustomEncoder(json.JSONEncoder):
     """
     Fix numpy objects and dates, otherwise normal serialisation
+    Also handle ranges from postgres
     """
 
     def default(self, obj: Any) -> JSON:
@@ -181,12 +208,24 @@ class CustomEncoder(json.JSONEncoder):
             return int(obj)
         if isinstance(obj, np.floating):
             return float(obj)
-        # todo -- are we sure this isn't needed?:
-        # ifisinstance(obj, uuid.UUID):
-        #   return str(obj)
-        elif isinstance(obj, (datetime, date)):
+        if isinstance(obj, uuid.UUID):
+            return str(obj)
+        if isinstance(obj, (datetime, date)):
             return obj.isoformat()
-        default: JSON = json.JSONEncoder.default(self, obj)
+        if isinstance(obj, Range):
+            return [obj.lower, obj.upper]
+        if isinstance(obj, Box):
+            return [obj.low.x, obj.low.y, obj.high.x, obj.high.y]
+        if isinstance(obj, (ObservableDict, ObservableList)):
+            return obj._serialize()
+        if isinstance(obj, (tuple, list)):
+            return [_serialize_observable(x) for x in obj]
+        if isinstance(obj, dict):
+            return {k: _serialize_observable(v) for k, v in obj.items()}
+        try:
+            default: JSON = json.JSONEncoder.default(self, obj)
+        except:
+            default = obj
         return default
 
 
@@ -320,14 +359,23 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     await _general_error_handler("timeout", exc, request)
 
 
+def refresh_job_ttl(
+    connection: RedisConnection, job_id: str, new_ttl: int = QUERY_TTL
+) -> None:
+    connection.expire(job_id, new_ttl)
+    connection.expire(f"rq:job:{job_id}", new_ttl)
+    connection.expire(f"rq:resluts:{job_id}", new_ttl)
+
+
 def _get_status(
-    n_results: int,
-    total_results_requested: int,
-    done_batches: list[Batch],
-    all_batches: list[Batch],
+    query_info: dict,
+    request_info: RequestInfo,
+    # n_results: int,
+    # total_results_requested: int,
+    # done_batches: list[Batch],
+    # all_batches: list[Batch],
     search_all: bool = False,
-    full: bool = False,
-    time_so_far: float = 0.0,
+    # time_so_far: float = 0.0,
 ) -> str:
     """
     Is a query finished, or do we need to do another iteration?
@@ -337,6 +385,13 @@ def _get_status(
         partial: currently fewer than total_results_requested
         satisfied: >= total_results_requested
     """
+    n_results = query_info.get("total_results_so_far", 0)
+    done_batches = query_info.get("done_batches", [])
+    all_batches = query_info.get("all_batches", [])
+    time_so_far = query_info.get("total_duration", 0.0)
+    total_results_requested = request_info.get("total_results_requested", 0)
+    full = request_info.get("full", False)
+
     if len(done_batches) == len(all_batches):
         return "finished"
     allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
@@ -350,6 +405,58 @@ def _get_status(
     if n_results >= total_results_requested and not full:
         return "satisfied"
     return "partial"
+
+
+def _get_redis_obj(connection: RedisConnection, key: str) -> dict[str, Any]:
+    obj = json.loads(connection.get(key) or "{}")
+    return obj
+
+
+def _update_redis_obj(
+    connection: RedisConnection,
+    key: str,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    obj = json.loads(connection.get(key) or "{}")
+    for k, v in info.items():
+        obj[k] = v
+    connection.set(key, json.dumps(obj, cls=CustomEncoder))
+    connection.expire(key, MESSAGE_TTL)
+    return obj
+
+
+def _get_query_info(
+    connection: RedisConnection, hash: str = "", job: Job | None = None
+) -> dict[str, Any]:
+    qi_key = f"query_info::{hash}"
+    return _get_redis_obj(connection, qi_key)
+
+
+def _update_query_info(
+    connection: RedisConnection,
+    hash: str = "",
+    job: Job | None = None,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    qi_key = f"query_info::{hash}"
+    return _update_redis_obj(connection, qi_key, info)
+
+
+def _get_request(
+    connection: RedisConnection, hash: str = "", job: Job | None = None
+) -> dict[str, Any]:
+    qi_key = f"request::{hash}"
+    return _get_redis_obj(connection, qi_key)
+
+
+def _update_request(
+    connection: RedisConnection,
+    hash: str = "",
+    job: Job | None = None,
+    info: dict[str, Any] = {},
+) -> dict[str, Any]:
+    qi_key = f"request::{hash}"
+    return _update_redis_obj(connection, qi_key, info)
 
 
 async def sem_coro(
@@ -491,6 +598,16 @@ async def _set_config(payload: JSONObject, app: web.Application) -> None:
     return None
 
 
+@ensure_authorised
+async def refresh_config(request: web.Request) -> web.Response:
+    """
+    Force a refresh of the config via the /config endpoint
+    """
+    qs = request.app["query_service"]
+    job: Job = await qs.get_config(force_refresh=True)
+    return web.json_response({"job": str(job.id)})
+
+
 subtype: TypeAlias = list[dict[str, str]]
 
 
@@ -593,8 +710,8 @@ def _get_sent_ids(
         return out
     prev_results = job.result
     seg_ids: set[str | int] = set()
-    kwargs: dict = cast(dict, job.kwargs)
-    rs = kwargs.get("meta_json", {})["result_sets"]
+    query_info = _get_query_info(conn, job=job)
+    rs = query_info.get("meta_json", {}).get("result_sets", [])
     kwics = set([i for i, r in enumerate(rs, start=1) if r.get("type") == "plain"])
     counts: Counter[int] = Counter()
     to_use: int = next((int(i[0]) for i in prev_results if int(i[0]) in kwics), -2)
@@ -875,7 +992,10 @@ def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
     first_job = job
     first_job_id_from_kwargs = cast(dict, job.kwargs).get("first_job")
     if first_job_id_from_kwargs:
-        first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
+        try:
+            first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
+        except NoSuchJobError:
+            pass
     return first_job
 
 
@@ -909,6 +1029,73 @@ def _decide_can_send(
     return False
 
 
+def _get_progress(job: Job, query_info: dict, request_info: RequestInfo) -> dict:
+    allowed_time = float(os.getenv("QUERY_ALLOWED_JOB_TIME", 0.0))
+    do_full = request_info.get("full", False)
+    status = _get_status(query_info, request_info)
+    total_requested = request_info["total_results_requested"]
+    total_found = query_info["total_results_so_far"]
+    done_batches = query_info["done_batches"]
+    total_words_processed_so_far = sum([x[-1] for x in query_info["done_batches"]]) or 1
+    use = total_words_processed_so_far * 100.0 / query_info["word_count"]
+    total_duration = query_info.get("total_duration", 0.0)
+    time_remaining = _time_remaining(status, total_duration, use)
+    ended_at = cast(datetime, job.ended_at)
+    started_at = cast(datetime, job.started_at)
+    duration: float = round((ended_at - started_at).total_seconds(), 3)
+    time_perc = 0.0
+    if allowed_time > 0.0 and do_full:
+        time_perc = total_duration * 100.0 / allowed_time
+    batches_done_string = f"{len(done_batches)}/{len(query_info['all_batches'])}"
+    total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
+    proportion_that_matches = total_found / total_words_processed_so_far
+    projected_results = int(query_info["word_count"] * proportion_that_matches)
+    if status == "finished":
+        projected_results = total_found if do_full else -1
+        perc_words = 100.0
+        perc_matches = 100.0
+        if do_full:
+            perc_matches = time_perc
+        query_info["percentage_done"] = 100.0
+    elif status in {"partial", "satisfied", "overtime"}:
+        done_batches = query_info["done_batches"]
+        total_words_processed_so_far = sum([x[-1] for x in done_batches]) or 1
+        proportion_that_matches = total_found / total_words_processed_so_far
+        projected_results = int(query_info["word_count"] * proportion_that_matches)
+        if not do_full:
+            projected_results = -1
+        perc_words = total_words_processed_so_far * 100.0 / query_info["word_count"]
+        perc_matches = (
+            min(total_found, total_requested) * 100.0 / (total_requested or total_found)
+        )
+        if do_full:
+            perc_matches = time_perc
+        query_info["percentage_done"] = round(perc_matches, 3)
+    if request_info.get("from_memory"):
+        projected_results = query_info["projected_results"]
+        perc_matches = query_info["percentage_done"]
+        perc_words = query_info["percentage_words_done"]
+        total_found = query_info["total_results_so_far"]
+        batches_done_string = query_info["batches_done_string"]
+        status = query_info["status"]
+        total_duration = query_info["total_duration"]
+    return {
+        "remaining": time_remaining,
+        "job": job.id,
+        "first_job": query_info.get("hash", ""),
+        "user": request_info.get("user", ""),
+        "room": request_info.get("room", ""),
+        "duration": duration,
+        "batches_done": batches_done_string,
+        "total_duration": total_duration,
+        "projected_results": projected_results,
+        "percentage_done": round(perc_matches, 3),
+        "percentage_words_done": round(perc_words, 3),
+        "total_results_so_far": total_found,
+        "action": "background_job_progress",
+    }
+
+
 def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     """
     Helper to find the total requested -- remove this after cleanup ideally
@@ -922,23 +1109,77 @@ def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
     return -1
 
 
-def _get_query_args(connection: RedisConnection, hash: str) -> list[QueryArgs]:
-    qas_json = connection.get(f"query_args_{hash}")
+def _get_request_info(connection: RedisConnection, hash: str) -> list[RequestInfo]:
+    qas_json = connection.get(f"request_info_{hash}")
     qas = json.loads(qas_json) if qas_json else []
     return qas
 
 
-def _set_query_args(connection: RedisConnection, qi_args: QueryArgs) -> None:
+def _set_request_info(connection: RedisConnection, request_info: RequestInfo) -> None:
+    hash = request_info.get("hash", "")
+    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
+    if not next((x for x in all_request_info if x == request_info), None):
+        all_request_info.append(request_info)
+    qa_key = f"request_info_{hash}"
+    connection.set(qa_key, json.dumps(all_request_info))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(
+        qa_key,
+        (
+            whole_corpus_timeout
+            if any(x.get("full") for x in all_request_info)
+            else timeout
+        ),
+    )
+
+
+def _update_request_info(
+    connection: RedisConnection, request_info: RequestInfo, new_info: RequestInfo
+) -> RequestInfo:
+    forbidden_keys = QueryArgs.__optional_keys__.union(QueryArgs.__required_keys__)
+    all_ris = _get_request_info(connection, request_info["hash"])
+    ret_ri: RequestInfo
+    for ri in all_ris:
+        if ri != request_info:
+            continue
+        ret_ri = ri
+        for k, v in new_info.items():
+            assert (
+                k not in forbidden_keys
+            ), f"Cannot change {k} in a request info after it's been created"
+            ri[k] = v  # type: ignore
+    qa_key = f"request_info_{hash}"
+    connection.set(qa_key, json.dumps(all_ris))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(
+        qa_key,
+        (whole_corpus_timeout if any(x.get("full") for x in all_ris) else timeout),
+    )
+    return ret_ri
+
+
+def _delete_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:
     hash = qi_args.get("hash", "")
-    all_query_args: list[QueryArgs] = _get_query_args(connection, hash)
-    if not next((x for x in all_query_args if x == qi_args), None):
-        all_query_args.append(qi_args)
-    connection.set(f"query_args_{hash}", json.dumps(all_query_args))
+    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
+    if not all_request_info:
+        return
+    all_request_info = [x for x in all_request_info if x != qi_args]
+    qa_key = f"request_info_{hash}"
+    if not all_request_info:
+        connection.delete(qa_key)
+        _update_query_info(connection, hash=hash, info={"running": False})
+        return
+    connection.set(qa_key, json.dumps(all_request_info))
+    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
+    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
+    connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
 
 
 def _sign_payload(
     payload: dict[str, Any] | JSONObject | SentJob,
-    kwargs: dict[str, Any] | QueryArgs | SentJob,
+    kwargs: dict[str, Any] | RequestInfo | SentJob,
 ) -> None:
     to_export = kwargs.get("to_export")
     kwargs_to_payload_keys = (
@@ -995,29 +1236,28 @@ def hasher(arg):
     return md5(str_arg.encode("utf-8")).digest().hex()
 
 
-def _parent_of(
-    current_batch: Batch, config: CorpusConfig, child: str, parent: str
-) -> bool:
-    if not current_batch:
-        raise ValueError("Need batch")
+def _parent_of(config: CorpusConfig, child: str, parent: str) -> bool:
     return _layer_contains(config, parent, child)
 
 
-def _is_time_anchored(current_batch: Batch, config: CorpusConfig, layer: str) -> bool:
-    if not current_batch:
-        raise ValueError("Need batch")
-    layer_config = config["layer"].get(layer)
-    if not layer_config:
-        return False
-    if "anchoring" in layer_config:
-        return layer_config["anchoring"].get("time", False)
-    if "contains" in layer_config:
-        return _is_time_anchored(
-            current_batch,
-            config,
-            layer_config.get("contains", config["firstClass"]["token"]),
-        )
+def _is_anchored(entity: dict, config: dict, anchor: str) -> bool:
+    if "anchoring" in entity:
+        return entity["anchoring"].get(anchor, False)
+    if entity.get("contains", "") in config.get("layer", {}):
+        return _is_anchored(config["layer"][entity["contains"]], config, anchor)
     return False
+
+
+def _is_char_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "stream")
+
+
+def _is_time_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "time")
+
+
+def _is_xy_anchored(entity: dict, config: dict) -> bool:
+    return _is_anchored(entity, config, "location")
 
 
 def _default_tracks(config: CorpusConfig) -> dict:
@@ -1027,21 +1267,213 @@ def _default_tracks(config: CorpusConfig) -> dict:
     return ret
 
 
+def _get_query_batches(
+    config: dict,
+    languages: list[str],
+) -> list[list[str | int]]:
+    """
+    Get a list of tuples in the format of (batch_suffix, size) to be queried
+    """
+    out: list[list[str | int]] = []
+    all_languages = ["en", "de", "fr", "ca", "it", "rm"]
+    all_langs = tuple([f"_{la}" for la in all_languages])
+    langs = tuple([f"_{la}" for la in languages])
+    batches = config["_batches"]
+    for name, size in batches.items():
+        stripped = name.rstrip("0123456789")
+        if stripped.endswith("rest"):
+            stripped = stripped[:-4]
+        if not stripped.endswith(langs) and stripped.endswith(all_langs):
+            continue
+        out.append([name, size])
+    return sorted(out, key=lambda x: x[-1])
+
+
+def get_segment_meta_script(
+    config: dict, languages: list[str], batch_name: str
+) -> tuple[str, list[str]]:
+    schema = config["schema_path"]
+    layers: dict = config["layer"]
+    doc: str = config["document"]
+    seg: str = config["segment"]
+    tok: str = config["token"]
+    lang = languages[0] if languages else ""
+    seg_table = _get_table(seg, config, batch_name, lang)
+    if not seg_table:
+        underlang = f"_{lang}" if lang else ""
+        seg_table = f"{seg}{underlang}"
+
+    # SEGMENT
+    annotations: str = (
+        ", annotations"
+        if any(p.get("contains", "") == tok for l, p in layers.items() if l != seg)
+        else ""
+    )
+    seg_mapping = _get_mapping(seg, config, batch_name, lang)
+    prep_table: str = seg_mapping.get("prepared", {}).get(
+        "relation", f"prepared_{seg_table}"
+    )
+    # seg_script = f"SELECT {seg}_id, id_offset, content, annotations FROM {schema}.{prep_table} WHERE {seg}_id IN ({sids})"
+    seg_script = f"SELECT {seg}_id, id_offset, content{annotations} FROM {schema}.{prep_table} WHERE {seg}_id = ANY(:sids)"
+
+    # META
+    has_media = config.get("meta", config).get("mediaSlots", {})
+    parents_of_seg = [
+        k for k in layers if _parent_of(cast(CorpusConfig, config), seg, k)
+    ]
+    parents_with_attributes: dict[str, int] = {seg: 1}  # Query the segment layer itself
+    parents_with_attributes.update(
+        {k: 1 for k in parents_of_seg if layers[k].get("attributes")}
+    )
+    # Make sure to always include Document in there
+    parents_with_attributes[doc] = 1
+
+    selects = []
+    joins: dict[str, int] = {}
+    group_by = []
+    for layer in parents_with_attributes:
+        alias = "s" if layer == seg else layer
+        layer_mapping = config["mapping"]["layer"].get(layer, {})
+        mapping_attrs = layer_mapping.get("attributes", {})
+        partitions = None if layer == seg else layer_mapping.get("partitions")
+        alignment = layer_mapping.get("alignment", {})
+        alignment_relation = {} if layer == seg else alignment.get("relation", None)
+        relation = alignment_relation
+        if not relation and layer != seg:
+            relation = layer_mapping.get("relation", layer.lower())
+        if not relation and lang and partitions:
+            relation = partitions.get(lang, {}).get("relation")
+        prefix_id: str = layer.lower()
+        if layer != seg and alignment:
+            prefix_id = "alignment"
+        # Select the ID
+        iddotref = f"{alias}.{prefix_id}_id"
+        selects.append(f"{iddotref} AS {layer}_id")
+        group_by.append(iddotref)
+        joins_later: dict[str, Any] = {}
+        attributes: dict[str, Any] = layers[layer].get("attributes", {})
+        relational_attributes = {
+            k: v
+            for k, v in attributes.items()
+            if mapping_attrs.get(k, {}).get("type") == "relation"
+        }
+        # Make sure one gets the data in a pure JSON format (not just a string representation of a JSON object)
+        selects += [
+            f"{alias}.\"{attr}\"{'::jsonb' if attr=='meta' else ''} AS {layer}_{attr}"
+            for attr, v in attributes.items()
+            if attr not in relational_attributes and v.get("type") != "vector"
+        ]
+        for attr, v in relational_attributes.items():
+            # Quote attribute name (is arbitrary)
+            attr_mapping = mapping_attrs.get(attr, {})
+            # Mapping is "relation" for dict-like attributes (eg ufeat or agent)
+            attr_table = attr_mapping.get("name", "")
+            alias_attr_table = f"{layer}_{attr}_{attr_table}"
+            attr_table_key = attr_mapping.get("key", attr)
+            attr_name = f'"{attr_table_key}"'
+            on_cond = f"{alias}.{attr}_id = {alias_attr_table}.{attr_table_key}_id"
+            dotref = f"{alias_attr_table}.{attr_name}"
+            sel = f"{dotref} AS {layer}_{attr}"
+            if v.get("type") == "labels":
+                nbit: int = cast(int, attributes[attr].get("nlabels", 1))
+                on_cond = (
+                    f"get_bit({alias}.{attr}, {nbit-1}-{alias_attr_table}.bit) > 0"
+                )
+                sel = f"array_agg({alias_attr_table}.label) AS {layer}_{attr}"
+            else:
+                group_by.append(dotref)
+            # Join the lookup table
+            joins_later[f"{schema}.{attr_table} {alias_attr_table} ON {on_cond}"] = None
+            # Select the attribute from the lookup table
+            selects.append(sel)
+
+        # Join the segment table on preps
+        if layer == seg:
+            joins[f"{schema}.{seg_table} {alias} ON s.{seg}_id = preps.{seg}_id"] = 1
+
+        # Will get char_range from the appropriate table
+        char_range_table: str = alias
+        # join tables
+        if lang and partitions:
+            interim_relation = partitions.get(lang, {}).get("relation")
+            if not interim_relation:
+                # This should never happen?
+                continue
+            if alignment_relation:
+                # The partition table is aligned to a main document table
+                joins[
+                    f"{schema}.{interim_relation} {alias}_{lang} ON {alias}_{lang}.char_range @> s.char_range"
+                ] = 1
+                joins[
+                    f"{schema}.{alignment_relation} {alias} ON {alias}_{lang}.alignment_id = {alias}.alignment_id"
+                ] = 1
+                char_range_table = f"{alias}_{lang}"
+            else:
+                # This is the main document table for this partition
+                joins[
+                    f"{schema}.{interim_relation} {layer} ON {alias}.char_range @> s.char_range"
+                ] = 1
+        elif relation:
+            joins[
+                f"{schema}.{relation} {alias} ON {layer}.char_range @> s.char_range"
+            ] = 1
+        for k in joins_later:
+            joins[k] = 1
+        # Get char_range from the main table
+        chardotref = char_range_table + '."char_range"'
+        selects.append(f"{chardotref} AS {layer}_char_range")
+        group_by.append(chardotref)
+        # And frame_range if applicable
+        if _is_time_anchored(layers[layer], config):
+            selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
+        # And xy_box if applicable
+        if _is_xy_anchored(layers[layer], config):
+            selects.append(f'{char_range_table}."xy_box" AS {layer}_xy_box')
+
+    # Add code here to add "media" if dealing with a multimedia corpus
+    if has_media:
+        selects.append(f"{doc}.media::jsonb AS {doc}_media")
+
+    selects_formed = ", ".join(selects)
+    # left join = include non-empty entities even if other ones are empty
+    joins_formed = f"\n    LEFT JOIN ".join(joins)
+    joins_formed = "" if not joins_formed else f"LEFT JOIN {joins_formed}"
+    group_by_formed = ", ".join(group_by)
+    meta_script = META_QUERY.format(
+        selects_formed=selects_formed,
+        joins_formed=joins_formed,
+        group_by_formed=group_by_formed,
+    )
+    meta_select_labels = [sl.split(" AS ")[-1] for sl in selects]
+
+    # SEGMENTS + META
+    preps_annotations = ", preps.annotations" if annotations else ""
+    meta_array = ", ".join(f"meta.{lb}" for lb in meta_select_labels)
+    script = f"""WITH preps AS ({seg_script}),
+    meta AS ({meta_script})
+SELECT -1::int2 AS rstype, jsonb_build_array(preps.{seg.lower()}_id, preps.id_offset, preps.content{preps_annotations}) FROM preps
+UNION ALL
+SELECT -2::int2 AS rstype, jsonb_build_array({meta_array}) FROM meta;    
+    """
+    print("segment_meta_script", script)
+    return script, meta_select_labels
+
+
 def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
     if not current_batch:
         raise ValueError("Need batch")
-    doc = config["document"]
-    seg = config["segment"]
     layer_info = config["layer"]
     schema = current_batch[1]
     lang = _determine_language(current_batch[2])
+
+    doc: str = config["document"]
+    seg: str = config["segment"]
+    tok: str = config["token"]
     seg_name = _get_table(seg, config, current_batch[2], lang or "")
 
     has_media = config.get("meta", config).get("mediaSlots", {})
 
-    parents_of_seg = [
-        k for k in layer_info if _parent_of(current_batch, config, seg, k)
-    ]
+    parents_of_seg = [k for k in layer_info if _parent_of(config, seg, k)]
     parents_with_attributes = {
         k: None for k in parents_of_seg if layer_info[k].get("attributes")
     }
@@ -1143,7 +1575,7 @@ def _meta_query(current_batch: Batch, config: CorpusConfig) -> str:
         selects.append(f"{chardotref} AS {layer}_char_range")
         group_by.append(chardotref)
         # And frame_range if applicable
-        if _is_time_anchored(current_batch, config, layer):
+        if _is_time_anchored(cast(dict, layer_info[layer]), cast(dict, config)):
             selects.append(f'{char_range_table}."frame_range" AS {layer}_frame_range')
         # And xy_box if applicable
         if config["layer"].get(layer, {}).get("anchoring", {}).get("location", False):

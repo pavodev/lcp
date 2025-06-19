@@ -3,14 +3,14 @@
     <div class="container-fluid mt-4 px-4">
       <div class="row">
         <div class="col">
-          <Title :title="'Query'" />
+          <Title :title="$t('common-query')" />
         </div>
       </div>
       <div class="row mt-2">
         <div class="col-4">
           <div class="form-group row">
             <label for="staticEmail" class="col-sm-3 col-form-label">
-              Corpora
+              {{ $t('common-corpora') }}
               <!-- <div
                 v-if="selectedCorpora && selectedCorpora.corpus"
                 class="details-button icon-3 tooltips corpus-structure-button"
@@ -21,24 +21,14 @@
               </div> -->
             </label>
             <div class="col-sm-9">
-              <multiselect
-                v-model="selectedCorpora"
-                :options="corporaOptions"
-                placeholder="Select corpus"
-                :multiple="false"
-                label="name"
-                track-by="value"
-              ></multiselect>
+              <multiselect v-model="selectedCorpora" :options="corporaOptions" placeholder="Select corpus"
+                :multiple="false" label="name" track-by="value"></multiselect>
             </div>
           </div>
           <div class="form-group row mt-1" v-if="selectedCorpora && availableLanguages.length > 1">
-            <label for="staticEmail" class="col-sm-3 col-form-label">Languages</label>
+            <label for="staticEmail" class="col-sm-3 col-form-label">{{ $t('common-languages') }}</label>
             <div class="col-sm-9">
-              <multiselect
-                v-model="selectedLanguages"
-                :options="availableLanguages"
-                :multiple="true"
-              ></multiselect>
+              <multiselect v-model="selectedLanguages" :options="availableLanguages" :multiple="true"></multiselect>
             </div>
           </div>
         </div>
@@ -47,39 +37,17 @@
         <div class="col-12 mt-3">
           <div class="form-floating mb-3">
             <nav>
-              <div
-                class="nav nav-tabs"
-                id="nav-main-tab"
-                role="tablist"
-                :class="{ 'reverse-items': ['soundscript', 'videoscope'].includes(appType) }"
-              >
-                <button
-                  class="nav-link"
-                  :class="{ active: activeMainTab === 'query' }"
-                  id="nav-query-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#nav-query"
-                  type="button"
-                  role="tab"
-                  aria-controls="nav-query"
-                  aria-selected="true"
-                  @click="activeMainTab = 'query'"
-                >
-                  Query
+              <div class="nav nav-tabs" id="nav-main-tab" role="tablist"
+                :class="{ 'reverse-items': ['soundscript', 'videoscope'].includes(appType) }">
+                <button class="nav-link" :class="{ active: activeMainTab === 'query' }" id="nav-query-tab"
+                  data-bs-toggle="tab" data-bs-target="#nav-query" type="button" role="tab" aria-controls="nav-query"
+                  aria-selected="true" @click="activeMainTab = 'query'">
+                  {{ $t('common-query') }}
                 </button>
-                <button
-                  class="nav-link"
-                  :class="{ active: activeMainTab === 'data' }"
-                  id="nav-data-tab"
-                  data-bs-toggle="tab"
-                  data-bs-target="#nav-data"
-                  type="button"
-                  role="tab"
-                  aria-controls="nav-data"
-                  aria-selected="false"
-                  @click="activeMainTab = 'data'"
-                >
-                  Data
+                <button class="nav-link" :class="{ active: activeMainTab === 'data' }" id="nav-data-tab"
+                  data-bs-toggle="tab" data-bs-target="#nav-data" type="button" role="tab" aria-controls="nav-data"
+                  aria-selected="false" @click="activeMainTab = 'data'">
+                  {{ $t('common-data') }}
                   <div class="lds-ripple lds-white lds-xs" v-if="loading">
                     <div></div>
                     <div></div>
@@ -102,22 +70,14 @@
               </div>
             </nav>
             <div class="tab-content" id="nav-main-tabContent">
-              <div
-                class="tab-pane fade pt-3"
-                :class="{ active: activeMainTab === 'query', show: activeMainTab === 'query' }"
-                id="nav-query"
-                role="tabpanel"
-                aria-labelledby="nav-query-tab"
-              >
+              <div class="tab-pane fade pt-3"
+                :class="{ active: activeMainTab === 'query', show: activeMainTab === 'query' }" id="nav-query"
+                role="tabpanel" aria-labelledby="nav-query-tab">
                 <div class="mt-3">
-                  <button
-                    type="button"
-                    @click="submit"
-                    class="btn btn-primary me-1 mb-1"
-                    :disabled="isSubmitDisabled()"
-                  >
+                  <button type="button" @click="submit" class="btn btn-primary me-1 mb-1"
+                    :disabled="isSubmitDisabled()">
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                    {{ loading == "resubmit" ? 'Resubmit' : 'Submit' }}
+                    {{ loading == "resubmit" ? $t('common-resubmit') : $t('common-submit') }}
                   </button>
 
                   <button
@@ -129,290 +89,163 @@
                     @click="setExportFilename('xml')"
                   >
                     <FontAwesomeIcon :icon="['fas', 'file-export']" />
-                    Export
+                    {{ $t('common-export') }}
                   </button>
 
-                  <button
-                    type="button"
-                    v-if="queryStatus == 'satisfied' && !loading && userData.user.anon != true"
-                    @click="submitFullSearch"
-                    class="btn btn-primary me-1 mb-1"
-                  >
+                  <button type="button" v-if="queryStatus == 'satisfied' && !loading && userData.user.anon != true"
+                    @click="submitFullSearch" class="btn btn-primary me-1 mb-1">
                     <FontAwesomeIcon :icon="['fas', 'magnifying-glass-chart']" />
-                    Search whole corpus
+                    {{ $t('common-search-whole') }}
                   </button>
-                  <button
-                    v-else-if="loading"
-                    type="button"
-                    @click="stop"
-                    :disabled="loading == false"
-                    class="btn btn-primary me-1 mb-1"
-                  >
+                  <button v-else-if="loading" type="button" @click="stop" :disabled="loading == false"
+                    class="btn btn-primary me-1 mb-1">
                     <FontAwesomeIcon :icon="['fas', 'xmark']" />
-                    Stop
+                    {{ $t('common-stop') }}
                   </button>
                 </div>
-
                 <div class="row">
                   <div class="col-6">
                     <div class="form-floating mb-3">
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
-                          <button
-                            class="nav-link"
-                            id="nav-plaintext-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#nav-plaintext"
-                            type="button"
-                            role="tab"
-                            aria-controls="nav-plaintext"
-                            aria-selected="false"
-                            @click="currentTab = 'text'"
-                          >
-                            Text
+                          <button class="nav-link" id="nav-plaintext-tab" data-bs-toggle="tab"
+                            data-bs-target="#nav-plaintext" type="button" role="tab" aria-controls="nav-plaintext"
+                            aria-selected="false" @click="setTab('text')">
+                            {{ $t('common-text') }}
                           </button>
-                          <button
-                            class="nav-link active"
-                            id="nav-dqd-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#nav-dqd"
-                            type="button"
-                            role="tab"
-                            aria-controls="nav-dqd"
-                            aria-selected="true"
-                            @click="currentTab = 'dqd'"
-                          >
+                          <button class="nav-link active" id="nav-dqd-tab" data-bs-toggle="tab"
+                            data-bs-target="#nav-dqd" type="button" role="tab" aria-controls="nav-dqd"
+                            aria-selected="true" @click="setTab('dqd')">
                             DQD
                           </button>
-                          <button
-                            class="nav-link"
-                            id="nav-cqp-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#nav-cqp"
-                            type="button"
-                            role="tab"
-                            aria-controls="nav-cqp"
-                            aria-selected="false"
-                            @click="currentTab = 'cqp'"
-                          >
+                          <button class="nav-link" id="nav-cqp-tab" data-bs-toggle="tab" data-bs-target="#nav-cqp"
+                            type="button" role="tab" aria-controls="nav-cqp" aria-selected="false"
+                            @click="setTab('cqp')">
                             CQP
                           </button>
-                          <button
-                            class="nav-link"
-                            id="nav-json-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#nav-json"
-                            type="button"
-                            role="tab"
-                            aria-controls="nav-json"
-                            aria-selected="false"
-                            @click="currentTab = 'json'"
-                          >
+                          <button class="nav-link" id="nav-json-tab" data-bs-toggle="tab" data-bs-target="#nav-json"
+                            type="button" role="tab" aria-controls="nav-json" aria-selected="false"
+                            @click="setTab('json')">
                             JSON
                           </button>
-                          <button
-                            v-if="sqlQuery"
-                            class="nav-link"
-                            id="nav-sql-tab"
-                            data-bs-toggle="tab"
-                            data-bs-target="#nav-sql"
-                            type="button"
-                            role="tab"
-                            aria-controls="nav-sql"
-                            aria-selected="false"
-                            @click="currentTab = 'sql'"
-                          >
+                          <button v-if="sqlQuery" class="nav-link" id="nav-sql-tab" data-bs-toggle="tab"
+                            data-bs-target="#nav-sql" type="button" role="tab" aria-controls="nav-sql"
+                            aria-selected="false" @click="setTab(currentTab = 'sql')">
                             SQL
                           </button>
                         </div>
                       </nav>
                       <div class="tab-content" id="nav-query-tabContent">
-                        <div
-                          class="tab-pane fade pt-3"
-                          id="nav-plaintext"
-                          role="tabpanel"
-                          aria-labelledby="nav-plaintext-tab"
-                        >
-                          <input
-                            class="form-control"
-                            type="text"
-                            placeholder="Query (e.g. a cat)"
-                            :class="
-                              isQueryValidData == null || isQueryValidData.valid == true
-                                ? 'ok'
-                                : 'error'
-                            "
-                            v-model="textsearch"
-                            @keyup="$event.key=='Enter' && this.submit()"
-                          />
+                        <div class="tab-pane fade pt-3" id="nav-plaintext" role="tabpanel"
+                          aria-labelledby="nav-plaintext-tab">
+                          <input class="form-control" type="text" placeholder="Query (e.g. a cat)" :class="isQueryValidData == null || isQueryValidData.valid == true
+                            ? 'ok'
+                            : 'error'
+                            " v-model="textsearch" @keyup="$event.key == 'Enter' && this.submit()" />
                           <!-- <label for="floatingTextarea">Query</label> -->
-                          <p
-                            class="error-text text-danger"
-                            v-if="isQueryValidData && isQueryValidData.valid != true"
-                          >
+                          <p class="error-text text-danger" v-if="isQueryValidData && isQueryValidData.valid != true">
                             {{ isQueryValidData.error }}
                           </p>
                         </div>
-                        <div
-                          class="tab-pane fade show active pt-3"
-                          id="nav-dqd"
-                          role="tabpanel"
-                          aria-labelledby="nav-results-tab"
-                        >
-                          <EditorView
-                            :query="queryDQD"
-                            :defaultQuery="defaultQueryDQD"
-                            :corpora="selectedCorpora"
-                            :invalidError="
-                              isQueryValidData && isQueryValidData.valid != true
-                                ? isQueryValidData.error
-                                : null
-                            "
-                            @submit="submit"
-                            @update="updateQueryDQD"
-                          />
-                          <p
-                            class="error-text text-danger mt-3"
-                            v-if="
-                              isQueryValidData && isQueryValidData.valid != true && debug
-                            "
-                          >
+                        <div class="tab-pane fade show active pt-3" id="nav-dqd" role="tabpanel"
+                          aria-labelledby="nav-results-tab">
+                          <EditorView :query="queryDQD" :defaultQuery="defaultQueryDQD" :corpora="selectedCorpora"
+                            :invalidError="isQueryValidData && isQueryValidData.valid != true
+                              ? isQueryValidData.error
+                              : null
+                              " @submit="submit" @update="updateQueryDQD" />
+                          <p class="error-text text-danger mt-3" v-if="
+                            isQueryValidData && isQueryValidData.valid != true && debug
+                          ">
                             {{ isQueryValidData.error }}
                           </p>
                         </div>
-                        <div
-                          class="tab-pane fade pt-3"
-                          id="nav-cqp"
-                          role="tabpanel"
-                          aria-labelledby="nav-cqp-tab"
-                        >
-                          <textarea
-                            class="form-control query-field"
-                            placeholder="Query (e.g. [word=&quot;hello&quot;])"
-                            :class="
-                              isQueryValidData == null || isQueryValidData.valid == true
-                                ? 'ok'
-                                : 'error'
-                            "
-                            v-model="cqp"
-                            @keyup="$event.key=='Enter' && $event.ctrlKey && this.submit()"
-                          ></textarea>
+                        <div class="tab-pane fade pt-3" id="nav-cqp" role="tabpanel" aria-labelledby="nav-cqp-tab">
+                          <textarea class="form-control query-field" placeholder="Query (e.g. [word=&quot;hello&quot;])"
+                            :class="isQueryValidData == null || isQueryValidData.valid == true
+                              ? 'ok'
+                              : 'error'
+                              " v-model="cqp"
+                            @keyup="$event.key == 'Enter' && $event.ctrlKey && this.submit()"></textarea>
                           <!-- <label for="floatingTextarea">Query</label> -->
-                          <p
-                            class="error-text text-danger"
-                            v-if="isQueryValidData && isQueryValidData.valid != true"
-                          >
+                          <p class="error-text text-danger" v-if="isQueryValidData && isQueryValidData.valid != true">
                             {{ isQueryValidData.error }}
                           </p>
                         </div>
-                        <div
-                          class="tab-pane fade pt-3"
-                          id="nav-json"
-                          role="tabpanel"
-                          aria-labelledby="nav-json-tab"
-                        >
-                          <textarea
-                            class="form-control query-field"
-                            placeholder="Query (e.g. test.*)"
-                            :class="
-                              isQueryValidData == null || isQueryValidData.valid == true
-                                ? 'ok'
-                                : 'error'
-                            "
-                            v-model="query"
-                          ></textarea>
+                        <div class="tab-pane fade pt-3" id="nav-json" role="tabpanel" aria-labelledby="nav-json-tab">
+                          <textarea class="form-control query-field" placeholder="Query (e.g. test.*)" :class="isQueryValidData == null || isQueryValidData.valid == true
+                            ? 'ok'
+                            : 'error'
+                            " v-model="query"></textarea>
                           <!-- <label for="floatingTextarea">Query</label> -->
-                          <p
-                            class="error-text text-danger"
-                            v-if="isQueryValidData && isQueryValidData.valid != true"
-                          >
+                          <p class="error-text text-danger" v-if="isQueryValidData && isQueryValidData.valid != true">
                             {{ isQueryValidData.error }}
                           </p>
                         </div>
-                        <div
-                          v-if="sqlQuery"
-                          class="tab-pane fade pt-3"
-                          id="nav-sql"
-                          role="tabpanel"
-                          aria-labelledby="nav-sql-tab"
-                        >
-                          <textarea
-                            class="form-control query-field"
-                            v-model="sqlQuery"
-                          ></textarea>
+                        <div v-if="sqlQuery" class="tab-pane fade pt-3" id="nav-sql" role="tabpanel"
+                          aria-labelledby="nav-sql-tab">
+                          <textarea class="form-control query-field" v-model="sqlQuery"></textarea>
                         </div>
+                      </div>
+                    </div>
+                    <div class="mt-3">
+                      <button type="button" v-if="!loading && userData.user.anon != true && userQueryVisible()"
+                        :disabled="isQueryValidData && isQueryValidData.valid != true" class="btn btn-primary me-2 mb-2"
+                        data-bs-toggle="modal" data-bs-target="#saveQueryModal">
+                        <FontAwesomeIcon :icon="['fas', 'file-export']" />
+                        {{ $t('common-save-query') }}
+                      </button>
+                      <button type="button" v-if="!loading && userQueryVisible() && selectedQuery"
+                        :disabled="(isQueryValidData && isQueryValidData.valid != true)"
+                        class="btn btn-danger me-2 mb-2" data-bs-toggle="modal" data-bs-target="#deleteQueryModal">
+                        <FontAwesomeIcon :icon="['fas', 'trash']" />
+                        {{ $t('common-delete-query') }}
+                      </button>
+                      <div v-if="userQueryVisible()">
+                        <multiselect v-model="selectedQuery" :options="processedSavedQueries" :searchable="true"
+                          :clear-on-select="false" :close-on-select="true" placeholder="Select a saved query"
+                          label="query_name" track-by="idx" @select="handleQuerySelection"></multiselect>
+                        <!-- <p v-if="selectedQuery">
+                          Selected query: {{ selectedQuery.query_name }}
+                        </p> -->
                       </div>
                     </div>
                   </div>
                   <div class="col-6">
                     <div class="corpus-graph mt-3" v-if="selectedCorpora">
-                      <FontAwesomeIcon
-                        :icon="['fas', 'expand']"
-                        @click="openGraphInModal"
-                        data-bs-toggle="modal"
-                        data-bs-target="#corpusDetailsModal"
-                      />
-                      <CorpusGraphView
-                        :corpus="selectedCorpora.corpus"
-                        :key="graphIndex"
-                        v-if="showGraph == 'main'"
-                        @graphReady="resizeGraph"
-                      />
+                      <FontAwesomeIcon :icon="['fas', 'expand']" @click="openGraphInModal" data-bs-toggle="modal"
+                        data-bs-target="#corpusDetailsModal" />
+                      <CorpusGraphView :corpus="selectedCorpora.corpus" :key="graphIndex" v-if="showGraph == 'main'"
+                        @graphReady="resizeGraph" />
                     </div>
                   </div>
                 </div>
               </div>
-              <div
-                class="tab-pane fade"
-                :class="{ active: activeMainTab === 'data', show: activeMainTab === 'data' }"
-                id="nav-data"
-                role="tabpanel"
-                aria-labelledby="nav-data-tab"
-              >
-                <PlayerComponent
-                  v-if="selectedCorpora && showExploreTab()"
-                  :key="selectedCorpora"
-                  :selectedCorpora="selectedCorpora"
-                  :selectedMediaForPlay="selectedMediaForPlay"
-                  :hoveredResult="hoveredResult"
-                  :dataType="corpusDataType(selectedCorpora.corpus)"
-                  @switchToQueryTab="setMainTab"
-                />
+              <div class="tab-pane fade" :class="{ active: activeMainTab === 'data', show: activeMainTab === 'data' }"
+                id="nav-data" role="tabpanel" aria-labelledby="nav-data-tab">
+                <PlayerComponent v-if="selectedCorpora && showExploreTab()" :key="selectedCorpora"
+                  :selectedCorpora="selectedCorpora" :selectedMediaForPlay="selectedMediaForPlay"
+                  :hoveredResult="hoveredResult" :dataType="corpusDataType(selectedCorpora.corpus)"
+                  @switchToQueryTab="setMainTab" />
 
                 <hr>
                 <div class="mt-5 row" v-if="querySubmitted">
                   <div class="col-6">
-                    <h6 class="mb-2">Query result</h6>
+                    <h6 class="mb-2">{{ $t('common-query-result') }}</h6>
                     <div class="progress mb-2">
-                      <div
-                        class="progress-bar"
-                        :class="
-                          loading ? 'progress-bar-striped progress-bar-animated' : ''
-                        "
-                        role="progressbar"
-                        :style="`width: ${percentageDone}%`"
-                        :aria-valuenow="percentageDone"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                      >
+                      <div class="progress-bar" :class="loading ? 'progress-bar-striped progress-bar-animated' : ''
+                        " role="progressbar" :style="`width: ${percentageDone}%`" :aria-valuenow="percentageDone"
+                        aria-valuemin="0" aria-valuemax="100">
                         {{ (percentageDone || 0.0).toFixed(2) }}%
                       </div>
                     </div>
                   </div>
                   <div class="col-6">
-                    <h6 class="mb-2">Total progress</h6>
+                    <h6 class="mb-2">{{ $t('common-total-progress') }}</h6>
                     <div class="progress mb-2">
-                      <div
-                        class="progress-bar"
-                        :class="
-                          loading ? 'progress-bar-striped progress-bar-animated' : ''
-                        "
-                        role="progressbar"
-                        :style="`width: ${percentageTotalDone}%`"
-                        :aria-valuenow="percentageTotalDone"
-                        aria-valuemin="0"
-                        aria-valuemax="100"
-                      >
+                      <div class="progress-bar" :class="loading ? 'progress-bar-striped progress-bar-animated' : ''
+                        " role="progressbar" :style="`width: ${percentageTotalDone}%`"
+                        :aria-valuenow="percentageTotalDone" aria-valuemin="0" aria-valuemax="100">
                         {{ percentageTotalDone.toFixed(2) }}%
                       </div>
                     </div>
@@ -421,34 +254,25 @@
                     <div class="row mb-4">
                       <div class="col">
                         <p class="mb-1">
-                          Number of results:
-                          <span
-                            class="text-bold"
-                            v-html="WSDataResults.total_results_so_far"
-                          ></span>
+                          {{ $t('common-number-results') }}:
+                          <span class="text-bold" v-html="WSDataResults.total_results_so_far"></span>
                         </p>
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Projected results:
-                          <span
-                            class="text-bold"
-                            v-html="WSDataResults.projected_results"
-                          ></span>
+                          {{ $t('common-projected-results') }}:
+                          <span class="text-bold" v-html="WSDataResults.projected_results"></span>
                         </p>
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Batch done:
-                          <span
-                            class="text-bold"
-                            v-html="WSDataResults.batches_done"
-                          ></span>
+                          {{ $t('common-batch-done') }}:
+                          <span class="text-bold" v-html="WSDataResults.batches_done"></span>
                         </p>
                       </div>
                       <div class="col">
                         <p class="mb-1">
-                          Status:
+                          {{ $t('common-status') }}:
                           <!-- <span class="text-bold" v-html="WSDataResults.status"></span> -->
                           <span class="text-bold" v-html="queryStatus"></span>
                         </p>
@@ -457,55 +281,42 @@
                   </div>
                 </div>
 
-                <div
-                  v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
-                  class="tooltip bs-tooltip-auto fade show"
-                  role="tooltip"
-                  style="
+                <div v-if="showResultsNotification && queryStatus == 'satisfied' && !loading"
+                  class="tooltip bs-tooltip-auto fade show" role="tooltip" style="
                     position: absolute;
                     left: 50vw;
                     transform: translate(-50%, -100%);
                     margin: 0px;
                     z-index: 10;
-                  "
-                  data-popper-placement="top"
-                >
+                  " data-popper-placement="top">
                   <div class="tooltip-arrow" style="position: absolute; left: 50%"></div>
                   <div class="tooltip-inner">
                     <div>
-                      The first pages of results have been fetched. More results will be
-                      fetched if you move to the next page or if you hit Search whole
-                      corpus.
+                      {{ $t('platform-general-fetched-results') }}
                     </div>
                     <div style="margin-top: 0.5em">
                       <input type="checkbox" id="dontShowResultsNotif" />
-                      <label for="dontShowResultsNotif">Don't show this again</label>
-                      <button
-                        @click="dismissResultsNotification"
-                        style="
+                      <label for="dontShowResultsNotif">{{ $t('common-dont-show-again') }}</label>
+                      <button @click="dismissResultsNotification" style="
                           border: solid 1px white;
                           border-radius: 0.5em;
                           margin-left: 0.25em;
                           color: white;
                           background-color: transparent;
-                        "
-                      >
-                        OK
+                        ">
+                        {{ $t('common-ok').toUpperCase() }}
                       </button>
                     </div>
                   </div>
                 </div>
 
-                <div
-                  v-if="percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)"
-                  style="text-align: center"
-                  class="mb-3 mt-2"
-                >
+                <div v-if="percentageDone == 100 && (!WSDataSentences || !WSDataSentences.result)"
+                  style="text-align: center" class="mb-3 mt-2">
                   <div v-if="WSDataResults && WSDataResults.total_results_so_far == 0">
-                    No results found!
+                    {{ $t('common-no-results') }}!
                   </div>
                   <div>
-                    Loading results...
+                    {{ $t('common-loading-results') }}...
                   </div>
                 </div>
                 <div class="mt-2">
@@ -523,6 +334,7 @@
                               :id="`nav-results-tabs-${index}`"
                               data-bs-toggle="tab"
                               :data-bs-target="`#nav-results-${index}`"
+                              @click.stop.prevent="activeResultIndex = (index+1)"
                               type="button"
                               role="tab"
                               :aria-controls="`nav-results-${index}`"
@@ -533,86 +345,53 @@
                                   WSDataSentences &&
                                   WSDataSentences.result) ||
                                 resultSet.type != 'plain'
-                              "
-                            >
-                              <FontAwesomeIcon
-                                v-if="resultSet.type == 'plain'"
-                                :icon="['fas', 'barcode']"
-                              />
-                              <FontAwesomeIcon
-                                v-else-if="resultSet.type == 'collocation'"
-                                :icon="['fas', 'circle-nodes']"
-                              />
+                              ">
+                              <FontAwesomeIcon v-if="resultSet.type == 'plain'" :icon="['fas', 'barcode']" />
+                              <FontAwesomeIcon v-else-if="resultSet.type == 'collocation'"
+                                :icon="['fas', 'circle-nodes']" />
                               <FontAwesomeIcon v-else :icon="['fas', 'chart-simple']" />
                               {{ resultSet.name }}
-                              <small
-                                >(<span v-if="resultSet.type == 'plain'">
-                                  {{
-                                    WSDataSentences && WSDataSentences.result[index + 1]
-                                      ? WSDataSentences.result[index + 1].length
-                                      : 0
-                                  }}</span
-                                >
-                                <span v-else>{{
+                              <small>
+                                <span>{{
                                   WSDataResults && WSDataResults.result[index + 1]
                                     ? WSDataResults.result[index + 1].length
                                     : 0
                                 }}</span>
-                                )</small
+                              </small
                               >
                             </button>
                           </template>
                         </div>
                       </nav>
                       <div class="tab-content" id="nav-results-tabsContent">
-                        <div
-                          class="tab-pane fade show pt-3"
-                          :class="index == 0 ? 'active' : ''"
-                          :id="`nav-results-${index}`"
-                          role="tabpanel"
-                          :aria-labelledby="`nav-results-${index}-tab`"
+                        <div class="tab-pane fade show pt-3" :class="index == 0 ? 'active' : ''"
+                          :id="`nav-results-${index}`" role="tabpanel" :aria-labelledby="`nav-results-${index}-tab`"
                           v-for="(resultSet, index) in WSDataResults.result['0'].result_sets"
-                          :key="`result-tab-${index}`"
-                        >
-                          <span
-                            v-if="
-                              resultSet.type == 'plain' &&
-                              WSDataSentences &&
-                              WSDataSentences.result
-                            "
-                          >
+                          :key="`result-tab-${index}`">
+                          <span v-if="
+                            resultSet.type == 'plain' &&
+                            WSDataSentences &&
+                            WSDataSentences.result
+                          ">
                             <div class="btn-group mt-2 btn-group-sm mb-3">
-                              <a
-                                href="#"
-                                @click.stop.prevent="plainType = 'table'"
-                                class="btn"
-                                :class="
-                                  plainType == 'table' || resultContainsSet(resultSet)
-                                    ? 'active btn-primary'
-                                    : 'btn-light'
-                                "
-                              >
+                              <a href="#" @click.stop.prevent="plainType = 'table'" class="btn" :class="plainType == 'table' || resultContainsSet(resultSet)
+                                ? 'active btn-primary'
+                                : 'btn-light'
+                                ">
                                 <FontAwesomeIcon :icon="['fas', 'table']" />
-                                Plain
+                                {{ $t('common-plain') }}
                               </a>
-                              <a
-                                v-if="resultContainsSet(resultSet) == false"
-                                href="#"
-                                @click.stop.prevent="plainType = 'kwic'"
-                                class="btn"
-                                :class="
-                                  plainType == 'kwic' ? 'active btn-primary' : 'btn-light'
-                                "
-                                aria-current="page"
-                              >
+                              <a v-if="resultContainsSet(resultSet) == false" href="#"
+                                @click.stop.prevent="plainType = 'kwic'" class="btn" :class="plainType == 'kwic' ? 'active btn-primary' : 'btn-light'
+                                  " aria-current="page">
                                 <FontAwesomeIcon :icon="['fas', 'barcode']" />
                                 KWIC
                               </a>
                             </div>
                             <ResultsPlainTableView
                               v-if="plainType == 'table' || resultContainsSet(resultSet)"
-                              :data="WSDataSentences.result[index + 1]"
-                              :sentences="WSDataSentences.result[-1]"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
                               :languages="selectedLanguages"
                               :meta="WSDataMeta"
                               :attributes="resultSet.attributes"
@@ -625,8 +404,8 @@
                             />
                             <ResultsKWICView
                               v-else-if="resultContainsSet(resultSet) == false"
-                              :data="WSDataSentences.result[index + 1]"
-                              :sentences="WSDataSentences.result[-1]"
+                              :data="WSDataResults.result[index + 1] || []"
+                              :sentences="WSDataSentences.result[-1] || []"
                               :languages="selectedLanguages"
                               :meta="WSDataMeta"
                               :attributes="resultSet.attributes"
@@ -636,15 +415,10 @@
                               :loading="loading"
                             />
                           </span>
-                          <ResultsTableView
-                            v-else-if="resultSet.type != 'plain'"
-                            :data="WSDataResults.result[index + 1]"
-                            :languages="selectedLanguages"
-                            :attributes="resultSet.attributes"
-                            :meta="WSDataMeta"
-                            :resultsPerPage="resultsPerPage"
-                            :type="resultSet.type"
-                          />
+                          <ResultsTableView v-else-if="resultSet.type != 'plain'"
+                            :data="WSDataResults.result[index + 1]" :languages="selectedLanguages"
+                            :attributes="resultSet.attributes" :meta="WSDataMeta" :resultsPerPage="resultsPerPage"
+                            :type="resultSet.type" :corpora="selectedCorpora" />
                         </div>
                       </div>
                     </div>
@@ -659,23 +433,12 @@
     </div>
 
     <!-- Modal -->
-    <div
-      class="modal fade"
-      id="exportModal"
-      tabindex="-1"
-      aria-labelledby="exportModalLabel"
-      aria-hidden="true"
-    >
+    <div class="modal fade" id="exportModal" tabindex="-1" aria-labelledby="exportModalLabel" aria-hidden="true">
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="exportModalLabel">Export results</h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+            <h5 class="modal-title" id="exportModalLabel">{{ $t('common-export-results') }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start">
             <div class="form-floating mb-3">
@@ -771,84 +534,68 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Close
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
       </div>
     </div>
-    <div
-      class="modal fade"
-      id="saveQueryModal"
-      tabindex="-1"
-      aria-labelledby="saveQueryModalLabel"
-      aria-hidden="true"
-    >
+    <div class="modal fade" id="saveQueryModal" tabindex="-1" aria-labelledby="saveQueryModalLabel" aria-hidden="true">
       <div class="modal-dialog">
         <div class="modal-content">
           <div class="modal-header">
-            <h5 class="modal-title" id="saveQueryModalLabel">Save query</h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+            <h5 class="modal-title" id="saveQueryModalLabel">{{ $t('common-save-query') }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start">
-            <label for="queryName" class="form-label">Query name</label>
-            <input
-              type="text"
-              class="form-control"
-              id="queryName"
-              v-model="queryName"
-            />
+            <label for="queryName" class="form-label">{{ $t('common-query-name') }}</label>
+            <input type="text" class="form-control" id="queryName" v-model="queryName" />
           </div>
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Close
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              {{ $t('common-close') }}
             </button>
-            <button
-              type="button"
-              :disabled="!queryName"
-              @click="saveQuery"
-              class="btn btn-primary me-1"
-            >
-              Save query
+            <button type="button" :disabled="!queryName" @click="saveQuery" class="btn btn-primary me-1"
+              data-bs-dismiss="modal">
+              {{ $t('common-save-query') }}
             </button>
           </div>
         </div>
       </div>
     </div>
-    <div
-      class="modal fade"
-      id="corpusDetailsModal"
-      tabindex="-1"
-      aria-labelledby="corpusDetailsModalLabel"
-      aria-hidden="true"
-      ref="vuemodal"
-    >
+    <div class="modal fade" id="deleteQueryModal" tabindex="-1" aria-labelledby="deleteQueryModalLabel"
+      aria-hidden="true">
+      <div class="modal-dialog">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title" id="deleteQueryModalLabel">{{ $t('common-delete-query') }}</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+          </div>
+          <div class="modal-body text-start">
+            <p>{{ $t('common-delete-query-sure') }}</p>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              {{ $t('common-close') }}
+            </button>
+            <button type="button" @click="deleteQuery" class="btn btn-danger me-1"
+              data-bs-dismiss="modal">
+              {{ $t('common-delete-query') }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal fade" id="corpusDetailsModal" tabindex="-1" aria-labelledby="corpusDetailsModalLabel"
+      aria-hidden="true" ref="vuemodal">
       <div class="modal-dialog modal-xl">
         <div class="modal-content">
           <div class="modal-header">
             <h5 class="modal-title" id="corpusDetailsModalLabel">
-              Corpus structure
+              {{ $t('corpus-structure') }}
             </h5>
-            <button
-              type="button"
-              class="btn-close"
-              data-bs-dismiss="modal"
-              aria-label="Close"
-            ></button>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body text-start" v-if="showGraph == 'modal'">
             <div class="row">
@@ -857,26 +604,15 @@
             </div>
           </div>
           <div class="modal-footer">
-            <button
-              type="button"
-              class="btn btn-secondary"
-              data-bs-dismiss="modal"
-            >
-              Close
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+              {{ $t('common-close') }}
             </button>
           </div>
         </div>
       </div>
     </div>
-    <div
-      class="lcp-progress-bar"
-      title="Refresh progress bar"
-      v-if="showLoadingBar"
-    >
-      <div
-        class="lcp-progress-bar-driver"
-        :style="`width: ${navPercentage}%;`"
-      ></div>
+    <div class="lcp-progress-bar" :title="$t('common-refresh-progress')" v-if="showLoadingBar">
+      <div class="lcp-progress-bar-driver" :style="`width: ${navPercentage}%;`"></div>
     </div>
   </div>
 </template>
@@ -893,6 +629,7 @@
   opacity: 1;
   transition: opacity 3s linear;
 }
+
 .lcp-progress-bar-driver {
   height: 1px;
   width: 0%;
@@ -900,41 +637,52 @@
   transition: 0.2s;
   box-shadow: 0px 0px 3px 1px #dc6027ad;
 }
+
 .container {
   text-align: left;
 }
+
 .pre {
   font-family: "Courier New", Courier, monospace;
 }
+
 .query-field {
   height: 328px;
 }
+
 .query-field.error {
   border-color: red;
 }
+
 textarea {
   font-family: Consolas, Monaco, Lucida Console, Liberation Mono,
     DejaVu Sans Mono, Bitstream Vera Sans Mono, Courier New, monospace;
 }
+
 .error-text {
   margin-top: 7px;
 }
+
 .corpus-graph .fa-expand {
   opacity: 0.5;
   float: right;
 }
+
 .corpus-graph .fa-expand:hover {
   opacity: 1;
   cursor: pointer;
 }
+
 .corpus-structure-button {
   display: inline-block;
   float: right;
 }
-.reverse-items > button#nav-query-tab {
+
+.reverse-items>button#nav-query-tab {
   order: 2;
 }
-.reverse-items > button#nav-data-tab {
+
+.reverse-items>button#nav-data-tab {
   order: 1;
 }
 </style>
@@ -976,10 +724,9 @@ export default {
       isQueryValidData: null,
       WSDataResults: "",
       WSDataMeta: {},
-      WSDataSentences: "",
-      pageSize: 100,
+      WSDataSentences: {},
       nResults: 200,
-      currentResults: 0,
+      activeResultIndex: 1,
       selectedLanguages: ["en"],
       queryName: "",
       nExport: 200,
@@ -991,6 +738,7 @@ export default {
       percentageTotalDone: 0,
       percentageWordsDone: 0,
       loading: false,
+      requestId: "",
       stats: null,
       queryTest: "const noop = () => {}",
       resultsPerPage: 100,
@@ -1007,6 +755,9 @@ export default {
 
       selectedMediaForPlay: null,
       hoveredResult: null,
+
+      selectedQuery: null,
+      userQueries: [],
 
       // selectedDocument: null,
       // documentDict: {},
@@ -1050,8 +801,8 @@ export default {
               corpus: corpus[0],
             };
             this.checkAuthUser()
-            this.defaultQueryDQD = corpus[0].sample_query || "";
-            this.queryDQD = this.defaultQueryDQD;
+            this.defaultQueryDQD = this.getSampleQuery();
+            this.queryDQD = this.getSampleQuery();
             this.preselectedCorporaId = null;
             this.showGraph = 'main'
             setTimeout(() => this.graphIndex++, 1)
@@ -1094,8 +845,8 @@ export default {
       // this.validate();
       if (this.selectedCorpora) {
         // this.loadDocuments();
-        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
-        this.queryDQD = this.selectedCorpora.corpus.sample_query || "";
+        this.defaultQueryDQD = this.getSampleQuery();
+        this.queryDQD = this.getSampleQuery();
         history.pushState(
           {},
           null,
@@ -1192,6 +943,11 @@ export default {
     // },
   },
   methods: {
+    getSampleQuery() {
+      const corpus = this.selectedCorpora;
+      if (!corpus) return "";
+      return corpus.corpus.meta.sample_query || corpus.corpus.sample_query || ""
+    },
     setExportFilename(format) {
       if (!this.nameExport)
         this.nameExport = `${this.selectedCorpora.corpus.shortname} ${new Date().toLocaleString()}.${format}`;
@@ -1201,6 +957,10 @@ export default {
     },
     setMainTab() {
       this.activeMainTab = 'query'
+    },
+    setTab(tab) {
+      this.selectedQuery = null;
+      this.currentTab = tab;
     },
     hoverResultLine(line) {
       this.hoveredResult = line;
@@ -1220,7 +980,7 @@ export default {
       if (!entities) return false;
       return Boolean(
         entities.data instanceof Array &&
-          entities.data.find((v) => ["set", "group"].includes(v.type))
+        entities.data.find((v) => ["set", "group"].includes(v.type))
       );
     },
     updateLoading(status) {
@@ -1236,17 +996,22 @@ export default {
       }
     },
     updatePage(currentPage) {
-      let newNResults = this.resultsPerPage * Math.max(currentPage + 1, 3);
-      // console.log(
-      //   "PageUpdate",
-      //   newNResults,
-      //   this.nResults,
-      //   this.WSDataSentences
-      // );
+      const allNonActiveResults = Object.entries(this.nKwics)
+        .filter(r=>String(r[0])!=String(this.activeResultIndex))
+        .reduce((v,s)=>s+(v[1]||[]).length,0);
+      const newNResults = allNonActiveResults + this.resultsPerPage * Math.max(currentPage + 1, 3);
+      const allActiveResults = Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0);
+      console.log(
+        "PageUpdate",
+        this.nKwics,
+        this.activeResultIndex,
+        allNonActiveResults,
+        newNResults,
+        allActiveResults,
+        this.WSDataResults.more_data_available
+      );
       if (
-        newNResults > this.nResults &&
-        (!this.WSDataSentences ||
-          (this.WSDataSentences && this.WSDataSentences.more_data_available))
+        newNResults > allActiveResults && this.WSDataSentences && this.WSDataResults.more_data_available
       ) {
         // console.log("Submit");
         this.nResults = newNResults;
@@ -1330,15 +1095,17 @@ export default {
         }
         if (data["action"] === "validate") {
           // Validate is called after setting availableLanguages, so it's a good time to check selectedLanguages
-          this.selectedLanguages = this.selectedLanguages.filter(v=>this.availableLanguages.includes(v));
-          if (this.selectedLanguages==0) {
+          this.selectedLanguages = this.selectedLanguages.filter(v => this.availableLanguages.includes(v));
+          if (this.selectedLanguages == 0) {
             this.selectedLanguages = [this.availableLanguages[0]];
           }
           // console.log("Query validation", data);
-          if (data.kind in {dqd:1, text:1, cqp: 1} && data.valid == true) {
+          if (data.kind in { dqd: 1, text: 1, cqp: 1 } && data.valid == true) {
             // console.log("Set query from server");
             this.query = JSON.stringify(data.json, null, 2);
           }
+          if (data.kind == "cqp" && !data.valid)
+            data.error = "Incomplete query or invalid CQP syntax";
           this.isQueryValidData = data;
           return;
         }
@@ -1373,14 +1140,41 @@ export default {
           return;
         }
         if (data["action"] === "fetch_queries") {
-          console.log("do something here with the fetched queries?", data);
+          if (!data["queries"]) return;
+
+          let queries;
+          if (typeof data["queries"] === 'string') {
+            try {
+              queries = JSON.parse(data["queries"]);
+            } catch (e) {
+              queries = [];
+            }
+          } else {
+            queries = data["queries"];
+          }
+
+          console.log(queries);
+          this.userQueries = queries;
           return;
         } else if (data["action"] === "store_query") {
-          console.log("query stored", data);
+          console.log('store_query', data);
+
+          if (data['status'] === 'success') {
+            useNotificationStore().add({
+              type: "success",
+              text: `Query successfully saved.`
+            });
+          }
+
+          this.fetch(); // Fetch the updated query list
+
+          return;
+        } else if (data["action"] == "delete_query") {
+          this.selectedQuery = null;
+          this.fetch(); // Fetch the updated query list
+
           return;
         } else if (data["action"] == "export_complete") {
-          this.loading = false;
-          this.percentageDone = this.WSDataResults.percentage_done;
           const info = {
             hash: data.hash,
             format: data.format,
@@ -1392,20 +1186,24 @@ export default {
           useWsStore().addMessageForPlayer(data)
           return;
         } else if (data["action"] === "stopped") {
-          if (data["n"]) {
+          if (data.request) {
             console.log("queries stopped", data);
             useNotificationStore().add({
               type: "success",
               text: "Query stopped",
             });
             this.loading = false;
+            if (this.requestId == data.request)
+              this.requestId = null;
           }
           return;
         } else if (data["action"] == "started_export") {
           this.loading = false;
+          if (this.requestId == data.request)
+            this.requestId = null;
         } else if (data["action"] === "query_result") {
           useWsStore().addMessageForPlayer(data)
-          // console.log("query_result", data);
+          console.log("query_result", data);
           this.updateLoading(data.status);
           if (
             this.failedStatus &&
@@ -1421,25 +1219,69 @@ export default {
             console.log("SQL", data.consoleSQL);
           }
           this.failedStatus = false;
-          data["n_results"] = data["result"].length;
-          this.WSDataResults = data;
+          for (let p of [
+            "batches_done",
+            "total_results_so_far",
+            "projected_results",
+            "more_data_available",
+            "percentage_done",
+            "percentage_words_done"
+          ]) {
+            if (parseInt(data.batches_done||0) < parseInt(this.WSDataResults.batches_done||0))
+              break;
+            this.WSDataResults[p] = data[p];
+          }
+          this.percentageDone = this.WSDataResults.percentage_done || 0;
+          this.percentageWordsDone = this.WSDataResults.percentage_words_done || 0;
+          if (!this.WSDataResults.result)
+            return this.WSDataResults.result = data.result;
+          const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
+          for (let rkey in data.result) {
+            if (!kwic_keys.includes(parseInt(rkey))) {
+              this.WSDataResults.result[rkey] = data.result[rkey];
+              continue;
+            }
+            this.WSDataResults.result[rkey] = [
+              ...(this.WSDataResults.result[rkey]||[]),
+              ...data.result[rkey]
+            ];
+          }
           return;
-        } else if (data["action"] === "sentences") {
-          useWsStore().addMessageForPlayer(data)
-          // console.log("sentences", data);
+        } else if (data["action"] === "segments") {
+          useWsStore().addMessageForPlayer(data);
           this.updateLoading(data.status);
+          const segment = this.selectedCorpora.corpus.firstClass.segment;
+          const meta = data.result["-2"] || []; // change this?
+          const meta_labels = ((data.result["0"] || {}).meta_labels || [])
+            .map( ml => [ml.split("_")[0],ml.split("_").slice(1,).join("_")] );
+          for (let hit_meta of meta) {
+            let segment_id = "";
+            const meta_object = {};
+            for (let n in hit_meta) {
+              let value = hit_meta[n];
+              const [layer, attr] = meta_labels[n];
+              if (layer == segment && attr == "id")
+                segment_id = value;
+              meta_object[layer] = meta_object[layer] || {};
+              if (attr.endsWith("_range") && value) {
+                const ranges = value.match(/\[(\d+),(\d+)\)/);
+                if (ranges)
+                  value = [parseInt(ranges[1]),parseInt(ranges[2])];
+              }
+              meta_object[layer][attr] = value;
+            }
+            this.WSDataMeta[segment_id] = meta_object;
+          }
           if (
             this.WSDataSentences &&
-            this.WSDataSentences.first_job == data.first_job &&
-            data.full == false
+            this.WSDataSentences.hash == data.hash &&
+            !data.full
           ) {
             Object.keys(this.WSDataSentences.result).forEach((key) => {
               if (key > 0 && key in data.result) {
                 this.WSDataSentences.result[key] = this.WSDataSentences.result[
                   key
                 ].concat(data.result[key]);
-                this.nResults = this.WSDataSentences.result[key].length;
-                this.currentResults = this.WSDataSentences.result[key].length;
               }
             });
             if (-1 in data.result) {
@@ -1454,41 +1296,22 @@ export default {
               if (!this.WSDataResults.result)
                 this.WSDataResults.result = {};
               if (!this.WSDataResults.result["0"] || !this.WSDataResults.result["0"].result_sets)
-                this.WSDataResults.result["0"] = {result_sets: []};
+                this.WSDataResults.result["0"] = { result_sets: [] };
               this.WSDataResults.result["0"].result_sets.forEach(
                 (_resultSet, index) => {
                   if (_resultSet.type == "plain") {
                     let resultIndex = index + 1;
-                    if (!(resultIndex in this.WSDataSentences.result)) {
+                    if (!(resultIndex in this.WSDataSentences.result))
                       this.WSDataSentences.result[resultIndex] = [];
-                    }
-                    this.nResults =
-                      this.WSDataSentences.result[resultIndex].length;
-                    this.currentResults =
-                      this.WSDataSentences.result[resultIndex].length;
                   }
                 }
               );
             }
           }
-          this.percentageDone = data.percentage_done;
-          this.percentageWordsDone = data.percentage_words_done;
           // if (["satisfied", "overtime"].includes(this.WSDataResults.status)) {
           //   this.loading = false;
           // }
           return;
-        } else if (data["action"] == "meta") {
-          const meta = data.result["-2"]; // change this?
-          for (let layer in meta) {
-            this.WSDataMeta[layer] = this.WSDataMeta[layer] || {};
-            this.WSDataMeta[layer] = {...this.WSDataMeta[layer], ...meta[layer]};
-          }
-        // } else if (data["action"] === "started_export") {
-        //   this.loading = false;
-        //   useNotificationStore().add({
-        //     type: "success",
-        //     text: "Started the export process...",
-        //   });
         } else if (data["action"] === "failed") {
           this.loading = false;
           if (data.sql) {
@@ -1542,10 +1365,10 @@ export default {
     },
     isSubmitDisabled() {
       return (this.selectedCorpora && this.selectedCorpora.length == 0) ||
-              this.loading===true ||
-              (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
-              !this.query ||
-              !this.selectedLanguages
+        this.loading === true ||
+        (this.isQueryValidData != null && this.isQueryValidData.valid == false) ||
+        !this.query ||
+        !this.selectedLanguages
     },
     openGraphInModal() {
       this.$refs.vuemodal.addEventListener("shown.bs.modal", () => {
@@ -1564,11 +1387,11 @@ export default {
       if (g === null) return;
       svg.style.height = `${g.getBoundingClientRect().height}px`;
     },
-    async exportResults(format, download=false, preview=false) {
+    async exportResults(format, download = false, preview = false) {
       const to_export = {};
       to_export.format = {
-        'plain':'dump',
-        'swissdox':'swissdox',
+        'plain': 'dump',
+        'swissdox': 'swissdox',
         'xml': 'xml'
       }[format];
       to_export.preview = preview;
@@ -1598,37 +1421,26 @@ export default {
       if (!to_export && resumeQuery == false) {
         this.failedStatus = false;
         this.stop();
-        this.nResults = this.pageSize * 2; // We want load 2 pages at first
         if (cleanResults == true) {
           this.WSDataResults = {};
           this.WSDataSentences = {};
         }
       }
       let data = {
-        corpora: this.selectedCorpora.value,
+        corpus: this.selectedCorpora.value,
         query: this.query,
         user: this.userData.user.id,
         room: this.roomId,
-        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
-        total_results_requested: this.nResults,
-        stats: true,
-        resume: resumeQuery,
-        simultaneous: this.simultaneousMode,
+        requested: this.resultsPerPage * (resumeQuery ? 1 : 3),
+        offset: resumeQuery ? Object.values(this.nKwics).reduce((v,s)=>s+(v||[]).length,0) : 0
       };
-      if (resumeQuery) {
-        data["first_job"] = this.WSDataResults.job;
-        data["previous"] = this.WSDataResults.job;
-        data["current_kwic_lines"] = this.currentResults;
-      }
       if (fullSearch) {
         data["full"] = true;
       }
       if (to_export) {
         data["to_export"] = to_export;
-        this.nExport = Number((String(this.nExport) || "200").replace(/\D/,''));
-        if (isNaN(this.nExport)) this.nExport = 200;
-        data["total_results_requested"] = this.nExport;
+        data["requested"] = Math.max(this.nExport, 1);
       }
       console.log("submitting with total results requested", data["total_results_requested"]);
       let retval = await useCorpusStore().fetchQuery(data);
@@ -1636,6 +1448,7 @@ export default {
         this.loading = true;
         this.percentageDone = 0.001;
         this.percentageWordsDone = 0;
+        this.requestId = retval.request;
       }
 
       // console.log(document.querySelector("button#nav-results-tab"))
@@ -1656,10 +1469,13 @@ export default {
       this.percentageDone = 0;
       this.percentageTotalDone = 0;
       this.failedStatus = false;
+      this.loading = false;
+      if (!this.requestId)
+        return;
       useWsStore().sendWSMessage({
         action: "stop",
+        request: this.requestId
       });
-      this.loading = false;
     },
     enough(job) {
       useWsStore().sendWSMessage({
@@ -1675,6 +1491,10 @@ export default {
         query = this.queryDQD + "\n";
       if (this.currentTab == "cqp")
         query = this.cqp;
+      if (!query || query.match(/^(\s|\n)+$/)) {
+        this.isQueryValidData = {valid: true};
+        return;
+      }
       useWsStore().sendWSMessage({
         action: "validate",
         query: query,
@@ -1682,28 +1502,68 @@ export default {
         corpus: this.selectedCorpora.value
       });
     },
+    getCurrentQuery() {
+      if (this.currentTab == "text")
+        return this.textsearch;
+      if (this.currentTab == "dqd")
+        return this.queryDQD + "\n";
+      if (this.currentTab == "cqp")
+        return this.cqp;
+    },
+    userQueryVisible() {
+      if (this.currentTab == "text" || this.currentTab == "dqd" || this.currentTab == "cqp") {
+        return true;
+      }
+
+      return false;
+    },
     saveQuery() {
       let data = {
         // corpora: this.selectedCorpora.map((corpus) => corpus.value),
         corpora: this.selectedCorpora.value,
-        query: this.query,
+        query: this.getCurrentQuery(),
         user: this.userData.user.id,
         room: this.roomId,
         // room: null,
-        page_size: this.pageSize,
+        page_size: this.resultsPerPage,
         languages: this.selectedLanguages,
         total_results_requested: this.nResults,
         query_name: this.queryName,
+        query_type: this.currentTab,
       };
+
+      console.log('data', JSON.stringify(data));
+
+      this.queryName = "";
       useCorpusStore().saveQuery(data);
+    },
+    deleteQuery() {
+      if (!this.selectedQuery) return;
+      useCorpusStore().deleteQuery(this.userData.user.id, this.roomId, this.selectedQuery.idx);
     },
     fetch() {
       let data = {
         user: this.userData.user.id,
         room: this.roomId,
+        // query_type: this.currentTab,
         // room: null,
       };
       useCorpusStore().fetchQueries(data);
+    },
+    handleQuerySelection(selectedQuery) {
+      if (this.currentTab == "text") {
+        this.textsearch = selectedQuery.query.query;
+      }
+      else if (this.currentTab == "dqd") {
+        this.queryDQD = selectedQuery.query.query;
+        this.defaultQueryDQD = selectedQuery.query.query;
+        this.updateQueryDQD(selectedQuery.query.query);
+      }
+      else if (this.currentTab == "cqp") {
+        this.cqp = selectedQuery.query.query;
+      }
+
+      return;
     },
     dismissResultsNotification() {
       this.showResultsNotification = false;
@@ -1743,12 +1603,12 @@ export default {
     corporaOptions() {
       return this.corpora
         ? this.corpora.map((corpus) => {
-            return {
-              name: corpus.meta.name,
-              value: corpus.meta.id,
-              corpus: corpus,
-            };
-          })
+          return {
+            name: corpus.meta.name,
+            value: corpus.meta.id,
+            corpus: corpus,
+          };
+        })
         : [];
     },
     navPercentage() {
@@ -1756,10 +1616,30 @@ export default {
         return Math.max(this.percentageDone, this.percentageWordsDone);
       else return this.percentageDone;
     },
+    processedSavedQueries() {
+      if (!this.userQueries) return [];
+
+      return this.userQueries.map((q) => ({
+        ...q,
+        query_name: q.query?.query_name || "",
+      })).filter((q) => q.query?.query_type === this.currentTab);
+    },
+
+    nKwics() {
+      const kwic_keys = ((this.WSDataResults.result[0]||{}).result_sets||[])
+        .map((rs,n)=>rs.type=="plain"?n+1:-1)
+        .filter(n=>n>0);
+      return Object.fromEntries(
+        Object.entries(this.WSDataResults.result)
+          .filter(r=>kwic_keys.includes(parseInt(r[0])))
+          .map(([rkey,results])=>[rkey,results.length])
+      );
+    }
   },
   mounted() {
     // this.userId = this.userData.user.id;
     setTooltips();
+    this.fetch(); // Retrieve the saved queries
   },
   beforeUnmount() {
     removeTooltips();

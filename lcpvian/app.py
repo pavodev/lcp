@@ -36,6 +36,7 @@ from .utils import (
     LCPApplication,
     handle_timeout,
     load_env,
+    refresh_config,
 )
 
 load_env()
@@ -46,18 +47,20 @@ from .corpora import corpora
 from .corpora import corpora_meta_update
 from .document import document, document_ids
 from .export import download_export
+from .fcs import get_fcs
 
-from .api import api_query
+from .exporter import Exporter as ExporterXML
+from .exporter_swissdox import Exporter as ExporterSwissdox
 from .user import user_data
 from .message import get_message
 from .project import project_api_create, project_api_revoke
 from .project import project_create, project_update
 from .project import project_users_invite, project_users
 from .project import project_users_invitation_remove, project_user_update
-from .query import query, refresh_config
+from .query import post_query
 from .query_service import QueryService
 from .sock import listen_to_redis, sock, ws_cleanup
-from .store import fetch_queries, store_query
+from .store import fetch_queries, store_query, delete_query
 from .typed import Endpoint, Task, Websockets
 from .upload import make_schema, upload
 from .lama import handle_lama_error
@@ -214,7 +217,6 @@ async def create_app(test: bool = False) -> web.Application:
     # app["auth"] = Authenticator(app)
 
     endpoints: list[tuple[str, str, Endpoint]] = [
-        ("/api/{corpus}/", "POST", api_query),
         ("/check-file-permissions", "GET", check_file_permissions),
         ("/config", "POST", refresh_config),
         ("/corpora", "POST", corpora),
@@ -223,6 +225,7 @@ async def create_app(test: bool = False) -> web.Application:
         ("/document/{doc_id}", "POST", document),
         ("/document_ids/{corpus_id}", "POST", document_ids),
         ("/download_export", "GET", download_export),
+        ("/fcs-endpoint", "GET", get_fcs),
         ("/fetch", "POST", fetch_queries),
         ("/get_message/{fn}", "GET", get_message),
         ("/project", "POST", project_create),
@@ -237,9 +240,10 @@ async def create_app(test: bool = False) -> web.Application:
             "DELETE",
             project_users_invitation_remove,
         ),
-        ("/query", "POST", query),
+        ("/query", "POST", post_query),
         ("/settings", "GET", user_data),
         ("/store", "POST", store_query),
+        ("/user/{user_id}/room/{room_id}/query/{query_id}", "DELETE", delete_query),
         ("/upload", "POST", upload),
         ("/video", "GET", video),
         ("/ws", "GET", sock),
@@ -281,6 +285,7 @@ async def create_app(test: bool = False) -> web.Application:
             retry=retry_policy,
         ),
     )
+    app.addkey("exporters", dict, {"xml": ExporterXML, "swissdox": ExporterSwissdox})
 
     if REDIS_SHARED_DB_INDEX > -1:
         shared_redis_url: str = f"{REDIS_SHARED_URL}/{REDIS_SHARED_DB_INDEX}"

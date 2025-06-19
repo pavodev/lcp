@@ -15,7 +15,7 @@
               v-if="notif.dl_info && notif.dl_info.status == 'ready'"
               @click="fetch(notif.dl_info)"
               class="download"
-            >[ ready ]</span>
+            >[ {{ $t('common-ready').toLowerCase() }} ]</span>
             <span v-else-if="notif.dl_info">[ {{ notif.dl_info.status }} ]</span>
         </div>
     </div>

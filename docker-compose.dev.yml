@@ -9,7 +9,7 @@ services:
     build: ./database
     container_name: lcp-postgres
     env_file: .env.docker
-    shm_size: 10g # increase this if queries pull too much data
+    shm_size: 10g
     volumes:
       - db-data:/var/lib/postgresql/data
       - ./database/init-db:/docker-entrypoint-initdb.d
@@ -41,6 +41,16 @@ services:
       - ./uploads:/app/uploads
     networks:
       - lcp-network
+  
+  mediasrv:
+    image: "nginx:alpine"
+    container_name: lcp-mediasrv
+    volumes:
+      - ./media:/usr/share/nginx/html
+    ports:
+      - "8090:80"
+    networks:
+      - lcp-network
 
   backend:
     build:
@@ -65,16 +75,6 @@ services:
     networks:
       - lcp-network
 
-  mediasrv:
-    image: "nginx:alpine"
-    container_name: lcp-mediasrv
-    volumes:
-      - ./media:/usr/share/nginx/html
-    ports:
-      - "8090:80"
-    networks:
-      - lcp-network
-
   frontend:
     build:
       context: ./frontend
@@ -86,6 +86,7 @@ services:
       - backend
     volumes:
       - ./frontend:/app
+      - ./media:/app/public/media
     ports:
       - "8080:8080"
     networks:

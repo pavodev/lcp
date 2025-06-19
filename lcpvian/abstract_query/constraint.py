@@ -3,7 +3,7 @@ import re
 from typing import Any, cast
 from uuid import UUID
 
-from .typed import JSONObject, Joins, LabelLayer, QueryType, RefInfo
+from .typed import JSONObject, Joins, LabelLayer, RefInfo
 from .utils import (
     Config,
     _get_underlang,
@@ -27,18 +27,20 @@ QUANTOR_TEMPLATE = """
 """
 
 # callables allowed in dqd
-FUNCS = (
-    "length",
-    "century",
-    "decade",
-    "year",
-    "month",
-    "day",
-    "position",
-    "range",
-    "start",
-    "end",
-)
+FUNCS = {
+    "length": "number",
+    "century": "number",
+    "decade": "number",
+    "year": "number",
+    "month": "number",
+    "day": "number",
+    "position": "number",
+    "range": "number",
+    "start": "number",
+    "end": "number",
+    "lower": "string",
+    "upper": "string",
+}
 
 
 def _valid_uuid(val: Any) -> bool:
@@ -118,8 +120,9 @@ class Constraints:
         """
         Helper for quantors
         """
+        layer = member.layer or member.members[0].layer
         base = _get_table(
-            member.layer,
+            layer,
             self.config.config,
             self.config.batch,
             cast(str, self.config.lang),
@@ -318,7 +321,14 @@ class Constraint:
         """
         Associate one or more WHERE statements with a JOIN statement
         """
-        table = table.lower()
+        table_strings = re.findall("'[^']+'", table)
+        table_non_strings = re.split("'[^']+'", table)
+        table_lower = ""
+        for n, non_string in enumerate(table_non_strings):
+            table_lower += non_string.lower()
+            if n < len(table_strings):
+                table_lower += table_strings[n]
+        table = table_lower
         if table in self._joins:
             if self._joins[table] is None:
                 self._joins[table] = set()
@@ -358,18 +368,6 @@ class Constraint:
         Determine whether or not we need to cast to int, float, text or nothing
         """
         typ = ""
-        # if isinstance(query, (list, tuple, set)):
-        #     query = list(query)[0]
-        # if self._query_variable:
-        #     return ""
-        # if self._is_meta:
-        #     met = cast(
-        #         dict, self._layer_info.get("meta", self._attribs.get("meta", {}))
-        #     )
-        #     typ = cast(str, cast(dict, met[self.field]).get("type", ""))
-        # else:
-        #     met = cast(dict, self._attribs.get(self.field, {}))
-        #     typ = cast(str, met.get("type", ""))
         if typ.startswith("int") and isinstance(query, int):
             return "::bigint"
         elif typ.startswith("int") and not isinstance(query, int):
@@ -487,7 +485,6 @@ class Constraint:
         negated = op.lower().startswith(("not", "!"))
         op = "=" if negated else ">"
         return (op, mask_label)
-        # formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
 
     def make(self) -> None:
         """
@@ -606,74 +603,6 @@ class Constraint:
             left_str = re.sub(r"->([^>]+)$", "->>\\1", left)
             right_str = re.sub(r"->([^>]+)$", "->>\\1", right)
             formed_condition = f"({left_str})::numeric {self.op} ({right_str})::numeric"
-
-        # # Special case: labels
-        # left_ref_info = left_ref[1]
-        # left_type = left_ref_info.get("type")
-        # if left_type == "labels":
-        #     assert self.op.lower().endswith("contain"), SyntaxError(
-        #         f"Must use 'contain' on labels ({left_ref[0]} + {self.op})"
-        #     )
-        #     assert self.type in ("string", "regex"), TypeError(
-        #         f"Contained labels can only be tested against strings or regexes ({left_ref[0]} + {self.op} + {right_ref[0]})"
-        #     )
-        #     ref_layer = left_ref_info.get("layer", self.layer)
-        #     ref_layer_info = self.config["layer"].get(ref_layer, {})
-        #     assert "nlabels" in ref_layer_info, KeyError(
-        #         f"Missing 'nlabels' for layer '{ref_layer}' in config"
-        #     )
-        #     nbit = ref_layer_info["nlabels"]
-        #     ref_mapping = left_ref_info.get("mapping", {})
-        #     lookup_table = ref_mapping.get("name", "")
-        #     inner_op = "~" if self.type == "regex" else "="
-        #     dummy_mask = "".join(["0" for _ in range(nbit)])
-        #     inner_condition = (
-        #         f"(SELECT COALESCE(bit_or(1::bit({nbit})<<bit)::bit({nbit}), b'{dummy_mask}') AS m "
-        #         + f"FROM {self.schema}.{lookup_table} WHERE label {inner_op} {right_ref[0]})"
-        #     )
-        #     # Use label_layer to store the inner conditions query-wide and give them unique labels
-        #     if self.label_layer is None:
-        #         self.label_layer = {}
-        #     if self.label not in self.label_layer:
-        #         self.label_layer[self.label] = (self.layer, {})
-        #     meta: dict = self.label_layer[self.label][1]
-        #     meta["labels inner conditions"] = meta.get("labels inner conditions", {})
-        #     comp_str: str = f"{self.op} {self.type} {right_ref[0]}"
-        #     n = meta["labels inner conditions"].get(
-        #         comp_str, len(meta["labels inner conditions"])
-        #     )
-        #     meta["labels inner conditions"][comp_str] = n
-        #     mask_label = f"{self.label}_mask_{n}"
-        #     formed_join_table = f"{inner_condition} {mask_label}"
-        #     self._add_join_on(formed_join_table, "")
-        #     negated = self.op.lower().startswith(("not", "!"))
-        #     op = "=" if negated else ">"
-        #     formed_condition = f"{left_ref[0]} & {mask_label}.m {op} 0::bit({nbit})"
-
-        # elif left_type == "date":
-        #     right_ref_info = right_ref[1]
-        #     assert right_ref_info.get("type") in ("date", "text", "number"), TypeError(
-        #         f"Invalid date comparison ({left_ref[0]} {self.op} {right_ref[0]})"
-        #     )
-        #     q = right_ref[0]
-        #     if self.op in (">", "<", ">=", "<=", "=", "!="):
-        #         right_ref_no_quotes = right_ref[0].strip("'").strip('"')
-        #         lower_date = self._parse_date(right_ref_no_quotes)
-        #         upper_date = self._parse_date(
-        #             right_ref_no_quotes, filler_month="12", filler_day="31"
-        #         )
-        #         op = self.op
-        #         if op == "=":
-        #             op = ">="
-        #             q = f"'{lower_date}'::date AND {left_ref[0]}::date <= '{upper_date}'::date"
-        #         elif op == "!=":
-        #             op = "<"
-        #             q = f"'{lower_date}'::date OR {left_ref[0]}::date > '{upper_date}'::date"
-        #         elif op in (">", ">="):
-        #             q = f"'{upper_date}'::date"
-        #         elif op in ("<", "<="):
-        #             q = f"'{lower_date}'::date"
-        #     formed_condition = f"{left_ref[0]}::date {op} {q}"
 
         self._joins.pop("", None)
         self._conditions.add(formed_condition)
@@ -922,7 +851,7 @@ class Constraint:
             (a[1].get("meta") or {}).get("str", a[0]) for a in parsed_ars
         )
         ref_info_str = f"{fn}({ref_str_ars})"
-        ref_info = RefInfo(type="text", meta={"str": ref_info_str})
+        ref_info = RefInfo(type=FUNCS[fn], meta={"str": ref_info_str})
         if fn == "range":
             first_arg_str, first_arg_info = parsed_ars[0]
             assert first_arg_info.get("type") == "entity", TypeError(
@@ -967,28 +896,6 @@ class Constraint:
             fn_str = f"extract('{sql_fn}' from ({first_arg_str})::date)"
             ref_info = RefInfo(type="number", meta={"str": ref_info_str})
         return (fn_str, ref_info)
-
-    # def date(self) -> None:
-    #     q: str = f"{self._formatted}"
-    #     op = self.op
-    #     cast = self._cast
-    #     labfield = f"{self.label.lower()}.{self.field.lower()}"
-    #     if op in (">", "<", ">=", "<=", "=", "!="):
-    #         lower_date = self._parse_date(q)
-    #         upper_date = self._parse_date(q, filler_month="12", filler_day="31")
-    #         cast = "::date"
-    #         if op == "=":
-    #             op = ">="
-    #             q = f"'{lower_date}'::date AND {labfield}{cast} <= '{upper_date}'::date"
-    #         elif op == "!=":
-    #             op = "<"
-    #             q = f"'{lower_date}'::date OR {labfield}{cast} > '{upper_date}'::date"
-    #         elif op in (">", ">="):
-    #             q = f"'{upper_date}'::date"
-    #         elif op in ("<", "<="):
-    #             q = f"'{lower_date}'::date"
-    #     formed = f"{self.label.lower()}.{self.field.lower()}{cast} {op} {q}"
-    #     self._conditions.add(formed)
 
 
 def _get_constraint(
@@ -1054,7 +961,7 @@ def _get_constraint(
             unit_layer,
             unit_label,
             conf,
-            quantor,
+            quantor or unit.get("quantor", None),
             "AND",
             n,
             order,
@@ -1163,33 +1070,29 @@ def _get_constraints(
     # if not constraints and order is None:
     #     return None
 
+    # sorry about this:
+    first_unit: dict[str, Any] = next(
+        (
+            cast(dict[str, Any], i.get("unit", i.get("sequence", i.get("set"))))
+            for i in sorted(cast(list[dict], constraints), key=arg_sort_key)
+            if any(x in i for x in ("unit", "sequence", "set"))
+        ),
+        {},
+    )
+    first_layer = first_unit.get("layer", "")
+
     if top_level:
         allow_any = True
-        # sorry about this:
-        first_unit: dict[str, Any] = next(
-            (
-                cast(dict[str, Any], cast(JSONObject, i)["unit"])
-                for i in cast(
-                    list[JSONObject],
-                    sorted(
-                        cast(list[dict], constraints), key=arg_sort_key
-                    ),  # why do we assume the existence of an args key here?
-                )
-                if "unit" in cast(JSONObject, i)
-            ),
-            {},
-        )
-        first_layer = first_unit.get("layer", "")
 
     results = []
     # op = cast(str, constraints.get("operator", "AND"))
-
-    lab = label or f"constraint_{n}"
 
     references: dict[str, list[str]] = {}
 
     part_ofs: list[str] = []
     for part in part_of or []:
+        if not label and first_unit:
+            label = first_unit.get("label", "")
         part_type, part_label = cast(
             tuple[str, str], next((k, v) for k, v in part.items())
         )
@@ -1217,7 +1120,7 @@ def _get_constraints(
 
     args = cast(list[JSONObject], constraints)
     for arg in sorted(args, key=arg_sort_key):
-        arg_label = cast(str, lab if not top_level else arg.get("label", ""))
+        arg_label = cast(str, arg.get("label") or label)
         tup = _get_constraint(
             arg,
             layer,
@@ -1236,11 +1139,11 @@ def _get_constraints(
         )
         n += 1
         results.append(tup)
-    lay: str = layer if not top_level else first_layer
+    lay: str = first_layer if top_level else layer
     return Constraints(
         conf.schema,
         lay,
-        lab,
+        label,
         conf,
         results,
         cast(str, op),
@@ -1274,7 +1177,7 @@ def process_set(
 
     joins: Joins = {}
 
-    conditions: set[str] = set()
+    conditions: dict[str, int] = {}
     if attribute == "___tokenid___":
         field = cast(str, config["token"]).lower() + "_id"
     elif (
@@ -1326,19 +1229,19 @@ def process_set(
             for join_condition in v:
                 if not isinstance(join_condition, str):
                     continue
-                conditions.add(join_condition)
+                conditions[join_condition] = 1
         cond = conn_obj.conditions() if conn_obj else ""
         if cond:
-            conditions.add(cond)
+            conditions[cond] = 1
 
     if config["layer"][lay].get("contains") == config["token"]:
         joins[f"{schema}.{from_table} {from_label}"] = True
-        conditions.add(f"{from_label}.char_range && anonymous_set_t.char_range")
+        conditions[f"{from_label}.char_range && anonymous_set_t.char_range"] = 1
         from_table = batch
         from_label = "anonymous_set_t"
 
     strung_joins = _joinstring(joins)
-    strung_conds = "WHERE " + " AND ".join(conditions) if conditions else ""
+    strung_conds = "WHERE " + " AND ".join(x for x in conditions) if conditions else ""
 
     formed = f"""
               (SELECT array_agg({from_label}.{field})

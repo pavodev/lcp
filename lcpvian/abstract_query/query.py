@@ -1,13 +1,17 @@
+import json
 import re
 
 from typing import Any, cast
 
 from .constraint import Constraints, _get_constraints, process_set
+from .prefilter import Prefilter
 from .sequence import Cte, SQLSequence
+from .sequence_members import Sequence
 from .typed import JSONObject, Joins, LabelLayer, QueryJSON, QueryPart
 from .utils import (
     Config,
     QueryData,
+    _flatten_coord,
     _get_table,
     _get_mapping,
     _get_batch_suffix,
@@ -33,6 +37,9 @@ match_list AS (
         FROM {match_from}
 ),
 """
+
+SELECT_PH = "{selects}"
+CARRY_PH = "{carry_over}"
 
 
 class Token:
@@ -260,6 +267,201 @@ class QueryMaker:
         """
         # TODO
 
+    def process_disjunction(self, members: list) -> list[list[str]]:
+        token_table = _get_table(self.token, self.config, self.batch, self.lang or "")
+        disjunction_ctes: list[list[str]] = []
+        unions: list[str] = []
+        for m in _flatten_coord(members, "OR"):
+            if not isinstance(m, dict):
+                continue
+            log_exp = m.get("logicalExpression", {})
+            log_op = log_exp.get("naryOperator")
+            if "unit" in m:
+                uly = m["unit"].get("layer", "")
+                ulb = m["unit"].get("label") or self.r.unique_label(
+                    "t", layer=self.token
+                )
+                upo = m["unit"].get("partOf", [])
+                joins, conds = self._token(m["unit"], uly, ulb, upo)
+                if not conds:
+                    continue
+                from_built = " CROSS JOIN ".join(["{prev_table}"] + [j for j in joins])
+                joins_values: list[set[str]] = [
+                    j for j in joins.values() if j and isinstance(j, set)
+                ]
+                joins_conds: set[str] = set(
+                    str(x) for j in joins_values for x in j if str(x).strip()
+                )
+                conds_built = " AND ".join(sorted(conds.union(joins_conds)))
+                unions.append(
+                    f"SELECT {SELECT_PH}, {CARRY_PH}jsonb_build_array({ulb}.{self.token}_id) AS disjunction_matches FROM {from_built} WHERE {conds_built}"
+                )
+            elif "sequence" in m:
+                seq: Sequence = Sequence(QueryData(), self.conf, m)
+                sqlseq: SQLSequence = SQLSequence(seq)
+                sqlseq.categorize_members()
+                assert not sqlseq.ctes, RuntimeError(
+                    "Cannot nest a complex sequence inside a disjunction"
+                )
+                # if sqlseq.get_first_stream_part_of() != seg_lab:
+                #     continue
+                seq_where: list[str] = []
+                fixed_where, fixed_joins = sqlseq.where_fixed_members(set(), self.token)
+                if fixed_where:
+                    seq_where += fixed_where
+                batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
+                _, _, simple_where = sqlseq.simple_sequences_table(
+                    fixed_part_ts="",
+                    from_table="{prev_table}",
+                    tok=self.token,
+                    batch_suffix=batch_suffix,
+                    seg=self.segment,
+                    schema=self.schema.lower(),
+                )
+                if simple_where:
+                    seq_where.append(simple_where)
+                if not seq_where:
+                    continue
+                token_labels = [t.internal_label for t, *_ in sqlseq.fixed_tokens]
+                seq_from = " CROSS JOIN ".join(
+                    ["{prev_table}"]
+                    + [f"{self.schema}.{token_table} {tlab}" for tlab in token_labels]
+                )
+                seq_from = " JOIN ".join([seq_from] + fixed_joins)
+                seq_where_built = " AND ".join(seq_where)
+                select_matches = ", ".join(
+                    [
+                        f"{u.internal_label}.{self.token}_id"
+                        for u, *_ in sqlseq.fixed_tokens
+                    ]
+                )
+                unions.append(
+                    f"SELECT {SELECT_PH}, {CARRY_PH}jsonb_build_array({select_matches}) AS disjunction_matches FROM {seq_from} WHERE {seq_where_built}"
+                )
+            if log_op != "AND":
+                continue
+            # AND
+            from_nested: list[int] = []  # the index of the nested disjuinction CTEs
+            conjunction_where: list[str] = []
+            conjunction_cross_joins: list[str] = []
+            disj_joins: list[str] = []
+            conjunction_selects: list[str] = []
+            log_args = log_exp.get("args", [])
+            for conj in _flatten_coord(log_args, "AND"):
+                if not isinstance(conj, dict):
+                    continue
+                if conj.get("logicalExpression", {}).get("naryOperator") == "OR":
+                    nested_disjuncts = conj.get("logicalExpression", {}).get("args", [])
+                    nested_disjunction = self.process_disjunction(nested_disjuncts)
+                    from_nested.append(
+                        len(disjunction_ctes) + len(nested_disjunction) - 1
+                    )
+                    disjunction_ctes += nested_disjunction
+                    continue
+                if "unit" in conj:
+                    uly = conj["unit"].get("layer", "")
+                    ulb = conj["unit"].get("label") or self.r.unique_label(
+                        "t", layer=self.token
+                    )
+                    upo = conj["unit"].get("partOf", [])
+                    joins, conds = self._token(conj["unit"], uly, ulb, upo)
+                    if not conds:
+                        continue
+                    joins_values = [
+                        j for j in joins.values() if j and isinstance(j, set)
+                    ]
+                    joins_conds = set(
+                        str(x) for j in joins_values for x in j if str(x).strip()
+                    )
+                    conjunction_where += sorted(c for c in conds.union(joins_conds))
+                    conjunction_cross_joins += [j for j in joins]
+                    conjunction_selects.append(f"{ulb}.{self.token}_id")
+                elif "sequence" in conj:
+                    seq = Sequence(QueryData(), self.conf, conj)
+                    sqlseq = SQLSequence(seq)
+                    sqlseq.categorize_members()
+                    # if sqlseq.get_first_stream_part_of() != seg_lab:
+                    #     continue
+                    seq_where = []
+                    fixed_where, fixed_joins = sqlseq.where_fixed_members(
+                        set(), self.token
+                    )
+                    if fixed_where:
+                        seq_where += fixed_where
+                    batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
+                    _, _, simple_where = sqlseq.simple_sequences_table(
+                        fixed_part_ts="",
+                        from_table="{prev_table}",
+                        tok=self.token,
+                        batch_suffix=batch_suffix,
+                        seg=self.segment,
+                        schema=self.schema.lower(),
+                    )
+                    if simple_where:
+                        seq_where.append(simple_where)
+                    if not seq_where:
+                        continue
+                    seq_where_built = " AND ".join(seq_where)
+                    conjunction_where.append(seq_where_built)
+                    disj_joins += [j for j in fixed_joins]
+                    bound_tokens = [
+                        t.internal_label
+                        for t, *_ in sqlseq.fixed_tokens
+                        if t.internal_label not in self.r.label_layer
+                        or _bound_label(t.internal_label, self.config)
+                    ]
+                    conjunction_cross_joins += [
+                        f"{self.schema}.{token_table} {tlab}" for tlab in bound_tokens
+                    ]
+                    conjunction_selects += [
+                        f"{u.internal_label}.{self.token}_id"
+                        for u, *_ in sqlseq.fixed_tokens
+                    ]
+            disj_joins += [f"disjunction{n}" + " USING ({using})" for n in from_nested]
+            conj_from = " CROSS JOIN ".join(["{prev_table}"] + conjunction_cross_joins)
+            conj_from = " JOIN ".join([conj_from] + disj_joins)
+            conj_where_built = " AND ".join(conjunction_where)
+            conj_selects_built = ", ".join(conjunction_selects)
+            conj_matches = " || ".join(
+                [f"jsonb_build_array({conj_selects_built})"]
+                + [f"disjunction{n}.disjunction_matches" for n in from_nested]
+            )
+            unions.append(
+                f"SELECT {SELECT_PH}, {conj_matches} AS disjunction_matches FROM {conj_from} WHERE {conj_where_built}"
+            )
+        disjunction_ctes.append(unions)
+        return disjunction_ctes
+
+    def lift_quantifiers(self, query_obj: dict | list) -> dict | list:
+        ret_obj: dict | list = (
+            {} if isinstance(query_obj, dict) else [None for _ in range(len(query_obj))]
+        )
+        for n, k in enumerate(query_obj):
+            v = query_obj[k] if isinstance(query_obj, dict) else k
+            i = k if isinstance(query_obj, dict) else n
+            if isinstance(v, list):
+                ret_obj[i] = self.lift_quantifiers(v)
+                continue
+            elif not isinstance(v, dict):
+                ret_obj[i] = v
+                continue
+            if "quantification" in v:
+                quan_obj = cast(dict[str, Any], v["quantification"])
+                quantor = quan_obj.get("quantifier", "")
+                if quantor.endswith(("EXISTS", "EXIST")):
+                    if quantor.startswith(("~", "!", "NOT", "¬")):
+                        quantor = "NOT EXISTS"
+                    else:
+                        quantor = "EXISTS"
+                    key_to_lift = next(
+                        (x for x in ("unit", "sequence") if x in quan_obj), None
+                    )
+                    if key_to_lift:
+                        v = {x: y for x, y in quan_obj.items() if x == key_to_lift}
+                        v[key_to_lift]["quantor"] = quantor
+            ret_obj[i] = self.lift_quantifiers(v)
+        return ret_obj
+
     def query(self, recurse: list | None = None) -> tuple[str, str, str]:
         """
         The main entrypoint: produce query SQL as a single string
@@ -298,32 +500,32 @@ class QueryMaker:
 
         groups: dict[str, list[str]] = {}
 
-        obj: dict[str, Any]
+        disjunctions: list[list] = []  # disjunctions of tokens/sequences
 
-        for obj in to_iter:
-            # Lift any argument of a quantifier to obj
-            if "quantification" in obj:
-                quan_obj = cast(dict[str, Any], obj["quantification"])
-                quantor = quan_obj.get("quantifier", "")
-                if quantor.endswith(("EXISTS", "EXIST")):
-                    if quantor.startswith(("~", "!", "NOT", "¬")):
-                        quantor = "NOT EXISTS"
-                    else:
-                        quantor = "EXISTS"
-                    obj = {k: v for k, v in quan_obj.items() if k == "unit"}
-                    obj["unit"]["quantor"] = quantor
+        # build the conditions of the objects in the query list
+        obj: dict[str, Any]
+        for obj in self.lift_quantifiers(to_iter):
 
             # Turn any logical expression into a main constraint
-            if any(x == "logicalExpression" for x in obj):
+            if "logicalExpression" in obj:
                 obj = {"args": [obj]}
 
             is_sequence = "sequence" in obj
             is_set = "set" in obj
-            is_constraint = "args" in obj and recurse is None
+            is_constraint = "constraint" in obj and recurse is None
             is_group = "group" in obj
 
             if is_constraint:
-                self.constraint(obj)
+                log_exp = obj["constraint"].get("logicalExpression", {})
+                log_args = log_exp.get("args", [])
+                is_disj = log_exp.get("naryOperator") == "OR"
+                none_quantified = not any(
+                    "quantor" in x.get("unit", x.get("sequence", {})) for x in log_args
+                )
+                if is_disj and none_quantified:
+                    disjunctions.append(log_args)
+                else:
+                    self.constraint(obj["constraint"])
                 continue
 
             if is_set:
@@ -440,29 +642,44 @@ class QueryMaker:
                 self.joins[join_table] = True
                 self.conditions.add(join_conds)
 
+            simple_seq, new_labels, simple_where = s.simple_sequences_table(
+                fixed_part_ts=",\n".join(
+                    [
+                        f"{last_table}.{self._get_label_as(s)} AS {self._get_label_as(s)}"
+                        for s in sorted(selects_in_fixed)
+                    ]
+                ),
+                from_table=last_table,
+                tok=tok,
+                batch_suffix=batch_suffix,
+                seg=seg_str,
+                schema=self.schema.lower(),
+            )
+            self.conditions.add(simple_where)
+
             # If this sequence has a user-provided label, select the tokens it contains
             if not s.sequence.anonymous:
-                min: str = (
-                    f"___lasttable___.{next(t.internal_label for t,_,_,_ in s.fixed_tokens)}"
-                )
-                max: str = (
-                    f"___lasttable___.{next(t.internal_label for t,_,_,_ in reversed(s.fixed_tokens))}"
-                )
+                min_ref: str = ""
+                max_ref: str = ""
                 if s.ctes:
                     # If the first CTE comes first in the sequence, start_id is the main sequence's min token_id
                     if not s.ctes[0].prev_fixed_token:
-                        min = f"___lasttable___.start_id"
+                        min_ref = f"___lasttable___.start_id"
                     # If the last CTE comes last in the sequence, id is the main sequence's max token_id
                     if not s.ctes[-1].next_fixed_token:
-                        max = f"___lasttable___.id"
+                        max_ref = f"___lasttable___.id"
+                if not min_ref:
+                    min_ref = f"___lasttable___.{next(t.internal_label for t,_,_,_ in s.fixed_tokens)}"
+                if not max_ref:
+                    max_ref = f"___lasttable___.{next(t.internal_label for t,_,_,_ in reversed(s.fixed_tokens))}"
 
                 min_label: str = self.r.unique_label(f"min_{s.sequence.label}")
                 max_label: str = self.r.unique_label(f"max_{s.sequence.label}")
 
                 s_part_of = s.get_first_stream_part_of()
                 sequence_ranges[s.sequence.label] = (
-                    f"{min} as {min_label}",
-                    f"{max} as {max_label}",
+                    f"{min_ref} as {min_label}",
+                    f"{max_ref} as {max_label}",
                     s_part_of,
                 )
 
@@ -505,7 +722,7 @@ class QueryMaker:
         elif seg_suffixes:
             seg_suffixes[next(k for k in seg_suffixes.keys())] = current_batch_suffix
 
-        table, label = self.remove_and_get_base()
+        table, label = self.remove_and_get_base(disjunctions)
         from_table = table
 
         # we remove the selects that are not needed
@@ -548,7 +765,9 @@ class QueryMaker:
                     {c for c in v if c and isinstance(c, str)}
                 )
         union_conditions: set[str] = join_conditions.union(self.conditions)
-        formed_conditions = "\nAND ".join(sorted(union_conditions))
+        formed_conditions = "\nAND ".join(
+            x for x in sorted(union_conditions) if x.strip()
+        )
         formed_where = "" if not formed_conditions.strip() else "WHERE"
         formed_conditions = formed_conditions.format(_base_label=label)
         # todo: add group bt and having sections
@@ -557,33 +776,94 @@ class QueryMaker:
 
         additional_ctes: str = ""
 
-        # Simple subsequences: create subseq tables that check the series of tokens between two fixed tokens
-        for n, s in enumerate(self.sqlsequences):
-            simple_seq, new_labels = s.simple_sequences_table(
-                fixed_part_ts=",\n".join(
-                    [
-                        f"{last_table}.{self._get_label_as(s)} AS {self._get_label_as(s)}"
-                        for s in sorted(selects_in_fixed)
-                    ]
-                ),
-                from_table=last_table,
-                tok=tok,
-                batch_suffix=batch_suffix,
-                seg=seg_str,
-                schema=self.schema.lower(),
-            )
-            for new_label in new_labels:
-                selects_in_fixed.add(new_label)
-            if simple_seq:
-                # Update last_table
-                last_table = f"subseq{n}"
-                additional_ctes += f"""{last_table} AS (
-                    {simple_seq}
-                )
-                ,"""
-                # Subsequences do not introduce any selectable entity, so we're find reusing selects_in_fixed for now
+        unbound_labels: dict[str, str] = {
+            lab: lay
+            for lab, (lay, _) in self.r.label_layer.items()
+            if not _bound_label(lab, self.query_json)
+        }
+        built_disjunctions = []
+        for disjunction in disjunctions:
+            disj_ctes: list[str] = [
+                " UNION ALL ".join(union_cte)
+                for union_cte in self.process_disjunction(disjunction)
+            ]
+            # Make sure we select what's necessary from fixed_parts
+            for n in range(len(disj_ctes)):
+                union_cte = disj_ctes[n]
+                for lab, lay in unbound_labels.items():
+                    found_lab = re.search(rf"\b{lab}\b", union_cte)
+                    if not found_lab:
+                        continue
+                    sel_lab = f"___lasttable___.{lab} AS {lab}".lower()
+                    self.selects.add(sel_lab)
+                    sel_lab_in_fixed = f"{lab}.{lay}_id AS {lab}".lower()
+                    selects_in_fixed.add(sel_lab_in_fixed)
+                    union_cte = re.sub(
+                        rf"\b{lab}\.{lay}_id", lab, union_cte, flags=re.IGNORECASE
+                    )
+                    for labref in re.findall(rf"\b{lab}\.[_.a-zA-Z0-9]+", union_cte):
+                        # if labref.endswith("_id"):
+                        #     continue
+                        aname = labref.split(".")[-1]
+                        ref_sel_lab = (
+                            f"___lasttable___.{lab}_{aname} AS {lab}_{aname}".lower()
+                        )
+                        self.selects.add(ref_sel_lab)
+                        ref_sel_lab_in_fixed = f"{lab}.{aname} AS {lab}_{aname}".lower()
+                        selects_in_fixed.add(ref_sel_lab_in_fixed)
+                        union_cte = re.sub(
+                            rf"\b{labref}\b",
+                            f"{lab}_{aname}",
+                            union_cte,
+                            flags=re.IGNORECASE,
+                        )
+                        disj_ctes[n] = union_cte
+                    disj_ctes[n] = union_cte
+            built_disjunctions.append(disj_ctes)
 
-        # Simple subsequences: create subseq tables that check the series of tokens between two fixed tokens
+        disjunction_ctes: list[str] = []
+        n_disj_cte = 0
+        table_suffix: str = (
+            self._table[1] if self._table else next(s for s in seg_suffixes)
+        )
+        using: list[str] = [table_suffix]
+        for anchor in ("char_range", "frame_range", "xy_box"):
+            if not any(
+                sel.lower().endswith(f"as {table_suffix}_{anchor}".lower())
+                for sel in selects_in_fixed
+            ):
+                continue
+            using.append(f"{table_suffix}_{anchor}")
+        for n_main_disj, disj_ctes in enumerate(built_disjunctions):
+            for disj_cte in disj_ctes:
+                cte_prev_table = (
+                    "fixed_parts" if n_main_disj == 0 else f"disjunction{n_disj_cte-1}"
+                )
+                cte_selects = ", ".join(
+                    s.replace("___lasttable___", cte_prev_table)
+                    for s in sorted(self.selects)
+                )
+                carry_over: str = (
+                    ""
+                    if n_main_disj == 0
+                    else f"{cte_prev_table}.disjunction_matches || "
+                )
+                disj_cte_str = disj_cte.format(
+                    prev_table=cte_prev_table,
+                    selects=cte_selects,
+                    carry_over=carry_over,
+                    using=", ".join(using),
+                )
+                disjunction_ctes.append(disj_cte_str)
+                additional_ctes += f"disjunction{n_disj_cte} AS ({disj_cte_str}),"
+                n_disj_cte += 1
+        if built_disjunctions:
+            last_table = f"disjunction{n_disj_cte-1}"
+            self.selects.add(
+                "___lasttable___.disjunction_matches AS disjunction_matches"
+            )
+
+        # CTEs: use the traversal strategy
         last_cte: Cte | None = None
         n_cte: int = 0
         for s in self.sqlsequences:
@@ -596,6 +876,11 @@ class QueryMaker:
                 if isinstance(last_cte, Cte) and n > 0:
                     state_prev_cte = last_cte.get_final_states()
                 transition_table: str = cte.transition()
+                additional_selects = [
+                    self._get_label_as(slc)
+                    for slc in self.selects
+                    if self._get_label_as(slc) != s.get_first_stream_part_of()
+                ]
                 traversal_table: str = cte.traversal(
                     from_table=last_table,
                     state_prev_cte=state_prev_cte,
@@ -603,6 +888,7 @@ class QueryMaker:
                     tok=self.token.lower(),
                     batch_suffix=batch_suffix,
                     seg=self.segment.lower(),
+                    additional_selects=additional_selects,
                 )
                 additional_ctes += f"""{transition_table}
                 ,
@@ -614,7 +900,8 @@ class QueryMaker:
         # If any sequence has a label and needs its range to be returned
         if sequence_ranges:
 
-            selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
+            # selects_intermediate = {self._get_label_as(s) for s in selects_in_fixed}
+            selects_intermediate = {self._get_label_as(s) for s in self.selects}
             gather_selects: str = ",\n".join(
                 # sorted({s.replace("___lasttable___", last_table) for s in self.selects})
                 sorted(
@@ -734,7 +1021,38 @@ class QueryMaker:
         assert ll
         return next((k for k, v in ll.items() if v[0] == self.segment), "")
 
-    def remove_and_get_base(self) -> tuple[str, str]:
+    def disjunction_prefilters(
+        self, members: list = [], seg_lab: str = "", op: str = "OR"
+    ) -> str:
+        ret: str = ""
+        for m in members:
+            if "unit" in m:
+                if not any(seg_lab in x.values() for x in m["unit"].get("partOf", [])):
+                    continue
+                s: dict = {"sequence": {"members": [m]}}
+                unit_pref = Prefilter([s], self.conf, dict(), "")._condition()
+                if not unit_pref:
+                    continue
+                ret = unit_pref if not ret else ret + f" {op} ({unit_pref})"
+            elif "sequence" in m:
+                seq: Sequence = Sequence(QueryData(), self.conf, m)
+                sqlseq: SQLSequence = SQLSequence(seq)
+                if sqlseq.get_first_stream_part_of() != seg_lab:
+                    continue
+                seq_prefs = " AND ".join(sqlseq.prefilters())
+                if not seq_prefs:
+                    continue
+                ret = seq_prefs if not ret else ret + f" {op} ({seq_prefs})"
+            elif "logicalExpression" in m:
+                log_op = m["logicalExpression"].get("naryOperator")
+                log_ar = m["logicalExpression"].get("args", [])
+                coord_prefs = self.disjunction_prefilters(log_ar, seg_lab, log_op)
+                if not coord_prefs:
+                    continue
+                ret = coord_prefs if not ret else ret + f" {op} ({coord_prefs})"
+        return ret
+
+    def remove_and_get_base(self, disjunctions: list = []) -> tuple[str, str]:
         """
         If we made a join that is equal to the FROM clause, we remove it
         """
@@ -747,17 +1065,18 @@ class QueryMaker:
 
         schema_prefix: str = f"{self.schema}."
         base: str = f"{schema_prefix}{table} {label}".lower()
-
         prefilters: set[str] = {
             p
             for s in self.sqlsequences
             for p in s.prefilters()
-            if s.get_first_stream_part_of() == label
+            if s.get_first_stream_part_of() == label and p.strip()
         }
+        for disjunction in disjunctions:
+            prefilters.add(f"({self.disjunction_prefilters(disjunction, label)})")
         if self.has_fts and prefilters:
             batch_suffix = _get_batch_suffix(self.batch, self.n_batches)
             vector_name = f"fts_vector{self._underlang}{batch_suffix}"  # Need better handling of this: add to mapping?
-            ps: str = " AND ".join(prefilters)
+            ps: str = " AND ".join(sorted(prefilters))
             new_label = f"fts_vector_{label}"
             old_base_joins: None | bool | list | set = self.joins.get(base, [])
             new_joins: set[str | bool] = set()
@@ -785,7 +1104,7 @@ class QueryMaker:
         Handle top-level constraints only
         """
         conn_obj = _get_constraints(
-            obj["args"],
+            cast(JSONObject, [obj]),
             "",
             "",
             self.conf,

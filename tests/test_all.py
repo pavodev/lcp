@@ -20,7 +20,7 @@ os.environ["_TEST"] = "true"
 from lcpvian.app import create_app
 
 # from lcpvian.sock import handle_redis_response
-from lcpvian.utils import _meta_query
+from lcpvian.utils import get_segment_meta_script
 
 
 PUBSUB_CHANNEL = PUBSUB_CHANNEL_TEMPLATE % "query"
@@ -96,19 +96,22 @@ class MyAppTestCase(AioHTTPTestCase):
                 ).strip()
             with open(base + ".meta") as mfile:
                 meta = json.load(mfile)
-
+            lg = _determine_language(meta["batch"]) or ""
             kwa = dict(
                 schema=meta["schema"],
                 batch=meta["batch"],
                 config=meta,
-                lang=_determine_language(meta["batch"]),
+                lang=lg,
             )
             json_query = dqd_to_json(dqd, meta)
             sql_query, meta_json, post_processes = json_to_sql(json_query, **kwa)
             self.assertTrue(meta_json is not None)
             self.assertTrue(post_processes is not None)
             self.assertEqual(sql_norm(sql_query), sql_norm(sql))
-            cb: Batch = (meta["idx"], meta["schema"], meta["batch"], 1)
-            mq = _meta_query(cb, meta)
+            mq, _ = get_segment_meta_script(
+                meta,
+                [lg],
+                meta["batch"],
+            )
             mm = sqlparse.format(mq, reindent=True, keyword_case="upper")
             self.assertEqual(sql_norm(meta_q), sql_norm(mm))

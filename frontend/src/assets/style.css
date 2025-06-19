@@ -253,3 +253,7 @@ nav a.router-link-exact-active {
   font-size: 9px;
   border-radius: 0 0 3px 3px;
 }
+
+.pre-line {
+  white-space: pre-line;
+}

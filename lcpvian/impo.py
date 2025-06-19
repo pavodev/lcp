@@ -530,8 +530,11 @@ class Importer:
         await self.run_script(self.m_token_freq)
         self.update_progress("- token_n")
         await self.run_script(self.m_token_n)
-        self.update_progress("- lemma_freqs")
-        await self.run_script(self.m_lemma_freqs)
+        tok = self.template["firstClass"]["token"]
+        tok_attrs = cast(dict, self.template["layer"][tok])["attributes"]
+        if "lemma" in tok_attrs:
+            self.update_progress("- lemma_freqs")
+            await self.run_script(self.m_lemma_freqs)
         self.update_progress("Done with collocations!")
         return None
 

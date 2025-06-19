@@ -15,3 +15,5 @@ database/wip/*
 *.so
 *.c
 frontend/public/media/
+
+examples/*

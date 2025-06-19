@@ -70,6 +70,17 @@ CREATE INDEX ON main.exports (query_hash);
 GRANT SELECT, INSERT, UPDATE ON main.exports TO lcp_production_owner;
 
 
+-- user saved queries
+CREATE TABLE lcp_user.queries (
+   idx               uuid                 PRIMARY KEY
+ , query             jsonb                NOT NULL
+ , "user"            uuid                 NOT NULL
+ , room              uuid
+ , query_name        text
+ , query_type        text
+ , created_at        timestamptz          DEFAULT CURRENT_TIMESTAMP
+);
+
 -- global ENUM types
 CREATE TYPE main.udep AS ENUM (
    'acl'
@@ -459,6 +470,7 @@ GRANT SELECT
    ON main.corpus
     , main.inprogress_corpus
     , main.exports
+    , lcp_user.queries
    TO lcp_production_maintenance
     , lcp_production_monitoring
     , lcp_production_importer
