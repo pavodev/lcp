@@ -37,6 +37,8 @@ COUNTER = f"""
 
 """
 
+ANCHORINGS = ("stream", "time", "location")
+
 
 class ResultsMaker:
     """
@@ -810,9 +812,17 @@ WHERE {entity}.char_range && contained_token.char_range
                 if "partitions" in mapping and self.lang:
                     mapping = mapping["partitions"].get(self.lang, {})
                 table = _get_table(entity_layer, self.config, self.batch, self.lang)
-                counts.append(
-                    f"(SELECT count(*) FROM {self.schema}.{table}) AS total_{entity_layer.lower()}"
+                el = entity_layer.lower()
+                count_total = (
+                    f"""(SELECT count({el[0]})
+    FROM {self.schema}.{table} {el[0]}"""
+                    + """
+    CROSS JOIN {joins}
+    WHERE {wheres}) AS {total_label}"""
                 )
+                # TODO: build joins and wheres based on the attributes
+                # for each attribute, determine which anchor is shared with the entity
+                counts.append(count_total)
                 # table = mapping.get("relation", entity_layer.lower())
                 # if (
                 #     "batches" in mapping
@@ -832,6 +842,8 @@ WHERE {entity}.char_range && contained_token.char_range
         else:
             jcounts = " "
         funcstr = " , ".join(functions)
+        jjoins: list[str] = []
+        jwheres: list[str] = []
         parsed_attributes: list[tuple[str, RefInfo]] = []
         for att in attributes:
             if "entity" in att:
@@ -867,12 +879,43 @@ WHERE {entity}.char_range && contained_token.char_range
             self.r.selects.add(f"{ref} AS {alias}")
             self.r.entities.add(alias)
             parsed_attributes.append((alias, ref_info))
+            if (
+                not count_entities
+                or "attribute" not in att
+                or "." not in att["attribute"]
+            ):
+                continue
+            entity_lab = count_entities[0]
+            entity_layer, _ = self.r.label_layer[entity_lab]
+            prefix, *_ = att["attribute"].split(".")
+            prefix_layer, _ = self.r.label_layer[prefix]
+            anchorings = [
+                {"stream": "char_range", "time": "frame_range", "location": "xy_box"}[a]
+                for a in ANCHORINGS
+                if _is_anchored(self.config, prefix_layer, a)
+                and _is_anchored(self.config, entity_layer, a)
+            ]
+            assert anchorings, RuntimeError(
+                f"Layer {prefix_layer} ({prefix}) does not share an anchoring with layer {entity_layer} ({entity_lab})"
+            )
+            prefix_table = _get_table(prefix_layer, self.config, self.batch, self.lang)
+            jjoins.append(f"{self.schema}.{prefix_table} {prefix}")
+            where_anchors = " OR ".join(
+                f"{prefix}.{a} && {entity_layer.lower()[0]}.{a}" for a in anchorings
+            )
+            jwheres.append(f"({ref} = {alias} AND ({where_anchors}))")
         assert parsed_attributes, RuntimeError(
             f"Need at least one *attribute* referenced in the analysis"
         )
         if count_entities:
             count_entity_layer, _ = self.r.label_layer[count_entities[0]]
-            funcstr += f", total_{count_entity_layer.lower()}"
+            total_label = f"total_{count_entity_layer.lower()}"
+            funcstr += f", {total_label}"
+            jcounts = jcounts.format(
+                joins=" CROSS JOIN ".join(jjoins),
+                wheres=" AND ".join(jwheres),
+                total_label=total_label,
+            )
         nodes = " , ".join(p for p, _ in parsed_attributes)
         wheres, filter_meta = self._process_filters(filt)
         out = f"""
