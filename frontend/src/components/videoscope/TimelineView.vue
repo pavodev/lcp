@@ -520,7 +520,7 @@ export default {
             console.log('Initializing timeline...');
             this.initializeTimeline('timeline-svg-mobile');
           }
-        }, 5000);
+        }, 1000);
       });
     },
     closeTimelineModal() {
