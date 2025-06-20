@@ -209,7 +209,7 @@
   }
 
   .timeline-container {
-    flex-direction: row;
+    flex-direction: column;
     height: 100%;
   }
 
@@ -222,6 +222,7 @@
 
   .timeline-wrapper {
     flex: 1;
+    width: 100%;
     height: 100%;
     min-height: 0;
   }
