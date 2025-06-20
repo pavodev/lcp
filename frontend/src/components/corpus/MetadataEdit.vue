@@ -1,4 +1,11 @@
 <template>
+  <div id="corpus-warning">
+    <div class="row">
+      <div class="col-18" style="font-style: italic;">
+        {{ $t('modal-meta-warning-before') }} {{ getUserLocale().name }}{{ $t('modal-meta-warning-after') }}
+      </div>
+    </div>
+  </div>
   <div id="corpus-metadata-edit">
     <div class="row">
       <div class="col-6">
@@ -9,8 +16,8 @@
       </div>
       <div class="col-6">
         <div class="mb-3">
-          <label for="corpus-source" class="form-label">{{ $t('modal-meta-source') }}</label>
-          <input type="text" class="form-control" v-model="corpusData.meta.source" id="corpus-source" />
+          <label for="corpus-url" class="form-label">{{ $t('modal-meta-url') }}</label>
+          <input type="text" class="form-control" v-model="corpusData.meta.url" id="corpus-url" />
         </div>
       </div>
     </div>
@@ -90,6 +97,15 @@
         </div>
       </div>
     </div>
+    <div class="row">
+      <div class="col-12">
+        <div class="mb-3">
+          <label for="corpus-sample" class="form-label">{{ $t('modal-meta-sample') }}</label>
+          <textarea class="form-control" placeholder="Sample DQD query" v-model="corpusData.meta.sample_query"
+            id="corpus-sample" style="height: 300px"></textarea>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -111,6 +127,7 @@ a:hover {
 <script>
 import { mapState } from "pinia";
 import { useCorpusStore } from "@/stores/corpusStore";
+import { getUserLocale } from "@/fluent";
 import Utils from "@/utils";
 
 export default {
@@ -127,6 +144,7 @@ export default {
   },
   methods: {
     corpusDataType: Utils.corpusDataType,
+    getUserLocale: getUserLocale
   },
   watch: {
     userLicense() {

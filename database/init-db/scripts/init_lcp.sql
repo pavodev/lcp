@@ -72,13 +72,13 @@ GRANT SELECT, INSERT, UPDATE ON main.exports TO lcp_production_owner;
 
 -- user saved queries
 CREATE TABLE lcp_user.queries (
-idx UUID PRIMARY KEY,
-query JSONB NOT NULL,
-"user" UUID NOT NULL,
-room UUID,
-query_name TEXT,
-query_type TEXT,
-created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+   idx               uuid                 PRIMARY KEY
+ , query             jsonb                NOT NULL
+ , "user"            uuid                 NOT NULL
+ , room              uuid
+ , query_name        text
+ , query_type        text
+ , created_at        timestamptz          DEFAULT CURRENT_TIMESTAMP
 );
 
 -- global ENUM types

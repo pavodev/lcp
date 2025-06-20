@@ -404,3 +404,17 @@ def _flatten_coord(objs: list, operator: str = "OR") -> list:
             continue
         ret.append(o)
     return ret
+
+
+def escape_single_quotes(obj: list | dict) -> list | dict:
+    is_dict = isinstance(obj, dict)
+    ret = {} if is_dict else [1 for _ in range(len(obj))]
+    for n, k in enumerate(obj):
+        v = obj[k] if is_dict else obj[n]
+        if isinstance(v, (dict, list)):
+            v = escape_single_quotes(v)
+        elif isinstance(v, str):
+            v = v.replace("'", "''")
+        i = k if is_dict else n
+        ret[i] = v  # type: ignore
+    return cast(list | dict, ret)

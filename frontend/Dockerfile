@@ -17,7 +17,7 @@ RUN yarn
 COPY . ./
 
 # Build the Vue.js application
-ENV NODE_ENV=USI
+ENV NODE_ENV=development
 RUN export GIT_HASH=$(git rev-parse HEAD) && yarn run build --mode development
 
 

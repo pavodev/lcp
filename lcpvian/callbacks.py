@@ -11,6 +11,7 @@ calls to Queue.enqueue in query_service.py
 """
 
 import duckdb
+import json
 import os
 import pandas
 import shutil
@@ -326,16 +327,16 @@ def _queries(
     job_kwargs: dict = cast(dict, job.kwargs)
     is_store: bool = job_kwargs.get("store", False)
     is_delete: bool = job_kwargs.get("delete", False)
-    
+
     action = "fetch_queries"
 
     if is_store:
         action = "store_query"
     elif is_delete:
         action = "delete_query"
-    
+
     # action = "store_query" if is_store else "fetch_queries"
-    
+
     room: str | None = job_kwargs.get("room")
     msg_id = str(uuid4())
     jso: dict[str, Any] = {
@@ -361,7 +362,8 @@ def _queries(
 
     return _publish_msg(connection, jso, msg_id)
 
-def _deleted(job: Job, connection: RedisConnection, result: any) -> None:
+
+def _deleted(job: Job, connection: RedisConnection, result: Any) -> None:
     """
     Callback for successful deletion.
     """
@@ -371,18 +373,17 @@ def _deleted(job: Job, connection: RedisConnection, result: any) -> None:
     # Since DELETE without RETURNING doesn't provide row data, we use the original query_id.
     deleted_idx = job_kwargs.get("idx")
     msg_id = str(uuid4())
-    jso: dict[str, any] = {
+    jso: dict[str, Any] = {
         "user": str(job_kwargs["user"]),
         "room": room,
         "idx": deleted_idx,
         "status": "success",
         "action": action,
         "msg_id": msg_id,
-        "queries": '[]',
+        "queries": "[]",
     }
-    
-    return _publish_msg(connection, jso, msg_id)
 
+    return _publish_msg(connection, jso, msg_id)
 
 
 def _swissdox_to_db_file(

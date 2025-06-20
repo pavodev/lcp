@@ -401,6 +401,11 @@ export default {
       if (isNaN(domainStart) || isNaN(domainEnd)) return;
 
       domainStart = Math.max(0, domainStart.toFixed(3));
+
+      // console.log('Position data:', domainStart, this.currentTime, domainEnd, xPosition);
+      // console.log(`Position data / start: ${domainStart}, current: ${this.currentTime}, end: ${domainEnd}, new position: ${xPosition}`);
+
+      // If the global currentTime is in the visible domain, show the line; otherwise hide it
       const inDomain = (this.currentTime >= domainStart && this.currentTime <= domainEnd);
 
       verticalLine

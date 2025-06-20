@@ -149,7 +149,7 @@ modal-details-user-license = User defined
 # Metadata edit modal
 
 modal-meta-name = Name
-modal-meta-source = Source
+modal-meta-url = URL
 modal-meta-authors = Authors
 modal-meta-provider = Provider/Institution
 modal-meta-revision = Revision
@@ -158,6 +158,10 @@ modal-meta-description = Description
 modal-meta-license = License
 modal-meta-user-defined = User defined
 modal-meta-user-license = User defined license
+modal-meta-sample = Sample DQD query
+modal-meta-warning-before = You are currently editing the properties in
+modal-meta-warning-after = . Switch the interface's language to edit the properties in another language.
+
 
 # New/Edit project modal
 

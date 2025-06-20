@@ -159,12 +159,18 @@ export default {
       if (this.data && this.attributes) {
         data = JSON.parse(JSON.stringify(this.data));
         if (this.type == "analysis") {
-          let sum = data.reduce((accumulator, row) => {
-            return accumulator + row.at(-1)
-          }, 0);
+          let sum = data.at(-1).at(-1), indexFreq = -2;
+          const all_layers = Object.keys(this.corpora.corpus.layer);
+          const last_at = this.attributes.at(-1);
+          if (!all_layers.find(l=>last_at.name == `total_${l}`.toLowerCase())) {
+            indexFreq = -1;
+            sum = data.reduce((accumulator, row) => {
+              return accumulator + row.at(indexFreq)
+            }, 0);
+          }
           data = this.data.map(row => [
             ...row,
-            (row.at(-1)/sum*100.).toFixed(4)
+            (row.at(indexFreq)/sum*100.).toFixed(4)
           ])
         }
         else if (this.type == "collocation") {

@@ -43,10 +43,9 @@ from .callbacks import (
     _general_failure,
     _upload_failure,
     _queries,
-    _deleted,
-    # _query,
     _schema,
     _upload,
+    _deleted,
 )
 from .export import _export_notifs
 from .jobfuncs import _db_query, _upload_data, _create_schema
@@ -321,7 +320,12 @@ class QueryService:
         return job
 
     def fetch_queries(
-        self, user: str, room: str, query_type: str, queue: str = "internal", limit: int = 10
+        self,
+        user: str,
+        room: str,
+        query_type: str,
+        queue: str = "internal",
+        limit: int = 10,
     ) -> Job:
         """
         Get previous saved queries for this user/room
@@ -355,7 +359,7 @@ class QueryService:
             "room": room,
             "config": True,
             "query_type": query_type,
-            "is_Main": True,  # query on main.* or something similar
+            "is_main": True,  # query on main.* or something similar
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -367,7 +371,6 @@ class QueryService:
             kwargs=opts,
         )
         return job
-    
 
     def store_query(
         self,
@@ -382,7 +385,7 @@ class QueryService:
         """
         query = (
             'INSERT INTO lcp_user.queries (idx, query, "user", room, query_name, query_type) '
-            'VALUES (:idx, :query, :user, :room, :query_name, :query_type);'
+            "VALUES (:idx, :query, :user, :room, :query_name, :query_type);"
         )
         kwargs = {
             "user": user,
@@ -391,13 +394,13 @@ class QueryService:
             "is_main": True,  # query on main.* or something similar
             "query_id": idx,
         }
-        params: dict[str, str | int | None | JSONObject] = {
+        params: dict[str, Any] = {
             "idx": idx,
             "query": json.dumps(query_data, default=str),
             "user": user,
             "room": room,
             "query_name": query_data["query_name"],
-            "query_type": query_data["query_type"]
+            "query_type": query_data["query_type"],
         }
         job: Job = self.app[queue].enqueue(
             _db_query,
@@ -410,7 +413,9 @@ class QueryService:
         )
         return job
 
-    def delete_query(self, user_id: str, room_id: str, query_id: str, queue: str = "internal") -> Job:
+    def delete_query(
+        self, user_id: str, room_id: str, query_id: str, queue: str = "internal"
+    ) -> Job:
         """
         Delete a query using a background job.
         """
@@ -419,23 +424,21 @@ class QueryService:
             query_uuid = uuid.UUID(query_id)
         except ValueError:
             raise ValueError("Invalid query id provided")
-        
+
         # Build parameters with the UUID object.
-        params: dict[str, any] = {"user": user_id, "room": room_id, "idx": query_uuid}
+        params: dict[str, Any] = {"user": user_id, "room": room_id, "idx": query_uuid}
 
         # DELETE query without a RETURNING clause.
-        query = (
-            """DELETE FROM lcp_user.queries
+        query = """DELETE FROM lcp_user.queries
             WHERE "user" = :user
             AND idx = :idx"""
-        )
 
         opts = {
             "user": user_id,
             "room": room_id,
             "idx": query_id,  # keep as string for logging and later use in the callback
             "delete": True,
-            "config": True
+            "config": True,
         }
 
         job: Job = self.app[queue].enqueue(
@@ -449,16 +452,18 @@ class QueryService:
         )
         return job
 
-
     def update_metadata(
         self,
         corpus_id: int,
         query_data: JSONObject,
+        lg: str = "en",
         queue: str = "internal",
     ) -> Job:
         """
         Update metadata for a corpus
         """
+        MONOLINGUAL = {"name", "version", "license"}
+
         kwargs = {
             "store": True,
             "is_main": True,  # query on main.*
@@ -466,10 +471,29 @@ class QueryService:
             "refresh_config": True,
         }
         query = f"""CALL main.update_corpus_meta(:corpus_id, :metadata_json ::jsonb);"""
+        existing_meta: dict = self.app["config"][str(corpus_id)]["meta"]
+        for k, v in query_data.items():
+            if k in MONOLINGUAL:
+                continue
+            is_str = isinstance(existing_meta.get(k), str)
+            if is_str:
+                if lg == "en" or existing_meta[k] == v:
+                    continue
+                query_data[k] = {"en": existing_meta[k]}
+            if not isinstance(query_data[k], dict):
+                query_data[k] = (
+                    {**existing_meta[k]}
+                    if isinstance(existing_meta.get(k), dict)
+                    else {}
+                )
+            query_data[k][lg] = v  # type: ignore
+            if "en" not in query_data[k]:  # type: ignore
+                query_data[k]["en"] = v  # type: ignore
         params: dict[str, str | int | None | JSONObject] = {
             "corpus_id": corpus_id,
             "metadata_json": json.dumps(query_data),
         }
+        self.app["config"][str(corpus_id)]["meta"] = query_data
         job: Job = self.app[queue].enqueue(
             _db_query,
             result_ttl=self.query_ttl,

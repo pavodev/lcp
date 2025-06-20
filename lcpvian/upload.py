@@ -519,7 +519,10 @@ async def make_schema(request: web.Request) -> web.Response:
     template["schema_name"] = schema_name
 
     try:
-        pieces = generate_ddl(template, proj_id, corpus_version)
+        no_index: list[list[str]] = cast(
+            list[list[str]], request_data.get("no_index", [])
+        )
+        pieces = generate_ddl(template, proj_id, corpus_version, no_index)
         pieces["template"] = template
     except Exception as err:
         tb = traceback.format_exc()

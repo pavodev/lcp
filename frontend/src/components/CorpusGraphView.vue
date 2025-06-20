@@ -89,6 +89,22 @@ function computeAttributes(corpus_layer) {
   return corpus_layers_attributes;
 }
 
+const STYLES = {
+  text: "fill:#FBD573,stroke:#333,stroke-width:2px",
+  categorical: "fill:#FBD573,stroke:#333,stroke-width:2px",
+  number: "fill:#ABF513,stroke:#333,stroke-width:2px",
+  labels: "fill:#3BF5B3,stroke:#333,stroke-width:2px",
+  ref: "fill:#6264FF,stroke:#333,stroke-width:2px",
+  entity: "fill:#F321AA,stroke:#333,stroke-width:2px",
+}
+
+const isAnchored = (layer, conf, anchor) => {
+  if (conf[layer].anchoring && conf[layer].anchoring[anchor] == true)
+    return true;
+  if (conf[layer].contains && conf[layer].contains in conf)
+    return isAnchored(conf[layer].contains, conf, anchor);
+  return false;
+}
 
 export default {
   name: "CorpusGraphView",
@@ -142,6 +158,7 @@ export default {
           edgeType: "round"
         },
       ];
+      let globalAttributesDone = {};
       let partOfs = {};
       Object.keys(corpus.layer).forEach((layer, index) => {
         let next = [], link = [];
@@ -160,9 +177,16 @@ export default {
               style: "fill:#FBD573,stroke:#333,stroke-width:2px",
               editable: attribute_props instanceof UnfoldAttribute
             };
+
+            const tooltipNotes = ["Type: text"];
+            if (attribute_props.description)
+              tooltipNotes.push("Description: "+attribute_props.description.replace(/[^a-zA-Z0-9\s]+/,""));
+
             if ("entity" in attribute_props && attribute_props.entity in corpus.layer) {
               attributeData.next = [`l-${attribute_props.entity.toLowerCase().replace(/@/gi, "_")}`];
               attributeData.link = ["-.->|refers to|"];
+              attributeData.style = STYLES.entity;
+              tooltipNotes[0] = `Type: ${attribute_props.entity}`;
             }
             else if (attribute_props.type=="categorical") {
               let warnings = [];
@@ -182,8 +206,36 @@ export default {
                 stringPossibleValues += " ..."
                 warnings.push("too many values to display");
               }
-              attributeData.text = `<abbr title='${stringPossibleValues}${warnings.length?' /!\\ '+warnings.join(' - ')+' /!\\':''}' class='tooltips'>${attributeData.text}</abbr>`;
+              tooltipNotes.push(`Possible values: ${stringPossibleValues}${warnings.length?' /!\\ '+warnings.join(' - ')+' /!\\':''}`);
             }
+            if (attribute_props.type && attribute_props.type in STYLES)
+              attributeData.style = STYLES[attribute_props.type];
+            if (attribute_props.ref) {
+              attributeData.style = STYLES.ref;
+              tooltipNotes[0] = "Type: global attribute";
+              if (!(attribute_props.ref in globalAttributesDone)) {
+                attributeData.link = [];
+                attributeData.next = [];
+                const ga = corpus.globalAttributes[attribute_props.ref];
+                for (let [gk,gv] of Object.entries(ga.keys)) {
+                  attributeData.link.push("---");
+                  attributeData.next.push(`${attributeId}-${gk}`);
+                  data.push({
+                    id: `${attributeId}-${gk}`,
+                    text: `<abbr title='${gv.type}' class='tooltips'>${gk}</abbr>`,
+                    edgeType: "round",
+                    style: "fill:#FBD573,stroke:#333,stroke-width:2px",
+                    editable: false
+                  });
+                }
+                globalAttributesDone[attribute_props.ref] = 1;
+              }
+            }
+
+            if (attribute_props.type && !(attribute_props.type in {text:1, categorical:1}))
+              tooltipNotes[0] = `Type: ${attribute_props.type}`;
+
+            attributeData.text = `<abbr title='${tooltipNotes.join(' -- ')}' class='tooltips'>${attributeData.text}</abbr>`
             data.push(attributeData);
             next.push(attributeId);
             link.push("---")
@@ -209,9 +261,24 @@ export default {
           link.push("-- in -->")
           data[0].next = data[0].next.filter( (layerId) => layerId != containedId );
         }
+        let layer_title = [];
+        const anchorings = [];
+        for (let [anchor, init, desc] of [
+          ["stream", 'c', "character aligned"],
+          ["time", 't', "time aligned"],
+          ["location", 'l', "location aligned"]
+        ]) {
+          if (!isAnchored(layer, corpus.layer, anchor))
+            continue;
+          anchorings.push(init + ".");
+          layer_title.push(desc)
+        }
+        let layer_text = layer.replace(/@/gi, "_") + " " + anchorings.join('');
+        if (layer_title.length)
+          layer_text = `<abbr title='${layer_title.join(' - ')}' class='tooltips'>${layer_text}</abbr>`;
         let layerData = {
           id: `l-${layer.toLowerCase().replace(/@/gi, "_")}`,
-          text: layer.replace(/@/gi, "_"),
+          text: layer_text,
           next: next,
           link: link
         };
