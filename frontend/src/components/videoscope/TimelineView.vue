@@ -508,14 +508,13 @@ export default {
       // Wait for the modal to be mounted and visible
       this.$nextTick(() => {
         // Only initialize if we're in landscape mode
-        if (this.isLandscape) {
-          this.initializeTimeline('timeline-svg-mobile');
+        setTimeout(() => {
           // Use setTimeout to ensure SVG is fully initialized and transformed
-          // setTimeout(() => {
-          //   this.updateCurrentPosition(this.playerCurrentTime);
-          //   this.center();
-          // }, 100);
-        }
+          if (this.isLandscape) {
+            console.log('Initializing timeline...');
+            this.initializeTimeline('timeline-svg-mobile');
+          }
+        }, 5000);
       });
     },
     closeTimelineModal() {
@@ -540,7 +539,13 @@ export default {
           this.$nextTick(() => {
             const svgElement = document.getElementById('timeline-svg-mobile');
             if (svgElement && svgElement.parentElement) {
-              this.initializeTimeline('timeline-svg-mobile');
+              setTimeout(() => {
+                // Use setTimeout to ensure SVG is fully initialized and transformed
+                console.log('Initializing timeline...');
+                this.initializeTimeline('timeline-svg-mobile');
+
+              }, 5000);
+              // this.initializeTimeline('timeline-svg-mobile');
             }
           });
         }
@@ -570,8 +575,8 @@ export default {
         ? svgElement.parentElement.clientWidth
         : document.body.clientWidth - 20;
 
-        console.log("Timeline parent: ", svgElement.parentElement);
-        console.log("document.body.clientwidth: ", document.body.clientWidth);
+      console.log("Timeline parent: ", svgElement.parentElement);
+      console.log("document.body.clientwidth: ", document.body.clientWidth);
 
       // Avoid the timeline to be rendered if the container was still no drawn in the browser
       // Neccessary in particular for iOS devices using safari.
