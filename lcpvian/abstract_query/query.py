@@ -1169,8 +1169,9 @@ class QueryMaker:
         layer_info = cast(JSONObject, layer_info[layer])
         contains = cast(str, layer_info.get("contains", ""))
         is_meta = bool(contains) and contains != self.token
+        is_relation = layer_info.get("layerType", "relation")
         is_negative = obj.get("quantor", "") == "NOT EXISTS"
-        if not is_meta and not is_negative:
+        if not is_meta and not is_relation and not is_negative:
             idx = "_id" if not is_meta else ""
             select = f"{label}.{layer}{idx} as {label}"
             self.selects.add(select.lower())
