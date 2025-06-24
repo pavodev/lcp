@@ -112,7 +112,7 @@ svg#timeline-svg {
   }
 }
 
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 768px) and (orientation: portrait) {
   .button-container {
     margin-left: 0;
     display: flex;
