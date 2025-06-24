@@ -1519,7 +1519,7 @@ div.active video {
   background-color: lightgray;
 }
 
-@media screen and (max-width: 768px) {
+@media screen and (max-width: 768px) and (orientation: landscape) {
   .video-box>div.active {
     max-width: calc(100vw - 78px) !important;
     order: -1;
