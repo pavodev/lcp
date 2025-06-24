@@ -151,7 +151,7 @@ export default {
       MAX_ZOOM_LEVEL: MAX_ZOOM_LEVEL,
       isMobile: false,
       isLandscape: false,
-      _resizeHandler: null,
+      resizeHandler: null,
     }
   },
   watch: {
@@ -341,8 +341,8 @@ export default {
     setResizeOrientationListeners() {
       console.log("Setting up resize and orientation change listeners...")
       // kick off initial check and update on resize/orientationchange
-      window.addEventListener('resize', this._resizeHandler);
-      window.addEventListener('orientationchange', this._resizeHandler);
+      window.addEventListener('resize', this.resizeHandler);
+      window.addEventListener('orientationchange', this.resizeHandler);
     },
     checkMobile(e) {
       console.log('new event: ', e, this.currentTime);
@@ -727,16 +727,16 @@ export default {
   },
   mounted() {
     // Create a debounced resize handler and save a reference
-    this._resizeHandler = (e) => {
+    this.resizeHandler = (e) => {
       clearTimeout(this._resizeTimeout)
       this._resizeTimeout = setTimeout(() => this.checkMobile(e), 200)
     }
     // Initialize the timeline
     this.initializeTimeline();
   },
-  beforeDestroy(){
-    window.removeEventListener('resize', this._resizeHandler)
-    window.removeEventListener('orientationchange', this._resizeHandler)
+  beforeUnmount(){
+    window.removeEventListener('resize', this.resizeHandler)
+    window.removeEventListener('orientationchange', this.resizeHandler)
   }
 };
 </script>
