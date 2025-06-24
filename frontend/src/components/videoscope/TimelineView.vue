@@ -63,6 +63,10 @@
   margin-left: 178px;
 }
 
+.button-container > button, .button-container > input {
+  margin-top: 5px;
+}
+
 * >>> .tooltip-rect {
   fill: #fffffff0;
   stroke: #e6e6e6;
