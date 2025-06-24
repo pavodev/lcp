@@ -359,6 +359,13 @@ async def handle_timeout(exc: Exception, request: web.Request) -> None:
     await _general_error_handler("timeout", exc, request)
 
 
+async def handle_bad_request(exc: Exception, request: web.Request) -> None:
+    """
+    If BE raises an HTTPBadRequest error
+    """
+    await _general_error_handler(str(exc), exc, request)
+
+
 def refresh_job_ttl(
     connection: RedisConnection, job_id: str, new_ttl: int = QUERY_TTL
 ) -> None:
