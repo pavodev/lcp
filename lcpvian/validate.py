@@ -10,6 +10,39 @@ from .textsearch_to_json import textsearch_to_json
 from .typed import JSONObject
 
 
+def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
+    if isinstance(obj, list):
+        for x in obj:
+            if not isinstance(x, (dict, list)):
+                continue
+            check_layer(conf, x, recent_layer=recent_layer)
+        return
+    if "unit" in obj:
+        recent_layer = obj["unit"].get("layer", "")
+        assert recent_layer in conf["layer"], ReferenceError(
+            f"Could not find a layer named '{recent_layer}' in this corpus"
+        )
+    if "reference" in obj and recent_layer:
+        ref = obj["reference"]
+        attrs = conf["layer"].get(recent_layer, {}).get("attributes", {})
+        assert ref in attrs or ref in attrs.get("meta", {}), ReferenceError(
+            f"Could not find an attribute named '{ref}' on layer {recent_layer}"
+        )
+    if obj.get("attribute", "").count(".") == 1:
+        _, aname = obj["attribute"].split(".")
+        assert any(
+            aname in x.get("attributes", {})
+            or aname in x.get("attributes", {}).get("meta", {})
+            for x in conf["layer"].values()
+        ), ReferenceError(
+            f"Could not find an attribute named '{aname}' on any layer ({obj['attribute']})"
+        )
+    for x in obj.values():
+        if not isinstance(x, (dict, list)):
+            continue
+        check_layer(conf, x, recent_layer=recent_layer)
+
+
 async def validate(
     user: str | None = None,
     room: str | None = None,
@@ -27,7 +60,7 @@ async def validate(
     result: JSONObject = {}
     if kind == "json":
         try:
-            json.loads(query)
+            json_query = json.loads(query)
             result = {
                 "kind": "json",
                 "valid": True,
@@ -95,14 +128,15 @@ async def validate(
             }
     elif kind == "cqp":
         try:
+            json_query = full_cqp_to_json(query, conf)
             # plain text search
             result = {
                 "kind": "cqp",
                 "valid": True,
                 "action": "validate",
+                "json": json_query,
                 "status": 200,
             }
-            result["json"] = full_cqp_to_json(query, conf)
         except Exception as e:
             result = {
                 "kind": "cqp",
@@ -114,16 +148,28 @@ async def validate(
     elif kind == "text":
         try:
             # plain text search
+            json_query = textsearch_to_json(query, conf)
             result = {
                 "kind": "text",
                 "valid": True,
                 "action": "validate",
+                "json": json_query,
                 "status": 200,
             }
-            result["json"] = textsearch_to_json(query, conf)
         except Exception as e:
             result = {
                 "kind": "text",
+                "valid": False,
+                "action": "validate",
+                "error": str(e),
+                "status": 400,
+            }
+    if result.get("valid"):
+        try:
+            check_layer(conf, json_query)
+        except Exception as e:
+            result = {
+                "kind": kind,
                 "valid": False,
                 "action": "validate",
                 "error": str(e),
