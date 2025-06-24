@@ -90,8 +90,8 @@ svg#timeline-svg {
   justify-content: center;
   align-items: center;
   flex-direction: column;
-  margin-left: 30px;
-  margin-right: 30px;
+  margin-top: 30px;
+  margin-bottom: 30px;
 }
 
 @keyframes rotate {
