@@ -108,14 +108,14 @@
                     <div class="form-floating mb-3">
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
-                          <button class="nav-link" id="nav-plaintext-tab" data-bs-toggle="tab"
+                          <button class="nav-link active" id="nav-plaintext-tab" data-bs-toggle="tab"
                             data-bs-target="#nav-plaintext" type="button" role="tab" aria-controls="nav-plaintext"
-                            aria-selected="false" @click="setTab('text')">
+                            aria-selected="true" @click="setTab('text')">
                             {{ $t('common-text') }}
                           </button>
-                          <button class="nav-link active" id="nav-dqd-tab" data-bs-toggle="tab"
+                          <button class="nav-link" id="nav-dqd-tab" data-bs-toggle="tab"
                             data-bs-target="#nav-dqd" type="button" role="tab" aria-controls="nav-dqd"
-                            aria-selected="true" @click="setTab('dqd')">
+                            aria-selected="false" @click="setTab('dqd')">
                             DQD
                           </button>
                           <button class="nav-link" id="nav-cqp-tab" data-bs-toggle="tab" data-bs-target="#nav-cqp"
@@ -136,7 +136,7 @@
                         </div>
                       </nav>
                       <div class="tab-content" id="nav-query-tabContent">
-                        <div class="tab-pane fade pt-3" id="nav-plaintext" role="tabpanel"
+                        <div class="tab-pane fade show active pt-3" id="nav-plaintext" role="tabpanel"
                           aria-labelledby="nav-plaintext-tab">
                           <input class="form-control" type="text" placeholder="Query (e.g. a cat)" :class="isQueryValidData == null || isQueryValidData.valid == true
                             ? 'ok'
@@ -147,7 +147,7 @@
                             {{ isQueryValidData.error }}
                           </p>
                         </div>
-                        <div class="tab-pane fade show active pt-3" id="nav-dqd" role="tabpanel"
+                        <div class="tab-pane fade pt-3" id="nav-dqd" role="tabpanel"
                           aria-labelledby="nav-results-tab">
                           <EditorView :query="queryDQD" :defaultQuery="defaultQueryDQD" :corpora="selectedCorpora"
                             :invalidError="isQueryValidData && isQueryValidData.valid != true
@@ -731,7 +731,7 @@ export default {
       queryName: "",
       nExport: 200,
       nameExport: "",
-      currentTab: "dqd",
+      currentTab: "text",
       exportTab: "xml",
       simultaneousMode: false,
       percentageDone: 0,
