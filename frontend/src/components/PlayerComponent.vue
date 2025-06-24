@@ -1085,18 +1085,6 @@ div.active>video {
 }
 
 @media screen and (max-width: 768px) {
-  video {
-    max-width: 100vw !important;
-    height: auto;
-    display: block;
-    width: 100%;
-    height: auto;
-    object-fit: contain;
-    background: black; 
-  }
-}
-
-@media screen and (max-width: 768px) {
   .video-box {
     height: auto;
     min-height: 200px;
@@ -1149,6 +1137,18 @@ div.active>video {
     width: fit-content !important;
     margin: 0;
     align-self: flex-start;
+  }
+}
+
+@media screen and (orientation: landscape) {
+  video {
+    max-width: 100vw !important;
+    height: auto;
+    display: block;
+    width: 100%;
+    height: auto;
+    object-fit: contain;
+    background: black; 
   }
 }
 
