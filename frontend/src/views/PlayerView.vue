@@ -1534,10 +1534,8 @@ div.active video {
     object-fit: contain;
     background: black; 
   }
-}
-
-@media screen and (orientation: landscape) {
-  div.active video {
+  
+  video {
     max-width: 100vw !important;
     height: auto;
     display: block;
