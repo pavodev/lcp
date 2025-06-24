@@ -509,37 +509,6 @@ async def gather(
         raise err
 
 
-def _handle_large_msg(strung: str, limit: int) -> list[bytes] | list[str]:
-    """
-    Before we publish a message to redis pubsub, check if it's larger
-    than the pubsub limit. If it is, we break it into chunks, wait between
-    each publish, then join them back together on the other side
-
-    strung is a serialised JSON object, return a list str/bytes to send,
-    with a wait time determined by redis config in between each
-    """
-    # just a bit of extra room around our redis hard limit
-    buffer = 100
-
-    if limit == -1:
-        return [strung]
-
-    enc: bytes = strung.encode("utf-8")
-
-    if len(enc) < limit:
-        return [strung]
-    cz = limit - buffer
-    n_chunks = math.ceil(len(enc) / cz)
-    chunks: list[bytes] = [enc[0 + i : cz + i] for i in range(0, len(enc), cz)]
-    out: list[bytes] = []
-    uu = str(uuid4())[:8]
-    for i, chunk in enumerate(chunks, start=1):
-        formed = f"#CHUNK#{uu}#{i}#{n_chunks}#".encode("utf-8")
-        formed += chunk
-        out.append(formed)
-    return out
-
-
 async def push_msg(
     sockets: Websockets,
     session_id: str,
