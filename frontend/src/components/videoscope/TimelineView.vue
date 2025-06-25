@@ -416,7 +416,7 @@ export default {
     // https://waldyrious.net/viridis-palette-generator/
     const barColors = [
       // "#fde725", "#a0da39", "#4ac16d", "#1fa187", "#277f8e", "#365c8d", "#46327e", "#440154"
-      "#1fa187ff", "#46327eff", "#4ac16dff", "#277f8eff", "#440154ff", "#fde725ff", "#365c8dff", "#a0da39ff"
+      "#1fa187ff", "#46327eff", "#4ac16dff", "#277f8eff", "#440154ff", "#fdaa25ff", "#365c8dff", "#a0da39ff"
     ];
 
     // Set up the SVG container
