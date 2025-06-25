@@ -95,6 +95,14 @@
               {{ token[0] }}
             </span> -->
           </td>
+          <td class="action-button"
+            data-bs-toggle="modal"
+            :data-bs-target="`#imageModal${randInt}`"
+            @click="showImage(...getImage(resultIndex), this.meta[this.data[resultIndex][0]])"
+            v-if="getImage(resultIndex)"
+          >
+            <FontAwesomeIcon :icon="['fas', 'image']" />
+          </td>
           <td class="buttons">
             <button
               type="button"
@@ -582,12 +590,29 @@ export default {
       this.modalIndex = index + (this.currentPage - 1) * this.resultsPerPage;
       this.modalVisible = true;
     },
-    showImage(filename, imageLayer) {
+    getImage(resultIndex) {
+      if (!this.corpora.corpus) return null;
+      for (let [layerName, props] of Object.entries(this.corpora.corpus.layer)) {
+        let attrs = props.attributes || {};
+        if ("meta" in attrs)
+          attrs = {attrs, ...attrs.meta};
+        for (let [aname, aprops] of Object.entries(attrs||{}))
+          if (aprops.type == "image") return [
+            this.meta[this.data[resultIndex][0]][layerName][aname],
+            layerName
+          ];
+      }
+      return null;
+    },
+    showImage(filename, imageLayer, meta=null) {
+      if (meta===null)
+        meta = this.currentMeta;
+      if (!meta) return;
       const boxes = [];
       const colors = ["green","blue","orange","pink","brown"];
       let image_offset = [];
       let color = 1;
-      for (let [layer, props] of Object.entries(this.currentMeta||{})) {
+      for (let [layer, props] of Object.entries(meta||{})) {
         if (!props.xy_box)
           continue;
         let xy_box = props.xy_box.match(/\d+/g).map(v=>parseInt(v))
