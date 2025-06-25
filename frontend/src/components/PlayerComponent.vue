@@ -490,8 +490,6 @@ export default {
         newTime.minutes * 60 +
         newTime.seconds;
 
-      console.log(newTime, seconds);
-
       // Clamp to video duration if available
       if (this.$refs.videoPlayer1 && this.$refs.videoPlayer1.duration) {
         seconds = Math.min(seconds, this.$refs.videoPlayer1.duration - 0.1);

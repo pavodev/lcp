@@ -303,7 +303,7 @@ export default {
       svg.transition().call(zoom.transform, newTransform);
     },
     moveLeft() {
-      console.log('MOVING LEFT');
+
       const currentTransform = d3.zoomTransform(svg.node());
       const newXScale = currentTransform.rescaleX(linearScale);
 
@@ -343,13 +343,11 @@ export default {
       svg.call(zoom.transform, d3.zoomIdentity.translate(newTx, currentTransform.y).scale(currentTransform.k));
     },
     setResizeOrientationListeners() {
-      console.log("Setting up resize and orientation change listeners...")
       // kick off initial check and update on resize/orientationchange
       window.addEventListener('resize', this.resizeHandler);
       window.addEventListener('orientationchange', this.resizeHandler);
     },
     checkMobile(e) {
-      console.log('new event: ', e, this.currentTime);
       if(e.type !== "resize" && e.type !== "orientationchange") return;
 
       this.isMobile = window.innerWidth  < 768;
@@ -424,8 +422,6 @@ export default {
     // root.exit().remove();
     svg = d3.select("#timeline-svg");
     svg.selectAll("*").remove();
-
-    console.log("SVG", svg);
 
     // Create the scaleLinear
     linearScale = d3.scaleLinear().domain([0, this.mediaDuration]).range([padding, width - 1]);
