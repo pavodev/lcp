@@ -588,15 +588,18 @@ export default {
       let image_offset = [];
       let color = 1;
       for (let [layer, props] of Object.entries(this.currentMeta||{})) {
+        if (!props.xy_box)
+          continue;
+        let xy_box = props.xy_box.match(/\d+/g).map(v=>parseInt(v))
+        if (xy_box[0] > xy_box[2])
+          xy_box = [xy_box[2], xy_box[3], xy_box[0], xy_box[1]];
         if (imageLayer && imageLayer == layer) {
-          image_offset = props.xy_box.slice(0,2);
+          image_offset = xy_box.slice(0,2);
           continue;
         }
         if (!this.corpora.corpus.layer[layer].anchoring.location)
           continue;
-        if (!props.xy_box)
-          continue;
-        boxes.push([...props.xy_box, colors[color % colors.length]]);
+        boxes.push([...xy_box, colors[color % colors.length]]);
         color++;
       }
       for (let n = 0; image_offset.length && n < boxes.length; n++) {
