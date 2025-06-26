@@ -114,7 +114,12 @@ def _make_search_response(
         cid = corpus["cid"]
         lg = corpus["lg"]
         shortname = corpus["conf"]["shortname"]
-        column_names: list[str] = corpus["conf"]["column_names"]
+        column_names: list[str] = (
+            corpus["conf"]["mapping"]["layer"]
+            .get(corpus["conf"]["segment"])
+            .get("prepared", {})
+            .get("columnHeaders", corpus["conf"]["column_names"])
+        )
         space_after_id = (
             column_names.index("spaceAfter") if "spaceAfter" in column_names else -1
         )
