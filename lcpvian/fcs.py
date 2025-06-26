@@ -121,7 +121,7 @@ def _make_search_response(
         form_id = column_names.index("form")
         if "1" not in payload or "-1" not in payload:
             continue
-        for rp, (sid, hits) in enumerate(payload["1"], start=1):
+        for rp, (sid, hits, *_) in enumerate(payload["1"], start=1):
             offset, tokens, *annotations = payload["-1"][sid]
             prep_seg = ""
             in_hit = False
@@ -193,7 +193,9 @@ async def search_retrieve(
     corpora: list[tuple[str, dict, str]] = [
         (cid, conf, lg)
         for cid, conf in app["config"].items()
-        for lg in conf.get("partitions", {}).get("values", ["en"])
+        for lg in conf.get("partitions", {}).get(
+            "values", [conf.get("meta", {}).get("language", "en")]
+        )
         if (not resources or ((cid, lg) in resources))
         and authenticator.check_corpus_allowed(cid, conf, {}, "lcp", get_all=False)
     ]
@@ -217,7 +219,7 @@ async def search_retrieve(
     request_ids: dict[str, dict] = {}
     async with asyncio.TaskGroup() as tg:
         for cid, conf, lg in corpora:
-            langs = [lg]
+            langs = [lg if "partitions" in conf else "en"]
             json_query: str = json.dumps(
                 CqlToJson(
                     segment=conf["firstClass"]["segment"],
