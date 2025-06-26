@@ -40,20 +40,24 @@ def _get_iso639_3(lang: str) -> str:
         return "roh"
     if lang == "ro":
         return "ron"
+    if lang == "gs":
+        return "gsw"
     return ""
 
 
-def _get_languages_from_partitions(partitions: dict) -> str:
+def _get_languages(partitions: dict, main_language: str = "") -> str:
     lg_template = """          <ed:Languages>
             {languages}
           </ed:Languages>"""
-    languages = "<ed:Language>eng</ed:Language>"
+    languages = "<ed:Language>und</ed:Language>"
     if values := partitions.get("values", []):
         languages = "\n            ".join(
             f"<ed:Language>{_get_iso639_3(lg)}</ed:Language>"
             for lg in values
             if _get_iso639_3(lg)
         )
+    elif main_language:
+        languages = f"<ed:Language>{_get_iso639_3(main_language)}</ed:Language>"
     return lg_template.format(languages=languages)
 
 
@@ -250,7 +254,7 @@ async def explain(app: LCPApplication, **extra_params) -> str:
           <ed:Title xml:lang="en">{conf['shortname']}</ed:Title>
           <ed:Description xml:lang="en">{conf['description']}</ed:Description>
           <ed:LandingPageURI>{PID_PREFIX}{cid}/{conf['shortname']}</ed:LandingPageURI>
-          {_get_languages_from_partitions(conf.get('partitions', {}))}
+          {_get_languages(conf.get('partitions', {}), conf.get('meta', {}).get('language', ''))}
           <ed:AvailableDataViews ref="hits"/>
         </ed:Resource>"""
             for cid, conf in app["config"].items()
