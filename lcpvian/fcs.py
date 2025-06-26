@@ -85,6 +85,7 @@ async def _check_request_complete(
     while 1:
         await asyncio.sleep(0.5)
         if not qi.has_request(request):
+            request_ids[request.id]["done"] = True
             break
         n_results = sum(
             len(app["query_buffers"].get(rid, {}).get("1", []))
@@ -94,7 +95,6 @@ async def _check_request_complete(
         if n_results >= requested:
             qi.stop_request(request)
             break
-    request_ids[request.id]["done"] = True
     return
 
 
