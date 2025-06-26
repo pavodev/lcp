@@ -46,9 +46,24 @@
     <div class="row">
       <div class="col-7">
         <div class="mb-3">
-          <label for="corpus-license" class="form-label">{{ $t('modal-meta-data-type') }} <b>{{ corpusDataType(corpusData) }}</b></label>
+          <label for="corpus-language" class="form-label">{{ $t('modal-meta-language') }} </label>
+          <select v-model="corpusData.meta.language" id="corpus-language">
+            <option value="">{{ $t('modal-meta-lg-undefined') }}</option>
+            <option value="en">{{ $t('modal-meta-lg-english') }}</option>
+            <option value="de">{{ $t('modal-meta-lg-german') }}</option>
+            <option value="fr">{{ $t('modal-meta-lg-french') }}</option>
+            <option value="it">{{ $t('modal-meta-lg-italian') }}</option>
+            <option value="es">{{ $t('modal-meta-lg-spanish') }}</option>
+            <option value="gs">{{ $t('modal-meta-lg-swiss-german') }}</option>
+            <option value="rm">{{ $t('modal-meta-lg-romansh') }}</option>
+          </select>
         </div>
       </div>
+      <!-- <div class="col-7">
+        <div class="mb-3">
+          <label for="corpus-license" class="form-label">{{ $t('modal-meta-data-type') }} <b>{{ corpusDataType(corpusData) }}</b></label>
+        </div>
+      </div> -->
     </div>
     <div class="row">
       <div class="col-12">

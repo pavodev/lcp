@@ -36,9 +36,9 @@
           <i>{{ $t('platform-videoscope') }}</i>
         </a>
       </div>
-      <!-- <p class="author mb-0" v-if="corpusModal.meta.author">
-        {{ corpusModal.meta.author }}
-      </p> -->
+      <p class="authors mb-0" v-if="corpusModal.meta.authors">
+        <em>{{ corpusModal.meta.authors }}</em>
+      </p>
       <p class="description mt-3">
         {{ corpusModal.meta.corpusDescription }}
       </p>
@@ -61,6 +61,9 @@
       </p>
       <p class="word-count mb-0">
         {{$t('modal-details-description')}}: {{ corpusModal.description }}
+      </p>
+      <p class ="word-count mb-0" v-if="corpusModal.meta.language && !(corpusModal.partitions)">
+        {{$t('modal-details-language')}}: {{ corpusModal.meta.language }}
       </p>
       <span v-if="corpusModal.partitions">
         <p class="word-count" v-if="corpusModal.partitions">

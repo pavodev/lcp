@@ -138,6 +138,7 @@ modal-details-count = Word count
 modal-details-revison = Revison
 modal-details-url = URL
 modal-details-description = Description
+modal-details-language = Main language
 modal-details-partitions = Partitions
 modal-details-segments = Segments
 modal-details-license = License
@@ -152,12 +153,24 @@ modal-meta-provider = Provider/Institution
 modal-meta-revision = Revision
 modal-meta-data-type = Data type
 modal-meta-description = Description
+modal-meta-language = Main language
 modal-meta-license = License
 modal-meta-user-defined = User defined
 modal-meta-user-license = User defined license
 modal-meta-sample = Sample DQD query
 modal-meta-warning-before = You are currently editing the properties in
 modal-meta-warning-after = . Switch the interface's language to edit the properties in another language.
+modal-meta-lg-undefined = Undefined
+modal-meta-lg-english = English
+modal-meta-lg-german = German
+modal-meta-lg-french = French
+modal-meta-lg-italian = Italian
+modal-meta-lg-spanish = Spanish
+modal-meta-lg-swiss-german = Swiss German
+modal-meta-lg-romansh = Romansch
+
+
+
 
 
 # New/Edit project modal

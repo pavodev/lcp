@@ -69,6 +69,7 @@ async def corpora_meta_update(request: web.Request) -> web.Response:
         institution=request_data.get("institution", ""),
         revision=request_data.get("revision", ""),
         corpusDescription=request_data["corpusDescription"],
+        language=request_data.get("language", ""),
         license=request_data.get("license", ""),
         userLicense=request_data.get("userLicense", ""),
         dataType=request_data.get("dataType", ""),

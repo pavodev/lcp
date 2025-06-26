@@ -462,7 +462,7 @@ class QueryService:
         """
         Update metadata for a corpus
         """
-        MONOLINGUAL = {"name", "version", "license"}
+        MONOLINGUAL = {"name", "revision", "license", "language"}
 
         kwargs = {
             "store": True,

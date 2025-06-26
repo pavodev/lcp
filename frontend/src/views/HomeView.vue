@@ -134,8 +134,13 @@
                           class="badge text-bg-primary me-1 tooltips" :title="$t('common-partition')"
                           v-for="language in corpus.partitions.values"
                           v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`"
-                        />
+                        ></span>
                       </template>
+                      <span
+                        class="badge text-bg-primary me-1 tooltips" :title="$t('common-partition')"
+                        v-if="!(corpus.partitions) && corpus.meta.language"
+                        v-html="corpus.meta.language.toUpperCase()"
+                      ></span>
                       <span class="badge text-bg-primary me-1 tooltips" :title="$t('common-word-count')"
                       >{{
                         nFormatter(
