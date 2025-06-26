@@ -144,15 +144,16 @@ def _make_search_response(
             prep_seg = prep_seg.strip()
             if in_hit:
                 prep_seg += "</hits:Hit>"
+            ref = f"{PID_PREFIX}query/{cid}/{shortname}"
             records.append(
                 f"""
     <sru:record>
       <sru:recordSchema>http://clarin.eu/fcs/resource</sru:recordSchema>
       <sru:recordPacking>xml</sru:recordPacking>
       <sru:recordData>
-        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="{PID_PREFIX}{cid}/{lg}" ref="{PID_PREFIX}query/{cid}/{shortname}">
-          <fcs:ResourceFragment>
-            <fcs:DataView type="application/x-clarin-fcs-hits+xml">
+        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="{PID_PREFIX}{cid}/{lg}" ref="{ref}">
+          <fcs:ResourceFragment ref="{ref}">
+            <fcs:DataView type="application/x-clarin-fcs-hits+xml" ref="{ref}">
               <hits:Result xmlns:hits="http://clarin.eu/fcs/dataview/hits">
                 {prep_seg}
               </hits:Result>
