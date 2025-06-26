@@ -709,7 +709,9 @@ WHERE {entity}.char_range && contained_token.char_range
         """
         Produce a frequency table and its JSON metadata
         """
-        count_entities: list[str] = [x["entity"] for x in attributes if "entity" in x]
+        count_entities: dict[str, str] = {
+            x["entity"]: "" for x in attributes if "entity" in x
+        }
         assert len(count_entities) < 2, RuntimeError(
             f"Cannot reference more than one entity in the attributes of an analysis {', '.join(count_entities)})"
         )
@@ -719,7 +721,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 if not count_entities:
                     counts.append(f"count(*) AS {func.lower()}")
                     continue
-                count_entity = count_entities[0]
+                count_entity = next(ce for ce in count_entities)
                 counts.append(f"count(DISTINCT {count_entity}) AS {func.lower()}")
                 entity_layer, _ = self.r.label_layer[count_entity]
                 conf_map = cast(dict, self.config["mapping"])
@@ -731,28 +733,18 @@ WHERE {entity}.char_range && contained_token.char_range
                     mapping = mapping["partitions"].get(self.lang, {})
                 table = _get_table(entity_layer, self.config, self.batch, self.lang)
                 el = entity_layer.lower()
+                lab_n = 1
+                while (el_lab := f"{el[0]}{lab_n}") in self.r.label_layer:
+                    lab_n += 1
+                count_entities[count_entity] = el_lab
                 count_total = (
-                    f"""(SELECT count({el[0]})
-    FROM {self.schema}.{table} {el[0]}"""
+                    f"""(SELECT count({el_lab})
+    FROM {self.schema}.{table} {el_lab}"""
                     + """
-    CROSS JOIN {joins}
+    {joins}
     WHERE {wheres}) AS {total_label}"""
                 )
-                # TODO: build joins and wheres based on the attributes
-                # for each attribute, determine which anchor is shared with the entity
                 counts.append(count_total)
-                # table = mapping.get("relation", entity_layer.lower())
-                # if (
-                #     "batches" in mapping
-                #     or entity_layer == self.segment
-                #     and "batches" in token_mapping
-                # ):
-                #     if table.endswith("<batch>"):
-                #         table = table[0:-7]
-                #     table = table + "0"
-                # counts.append(
-                #     f"(SELECT count(*) FROM {self.schema}.{table}) AS total_{entity_layer.lower()}"
-                # )
             else:
                 raise NotImplementedError("TODO?")
         if counts:
@@ -762,6 +754,7 @@ WHERE {entity}.char_range && contained_token.char_range
         funcstr = " , ".join(functions)
         jjoins: list[str] = []
         jwheres: list[str] = []
+        jgroups: list[str] = []
         parsed_attributes: list[tuple[str, RefInfo]] = []
         for att in attributes:
             if "entity" in att:
@@ -803,8 +796,8 @@ WHERE {entity}.char_range && contained_token.char_range
                 or "." not in att["attribute"]
             ):
                 continue
-            entity_lab = count_entities[0]
-            entity_layer, _ = self.r.label_layer[entity_lab]
+            entity, entity_lab = next(x for x in count_entities.items())
+            entity_layer, _ = self.r.label_layer[entity]
             prefix, *_ = att["attribute"].split(".")
             prefix_layer, _ = self.r.label_layer[prefix]
             anchorings = [
@@ -816,21 +809,26 @@ WHERE {entity}.char_range && contained_token.char_range
             assert anchorings, RuntimeError(
                 f"Layer {prefix_layer} ({prefix}) does not share an anchoring with layer {entity_layer} ({entity_lab})"
             )
-            prefix_table = _get_table(prefix_layer, self.config, self.batch, self.lang)
-            jjoins.append(f"{self.schema}.{prefix_table} {prefix}")
+            # prefix_table = _get_table(prefix_layer, self.config, self.batch, self.lang)
+            # join_formed = f"{self.schema}.{prefix_table} {prefix}"
+            # if join_formed != f"{self.schema}.{table} {entity_lab}":
+            #     jjoins.append(join_formed)
             where_anchors = " OR ".join(
-                f"{prefix}.{a} && {entity_layer.lower()[0]}.{a}" for a in anchorings
+                f"{prefix}_{a} && {entity_lab}.{a}" for a in anchorings
             )
-            jwheres.append(f"({ref} = {alias} AND ({where_anchors}))")
+            jwheres.append(where_anchors)
+            self.r.selects.update({f"{prefix}.{a} AS {prefix}_{a}" for a in anchorings})
+            self.r.entities.update({f"{prefix}_{a}" for a in anchorings})
+            jgroups = [f"{prefix}_{a}" for a in anchorings]
         assert parsed_attributes, RuntimeError(
             f"Need at least one *attribute* referenced in the analysis"
         )
         if count_entities:
-            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            count_entity_layer, _ = self.r.label_layer[next(x for x in count_entities)]
             total_label = f"total_{count_entity_layer.lower()}"
             funcstr += f", {total_label}"
             jcounts = jcounts.format(
-                joins=" CROSS JOIN ".join(jjoins),
+                joins=" CROSS JOIN " + " CROSS JOIN ".join(jjoins) if jjoins else "",
                 wheres=" AND ".join(jwheres),
                 total_label=total_label,
             )
@@ -847,7 +845,7 @@ WHERE {entity}.char_range && contained_token.char_range
                         {jcounts}
                     FROM
                         match_list
-                    GROUP BY {nodes}
+                    GROUP BY {nodes}{', '+','.join(jgroups) if jgroups else ''}
                 ) x {wheres} )
         """
         attribs: Attribs = []
@@ -862,7 +860,7 @@ WHERE {entity}.char_range && contained_token.char_range
         for func in functions:
             attribs.append({"name": func, "type": "aggregate"})
         if count_entities:
-            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            count_entity_layer, _ = self.r.label_layer[next(x for x in count_entities)]
             attribs.append(
                 {"name": f"total_{count_entity_layer.lower()}", "type": "aggregate"}
             )
