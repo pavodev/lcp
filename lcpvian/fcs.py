@@ -150,7 +150,7 @@ def _make_search_response(
       <sru:recordSchema>http://clarin.eu/fcs/resource</sru:recordSchema>
       <sru:recordPacking>xml</sru:recordPacking>
       <sru:recordData>
-        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="{PID_PREFIX}{cid}/{lg}">
+        <fcs:Resource xmlns:fcs="http://clarin.eu/fcs/resource" pid="{PID_PREFIX}{cid}/{lg}" ref="{PID_PREFIX}query/{cid}/{shortname}">
           <fcs:ResourceFragment>
             <fcs:DataView type="application/x-clarin-fcs-hits+xml">
               <hits:Result xmlns:hits="http://clarin.eu/fcs/dataview/hits">
@@ -293,7 +293,7 @@ async def explain(app: LCPApplication, **extra_params) -> str:
         resources_list: list[str] = [
             f"""      <ed:Resource pid="{PID_PREFIX}{cid}/{lg}">
           <ed:Title xml:lang="en">{conf['shortname']}{ ' ('+lg+')' if 'partitions' in conf else ''}</ed:Title>
-          <ed:Description xml:lang="en">{conf['description']}</ed:Description>
+          <ed:Description xml:lang="en">{conf['description'] or conf['meta'].get('corpusDescription')}</ed:Description>
           <ed:LandingPageURI>{PID_PREFIX}query/{cid}/{conf['shortname']}</ed:LandingPageURI>
           {_get_languages({}, lg)}
           <ed:AvailableDataViews ref="hits"/>
