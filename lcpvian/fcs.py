@@ -290,7 +290,7 @@ async def explain(app: LCPApplication, **extra_params) -> str:
         authenticator = cast(Authentication, app["auth_class"](app))
         resources_list: list[str] = [
             f"""      <ed:Resource pid="{PID_PREFIX}{cid}/{lg}">
-          <ed:Title xml:lang="en">{conf['shortname']}</ed:Title>
+          <ed:Title xml:lang="en">{conf['shortname']}{ ' ('+lg+')' if 'partitions' in conf else ''}</ed:Title>
           <ed:Description xml:lang="en">{conf['description']}</ed:Description>
           <ed:LandingPageURI>{PID_PREFIX}query/{cid}/{conf['shortname']}</ed:LandingPageURI>
           {_get_languages({}, lg)}
