@@ -961,20 +961,6 @@ def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
     return table
 
 
-def _get_first_job(job: Job, connection: "RedisConnection[bytes]") -> Job:
-    """
-    Helper to get the base job from a group of query jobs
-    """
-    first_job = job
-    first_job_id_from_kwargs = cast(dict, job.kwargs).get("first_job")
-    if first_job_id_from_kwargs:
-        try:
-            first_job = Job.fetch(first_job_id_from_kwargs, connection=connection)
-        except NoSuchJobError:
-            pass
-    return first_job
-
-
 def _time_remaining(status: str, total_duration: float, use: float) -> float:
     """
     Helper to estimate remaining time for a job
@@ -985,24 +971,6 @@ def _time_remaining(status: str, total_duration: float, use: float) -> float:
         return 0.0
     timed = (total_duration * (100.0 / use)) - total_duration
     return max(0.0, round(timed, 3))
-
-
-def _decide_can_send(
-    status: str, is_full: bool, is_base: bool, from_memory: bool
-) -> bool:
-    """
-    Helper to figure out if we can send query message to the user or not
-
-    We don't exit early if we can't send, because we still need to store the
-    message and potentially trigger a new job
-    """
-    if not is_full or status == "finished":
-        return True
-    elif is_base and from_memory:
-        return True
-    elif not is_base and not from_memory:
-        return True
-    return False
 
 
 def _get_progress(job: Job, query_info: dict, request_info: RequestInfo) -> dict:
@@ -1070,87 +1038,6 @@ def _get_progress(job: Job, query_info: dict, request_info: RequestInfo) -> dict
         "total_results_so_far": total_found,
         "action": "background_job_progress",
     }
-
-
-def _get_total_requested(kwargs: dict[str, Any], job: Job) -> int:
-    """
-    Helper to find the total requested -- remove this after cleanup ideally
-    """
-    total_requested = cast(int, kwargs.get("total_results_requested", -1))
-    if total_requested > 0:
-        return total_requested
-    total_requested = cast(dict, job.kwargs).get("total_results_requested", -1)
-    if total_requested > 0:
-        return total_requested
-    return -1
-
-
-def _get_request_info(connection: RedisConnection, hash: str) -> list[RequestInfo]:
-    qas_json = connection.get(f"request_info_{hash}")
-    qas = json.loads(qas_json) if qas_json else []
-    return qas
-
-
-def _set_request_info(connection: RedisConnection, request_info: RequestInfo) -> None:
-    hash = request_info.get("hash", "")
-    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
-    if not next((x for x in all_request_info if x == request_info), None):
-        all_request_info.append(request_info)
-    qa_key = f"request_info_{hash}"
-    connection.set(qa_key, json.dumps(all_request_info))
-    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
-    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
-    connection.expire(
-        qa_key,
-        (
-            whole_corpus_timeout
-            if any(x.get("full") for x in all_request_info)
-            else timeout
-        ),
-    )
-
-
-def _update_request_info(
-    connection: RedisConnection, request_info: RequestInfo, new_info: RequestInfo
-) -> RequestInfo:
-    forbidden_keys = QueryArgs.__optional_keys__.union(QueryArgs.__required_keys__)
-    all_ris = _get_request_info(connection, request_info["hash"])
-    ret_ri: RequestInfo
-    for ri in all_ris:
-        if ri != request_info:
-            continue
-        ret_ri = ri
-        for k, v in new_info.items():
-            assert (
-                k not in forbidden_keys
-            ), f"Cannot change {k} in a request info after it's been created"
-            ri[k] = v  # type: ignore
-    qa_key = f"request_info_{hash}"
-    connection.set(qa_key, json.dumps(all_ris))
-    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
-    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
-    connection.expire(
-        qa_key,
-        (whole_corpus_timeout if any(x.get("full") for x in all_ris) else timeout),
-    )
-    return ret_ri
-
-
-def _delete_request_info(connection: RedisConnection, qi_args: RequestInfo) -> None:
-    hash = qi_args.get("hash", "")
-    all_request_info: list[RequestInfo] = _get_request_info(connection, hash)
-    if not all_request_info:
-        return
-    all_request_info = [x for x in all_request_info if x != qi_args]
-    qa_key = f"request_info_{hash}"
-    if not all_request_info:
-        connection.delete(qa_key)
-        _update_query_info(connection, hash=hash, info={"running": False})
-        return
-    connection.set(qa_key, json.dumps(all_request_info))
-    timeout = int(os.getenv("QUERY_TIMEOUT", 1000))
-    whole_corpus_timeout = int(os.getenv("QUERY_ENTIRE_CORPUS_CALLBACK_TIMEOUT", 99999))
-    connection.expire(qa_key, whole_corpus_timeout if qi_args.get("full") else timeout)
 
 
 def _sign_payload(
