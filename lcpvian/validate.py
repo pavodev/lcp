@@ -8,6 +8,7 @@ from .cqp_to_json import full_cqp_to_json
 from .dqd_parser import convert
 from .textsearch_to_json import textsearch_to_json
 from .typed import JSONObject
+from .utils import _get_all_attributes
 
 
 def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
@@ -24,16 +25,15 @@ def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
         )
     if "reference" in obj and recent_layer:
         ref = obj["reference"]
-        attrs = conf["layer"].get(recent_layer, {}).get("attributes", {})
-        assert ref in attrs or ref in attrs.get("meta", {}), ReferenceError(
+        # attrs = conf["layer"].get(recent_layer, {}).get("attributes", {})
+        attrs = _get_all_attributes(recent_layer, conf)
+        assert ref in attrs, ReferenceError(
             f"Could not find an attribute named '{ref}' on layer {recent_layer}"
         )
     if obj.get("attribute", "").count(".") == 1:
         _, aname = obj["attribute"].split(".")
         assert any(
-            aname in x.get("attributes", {})
-            or aname in x.get("attributes", {}).get("meta", {})
-            for x in conf["layer"].values()
+            aname in _get_all_attributes(x, conf) for x in conf["layer"]
         ), ReferenceError(
             f"Could not find an attribute named '{aname}' on any layer ({obj['attribute']})"
         )

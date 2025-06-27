@@ -961,6 +961,37 @@ def _get_table(layer: str, config: Any, batch: str, lang: str) -> str:
     return table
 
 
+def _get_all_attributes(layer: str, config: Any, lang: str = "") -> dict:
+    """
+    Look up the config to get all the attributes of a given layer
+    including those of the passed language partition or all partitions
+    """
+    if layer not in config["layer"]:
+        return {}
+    main_attrs: dict = config["layer"][layer].get("attributes", {})
+    ret = {
+        k: v for k, v in main_attrs.items() if k != "meta" or not isinstance(v, dict)
+    }
+    if isinstance(main_attrs.get("meta", ""), dict):
+        ret.update({k: v for k, v in main_attrs["meta"].items()})
+    partitions = config["mapping"]["layer"].get(layer, {}).get("partitions", {})
+    if partitions:
+        if lang and lang not in partitions:
+            return ret
+        lkey = f"{layer}@{lang}"
+        if lang and lkey in config["layer"]:
+            ret.update({k: v for k, v in _get_all_attributes(lkey, config).items()})
+        if not lang:
+            ret.update(
+                {
+                    k: v
+                    for lg in partitions
+                    for k, v in _get_all_attributes(f"{layer}@{lg}", config).items()
+                }
+            )
+    return ret
+
+
 def _time_remaining(status: str, total_duration: float, use: float) -> float:
     """
     Helper to estimate remaining time for a job
