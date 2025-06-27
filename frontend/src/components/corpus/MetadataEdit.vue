@@ -213,7 +213,7 @@ export default {
     getUserLocale: getUserLocale,
     getLayerAttributes: (attributes) => {
       let ret = attributes;
-      if ("meta" in attributes && typeof(attributes.meta) != "string") {
+      if ("meta" in (attributes || {}) && typeof(attributes.meta) != "string") {
         ret = Object.fromEntries(Object.entries(attributes).filter(v=>v[0] != "meta"));
         for (let [k,v] of Object.entries(attributes.meta))
           ret[k] = v;
