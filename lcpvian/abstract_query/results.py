@@ -19,6 +19,7 @@ from .typed import (
 from .utils import (
     Config,
     QueryData,
+    _flatten_coord,
     _get_table,
     _bound_label,
     _label_layer,
@@ -57,15 +58,59 @@ class ResultsMaker:
         self.conf_layer = cast(JSONObject, self.config["layer"])
         self.r = QueryData()
         tmp_label_layer = _label_layer(query_json.get("query", query_json))
-        self.query_json: QueryJSON = cast(
-            QueryJSON, self.r.add_labels(query_json, tmp_label_layer)
-        )
+        new_query_json = cast(dict, self.r.add_labels(query_json, tmp_label_layer))
+        lifted_quants = cast(list, self.lift_quantifiers(new_query_json["query"]))
+        query_json["query"] = [  # lift and flatten conjunctions
+            y
+            for x in lifted_quants
+            for y in (
+                _flatten_coord(
+                    x["constraint"]["logicalExpression"]["args"], operator="AND"
+                )
+                if x.get("constraint", {})
+                .get("logicalExpression", {})
+                .get("naryOperator")
+                == "AND"
+                else [x]
+            )
+        ]
+        self.query_json = query_json
         self.r.label_layer = _label_layer(self.query_json.get("query", self.query_json))
         self._n = 1
         self._underlang = _get_underlang(self.lang, self.config)
         self._label_mapping: dict[str, str] = (
             dict()
         )  # Map entities' labels to potentially internal labels
+
+    def lift_quantifiers(self, query_obj: dict | list) -> dict | list:
+        ret_obj: dict | list = (
+            {} if isinstance(query_obj, dict) else [None for _ in range(len(query_obj))]
+        )
+        for n, k in enumerate(query_obj):
+            v = query_obj[k] if isinstance(query_obj, dict) else k
+            i = k if isinstance(query_obj, dict) else n
+            if isinstance(v, list):
+                ret_obj[i] = self.lift_quantifiers(v)
+                continue
+            elif not isinstance(v, dict):
+                ret_obj[i] = v
+                continue
+            if "quantification" in v:
+                quan_obj = cast(dict[str, Any], v["quantification"])
+                quantor = quan_obj.get("quantifier", "")
+                if quantor.endswith(("EXISTS", "EXIST")):
+                    if quantor.startswith(("~", "!", "NOT", "¬")):
+                        quantor = "NOT EXISTS"
+                    else:
+                        quantor = "EXISTS"
+                    key_to_lift = next(
+                        (x for x in ("unit", "sequence") if x in quan_obj), None
+                    )
+                    if key_to_lift:
+                        v = {x: y for x, y in quan_obj.items() if x == key_to_lift}
+                        v[key_to_lift]["quantor"] = quantor
+            ret_obj[i] = self.lift_quantifiers(v)
+        return ret_obj
 
     def add_query_entities(self, query_json: dict[str, Any]) -> None:
         """
