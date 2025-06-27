@@ -48,8 +48,8 @@ export const useCorpusStore = defineStore("corpusData", {
     },
     updateMeta(data) {
       const lg = getUserLocale().value;
-      data.metadata._lg = lg;
-      httpApi.put(`/corpora/${data.corpusId}/meta/update`, data.metadata).then((response) => {
+      const toSend = {lg: lg, metadata: data.metadata, descriptions: data.descriptions}
+      httpApi.put(`/corpora/${data.corpusId}/meta/update`, toSend).then((response) => {
         return response.data;
       });
     },

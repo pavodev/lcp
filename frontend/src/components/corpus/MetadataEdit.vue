@@ -152,7 +152,7 @@
             v-model="props.description"
             :placeholder="$t('modal-structure-no-desc')"
           />
-          <div v-for="(aprops, attribute) in props.attributes" :key="`attribute-${layer}-${attribute}`" class="attribute">
+          <div v-for="(aprops, attribute) in getLayerAttributes(props.attributes)" :key="`attribute-${layer}-${attribute}`" class="attribute">
             <label :for="`attribute-${layer}-${attribute}`" class="form-label">{{ attribute }}</label>
             <input
               type="text"
@@ -210,7 +210,16 @@ export default {
   },
   methods: {
     corpusDataType: Utils.corpusDataType,
-    getUserLocale: getUserLocale
+    getUserLocale: getUserLocale,
+    getLayerAttributes: (attributes) => {
+      let ret = attributes;
+      if ("meta" in attributes && typeof(attributes.meta) != "string") {
+        ret = Object.fromEntries(Object.entries(attributes).filter(v=>v[0] != "meta"));
+        for (let [k,v] of Object.entries(attributes.meta))
+          ret[k] = v;
+      }
+      return ret;
+    }
   },
   watch: {
     userLicense() {
