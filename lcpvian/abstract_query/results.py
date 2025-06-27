@@ -60,9 +60,23 @@ class ResultsMaker:
         tmp_label_layer = _label_layer(query_json.get("query", query_json))
         new_query_json = cast(dict, self.r.add_labels(query_json, tmp_label_layer))
         lifted_quants = cast(list, self.lift_quantifiers(new_query_json["query"]))
-        query_json["query"] = [  # lift and flatten conjunctions
+        lifted_conjs = self.lift_conjunctions(lifted_quants)
+        # Make sure root logicalExpressions are introduced as constraints
+        query_json["query"] = [
+            {"constraint": x} if "logicalExpression" in x else x for x in lifted_conjs
+        ]
+        self.query_json = query_json
+        self.r.label_layer = _label_layer(self.query_json.get("query", self.query_json))
+        self._n = 1
+        self._underlang = _get_underlang(self.lang, self.config)
+        self._label_mapping: dict[str, str] = (
+            dict()
+        )  # Map entities' labels to potentially internal labels
+
+    def lift_conjunctions(self, query_list: list) -> list:
+        return [  # lift and flatten conjunctions
             y
-            for x in lifted_quants
+            for x in query_list
             for y in (
                 _flatten_coord(
                     x["constraint"]["logicalExpression"]["args"], operator="AND"
@@ -74,13 +88,6 @@ class ResultsMaker:
                 else [x]
             )
         ]
-        self.query_json = query_json
-        self.r.label_layer = _label_layer(self.query_json.get("query", self.query_json))
-        self._n = 1
-        self._underlang = _get_underlang(self.lang, self.config)
-        self._label_mapping: dict[str, str] = (
-            dict()
-        )  # Map entities' labels to potentially internal labels
 
     def lift_quantifiers(self, query_obj: dict | list) -> dict | list:
         ret_obj: dict | list = (

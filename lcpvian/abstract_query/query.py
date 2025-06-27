@@ -482,7 +482,8 @@ class QueryMaker:
             is_group = "group" in obj
 
             if is_constraint:
-                log_exp = obj["constraint"].get("logicalExpression", {})
+                constraint = cast(dict, obj["constraint"])
+                log_exp = constraint.get("logicalExpression", {})
                 log_args = log_exp.get("args", [])
                 is_disj = log_exp.get("naryOperator") == "OR"
                 none_quantified = not any(
@@ -491,7 +492,7 @@ class QueryMaker:
                 if is_disj and none_quantified:
                     disjunctions.append(log_args)
                 else:
-                    self.constraint(obj["constraint"])
+                    self.constraint(constraint)
                 continue
 
             if is_set:
@@ -499,7 +500,7 @@ class QueryMaker:
             elif is_group:
                 lab = ""
                 group: list[str] = []
-                for k, v in obj["group"].items():
+                for k, v in cast(dict, obj["group"]).items():
                     if k == "label":
                         lab = v
                     if k == "members":
@@ -508,9 +509,9 @@ class QueryMaker:
                     groups[lab] = group
                 continue
 
-            if "layer" not in obj.get("unit", {}):
+            if "layer" not in cast(dict, obj.get("unit", {})):
                 continue
-            obj = obj["unit"]
+            obj = cast(dict, obj["unit"])
             layer = cast(str, obj["layer"])
             layer_info = cast(JSONObject, self.config["layer"])
             layer_info = cast(JSONObject, layer_info[layer])
