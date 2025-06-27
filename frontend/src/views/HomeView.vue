@@ -315,7 +315,7 @@
             </h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
-          <div class="modal-body text-start" v-if="corpusModal">
+          <div class="modal-body text-start fit-body" v-if="corpusModal">
             <MetadataEdit :corpus="corpusModal" :key="modalIndexKey" />
           </div>
           <div class="modal-footer">
@@ -714,6 +714,11 @@ export default {
   text-align: center;
   cursor: pointer;
   vertical-align: middle;
+}
+
+.fit-body {
+  max-height: 80vh;
+  overflow-y: scroll;
 }
 
 .scroller {

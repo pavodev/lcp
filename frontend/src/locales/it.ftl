@@ -145,6 +145,8 @@ modal-details-user-license = Definita dall'utente
 
 # Modifica dei metadati
 
+modal-meta-metadata = Metadata
+modal-meta-structure = Structure
 modal-meta-name = Nome
 modal-meta-url = URL
 modal-meta-authors = Autori
@@ -167,6 +169,7 @@ modal-meta-lg-italian = Italiano
 modal-meta-lg-spanish = Spagnola
 modal-meta-lg-swiss-german = Svizzero Tedesco
 modal-meta-lg-romansh = Romancio
+modal-structure-no-desc = No Description
 
 
 # Nuovo/Modifica progetto

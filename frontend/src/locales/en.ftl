@@ -146,6 +146,8 @@ modal-details-user-license = User defined
 
 # Metadata edit modal
 
+modal-meta-metadata = Metadata
+modal-meta-structure = Structure
 modal-meta-name = Name
 modal-meta-url = URL
 modal-meta-authors = Authors
@@ -168,9 +170,7 @@ modal-meta-lg-italian = Italian
 modal-meta-lg-spanish = Spanish
 modal-meta-lg-swiss-german = Swiss German
 modal-meta-lg-romansh = Romansch
-
-
-
+modal-structure-no-desc = No Description
 
 
 # New/Edit project modal
