@@ -544,7 +544,9 @@ class QueryMaker:
             if not self._backup_table:  # and (is_document or is_segment or is_token):
                 self._backup_table = (layerlang, llabel)
 
-            if layer_info["layerType"] != "relation":
+            if layer_info["layerType"] != "relation" and not layer_info.get(
+                "alignment"
+            ):
                 # make sure we always select all the main units
                 self.selects.add(f"{label}.{layer}_id as {label}".lower())
                 self.r.entities.add(label.lower())
