@@ -83,8 +83,13 @@
           <div class="col-12">
             <div class="mb-3">
               <label for="corpus-description" class="form-label">{{ $t('modal-meta-description') }}</label>
-              <textarea class="form-control" placeholder="Corpora description" v-model="corpusData.meta.corpusDescription"
-                id="corpus-description" style="height: 100px"></textarea>
+              <textarea
+                class="form-control"
+                placeholder="Corpora description"
+                v-model="corpusData.meta.corpusDescription"
+                id="corpus-description"
+                style="height: 100px"
+              ></textarea>
             </div>
           </div>
         </div>
@@ -135,8 +140,13 @@
           <div class="col-12">
             <div class="mb-3">
               <label for="corpus-sample" class="form-label">{{ $t('modal-meta-sample') }}</label>
-              <textarea class="form-control" placeholder="Sample DQD query" v-model="corpusData.meta.sample_query"
-                id="corpus-sample" style="height: 300px"></textarea>
+              <textarea
+                class="form-control"
+                placeholder="Sample DQD query"
+                v-model="corpusData.meta.sample_query"
+                id="corpus-sample"
+                style="height: 300px"
+              ></textarea>
             </div>
           </div>
         </div>

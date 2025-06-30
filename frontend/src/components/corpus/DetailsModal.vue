@@ -107,7 +107,7 @@
   </div>
 </template>
 
-<style>
+<style scoped>
   .description {
     font-size: 90%;
     height: 108px;
