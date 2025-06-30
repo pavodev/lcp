@@ -1,11 +1,11 @@
-from typing import Any
+from typing import Any, cast
 
 import sqlparse  # type: ignore
 
 from .query import QueryMaker
 from .results import ResultsMaker
 from .typed import QueryJSON
-from .utils import Config, QueryData
+from .utils import Config, escape_single_quotes
 
 BASE = """
 {query}
@@ -36,9 +36,10 @@ def json_to_sql(
 
     It requires a query in JSON format plus configuration stuff
     """
+    query_json = cast(QueryJSON, escape_single_quotes(query_json))
     language: str | None = lang.lower() if lang else None
     conf: Config = Config(schema, batch, config, language)
-    result_data: QueryData = ResultsMaker(query_json, conf).results()
+    query_json, result_data = ResultsMaker(query_json, conf).results()
     query_part: str
     seg_label: str
     query_part, seg_label, has_char_range = QueryMaker(

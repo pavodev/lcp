@@ -35,7 +35,7 @@ if (process.env.APP_TYPE == "videoscope") {
       apiHeaders: {},
       sentryDSN: null,
       baseMediaUrl: "https://videoscope.lcp.usi.ch/media/",
-    };
+    }
   } else {
     // development
     config = {

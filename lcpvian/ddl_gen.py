@@ -308,8 +308,9 @@ class Table(DDL):
     ) -> None:
         super().__init__()
         name = name.strip()
-        if parent:
-            name = f"{parent.strip()}_{name}"
+        self.parent = (parent or "").strip().lower()
+        if self.parent:
+            name = f"{self.parent}_{name}"
         self.name = name
         self.header_txt = f"CREATE TABLE {self.name} ("
         self.cols = cols
@@ -361,11 +362,11 @@ class Table(DDL):
         ]
         return ret
 
-    def create_idxs(self, schema: str) -> list[str]:
+    def create_idxs(self, schema: str, no_index: set[str] = set()) -> list[str]:
         ret = [
             f'CREATE INDEX ON "{schema}".{self.name} ' + idx
             for col in self.cols
-            if (idx := col.ret_idx())
+            if (idx := col.ret_idx()) and col.name.lower() not in no_index
         ]
         return ret
 
@@ -725,7 +726,7 @@ class CTProcessor:
                             f"Cannot accommodate more than 9223372036854775807 distinct labels"
                         )
                     label_lookup_table = Table(
-                        label_lookup_table_name,
+                        attr.lower(),
                         [
                             Column("bit", inttype, primary_key=True),
                             Column("label", "text", unique=True),
@@ -874,10 +875,6 @@ class CTProcessor:
         self.globals.tables += tables
         self.globals.types += types
 
-        # Discard left_anchor and right_anchor in corpus_template
-        l_params["attributes"].pop("left_anchor")
-        l_params["attributes"].pop("right_anchor")
-
     def _get_relation_col(self, rel_structure: dict[str, str]) -> Column:
         name = rel_structure["name"]
         table_name = self.globals.layers[rel_structure["entity"]]["table_name"]
@@ -948,8 +945,14 @@ class CTProcessor:
         # corpus_version = str(self.corpus_version)
         schema_name: str = self.schema_name
         project_id: str = self.project_id
-        corpus_template: str = json.dumps(self.corpus_temp)
-
+        copy_corpus_temp: dict[str, Any] = json.loads(json.dumps(self.corpus_temp))
+        # remove any left_anchor/right_anchor for the relational layers
+        for lname, lattrs in cast(dict, copy_corpus_temp)["layer"].items():
+            if lattrs.get("layerType") != "relation":
+                continue
+            lattrs["attributes"].pop("left_anchor", "")
+            lattrs["attributes"].pop("right_anchor", "")
+        corpus_template: str = json.dumps(copy_corpus_temp)
         # scm: str = self.ddl.create_scm(schema_name, corpus_name, corpus_version)
         scm: str = self.ddl.create_scm(schema_name, project_id, corpus_template)
         self.globals.schema.append(scm)
@@ -1040,6 +1043,10 @@ class CTProcessor:
                 },
             )
             rel_cols.append(dep_column)
+            for an, at in lay_conf.get("attributes", {}).items():
+                if at.get("type") != "categorical":
+                    continue
+                rel_cols_names.append(an)
 
         mapd: dict[str, Any] = self.globals.mapping
         tokname = self.globals.base_map["token"]
@@ -1125,7 +1132,10 @@ class CTProcessor:
 
 
 def generate_ddl(
-    corpus_temp: dict[str, Any], project_id: str, corpus_version: int = 1
+    corpus_temp: dict[str, Any],
+    project_id: str,
+    corpus_version: int = 1,
+    no_index: list[list[str]] = [],
 ) -> dict[str, str | list[str] | dict[str, int]]:
     globs = Globs()
     globs.base_map = corpus_temp["firstClass"]
@@ -1156,7 +1166,10 @@ def generate_ddl(
     constraints: defaultdict[str, list[str]] = defaultdict(list)
     refs: list[str] = []
     for table in sorted(globs.tables):
-        constraints[table.name] += table.create_idxs(schema_name)
+        no_index_table = {
+            attr.lower() for lay, attr in no_index if lay.lower() == table.parent
+        }
+        constraints[table.name] += table.create_idxs(schema_name, no_index_table)
         cons = table.create_constrs(schema_name)
         for c in cons:
             if " REFERENCES " in c:

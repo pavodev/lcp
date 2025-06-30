@@ -1,0 +1,24 @@
+Document d
+    classCode = /^S/
+
+Segment@d s
+
+sequence@s seq
+    Token t1
+        xpos2 = "ART"
+    OR
+        Token t2
+            form = "cat"
+        sequence
+            Token tadj
+                xpos2 = "ADJ"
+            Token t3
+                form = "dog"
+    Token t4
+        xpos2 = "VERB"
+
+kwic => plain
+    context
+        s
+    entities
+        seq

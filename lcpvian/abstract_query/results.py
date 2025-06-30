@@ -9,7 +9,6 @@ from .typed import (
     QueryJSON,
     Joins,
     JSONObject,
-    TGSD,
     ConfigJSON,
     ResultMetadata,
     JSON,
@@ -20,10 +19,9 @@ from .typed import (
 from .utils import (
     Config,
     QueryData,
+    _get_table,
+    _bound_label,
     _label_layer,
-    _get_table,
-    _get_mapping,
-    _get_table,
     _get_underlang,
     _is_anchored,
     _parse_comparison,
@@ -39,6 +37,8 @@ COUNTER = f"""
 
 """
 
+ANCHORINGS = ("stream", "time", "location")
+
 
 class ResultsMaker:
     """
@@ -46,7 +46,6 @@ class ResultsMaker:
     """
 
     def __init__(self, query_json: QueryJSON, conf: Config) -> None:
-        self.query_json: QueryJSON = query_json
         self.conf: Config = conf
         self.config: ConfigJSON = conf.config
         self.schema: str = conf.schema
@@ -57,7 +56,11 @@ class ResultsMaker:
         self.document = cast(str, self.config["document"])
         self.conf_layer = cast(JSONObject, self.config["layer"])
         self.r = QueryData()
-        self.r.label_layer = _label_layer(query_json.get("query", query_json))
+        tmp_label_layer = _label_layer(query_json.get("query", query_json))
+        self.query_json: QueryJSON = cast(
+            QueryJSON, self.r.add_labels(query_json, tmp_label_layer)
+        )
+        self.r.label_layer = _label_layer(self.query_json.get("query", self.query_json))
         self._n = 1
         self._underlang = _get_underlang(self.lang, self.config)
         self._label_mapping: dict[str, str] = (
@@ -101,6 +104,10 @@ class ResultsMaker:
                     self.add_query_entities(arg)
             elif "unit" in obj:
                 unit = obj["unit"]
+                layer = obj["unit"].get("layer") or "__internal"
+                unit["label"] = unit.get("label") or self.r.unique_label(
+                    layer=layer, obj=obj
+                )
                 if cast(
                     str, unit.get("layer", "")
                 ).lower() == self.token.lower() and cast(str, unit.get("label", "")):
@@ -134,7 +141,7 @@ class ResultsMaker:
                     return v
         return None
 
-    def results(self) -> QueryData:
+    def results(self) -> tuple[QueryJSON, QueryData]:
         """
         Build the results section of the postgres query
         """
@@ -153,7 +160,7 @@ class ResultsMaker:
             raise ValueError("Results needed in JSON")
 
         # Check that all entity references are legit
-        legal_refs = set()
+        legal_refs = set("*")
         for obj in self.query_json.get("query", []):
             if "unit" in obj:
                 legal_refs.add(cast(dict, obj["unit"]).get("label", ""))
@@ -239,7 +246,7 @@ class ResultsMaker:
         strings.append(COUNTER)
         self.r.meta_json = {"result_sets": attribs}
         self.r.needed_results = "\n , ".join(strings)
-        return self.r
+        return self.query_json, self.r
 
     def _add_collocation_selects(self, result: dict) -> None:
         """
@@ -497,15 +504,67 @@ class ResultsMaker:
         select_extra = ""
 
         doc_join = ""
-        gesture_type = "null"
 
         self._update_context(context)
         context_layer = self.r.label_layer[context][0]
 
-        # g, t, s, d = self._get_labels(gest)
-
         lay: str
         tokens: list[dict] = []
+
+        include_disjunction: bool = False
+        if "*" in ents:
+            new_ents = [e for e in ents if e != "*"]
+            ents = new_ents
+            # Tokens in sequences
+            for lab, (lay, obj) in cast(dict, self.r.label_layer).items():
+                if lay != self.token:
+                    continue
+                part_of: list[dict[str, str]] = cast(
+                    list[dict[str, str]], obj.get("partOf", [])
+                )
+                if context not in [next(x for x in p.values()) for p in part_of]:
+                    continue
+                if _bound_label(lab, self.query_json):
+                    continue
+                is_fixed_token_in_sequence: bool = any(
+                    lab in (m.label, m.internal_label)
+                    for seq in self.r.sqlsequences
+                    for m in seq.get_members()
+                )
+                if not is_fixed_token_in_sequence:
+                    continue
+                ents.append(lab)
+            # Main tokens
+            for u in self.query_json["query"]:
+                if not isinstance(u, dict):
+                    continue
+                if "constraint" in u:
+                    constraint = cast(dict, u["constraint"])
+                    is_or = (
+                        constraint.get("logicalExpression", {}).get("naryOperator")
+                        == "OR"
+                    )
+                    include_disjunction = include_disjunction or (
+                        is_or
+                        and any(
+                            "unit" in x or "sequence" in x and "quantor" not in x
+                            for x in cast(
+                                list,
+                                constraint["logicalExpression"]["args"],
+                            )
+                        )
+                    )
+                if "unit" not in u:
+                    continue
+                part_of = cast(
+                    list[dict[str, str]], cast(dict, u["unit"]).get("partOf", [])
+                )
+                if context not in [next(x for x in p.values()) for p in part_of]:
+                    continue
+                lab = cast(dict, u["unit"]).get("label")
+                if not lab:
+                    continue
+                ents.append(cast(str, lab))
 
         for e in ents:
             lay, meta = self.r.label_layer[e]
@@ -529,7 +588,7 @@ class ResultsMaker:
                 continue
 
             if lay == self.token:
-                is_fixed_token_in_sequence: bool = any(
+                is_fixed_token_in_sequence = any(
                     m.label == e
                     for seq in self.r.sqlsequences
                     for m in seq.get_members()
@@ -569,7 +628,7 @@ WHERE {entity}.char_range && contained_token.char_range
                 entout += entities_list
             tokens += attributes
 
-        ents_form = ", ".join(entout)
+        ents_form: str = ", ".join(entout)
         doc_join = ""
         frame_range_base = "array[lower(match_list.{fr}), upper(match_list.{fr})]"
         extras: list[str] = []
@@ -586,7 +645,7 @@ WHERE {entity}.char_range && contained_token.char_range
             extra_meta.append(lay)
 
             for ex in extra_meta:
-                obj: dict[str, str | bool] = {
+                obj = {
                     "name": f"{ex}_frame_range",
                     "type": "list[int]",
                     "multiple": True,
@@ -597,9 +656,17 @@ WHERE {entity}.char_range && contained_token.char_range
                 formed = ", ".join(extras)
                 select_extra = ", " + formed
 
-        attribs = self._make_attribs(
-            context, context_layer, gesture_type, tokens, frame_ranges
-        )
+        attribs = self._make_attribs(context, context_layer, tokens, frame_ranges)
+
+        if include_disjunction:
+            ents_form = (
+                "disjunction_matches"
+                if not ents_form
+                else f"{ents_form}, disjunction_matches"
+            )
+            attribs[1]["data"].append(
+                {"name": "disjunction_matches", "type": "set", "multiple": True}
+            )
 
         out = f"""
             res{i} AS ( SELECT DISTINCT
@@ -630,37 +697,10 @@ WHERE {entity}.char_range && contained_token.char_range
             None,
         )
 
-    def _get_labels(self, gesture: bool) -> TGSD:
-        """
-        Get labels and layers for token, gesture, segment and document
-        """
-        has_gesture: None | tuple[str, str]
-        has_gesture = self._get_label_layer("gesture") if gesture else None
-        if has_gesture:
-            gesture_layer: str = has_gesture[0]
-            formed = f"{gesture_layer}.type AS {gesture_layer}_gesture"
-            self.r.selects.add(formed.lower())
-            self.r.entities.add(f"{gesture_layer}_gesture".lower())
-
-        out: list[tuple[str, str] | None] = [has_gesture]
-        has: None | tuple[str, str]
-
-        for i in ["token", "segment", "document"]:
-            has = self._get_label_layer(i)
-            assert has is None or (
-                isinstance(has, tuple)
-                and isinstance(has[0], str)
-                and isinstance(has[1], str)
-            )
-            out.append(has)
-
-        return (out[0], out[1], out[2], out[3])
-
     def _make_attribs(
         self,
         context: str,
         context_layer: str,
-        gesture_type: str,
         tokens: list[dict],
         frame_ranges: list[dict],
     ) -> list[dict]:
@@ -703,7 +743,6 @@ WHERE {entity}.char_range && contained_token.char_range
                 "type": "list[dict]",
             },
             # {"name": "document_id", "type": "number", "multiple": False},
-            # {"name": "gesture", "type": gesture_type, "multiple": False},
             # {"name": "agent", "type": "str", "multiple": False},
             {
                 "name": "frame_ranges",
@@ -752,10 +791,50 @@ WHERE {entity}.char_range && contained_token.char_range
         """
         Produce a frequency table and its JSON metadata
         """
+        count_entities: list[str] = [x["entity"] for x in attributes if "entity" in x]
+        assert len(count_entities) < 2, RuntimeError(
+            f"Cannot reference more than one entity in the attributes of an analysis {', '.join(count_entities)})"
+        )
         counts: list[str] = []
         for func in functions:
             if func.lower().startswith("freq"):
-                counts.append(f"count(*) AS {func.lower()}")
+                if not count_entities:
+                    counts.append(f"count(*) AS {func.lower()}")
+                    continue
+                count_entity = count_entities[0]
+                counts.append(f"count(DISTINCT {count_entity}) AS {func.lower()}")
+                entity_layer, _ = self.r.label_layer[count_entity]
+                conf_map = cast(dict, self.config["mapping"])
+                token_mapping = conf_map["layer"].get(self.token, {})
+                if "partitions" in token_mapping and self.lang:
+                    token_mapping = token_mapping["partitions"].get(self.lang, {})
+                mapping: dict = conf_map["layer"].get(entity_layer, {})
+                if "partitions" in mapping and self.lang:
+                    mapping = mapping["partitions"].get(self.lang, {})
+                table = _get_table(entity_layer, self.config, self.batch, self.lang)
+                el = entity_layer.lower()
+                count_total = (
+                    f"""(SELECT count({el[0]})
+    FROM {self.schema}.{table} {el[0]}"""
+                    + """
+    CROSS JOIN {joins}
+    WHERE {wheres}) AS {total_label}"""
+                )
+                # TODO: build joins and wheres based on the attributes
+                # for each attribute, determine which anchor is shared with the entity
+                counts.append(count_total)
+                # table = mapping.get("relation", entity_layer.lower())
+                # if (
+                #     "batches" in mapping
+                #     or entity_layer == self.segment
+                #     and "batches" in token_mapping
+                # ):
+                #     if table.endswith("<batch>"):
+                #         table = table[0:-7]
+                #     table = table + "0"
+                # counts.append(
+                #     f"(SELECT count(*) FROM {self.schema}.{table}) AS total_{entity_layer.lower()}"
+                # )
             else:
                 raise NotImplementedError("TODO?")
         if counts:
@@ -763,8 +842,12 @@ WHERE {entity}.char_range && contained_token.char_range
         else:
             jcounts = " "
         funcstr = " , ".join(functions)
+        jjoins: list[str] = []
+        jwheres: list[str] = []
         parsed_attributes: list[tuple[str, RefInfo]] = []
         for att in attributes:
+            if "entity" in att:
+                continue
             constraint: Constraint = Constraint(
                 att,
                 "=",  # placeholder,
@@ -796,6 +879,43 @@ WHERE {entity}.char_range && contained_token.char_range
             self.r.selects.add(f"{ref} AS {alias}")
             self.r.entities.add(alias)
             parsed_attributes.append((alias, ref_info))
+            if (
+                not count_entities
+                or "attribute" not in att
+                or "." not in att["attribute"]
+            ):
+                continue
+            entity_lab = count_entities[0]
+            entity_layer, _ = self.r.label_layer[entity_lab]
+            prefix, *_ = att["attribute"].split(".")
+            prefix_layer, _ = self.r.label_layer[prefix]
+            anchorings = [
+                {"stream": "char_range", "time": "frame_range", "location": "xy_box"}[a]
+                for a in ANCHORINGS
+                if _is_anchored(self.config, prefix_layer, a)
+                and _is_anchored(self.config, entity_layer, a)
+            ]
+            assert anchorings, RuntimeError(
+                f"Layer {prefix_layer} ({prefix}) does not share an anchoring with layer {entity_layer} ({entity_lab})"
+            )
+            prefix_table = _get_table(prefix_layer, self.config, self.batch, self.lang)
+            jjoins.append(f"{self.schema}.{prefix_table} {prefix}")
+            where_anchors = " OR ".join(
+                f"{prefix}.{a} && {entity_layer.lower()[0]}.{a}" for a in anchorings
+            )
+            jwheres.append(f"({ref} = {alias} AND ({where_anchors}))")
+        assert parsed_attributes, RuntimeError(
+            f"Need at least one *attribute* referenced in the analysis"
+        )
+        if count_entities:
+            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            total_label = f"total_{count_entity_layer.lower()}"
+            funcstr += f", {total_label}"
+            jcounts = jcounts.format(
+                joins=" CROSS JOIN ".join(jjoins),
+                wheres=" AND ".join(jwheres),
+                total_label=total_label,
+            )
         nodes = " , ".join(p for p, _ in parsed_attributes)
         wheres, filter_meta = self._process_filters(filt)
         out = f"""
@@ -822,7 +942,12 @@ WHERE {entity}.char_range && contained_token.char_range
             typed = f"{lay}.{lab}"
             attribs.append({"name": attr, "type": typed})
         for func in functions:
-            attribs.append({"name": func, "type": "aggregrate"})
+            attribs.append({"name": func, "type": "aggregate"})
+        if count_entities:
+            count_entity_layer, _ = self.r.label_layer[count_entities[0]]
+            attribs.append(
+                {"name": f"total_{count_entity_layer.lower()}", "type": "aggregate"}
+            )
         meta: ResultMetadata = {
             "attributes": attribs,
             "name": label,

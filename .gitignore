@@ -12,7 +12,6 @@ results/*
 database/wip/*
 .coverage
 .env
-.env.docker
 *.so
 *.c
 frontend/public/media/

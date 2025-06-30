@@ -71,7 +71,7 @@ class SingleNode:
                     piece = piece.lstrip().lstrip("^")
                     break
             fixed.append(f"{piece}{pref}")
-        tokens = [f" {inv}{{{self.field}}}{s}" for s in fixed]
+        tokens = [f"{inv}{{{self.field}}}{s}" for s in fixed]
         if len(tokens) > 1:
             return " (" + joiner.join(tokens) + " ) "
         else:
@@ -122,12 +122,21 @@ class SingleNode:
 
 class Conjuncted:
     """
-    A sequence of objects held together within an AND/OR expression
+    A set of constraints held together within an AND/OR expression
     """
 
     def __init__(self, conj: str | None, items: Sequence[SingleNode | Self]) -> None:
         self.conj = conj
         self.items = items
+
+
+class Disjunction:
+    """
+    Sequences units of the same, fixed length
+    """
+
+    def __init__(self, units: Sequence[Sequence[SingleNode | Conjuncted]]) -> None:
+        self.units = units
 
 
 class Prefilter:
@@ -198,25 +207,29 @@ class Prefilter:
                     continue
                 for c in pf.split("&"):
                     stripped_c = c.strip(" ()")
-                    if stripped_c.startswith(
-                        ("{" + attr_name + "}", "!{" + attr_name + "}")
+                    if (
+                        stripped_c.startswith(
+                            ("{" + attr_name + "}", "!{" + attr_name + "}")
+                        )
+                        and stripped_c not in conjuncts
                     ):
                         conjuncts.append(stripped_c)
         ps = [pf.format(**locations) for pf in prefilters]
         conjuncts = [c.format(**locations) for c in conjuncts]
         stringified = f"vec.vector @@ '{' <1> '.join(ps) }'"
-        if conjuncts:
+        if len(conjuncts) > 1:
+            # Including the single terms aside their sequence makes queries much faster
             cond_conjuncts = [f"vec.vector @@ '{c}'" for c in conjuncts]
             stringified = " AND ".join(cond_conjuncts) + " AND " + stringified
         return stringified
 
-    def initialise(self, query_json: QueryPart) -> list[SingleNode | Conjuncted | None]:
+    def initialise(
+        self, query_json: QueryPart
+    ) -> list[SingleNode | Conjuncted | Disjunction | None]:
         """
         todo: update this for latest query json
         """
-        # query_json = query_json["query"]
-        list_nodes: list[SingleNode | Conjuncted | None] = []
-        count = 0
+        list_nodes: list[SingleNode | Conjuncted | Disjunction | None] = []
         for obj in query_json:
             if not isinstance(obj, dict):
                 continue
@@ -225,16 +238,51 @@ class Prefilter:
             seq = cast(dict[str, JSON], obj["sequence"])
             members = cast(list[dict[str, JSON]], seq["members"])
             for member in members:
+                if "logicalExpression" in member:
+                    logic = cast(dict, member["logicalExpression"])
+                    assert logic.get("naryOperator") == "OR", RuntimeError(
+                        "Cannot build prefix for non-OR matrix logical expression"
+                    )
+                    log_members = logic.get("args", [])
+                    all_unit_or_sequence = all(
+                        "unit" in x or "sequence" in x for x in log_members
+                    )
+                    assert all_unit_or_sequence, RuntimeError(
+                        "Cannot build OR prefix if some members are not units or sequences"
+                    )
+                    units: Sequence[Sequence[SingleNode | Conjuncted]] = []
+                    assert all(
+                        "unit" in y
+                        for x in [lm for lm in log_members if "sequence" in lm]
+                        for y in x["sequence"].get("members", [])
+                    ), RuntimeError(
+                        "Can only build a prefix for disjunctions of sequences that exclusively contain units"
+                    )
+                    tmp_units = [
+                        [
+                            self._process_unit(
+                                cast(dict, y["unit"]).get("constraints", [])
+                            )
+                            for y in (
+                                x["sequence"].get("members", [])
+                                if "sequence" in x
+                                else [x]  # single unit
+                            )
+                        ]
+                        for x in log_members
+                    ]
+                    units = cast(
+                        Sequence[Sequence[SingleNode | Conjuncted]],
+                        [x for x in tmp_units if x is not None],
+                    )
+                    list_nodes.append(Disjunction(units))
+                    continue
                 if "unit" not in member:
                     continue  # TODO: handle nested sequences
                 cons = cast(
                     list[dict[str, Any]],
                     cast(dict, member["unit"]).get("constraints", []),
                 )
-                # if not cons:
-                #     count += 1
-                #     continue
-                # res = self._process_unit(cons)
                 res = None  # No constraints
                 if cons:
                     res = self._process_unit(cons)
@@ -244,8 +292,6 @@ class Prefilter:
     def _prefilter_conjuncts(self) -> list[str]:
         first_pass = self.initialise(self.query_json)
         return self._stringify_nodes(first_pass)
-        # strung: list[str] = self._stringify_nodes(first_pass)
-        # return self._finalise_prefilters(strung)
 
     def _condition(self) -> str:
         return self._stringify(self._prefilter_conjuncts())
@@ -308,7 +354,7 @@ class Prefilter:
         self, filt: list[dict[str, Any]], kind: str
     ) -> Conjuncted | None:
         """
-        Try to make prefilters from this OR-conjuncted token
+        Try to make prefilters from this AND/OR-conjuncted token
         """
         matches: list[SingleNode | Conjuncted] = []
 
@@ -327,7 +373,7 @@ class Prefilter:
                 continue
             attribute, operator, pattern, typ = self.parse_comparison(arg["comparison"])
             if typ == "other":
-                return None
+                continue
             if _is_prefix(pattern, operator, typ):
                 matches.append(SingleNode(attribute, operator, pattern, typ == "regex"))
 
@@ -348,7 +394,7 @@ class Prefilter:
         raise NotImplementedError("should not be here")
 
     def _stringify_nodes(
-        self, prefilter: list[Conjuncted | SingleNode | None]
+        self, prefilter: list[Conjuncted | SingleNode | Disjunction | None]
     ) -> list[str]:
         """
         Create the prefilter string from a single item in the defaultdict value
@@ -360,7 +406,14 @@ class Prefilter:
                 continue
 
             single = []
-            if isinstance(prefilt, Conjuncted):
+            if isinstance(prefilt, Disjunction):
+                disj = " | ".join(
+                    " <1> ".join(self._as_string(u) for u in units)
+                    for units in prefilt.units
+                )
+                all_made.append(f"({disj})")
+                continue
+            elif isinstance(prefilt, Conjuncted):
                 connective = prefilt.conj
                 items = prefilt.items
             else:

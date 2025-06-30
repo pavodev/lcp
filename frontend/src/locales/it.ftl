@@ -82,6 +82,8 @@ common-query-result = Risultato query
 common-total-progress = Progresso totale
 common-refresh-progress = Aggiorna barra di avanzamento
 common-show-hide-corpus = Mostra/nascondi struttura del corpus
+common-timeline = Timeline
+common-show-timeline = Visualizza la timeline
 load-example-query = Carica query di esempio
 common-query-corpus = Query corpus
 common-go-to-time = Vai al tempo
@@ -114,6 +116,7 @@ common-plain = Testo semplice
 common-plain-format = Formato semplice
 common-download-preview = Scarica anteprima
 common-text = Testo
+common-rotate-device = Ruota il dispositivo per visualizzare la timeline
 
 common-play-audio = Riproduci audio
 common-play-video = Riproduci video
@@ -145,7 +148,7 @@ modal-details-user-license = Definita dall'utente
 # Modifica dei metadati
 
 modal-meta-name = Nome
-modal-meta-source = Fonte
+modal-meta-url = URL
 modal-meta-authors = Autori
 modal-meta-provider = Fornitore/Istituzione
 modal-meta-revision = Revisione
@@ -154,6 +157,10 @@ modal-meta-description = Descrizione
 modal-meta-license = Licenza
 modal-meta-user-defined = Definito dall'utente
 modal-meta-user-license = Licenza definita dall'utente
+modal-meta-sample = Esempio di query DQD
+modal-meta-warning-before = Stai modificando le proprietà in
+modal-meta-warning-after = . Cambia la lingua dell'interfaccia per modificare le proprietà in un'altra lingua.
+
 
 # Nuovo/Modifica progetto
 

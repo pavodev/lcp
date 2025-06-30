@@ -68,7 +68,7 @@ def _where_conditions_from_constraints(
     return (all_conditions, left_joins, cons.references)
 
 
-def _prefilter(conf: Config, subseq: list[Unit]) -> str:
+def _prefilter(conf: Config, subseq: list[Unit | Disjunction]) -> str:
     seq: dict = {"sequence": {"members": [s.obj for s in subseq]}}
     p = Prefilter([seq], conf, dict(), "")  # has_segment (remove?)
     return p._condition()
@@ -146,7 +146,7 @@ class Cte:
                 entry[key] = set_entry
             delta[str(i)] = entry
 
-        # Prepare params for automathon
+        # Prepare params for automaton
         q = {str(s) for s in delta.keys()}
         sigma = {y for x in delta.values() for y in x if y}
         initial_state = str(state_map[self.start_state][0])
@@ -318,6 +318,7 @@ class Cte:
         for source_n, d in delta_items:
 
             for state_n, destinations in d.items():
+                destinations = sorted(destinations)
                 state: State = sigma_states[state_n]
                 destination_n = next(x for x in destinations)
                 override_references: dict[str, str] = {}
@@ -346,7 +347,7 @@ class Cte:
                 #     cond += f" AND {ref_table}.{self.next_fixed_token.internal_label} = token.{tok}_id + 1"
                 state_conds.add(f"({cond})")
 
-        big_disjunction: str = "\n                OR ".join(state_conds)
+        big_disjunction: str = "\n                OR ".join(sorted(state_conds))
         if not infixwheres:
             big_disjunction = f"{big_disjunction}"
         elif len(infixwheres) > 1:
@@ -388,16 +389,16 @@ class Cte:
                     }
                 }
                 name_seq: str = (
-                    state.unit.parent_sequence.label
-                    if state.unit and state.unit.parent_sequence
+                    state.unit.parent_member.label
+                    if state.unit and isinstance(state.unit.parent_member, Sequence)
                     else self.sequence.sequence.query_data.unique_label(
                         references=references
                     )
                 )
-                for d in destination:
+                for d in sorted(destination):
                     dict_table[f"({source}, {d}, '{state.label}', '{name_seq}')"] = None
 
-        values: str = ",\n            ".join(dict_table.keys())
+        values: str = ",\n            ".join(sorted(dict_table.keys()))
         return f"""transition{self.n} (source_state, dest_state, label, sequence) AS (
         VALUES
             {values}
@@ -411,6 +412,7 @@ class Cte:
         tok: str = "token",
         batch_suffix: str = "_enrest",
         seg: str = "segment",
+        additional_selects: list[str] = [],
     ) -> str:
         n: str = str(self.n)
         part_of: str = self.sequence.get_first_stream_part_of()
@@ -475,9 +477,31 @@ class Cte:
         else:
             where_union = f"WHERE {where_union}" if where_union else ""
 
+        select_fixed_tokens = (
+            "\n"
+            + ", ".join(
+                [
+                    "{table}." + t.internal_label + " AS " + t.internal_label
+                    for t, _, _, _ in self.sequence.fixed_tokens
+                ]
+            )
+            + ","
+            if self.sequence.fixed_tokens
+            else ""
+        )
+        for slc in additional_selects:
+            if slc in [
+                x
+                for u, *_ in self.sequence.fixed_tokens
+                for x in (u.label, u.internal_label)
+            ]:
+                continue
+            select_fixed_tokens += (
+                ("\n, " if not select_fixed_tokens else " ") + "{table}." + slc + ","
+            )
+
         retval: str = f"""traversal{n} AS (
-        SELECT  prev_cte.{part_of},
-                {', '.join(['prev_cte.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
+        SELECT  prev_cte.{part_of},{select_fixed_tokens.format(table='prev_cte')}
                 {start_id}           start_id,
                 token.{tok}_id           id,
                 transition{n}.dest_state    state,
@@ -488,10 +512,10 @@ class Cte:
         {where_start}"""
 
         if where_union:
+
             retval += f"""
         UNION ALL
-        SELECT  traversal{n}.{part_of},
-                {', '.join(['traversal'+str(n)+'.'+t.internal_label+' '+t.internal_label for t,_,_,_ in self.sequence.fixed_tokens])},
+        SELECT  traversal{n}.{part_of},{select_fixed_tokens.format(table='traversal'+str(n))}
                 traversal{n}.start_id,
                 token.token_id   id,
                 transition{n}.dest_state,
@@ -567,7 +591,7 @@ class SQLSequence:
             self._members = []
             # for m in self.sequence.members:
             for m in Member.from_obj(
-                obj=self.sequence.obj, parent_sequence=self.sequence
+                obj=self.sequence.obj, parent_member=self.sequence
             ):
                 if isinstance(m, Unit):
                     self._members.append(m)
@@ -643,9 +667,14 @@ class SQLSequence:
                     new_ref: str = self.internal_reference(v)
                     if override:
                         new_ref = override.get(v, v)
-                        v_lab = v.split(".")[0]
-                        if in_subsequence and "." in v and v_lab in override:
-                            pass
+                        v_lab, *v_attrs = new_ref.split(".")
+                        if (
+                            in_subsequence is not None
+                            and "." in v
+                            and v_lab in override
+                            and "." not in override[v_lab]
+                        ):
+                            new_ref = ".".join([override[v_lab], *v_attrs])
                             # token_layer = self.config.config["firstClass"]["token"]
                             # v_layer = self.label_layer.get(v_lab, (token_layer, None))[
                             #     0
@@ -737,7 +766,6 @@ class SQLSequence:
                             in_subsequence.add(ref_join)
                     new_joins.append(new_j)
                 joins = new_joins
-            override[str(seg_lab)] = f"fixed_parts.{seg_lab}"
 
         refs_to_replace = "|".join(
             [
@@ -754,9 +782,12 @@ class SQLSequence:
         return (ret[0], ret[1], refs)
 
     def prefilters(self) -> set[str]:
-        prefilters: list[list[Unit]] = [[]]
+        prefilters: list[list[Unit | Disjunction]] = [[]]
         for e in self.sequence.fixed_subsequences():
             if isinstance(e, Unit):
+                prefilters[-1].append(e)
+            elif isinstance(e, Disjunction):
+                # note: fixed_subsequences only returns disjuctions with fixed disjuncts of the same length
                 prefilters[-1].append(e)
             elif isinstance(e, int):
                 if e == 0:
@@ -810,10 +841,13 @@ class SQLSequence:
                         *{x for x in unit_labels_so_far},
                     }
                 }
-                m.internal_label = m.label
+                m.internal_label = m.label if m.label else m.internal_label
                 if not m.internal_label or m.internal_label in unit_labels_so_far:
+                    part_of = m.obj.get("partOf") or self.sequence.obj.get("partOf", [])
                     m.internal_label = self.sequence.query_data.unique_label(
-                        layer=token_layer, references=references
+                        layer=token_layer,
+                        references=references,
+                        obj={**m.obj, "partOf": part_of},
                     )
                 unit_labels_so_far.add(m.internal_label)
                 self._internal_references[m.label] = m.internal_label
@@ -823,11 +857,11 @@ class SQLSequence:
                 last_fixed_token = m
                 min_separation = 0
                 max_separation = 0
-                if m.parent_sequence:
-                    self._sequence_references[m.parent_sequence.label] = (
-                        self._sequence_references.get(m.parent_sequence.label, [])
+                if isinstance(m.parent_member, Sequence):
+                    self._sequence_references[m.parent_member.label] = (
+                        self._sequence_references.get(m.parent_member.label, [])
                     )
-                    self._sequence_references[m.parent_sequence.label].append(m)
+                    self._sequence_references[m.parent_member.label].append(m)
 
             elif isinstance(m, Disjunction):
                 # For now, treat all disjunctions as requiring a CTE
@@ -882,7 +916,7 @@ class SQLSequence:
             l: str = token.internal_label
             part_of: list[dict[str, str]] = token.obj["unit"].get("partOf", [])
             if not part_of:
-                tok_par_seq = token.parent_sequence
+                tok_par_seq = cast(Sequence, token.parent_member)
                 if tok_par_seq:
                     part_of = tok_par_seq.obj["sequence"].get("partOf", [])
                 if not part_of:
@@ -924,11 +958,11 @@ class SQLSequence:
         batch_suffix: str = "_enrest",
         seg: str = "segment",
         schema: str = "sparcling1",
-    ) -> tuple[str, set[str]]:
+    ) -> tuple[str, set[str], str]:
         """Go through the sequence's simple subsequences and return an SQL string for a CTE named subseq"""
 
         if not self.simple_sequences:
-            return ("", set())
+            return ("", set(), "")
 
         part_of_stream = self.get_first_stream_part_of()
 
@@ -954,9 +988,6 @@ class SQLSequence:
             )
 
             override_internal_references: dict[str, str] = {}
-            # Map fixed tokens to the fixed_parts table
-            for k, v in self._internal_references.items():
-                override_internal_references[k] = f"{from_table}.{v}"
             # Temporarily map fixed token labels to subsequence-internal labels as applicable
             for i, m in enumerate(s.members):
                 label = cast(Unit, m).label or cast(Unit, m).internal_label
@@ -974,7 +1005,7 @@ class SQLSequence:
                     "partOf", {}
                 )
                 if not sub_member_part_of:
-                    sub_member_sequence = m.parent_sequence
+                    sub_member_sequence = cast(Sequence, m.parent_member)
                     if sub_member_sequence:
                         sub_member_part_of = sub_member_sequence.obj["sequence"].get(
                             "partOf", []
@@ -1000,7 +1031,8 @@ class SQLSequence:
                         continue
                     for attr in attrs:
                         new_lbl_attr = self.sequence.query_data.unique_label(
-                            f"{lbl}_{attr}"
+                            f"{lbl}_{attr}",
+                            obj={**m.obj, "partOf": sub_member_part_of},
                         )
                         token_conds = [
                             x.replace(f"{lbl}.{attr}", new_lbl_attr)
@@ -1027,19 +1059,19 @@ class SQLSequence:
                         x
                         for x in [
                             (
-                                f"s{n}_t{i}.{tok}_id > {from_table}.{pl} AND (s{n}_t{i}.{tok}_id - {from_table}.{pl} - 1) % {n_tokens} = {i}"
+                                f"s{n}_t{i}.{tok}_id > {pl}.{tok}_id AND (s{n}_t{i}.{tok}_id - {pl}.{tok}_id - 1) % {n_tokens} = {i}"
                                 if prev
                                 else ""
                             ),
-                            (f"s{n}_t{i}.{tok}_id < {from_table}.{nl}" if nxt else ""),
+                            (f"s{n}_t{i}.{tok}_id < {nl}.{tok}_id" if nxt else ""),
                             (
                                 f"s{n}_t{i}.{tok}_id - s{n}_t{i-1}.{tok}_id = 1"
                                 if i > 0
                                 else ""
                             ),
-                            f"s{n}_t{i}.{seg}_id = {from_table}.{part_of_stream}",
+                            f"s{n}_t{i}.{seg}_id = {part_of_stream}.{seg}_id",
                             (
-                                f"s{n}_t{i}.{tok}_id <= t{np} AND ({from_table}.t{np} - s{n}_t{i}.{tok}_id) % {mod} = 0"
+                                f"s{n}_t{i}.{tok}_id <= {np}.{tok}_id AND ({np}.{tok}_id - s{n}_t{i}.{tok}_id) % {mod} = 0"
                                 if nxt is None and i + 1 == len(s.members)
                                 else ""
                             ),
@@ -1070,4 +1102,5 @@ class SQLSequence:
             FROM {from_table}
             WHERE {simple_seq}""",
             add_to_fixed_selects,
+            simple_seq,
         )

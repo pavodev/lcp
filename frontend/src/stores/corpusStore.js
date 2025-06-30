@@ -1,4 +1,5 @@
 import { defineStore } from "pinia";
+import { getUserLocale } from "@/fluent";
 import httpApi from "@/httpApi";
 
 export const useCorpusStore = defineStore("corpusData", {
@@ -19,13 +20,13 @@ export const useCorpusStore = defineStore("corpusData", {
   getters: {
     getLicenseByTag: (state) => {
       return (tag) => {
-        return state.licenses.find(license => license.tag === tag)
+        return state.licenses.find(license => license.tag === tag) || {url: ""}
       }
     },
   },
   actions: {
     async fetchQuery(data) {
-      let response = await httpApi.post(`/query_future`, data)
+      let response = await httpApi.post(`/query`, data)
       this.queryData = await response.data;
       return this.queryData
     },
@@ -46,6 +47,8 @@ export const useCorpusStore = defineStore("corpusData", {
       });
     },
     updateMeta(data) {
+      const lg = getUserLocale().value;
+      data.metadata._lg = lg;
       httpApi.put(`/corpora/${data.corpusId}/meta/update`, data.metadata).then((response) => {
         return response.data;
       });
@@ -53,10 +56,37 @@ export const useCorpusStore = defineStore("corpusData", {
     fetchCorpora() {
       httpApi.post(`/corpora`).then((response) => {
         this.corporaJson = response.data;
-        delete this.corporaJson.config["-1"]
+        delete this.corporaJson.config["-1"];
+        const lg = getUserLocale().value;
         this.corpora = Object.keys(this.corporaJson.config).map(corpusId => {
           let corpus = this.corporaJson.config[corpusId]
           corpus.meta['id'] = corpusId
+          for (let [k,v] of Object.entries(corpus.meta)) {
+            if (typeof(v) == "string" || !(v instanceof Object))
+              continue;
+            if (lg in v && typeof(v[lg]) == "string")
+              corpus.meta[k] = v[lg];
+            else if ("en" in v && typeof(v.en) == "string")
+              corpus.meta[k] = v.en;
+          }
+          for (let [layer, props] of Object.entries(corpus.layer)) {
+            for (let [k,v] of Object.entries(props.attributes || {})) {
+              if (k == "meta" && v instanceof Object) {
+                for (let [mk,mv] of Object.entries(v)) {
+                  if (!mv.description || typeof(mv.description) == "string" || !(mv.description instanceof Object))
+                    continue;
+                  if (lg in mv.description && typeof(mv.description[lg]) == "string")
+                    corpus.layer[layer].attributes.meta[mk].description = mv.description[lg];
+                }
+              }
+              else {
+                if (!v.description || typeof(v.description) == "string" || !(v.description instanceof Object))
+                  continue;
+                if (lg in v.description && typeof(v.description[lg]) == "string")
+                  corpus.layer[layer].attributes[k].description = v.description[lg];
+              }
+            }
+          }
           return corpus
         })
       });

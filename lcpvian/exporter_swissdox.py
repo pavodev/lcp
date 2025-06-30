@@ -7,7 +7,6 @@ import shutil
 from redis import Redis as RedisConnection
 from rq.job import get_current_job, Job
 from typing import Any, cast
-from uuid import uuid4
 
 from .jobfuncs import _handle_export, _db_query
 from .query_classes import Request, QueryInfo

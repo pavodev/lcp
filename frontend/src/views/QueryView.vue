@@ -7,7 +7,7 @@
         </div>
       </div>
       <div class="row mt-2">
-        <div class="col-4">
+        <div class="col-12 col-md-4">
           <div class="form-group row">
             <label for="staticEmail" class="col-sm-3 col-form-label">
               {{ $t('common-corpora') }}
@@ -104,7 +104,7 @@
                   </button>
                 </div>
                 <div class="row">
-                  <div class="col-6">
+                  <div class="col-12 col-md-6">
                     <div class="form-floating mb-3">
                       <nav>
                         <div class="nav nav-tabs justify-content-end" id="nav-query-tab" role="tablist">
@@ -211,7 +211,7 @@
                       </div>
                     </div>
                   </div>
-                  <div class="col-6">
+                  <div class="col-12 col-md-6">
                     <div class="corpus-graph mt-3" v-if="selectedCorpora">
                       <FontAwesomeIcon :icon="['fas', 'expand']" @click="openGraphInModal" data-bs-toggle="modal"
                         data-bs-target="#corpusDetailsModal" />
@@ -230,7 +230,7 @@
 
                 <hr>
                 <div class="mt-5 row" v-if="querySubmitted">
-                  <div class="col-6">
+                  <div class="col-12 col-md-6">
                     <h6 class="mb-2">{{ $t('common-query-result') }}</h6>
                     <div class="progress mb-2">
                       <div class="progress-bar" :class="loading ? 'progress-bar-striped progress-bar-animated' : ''
@@ -240,7 +240,7 @@
                       </div>
                     </div>
                   </div>
-                  <div class="col-6">
+                  <div class="col-12 col-md-6">
                     <h6 class="mb-2">{{ $t('common-total-progress') }}</h6>
                     <div class="progress mb-2">
                       <div class="progress-bar" :class="loading ? 'progress-bar-striped progress-bar-animated' : ''
@@ -418,7 +418,7 @@
                           <ResultsTableView v-else-if="resultSet.type != 'plain'"
                             :data="WSDataResults.result[index + 1]" :languages="selectedLanguages"
                             :attributes="resultSet.attributes" :meta="WSDataMeta" :resultsPerPage="resultsPerPage"
-                            :type="resultSet.type" />
+                            :type="resultSet.type" :corpora="selectedCorpora" />
                         </div>
                       </div>
                     </div>
@@ -801,8 +801,8 @@ export default {
               corpus: corpus[0],
             };
             this.checkAuthUser()
-            this.defaultQueryDQD = corpus[0].sample_query || "";
-            this.queryDQD = this.defaultQueryDQD;
+            this.defaultQueryDQD = this.getSampleQuery();
+            this.queryDQD = this.getSampleQuery();
             this.preselectedCorporaId = null;
             this.showGraph = 'main'
             setTimeout(() => this.graphIndex++, 1)
@@ -845,8 +845,8 @@ export default {
       // this.validate();
       if (this.selectedCorpora) {
         // this.loadDocuments();
-        this.defaultQueryDQD = this.selectedCorpora.corpus.sample_query || "";
-        this.queryDQD = this.selectedCorpora.corpus.sample_query || "";
+        this.defaultQueryDQD = this.getSampleQuery();
+        this.queryDQD = this.getSampleQuery();
         history.pushState(
           {},
           null,
@@ -943,6 +943,11 @@ export default {
     // },
   },
   methods: {
+    getSampleQuery() {
+      const corpus = this.selectedCorpora;
+      if (!corpus) return "";
+      return corpus.corpus.meta.sample_query || corpus.corpus.sample_query || ""
+    },
     setExportFilename(format) {
       if (!this.nameExport)
         this.nameExport = `${this.selectedCorpora.corpus.shortname} ${new Date().toLocaleString()}.${format}`;
@@ -1231,7 +1236,6 @@ export default {
           if (!this.WSDataResults.result)
             return this.WSDataResults.result = data.result;
           const kwic_keys = ((data.result[0]||{}).result_sets||[]).map((rs,n)=>rs.type=="plain"?n+1:-1).filter(n=>n>0);
-          console.log("kwic_keys", kwic_keys);
           for (let rkey in data.result) {
             if (!kwic_keys.includes(parseInt(rkey))) {
               this.WSDataResults.result[rkey] = data.result[rkey];
@@ -1259,7 +1263,7 @@ export default {
               if (layer == segment && attr == "id")
                 segment_id = value;
               meta_object[layer] = meta_object[layer] || {};
-              if (attr.endsWith("_range")) {
+              if (attr.endsWith("_range") && value) {
                 const ranges = value.match(/\[(\d+),(\d+)\)/);
                 if (ranges)
                   value = [parseInt(ranges[1]),parseInt(ranges[2])];
