@@ -162,7 +162,12 @@
     <div
       class="popover-liri"
       v-if="currentMeta"
-      :style="{top: (stickMeta.y || popoverY) + 'px', left: (stickMeta.x || popoverX) + 'px' }"
+      :style="{
+        top: `min(${stickMeta.y || popoverY}px, calc(100vh - 33vh))`,
+        left: (stickMeta.x || popoverX) + 'px',
+        overflowY: (stickMeta.x || stickMeta.y) ? 'scroll' : 'visible',
+        maxHeight: '33vh',
+      }"
     >
       <span
         v-if="stickMeta.x && stickMeta.y"
@@ -174,11 +179,11 @@
       <table class="popover-table">
         <template v-for="(meta, layer) in currentMeta" :key="`th-${layer}`">
           <tr v-if="layer in allowedMetaColums">
-            <td>
-              <span class="text-bold">{{ layer }}</span>
+            <td @click="this.meta_fold(layer, /*flip=*/true)">
+              <span class="text-bold">{{ this.meta_fold(layer) ? "&#9662;" : "&#9656;" }}{{ layer }}</span>
               <table class="popover-deatils-table mb-2">
                 <template v-for="(meta_value, meta_key) in meta" :key="`${layer}-${meta_key}`">
-                  <tr v-if="allowedMetaColums[layer].includes(meta_key)">
+                  <tr v-if="allowedMetaColums[layer].includes(meta_key) && (meta_value || meta_fold(layer))">
                     <td>{{ meta_key }}</td>
                     <td v-if="(corpora.corpus.layer[layer].attributes[meta_key]||{}).type == 'image'">
                       <span
@@ -856,6 +861,12 @@ export default {
       else
         ret = Utils.dictToStr(meta_obj, {addTitles: true, reorder: x=>x[0]=="id"}); // small hack to put id first
       return ret;
+    },
+    meta_fold(layer, flip) {
+      this.currentMeta._unfolded = (this.currentMeta._unfolded || {});
+      if (flip)
+        this.currentMeta._unfolded[layer] = !this.currentMeta._unfolded[layer];
+      return this.currentMeta._unfolded[layer];
     }
   },
   computed: {
