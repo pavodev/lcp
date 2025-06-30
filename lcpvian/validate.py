@@ -27,9 +27,22 @@ def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
         ref = obj["reference"]
         # attrs = conf["layer"].get(recent_layer, {}).get("attributes", {})
         attrs = _get_all_attributes(recent_layer, conf)
-        assert ref in attrs, ReferenceError(
-            f"Could not find an attribute named '{ref}' on layer {recent_layer}"
-        )
+        if "." in ref:
+            aname, afield = ref.split(".", 2)
+            assert aname in attrs, ReferenceError(
+                f"Could not find an attribute named '{aname}' on layer {recent_layer}"
+            )
+            aattrs = attrs[aname].get("keys", {})
+            aref = attrs[aname].get("ref", "")
+            if aref in conf.get("globalAttributes", {}):
+                aattrs = conf["globalAttributes"][aref].get("keys", {})
+            assert afield in aattrs, ReferenceError(
+                f"Could not find an attribute named '{afield}' on global attribute {aname} ({ref})"
+            )
+        else:
+            assert ref in attrs, ReferenceError(
+                f"Could not find an attribute named '{ref}' on layer {recent_layer}"
+            )
     if obj.get("attribute", "").count(".") == 1:
         _, aname = obj["attribute"].split(".")
         assert any(
