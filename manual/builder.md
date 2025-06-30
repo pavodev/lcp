@@ -9,6 +9,7 @@ The various [tests in the `lcpcli` repository](https://github.com/liri-uzh/lcpcl
 The following repositories also use the `Corpus` class to convert existing data sets:
 
  - [XML-to-LCP conversion of NOAH's Corpus](https://github.com/liri-uzh/lcpimport_noah_corpus)
+ - [TEI-to-LCP conversion of OFROM](https://github.com/liri-uzh/lcpimport_ofrom)
 
 ## `Corpus`
 
