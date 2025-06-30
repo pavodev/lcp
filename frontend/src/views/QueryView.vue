@@ -21,8 +21,14 @@
               </div> -->
             </label>
             <div class="col-sm-9">
-              <multiselect v-model="selectedCorpora" :options="corporaOptions" placeholder="Select corpus"
-                :multiple="false" label="name" track-by="value"></multiselect>
+              <multiselect
+                v-model="selectedCorpora"
+                :options="corporaOptions"
+                placeholder="Select corpus"
+                :multiple="false"
+                label="name"
+                track-by="value"
+              ></multiselect>
             </div>
           </div>
           <div class="form-group row mt-1" v-if="selectedCorpora && availableLanguages.length > 1">

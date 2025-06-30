@@ -54,7 +54,7 @@
         {{$t('modal-details-revison')}}: {{ corpusModal.meta.revision }}
       </p>
       <p class="word-count mb-0">
-        {{$t('modal-details-url')}}: 
+        {{$t('modal-details-url')}}:
         <a :href="getURLWithProtocol(corpusModal.meta.url)" target="_blank">{{
           corpusModal.meta.url
         }}</a>
@@ -72,7 +72,7 @@
         <div class="" v-for="partition in corpusModal.partitions.values" :key="partition">
           <p class="text-bold">{{ partition.toUpperCase() }}</p>
           <p class="word-count">
-            {{$t('modal-details-segments')}}: 
+            {{$t('modal-details-segments')}}:
             {{
               corpusModal.mapping.layer.Segment.partitions[
                 partition
@@ -86,7 +86,7 @@
         </div>
       </span>
       <p class="word-count mb-0 mt-2" v-if="license">
-        {{ $t('modal-details-license') }}: 
+        {{ $t('modal-details-license') }}:
         <span v-if="license.tag == 'user-defined'">
           {{ $t('modal-details-user-license') }}: {{ corpusModal.meta.userLicense }}
         </span>

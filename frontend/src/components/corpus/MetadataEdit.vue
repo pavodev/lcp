@@ -6,7 +6,7 @@
       </div>
     </div>
   </div>
-  <div class="nav nav-tabs" id="nav-main-tab" role="tablist">
+  <div class="nav nav-tabs mt-3" id="nav-main-tab" role="tablist">
     <button class="nav-link" :class="{ active: activeMainTab === 'metadata' }" id="nav-metadata-tab"
       data-bs-toggle="tab" data-bs-target="#nav-metadata" type="button" role="tab" aria-controls="nav-metadata"
       aria-selected="true" @click="activeMainTab = 'metadata'">
@@ -60,19 +60,17 @@
           </div>
         </div>
         <div class="row">
-          <div class="col-7">
+          <div class="col-4">
             <div class="mb-3">
               <label for="corpus-language" class="form-label">{{ $t('modal-meta-language') }} </label>
-              <select v-model="corpusData.meta.language" id="corpus-language">
-                <option value="">{{ $t('modal-meta-lg-undefined') }}</option>
-                <option value="en">{{ $t('modal-meta-lg-english') }}</option>
-                <option value="de">{{ $t('modal-meta-lg-german') }}</option>
-                <option value="fr">{{ $t('modal-meta-lg-french') }}</option>
-                <option value="it">{{ $t('modal-meta-lg-italian') }}</option>
-                <option value="es">{{ $t('modal-meta-lg-spanish') }}</option>
-                <option value="gs">{{ $t('modal-meta-lg-swiss-german') }}</option>
-                <option value="rm">{{ $t('modal-meta-lg-romansh') }}</option>
-              </select>
+              <multiselect
+                v-model="selectedLanguage"
+                :options="languages"
+                placeholder="Select langauage"
+                :multiple="false"
+                label="name"
+                track-by="value"
+              ></multiselect>
             </div>
           </div>
           <!-- <div class="col-7">
@@ -199,14 +197,26 @@ export default {
   name: "CorpusMetdataEdit",
   props: ["corpus"],
   data() {
+    let corpusData = { ...this.corpus } || {};
+    if (corpusData.meta && !corpusData.meta.language) {
+      corpusData.meta.language = "und"; // Default to undefined language
+    }
     return {
       activeMainTab: "metadata",
       userLicense: this.corpus.meta && this.corpus.meta.userLicense ? atob(this.corpus.meta.userLicense) : "",
-      corpusData: { ...this.corpus },
+      corpusData: corpusData,
     }
   },
   computed: {
-    ...mapState(useCorpusStore, ["licenses"]),
+    ...mapState(useCorpusStore, ["licenses", "languages"]),
+    selectedLanguage: {
+      get() {
+        return this.languages.find(l => l.value === this.corpusData.meta.language)
+      },
+      set(val) {
+        this.corpusData.meta.language = val.value
+      }
+    }
   },
   methods: {
     corpusDataType: Utils.corpusDataType,
