@@ -48,7 +48,7 @@
   </div>
 </template>
 
-<style>
+<style scoped>
 .modal {
   width: unset !important;
   max-width: calc(100vw - 2em);
