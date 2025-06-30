@@ -121,8 +121,13 @@
           <div class="col-12" v-if="corpusData.meta.license == 'user-defined'">
             <div class="mb-3">
               <label for="corpus-description" class="form-label">{{ $t('modal-meta-user-license') }}</label>
-              <textarea class="form-control" placeholder="User defined licence" v-model="userLicense"
-                id="user-defined-licence" style="height: 100px"></textarea>
+              <textarea
+                class="form-control"
+                placeholder="User defined licence"
+                v-model="userLicense"
+                id="user-defined-licence"
+                style="height: 100px"
+              ></textarea>
             </div>
           </div>
         </div>

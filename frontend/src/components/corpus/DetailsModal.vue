@@ -88,7 +88,8 @@
       <p class="word-count mb-0 mt-2" v-if="license">
         {{ $t('modal-details-license') }}:
         <span v-if="license.tag == 'user-defined'">
-          {{ $t('modal-details-user-license') }}: {{ corpusModal.meta.userLicense }}
+          <b>{{ $t('modal-details-user-license') }}</b><br>
+          {{ getUserLicense() }}
         </span>
         <span v-else>
           <a :href="license.url" target="_blank">
@@ -147,6 +148,12 @@
       }
     },
     methods: {
+      getUserLicense() {
+        if (this.corpusModal.meta.userLicense) {
+          return atob(this.corpusModal.meta.userLicense);
+        }
+        return "";
+      },
       corpusDataType: Utils.corpusDataType,
       getURLWithProtocol: Utils.getURLWithProtocol,
       hasAccessToCorpus: Utils.hasAccessToCorpus,
