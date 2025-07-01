@@ -92,6 +92,8 @@ function computeAttributes(corpus_layer) {
 const STYLES = {
   text: "fill:#FBD573,stroke:#333,stroke-width:2px",
   categorical: "fill:#FBD573,stroke:#333,stroke-width:2px",
+  dict: "fill:#6BD5F3,stroke:#333,stroke-width:2px",
+  jsonb: "fill:#6BD5F3,stroke:#333,stroke-width:2px", // Should become obsolete -- update DB
   number: "fill:#ABF513,stroke:#333,stroke-width:2px",
   labels: "fill:#3BF5B3,stroke:#333,stroke-width:2px",
   ref: "fill:#6264FF,stroke:#333,stroke-width:2px",
