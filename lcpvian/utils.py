@@ -992,6 +992,18 @@ def _get_all_attributes(layer: str, config: Any, lang: str = "") -> dict:
     return ret
 
 
+def _get_all_labels(json_query: dict | list) -> dict[str, str]:
+    ret = {}
+    is_list = isinstance(json_query, list)
+    for k in json_query:
+        v = k if is_list else json_query[k]
+        if isinstance(v, dict) and "label" in v:
+            ret[v["label"]] = v.get("layer", "")
+        if isinstance(v, (dict, list)):
+            ret.update(_get_all_labels(v))
+    return ret
+
+
 def _time_remaining(status: str, total_duration: float, use: float) -> float:
     """
     Helper to estimate remaining time for a job
