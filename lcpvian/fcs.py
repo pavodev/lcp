@@ -75,6 +75,24 @@ def _get_languages(partitions: dict, main_language: str = "") -> str:
     return lg_template.format(languages=languages)
 
 
+def _get_descriptions(conf: dict) -> str:
+    ret: str = ""
+    descriptions: str | dict = (
+        conf["meta"].get("corpusDescription") or conf["description"]
+    )
+    if isinstance(descriptions, str):
+        ret = f"""<ed:Description xml:lang="en">{escape(descriptions)}</ed:Description>\n          """
+    elif isinstance(descriptions, dict):
+        ret = (
+            "\n          ".join(
+                f"""<ed:Description xml:lang="{lg}">{escape(desc)}</ed:Description>"""
+                for lg, desc in descriptions.items()
+            )
+            + "\n          "
+        )
+    return ret
+
+
 async def _check_request_complete(
     qi: QueryInfo,
     request: Request,
@@ -299,8 +317,7 @@ async def explain(app: LCPApplication, **extra_params) -> str:
         resources_list: list[str] = [
             f"""      <ed:Resource pid="{PID_PREFIX}{cid}/{lg}">
           <ed:Title xml:lang="en">{conf['shortname']}{ ' ('+lg+')' if 'partitions' in conf else ''}</ed:Title>
-          <ed:Description xml:lang="en">{conf['description'] or conf['meta'].get('corpusDescription')}</ed:Description>
-          <ed:LandingPageURI>{PID_PREFIX}query/{cid}/{conf['shortname']}</ed:LandingPageURI>
+          {_get_descriptions(conf)}<ed:LandingPageURI>{PID_PREFIX}query/{cid}/{conf['shortname']}</ed:LandingPageURI>
           {_get_languages({}, lg)}
           <ed:AvailableDataViews ref="hits"/>
         </ed:Resource>"""

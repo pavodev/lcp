@@ -175,7 +175,6 @@ export default {
       return classes
     },
     isJson(content) {
-      console.log("testing isJson", content);
       if (content instanceof Object)
         return true;
       let isJson = false;
