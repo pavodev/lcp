@@ -8,15 +8,17 @@ from .cqp_to_json import full_cqp_to_json
 from .dqd_parser import convert
 from .textsearch_to_json import textsearch_to_json
 from .typed import JSONObject
-from .utils import _get_all_attributes
+from .utils import _get_all_attributes, _get_all_labels
 
 
-def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
+def check_layer(
+    conf: dict, obj: list | dict, labels: dict = {}, recent_layer: str = ""
+):
     if isinstance(obj, list):
         for x in obj:
             if not isinstance(x, (dict, list)):
                 continue
-            check_layer(conf, x, recent_layer=recent_layer)
+            check_layer(conf, x, labels=labels, recent_layer=recent_layer)
         return
     if "unit" in obj:
         recent_layer = obj["unit"].get("layer", "")
@@ -28,19 +30,27 @@ def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
         # attrs = conf["layer"].get(recent_layer, {}).get("attributes", {})
         attrs = _get_all_attributes(recent_layer, conf)
         if "." in ref:
-            aname, afield = ref.split(".", 2)
-            assert aname in attrs, ReferenceError(
-                f"Could not find an attribute named '{aname}' on layer {recent_layer}"
+            refname, reffield, *_ = ref.split(".")
+            attr = attrs.get(refname, {})
+            glob_attr = attr.get("ref", "")
+            dict_keys = attr.get("keys", {})
+            reflayer = labels.get(refname)
+            assert refname in attrs or reflayer, ReferenceError(
+                f"Invalid reference to '{ref}' under {recent_layer}"
             )
-            aattrs = attrs[aname].get("keys", {})
-            aref = attrs[aname].get("ref", "")
-            if aref in conf.get("globalAttributes", {}):
-                aattrs = conf["globalAttributes"][aref].get("keys", {})
-            assert afield in aattrs, ReferenceError(
-                f"Could not find an attribute named '{afield}' on global attribute {aname} ({ref})"
+            assert not glob_attr or reffield in conf["globalAttributes"].get(
+                glob_attr, {}
+            ).get("keys", {}), ReferenceError(
+                f"No sub-attribute named '{reffield}' on global attribute '{refname}'"
+            )
+            assert not reflayer or reffield in _get_all_attributes(
+                reflayer, conf
+            ), ReferenceError(f"No attribute named '{reffield}' on entity '{refname}'")
+            assert not dict_keys or reffield in dict_keys, ReferenceError(
+                f"No sub-attribute named '{reffield}' on attribute '{refname}' of layer {recent_layer}"
             )
         else:
-            assert ref in attrs, ReferenceError(
+            assert ref in attrs or ref in labels, ReferenceError(
                 f"Could not find an attribute named '{ref}' on layer {recent_layer}"
             )
     if obj.get("attribute", "").count(".") == 1:
@@ -53,7 +63,7 @@ def check_layer(conf: dict, obj: list | dict, recent_layer: str = ""):
     for x in obj.values():
         if not isinstance(x, (dict, list)):
             continue
-        check_layer(conf, x, recent_layer=recent_layer)
+        check_layer(conf, x, labels=labels, recent_layer=recent_layer)
 
 
 async def validate(
@@ -179,7 +189,8 @@ async def validate(
             }
     if result.get("valid"):
         try:
-            check_layer(conf, json_query)
+            all_labels = _get_all_labels(json_query)
+            check_layer(conf, json_query, labels=all_labels)
         except Exception as e:
             result = {
                 "kind": kind,
