@@ -161,7 +161,7 @@
                               : null
                               " @submit="submit" @update="updateQueryDQD" />
                           <p class="error-text text-danger mt-3" v-if="
-                            isQueryValidData && isQueryValidData.valid != true && debug
+                            isQueryValidData && isQueryValidData.valid != true
                           ">
                             {{ isQueryValidData.error }}
                           </p>
@@ -1112,6 +1112,10 @@ export default {
           }
           if (data.kind == "cqp" && !data.valid)
             data.error = "Incomplete query or invalid CQP syntax";
+          else if (data.error) {
+            data.error = (data.error || "").replace(/^Unexpected [^\s]+ [^(]+\('[^']+',\s*('[^']+')\)/, "Unexpected $1");
+            data.error = data.error.replace(/\s*Expected one of(.|\n)+$/,"");
+          }
           this.isQueryValidData = data;
           return;
         }
