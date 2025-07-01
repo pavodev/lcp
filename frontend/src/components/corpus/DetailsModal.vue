@@ -150,7 +150,13 @@
     methods: {
       getUserLicense() {
         if (this.corpusModal.meta.userLicense) {
-          return atob(this.corpusModal.meta.userLicense);
+          let license = "";
+          try {
+            license = atob(this.corpusModal.meta.userLicense);
+          } catch {
+            license = this.corpusModal.meta.userLicense;
+          }
+          return license;
         }
         return "";
       },

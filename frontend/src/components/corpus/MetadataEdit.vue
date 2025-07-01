@@ -216,9 +216,15 @@ export default {
     if (corpusData.meta && !corpusData.meta.language) {
       corpusData.meta.language = "und"; // Default to undefined language
     }
+    let userLicense = "";
+    try {
+      userLicense = atob(this.corpus.meta.userLicense);
+    } catch {
+      userLicense = this.corpus.meta.userLicense || "";
+    }
     return {
       activeMainTab: "metadata",
-      userLicense: this.corpus.meta && this.corpus.meta.userLicense ? atob(this.corpus.meta.userLicense) : "",
+      userLicense: userLicense,
       corpusData: corpusData,
     }
   },
