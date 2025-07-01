@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import urllib.parse
 
 from typing import Any
 
@@ -62,12 +63,12 @@ if SENTRY_DSN:
     )
 
 
-UPLOAD_USER = os.environ["SQL_UPLOAD_USERNAME"]
-QUERY_USER = os.environ["SQL_QUERY_USERNAME"]
-WEB_USER = os.environ["SQL_WEB_USERNAME"]
-UPLOAD_PASSWORD = os.environ["SQL_UPLOAD_PASSWORD"]
-QUERY_PASSWORD = os.environ["SQL_QUERY_PASSWORD"]
-WEB_PASSWORD = os.environ["SQL_WEB_PASSWORD"]
+UPLOAD_USER = urllib.parse.quote(os.environ["SQL_UPLOAD_USERNAME"])
+QUERY_USER = urllib.parse.quote(os.environ["SQL_QUERY_USERNAME"])
+WEB_USER = urllib.parse.quote(os.environ["SQL_WEB_USERNAME"])
+UPLOAD_PASSWORD = urllib.parse.quote(os.environ["SQL_UPLOAD_PASSWORD"])
+QUERY_PASSWORD = urllib.parse.quote(os.environ["SQL_QUERY_PASSWORD"])
+WEB_PASSWORD = urllib.parse.quote(os.environ["SQL_WEB_PASSWORD"])
 HOST = os.environ["SQL_HOST"]
 DBNAME = os.environ["SQL_DATABASE"]
 _UPLOAD_POOL = os.getenv("UPLOAD_USE_POOL", "false")

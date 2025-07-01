@@ -273,6 +273,8 @@ export default {
           anchorings.push(init + ".");
           layer_title.push(desc)
         }
+        if (corpus.layer[layer].description)
+          layer_title.push(corpus.layer[layer].description.replace(/[^a-zA-Z0-9\s]+/g, ""));
         let layer_text = layer.replace(/@/gi, "_") + " " + anchorings.join('');
         if (layer_title.length)
           layer_text = `<abbr title='${layer_title.join(' - ')}' class='tooltips'>${layer_text}</abbr>`;

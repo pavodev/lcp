@@ -25,6 +25,7 @@ import {
   faGear,
   faGlobe,
   faHouse,
+  faImage,
   faLink,
   faMagnifyingGlass,
   faMagnifyingGlassChart,
@@ -75,6 +76,7 @@ library.add(faForward);
 library.add(faGear);
 library.add(faGlobe);
 library.add(faHouse);
+library.add(faImage);
 library.add(faLink);
 library.add(faMagnifyingGlass);
 library.add(faMagnifyingGlassChart);
