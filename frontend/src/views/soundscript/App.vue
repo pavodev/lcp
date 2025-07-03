@@ -248,4 +248,7 @@ footer {
 * >>> .page-link {
   color: #0059be !important;
 }
+.export:hover #exportMonitor {
+  visibility: visible !important;
+}
 </style>

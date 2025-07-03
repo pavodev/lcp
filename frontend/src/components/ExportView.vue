@@ -39,7 +39,6 @@ export default {
   props: [],
   methods: {
     fetch(info) {
-      console.log("fetching", info);
       useCorpusStore().fetchExport(info);
     },
     onSocketMessage(data) {
