@@ -177,7 +177,8 @@ export default {
 a.navbar-brand + ul {
   display: none;
   position: absolute;
-  transform: translateY(2.5em);
+  padding: 0.5em;
+  transform: translate(0.5em, 3em);
   color: white;
   background-color: #2a7f62;
   list-style: none;
@@ -186,7 +187,6 @@ a.navbar-brand:hover + ul, a.navbar-brand + ul:hover {
   display: block;
 }
 a.navbar-brand + ul li a {
-  margin-left: -1.5em;
   color: white;
   text-decoration: none;
 }
