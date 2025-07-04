@@ -131,13 +131,13 @@
                     <p class="word-count">
                       <template v-if="corpus.partitions">
                         <span
-                          class="badge text-bg-primary me-1 tooltips" :title="$t('common-partition')"
+                          class="badge text-bg-primary me-1 tooltips" :title="this.getLanguage(language)"
                           v-for="language in corpus.partitions.values"
                           v-html="language.toUpperCase()" :key="`${corpus.id}-${language}`"
                         ></span>
                       </template>
                       <span
-                        class="badge text-bg-primary me-1 tooltips" :title="$t('common-partition')"
+                        class="badge text-bg-primary me-1 tooltips" :title="this.getLanguage(corpus.meta.language)"
                         v-if="!(corpus.partitions) && corpus.meta.language"
                         v-html="corpus.meta.language.toUpperCase()"
                       ></span>
@@ -363,6 +363,7 @@ import { useCorpusStore } from "@/stores/corpusStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useUserStore } from "@/stores/userStore";
 import { useNotificationStore } from "@/stores/notificationStore";
+import { availableLanguages } from "@/fluent";
 
 import Title from "@/components/TitleComponent.vue";
 import ProjectNewView from "@/components/project/NewView.vue";
@@ -406,6 +407,13 @@ export default {
   },
   methods: {
     hasAccessToCorpus: Utils.hasAccessToCorpus,
+    getLanguage(lg) {
+      const avLg = availableLanguages.find(v=>v.value.toLowerCase() == lg.toLowerCase());
+      if (avLg)
+        return avLg.name;
+      else
+        return lg;
+    },
     projectIcons(project) {
       let icons = ['fas']
       if (project.isPublic == true || project.isSemiPublic == true) {
