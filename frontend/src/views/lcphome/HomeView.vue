@@ -5,7 +5,7 @@
         <div class="col-8">
           <Title :title="$t('platform-general')" />
           <p>
-            {{ $t('plaftorm-general-description') }}
+            {{ $t('platform-general-description') }}
           </p>
           <p>
             <a :href="appLinks['catchphrase']" target="_blank" class="btn btn-primary me-1 btn-catchphrase">
