@@ -19,6 +19,7 @@ import {
   faCircleQuestion,
   faCopy,
   faDatabase,
+  faDownload,
   faExpand,
   faFileExport,
   faFont,
@@ -72,6 +73,7 @@ library.add(faCirclePlus);
 library.add(faCircleQuestion);
 library.add(faCopy);
 library.add(faDatabase);
+library.add(faDownload);
 library.add(faExpand);
 library.add(faFileExport);
 library.add(faFont);
