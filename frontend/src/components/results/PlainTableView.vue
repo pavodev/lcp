@@ -42,7 +42,8 @@
             <span
               v-if="'mediaSlots' in corpora.corpus.meta"
               class="timetag"
-              :title="meta[item.sentenceId][corpora.corpus.firstClass.document].name"
+              :title="meta?.[item.sentenceId]?.[corpora.corpus.firstClass.document]?.name ?? ''"
+
             >
               {{
                 this.getTimestamps(...this.getFrameRange(item.id, this.corpora.corpus.firstClass.segment)).join(" ")
@@ -170,7 +171,7 @@
                 <span v-if="'mediaSlots' in corpora.corpus.meta" class="timetag nowrap">
                   {{
                     this.getTimestamps(...meta.frame_range
-                      .map(fr=>fr-currentMeta[corpora.corpus.firstClass.document].frame_range[0])
+                    .map(fr => fr - (currentMeta?.[corpora.corpus.firstClass.document]?.frame_range?.[0] ?? 0))
                     ).join(' - ')
                   }}
                 </span>
@@ -545,7 +546,12 @@ export default {
       this.currentResultIndex = resultIndex;
       if (overwriteSid)
         sentenceId = overwriteSid;
-      this.currentMeta = Object.fromEntries(Object.entries(this.meta[sentenceId]).sort((x,y)=>y[0] != layer[x[0]]?.contains));
+        const sentenceMeta = this.meta?.[sentenceId];
+      if (!sentenceMeta) {
+        this.currentMeta = null;
+        return;
+      }
+      this.currentMeta = Object.fromEntries(Object.entries(sentenceMeta).sort((x,y)=>y[0] != layer[x[0]]?.contains));
       for (let layer in this.currentMeta) {
         const submeta = this.currentMeta[layer].meta;
         if (!submeta || (this.corpora.corpus.mapping[layer]||{}).hasMeta === false) continue
@@ -739,6 +745,7 @@ export default {
       if (meta) {
         // corpus tamplete,
         const doc_layer = this.corpora.corpus.firstClass.document;
+        if (!meta || !(doc_layer in meta)) return;
         let documentId = meta[doc_layer]._id;
         let filename = this.getAudio(resultIndex); // meta[this.corpora.corpus.firstClass.document].audio
         let [startFrameSeg, endFrameSeg] = this.getFrameRange(resultIndex, this.corpora.corpus.firstClass.segment);
